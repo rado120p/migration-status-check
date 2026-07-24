@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from migration_validator import api
 from migration_validator.models.result import Status
@@ -7,10 +8,14 @@ from migration_validator.reporting.text_report import filter_result, render
 
 NOW = "2026-07-24T11:40:02Z"
 
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
+DEVICE_5 = str(FIXTURES / "172.20.20.5.yml")
+
 
 def test_full_migration_run_is_green(synthetic_snapshot):
-    old = synthetic_snapshot("172.20.20.4.yml", "172.20.20.4", "pre-migration")
-    new = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post-migration")
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
@@ -20,8 +25,8 @@ def test_full_migration_run_is_green(synthetic_snapshot):
 
 
 def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
-    old = synthetic_snapshot("172.20.20.4.yml", "172.20.20.4", "pre-migration", pps=400)
-    new = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post-migration", pps=50)
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration", pps=400)
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration", pps=50)
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
@@ -35,8 +40,8 @@ def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
 
 
 def test_new_elan_service_shows_up_as_unmatched(synthetic_snapshot):
-    old = synthetic_snapshot("172.20.20.4.yml", "172.20.20.4", "pre-migration")
-    new = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post-migration")
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
@@ -45,7 +50,7 @@ def test_new_elan_service_shows_up_as_unmatched(synthetic_snapshot):
 
 
 def test_management_interfaces_never_appear(synthetic_snapshot):
-    new = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, now=NOW)
     rendered = render(result)
@@ -55,7 +60,7 @@ def test_management_interfaces_never_appear(synthetic_snapshot):
 
 
 def test_single_snapshot_validation_skips_comparison_checks(synthetic_snapshot):
-    old = synthetic_snapshot("172.20.20.4.yml", "172.20.20.4", "pre-migration")
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
 
     result = api.evaluate(old, now=NOW)
 
@@ -74,8 +79,8 @@ def test_render_after_filter_still_shows_unmatched_section(synthetic_snapshot):
     nezmigrovanymi sluzbami se musi vykreslit dal - to je hlavni bod, proti
     kteremu tenhle task testuje.
     """
-    old = synthetic_snapshot("172.20.20.4.yml", "172.20.20.4", "pre-migration")
-    new = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post-migration")
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, baseline=old, now=NOW)
     assert result.unmatched["subject"] or result.unmatched["baseline"]
