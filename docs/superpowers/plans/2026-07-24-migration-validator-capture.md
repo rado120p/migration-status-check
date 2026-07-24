@@ -24,6 +24,69 @@ Platí všechna omezení z Plánu 1, plus:
 - **XPath se nepíše naslepo.** Každý parser se ověřuje proti nahranému XML z laborky (`mig-validate record`).
 - Autentizace přebírá konvenci z existujících parserů: `--auth key|password`, `--username`, `--key-file`, default `ansible` + `~/.ssh/id_rsa`.
 
+## Laboratorní prostředí
+
+Containerlab topologie `pop-migration` běží lokálně. Ověřeno 2026-07-24:
+
+| adresa | container | model | verze | platforma |
+|---|---|---|---|---|
+| `172.20.20.4` | `clab-pop-migration-MX1-POP1` | VMX | `24.2R1-S2.5` | `junos` |
+| `172.20.20.5` | `clab-pop-migration-PTX1-POP1` | PTX10002-36QDD | `25.2R1.8-EVO` | `junos-evo` |
+
+**Detekce platformy podle `detect_platform()` na těchto verzích funguje** — EVO má `EVO` v řetězci
+verze, MX ne. Fallback na model prefix se neuplatní.
+
+Přístup je přes heslo, ne SSH klíč. Heslo **není v repozitáři** — nastav si ho do prostředí:
+
+```bash
+export MIG_LAB_PASSWORD='...'      # laboratorni credentials, uzivatel admin
+```
+
+Všechny ověřovací kroky v tomto plánu pak používají:
+
+```bash
+--auth password --username admin --password "$MIG_LAB_PASSWORD"
+```
+
+`clab-pop-migration-PTX1-POP1` se neresolvuje jménem — používej IP adresu.
+
+Ověřovací Python snippety v tomto plánu píšou pro stručnost `ConnectionOptions(host=address)`,
+což je výchozí autentizace klíčem. **V této laborce místo toho použij:**
+
+```python
+import os
+from migration_validator.connection.junos import ConnectionOptions
+
+def lab(address: str) -> ConnectionOptions:
+    return ConnectionOptions(
+        host=address,
+        username="admin",
+        auth_type="password",
+        password=os.environ["MIG_LAB_PASSWORD"],
+    )
+```
+
+### Postup nahrávání fixtures: dvoufázově
+
+Fixtures nemají být jen „nějaké XML" — mají odpovídat **skutečnému stavu před a po migraci**,
+jinak testy nikdy neuvidí realistický rozdíl (spárované služby, provoz, který se přesunul,
+ARP a MAC, které zmizely na jedné straně a objevily se na druhé).
+
+Postup:
+
+1. **Fáze „pre"** — služby aktivní na MX, na EVO vypnuté. Nahraj fixtures z `172.20.20.4`
+   do `tests/fixtures/rpc/junos/`.
+2. **Migrace** — služby na MX vypni (`deactivate`), na EVO zapni.
+3. **Fáze „post"** — nechej chvíli běžet provoz, ať se naučí ARP a MAC. Nahraj fixtures
+   z `172.20.20.5` do `tests/fixtures/rpc/junos-evo/`.
+
+Tím dostaneš dvojici fixtures, ze které jde v Tasku 7 postavit **realistický end-to-end test**
+celé migrace, ne jen kontrola schématu.
+
+Pokud fáze 2 není v daném okamžiku možná (laborka se používá k něčemu jinému), nahraj obě strany
+v aktuálním stavu — testy collectorů kontrolují schéma, ne konkrétní hodnoty, takže projdou.
+Realistickou dvojici pak doplň později.
+
 ## Struktura souborů
 
 | soubor | zodpovědnost |
@@ -286,15 +349,27 @@ Expected: PASS, 12 testů
 
 ```bash
 .venv/bin/python -c "
+import os
 from migration_validator.connection.junos import ConnectionOptions, connect, device_meta
+
 for address in ('172.20.20.4', '172.20.20.5'):
-    with connect(ConnectionOptions(host=address)) as dev:
+    options = ConnectionOptions(
+        host=address, username='admin', auth_type='password',
+        password=os.environ['MIG_LAB_PASSWORD'],
+    )
+    with connect(options) as dev:
         print(device_meta(dev, address))
 "
 ```
 
-Expected: `172.20.20.4` → `platform='junos'`, `172.20.20.5` → `platform='junos-evo'`.
-Pokud detekce neodpovídá, uprav `detect_platform` podle skutečné hodnoty `dev.facts['version']` a doplň testovací případ.
+Expected (ověřeno 2026-07-24 proti běžící laborce):
+
+```
+DeviceMeta(address='172.20.20.4', hostname='clab-pop-migration-MX1-POP1',
+           platform='junos', model='VMX', version='24.2R1-S2.5', ...)
+DeviceMeta(address='172.20.20.5', hostname='clab-pop-migration-PTX1-POP1',
+           platform='junos-evo', model='PTX10002-36QDD', version='25.2R1.8-EVO', ...)
+```
 
 - [ ] **Step 6: Commit**
 
