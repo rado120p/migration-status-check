@@ -491,11 +491,23 @@ Severity má default v kódu a jde přepsat v configu. Tolerance nejsou nikdy za
 
 **Společné (jakýkoliv scope, i device bez inventory)**
 
+| id | mode | severity | co dělá | omezení |
+|---|---|---|---|---|
+| `interface_state` | state | critical | admin/oper status je `up` | — |
+| `interface_errors` | state | advisory | input/output/framing errors | **jen tranzitní rozhraní** |
+| `interface_traffic` | both | advisory | `input_pps`/`output_pps` > 0; porovnání s tolerancí (default −60 %) | **jen tranzitní rozhraní** |
+
+**Core** (uplink do core, P-linky, loopback)
+
 | id | mode | severity | co dělá |
 |---|---|---|---|
-| `interface_state` | state | critical | admin/oper status je `up` |
-| `interface_errors` | state | advisory | input/output/framing errors |
-| `interface_traffic` | both | advisory | `input_pps`/`output_pps` > 0; porovnání s tolerancí (default −60 %) |
+| `interface_state` | state | critical | jako výše |
+| `interface_errors` | state | advisory | jen na tranzitních rozhraních; na `lo0.0` se přeskočí |
+| `interface_traffic` | both | advisory | dtto |
+
+Core scope **nedostává** ARP, ping ani BGP checky — ty jsou definované pro zákaznické služby.
+Sada checků pro Core se bude rozšiřovat později (kandidát: ISIS adjacency, MPLS/LDP stav); zatím
+je záměrně minimální a nebyla v původním zadání.
 
 **Internet + IPVPN**
 
@@ -531,8 +543,38 @@ Severity má default v kódu a jde přepsat v configu. Tolerance nejsou nikdy za
 `mode: both` znamená, že stejný check funguje v obou fázích: v kroku 3 ověří "teče provoz / jsou
 MACy", v kroku 6 navíc porovná proti baseline. Nejsou potřeba dvě sady testů.
 
+### Klasifikace rozhraní
+
+Ne každé rozhraní nese zákaznický provoz a counter-based checky na interních rozhraních nemají
+výpovědní hodnotu — jen by generovaly šum.
+
+**Tranzitní rozhraní** (jediná, na kterých běží `interface_errors` a `interface_traffic`):
+
+```
+ge   xe   et
+```
+
+**Interní rozhraní** — pro counter-based checky se vždy přeskočí (`SKIP`, ne WARN):
+
+```
+fxp   em    me    bme   cbp   pip   tap   jsrv  esi   vtep  pp0
+lc-   demux lsi   mtun  pime  pimd  gre   ipip  dsc   pfe   pfh
+vcp   sxe   vme   fti   lo0   re0   irb
+```
+
+Rozlišení `SKIP` vs `WARN` je tu podstatné: SKIP znamená *"tenhle test sem nepatří"*, WARN
+*"něco je špatně"*. Kdyby interní rozhraní trvale svítila oranžově, operátor si zvykne výstup
+přeskakovat a nástroj ztratí smysl.
+
+Klasifikace je **vlastnost checku, ne scope**. Rozhraní `irb.14` je na seznamu interních, takže
+nedostane counter checky — ale pořád je to plnohodnotná Internet služba a ARP, ping i BGP checky
+na něm proběhnou normálně.
+
 ### Detaily ping checku
 
+- **Ping běží pouze na scopech typu `Internet` a `IPVPN`.** Ostatní typy (`Core`, `E-Line`,
+  `E-LAN`) ho nedostanou vůbec — `lo0.0` je díky nové kategorizaci `Core`, takže se přeskočí
+  automaticky.
 - `arp_present` běží vždy **před** ping checkem (pořadí je dané fázemi `capture`, ne DAGem checků).
 - ARP check uloží **celý seznam** naučených adres na rozhraní; u ne-p2p subnetů jich může být víc.
 - Pingují se **všechny** adresy ze seznamu.
