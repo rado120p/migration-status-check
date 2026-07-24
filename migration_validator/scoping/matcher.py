@@ -171,7 +171,16 @@ def match_scopes(
             if not s_hits:
                 continue
             if len(b_hits) == 1 and len(s_hits) == 1:
-                if id(b_hits[0]) in paired or id(s_hits[0]) in paired:
+                # Kontroluje se paired I dropped: subnet a vlan pravidla generuji
+                # vic klicu na scope, takze scope zahozeny jako nejednoznacny pod
+                # jednim klicem by se pod jinym klicem tehoz pravidla jinak
+                # sparoval - a skoncil by zaroven v pairs i v unmatched.
+                if (
+                    id(b_hits[0]) in paired
+                    or id(s_hits[0]) in paired
+                    or id(b_hits[0]) in dropped
+                    or id(s_hits[0]) in dropped
+                ):
                     continue
                 result.pairs.append(
                     MatchedPair(
