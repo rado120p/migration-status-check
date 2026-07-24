@@ -212,3 +212,80 @@ def _compare_finding(
         subject=subject,
         details=details,
     )
+
+
+@register
+class TrafficCeasedCheck(Check):
+    """Overi, ze na starem rozhrani provoz po migraci klesl k nule.
+
+    Chyta zapomenute vypnuti a duplicitni forwarding. Default vypnuty -
+    vyzaduje treti capture stareho boxu po migraci.
+    """
+
+    id = "traffic_ceased"
+    title = "Utichnuti stareho rozhrani"
+    mode = Mode.COMPARE
+    requires = ("interfaces",)
+    default_severity = Severity.ADVISORY
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        names = _transit_interfaces(ctx)
+        if not names:
+            return [_no_transit_finding(ctx)]
+
+        threshold = int(ctx.options(self.id)["max_residual_pps"])
+
+        findings = []
+        for name in names:
+            subject = _rates(ctx.subject["interfaces"][name])
+            baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
+            if baseline_data is None:
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{name}: rozhrani neni v baseline snapshotu",
+                        label=name,
+                    )
+                )
+                continue
+
+            baseline = _rates(baseline_data)
+            if baseline["input_pps"] == 0 and baseline["output_pps"] == 0:
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{name}: v baseline zadny provoz, utichnuti nelze overit",
+                        label=name,
+                        baseline=baseline,
+                        subject=subject,
+                    )
+                )
+                continue
+
+            residual = max(subject["input_pps"], subject["output_pps"])
+            details = {"max_residual_pps": threshold, "residual_pps": residual}
+
+            if residual > threshold:
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{name}: stare rozhrani stale nese provoz "
+                        f"({residual} pps, prah {threshold} pps)",
+                        label=name,
+                        baseline=baseline,
+                        subject=subject,
+                        details=details,
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        Outcome.OK,
+                        f"{name}: provoz utichl ({residual} pps)",
+                        label=name,
+                        baseline=baseline,
+                        subject=subject,
+                        details=details,
+                    )
+                )
+        return findings

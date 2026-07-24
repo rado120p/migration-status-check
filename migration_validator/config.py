@@ -15,7 +15,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "bgp_prefix_counts": {"tolerance_percent": -10},
     "evpn_mac_count": {"tolerance_percent": -60},
     "ping_reachability": {"count": 5},
-    "traffic_ceased": {"enabled": False},
+    "traffic_ceased": {"enabled": False, "max_residual_pps": 1},
 }
 
 

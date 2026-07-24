@@ -146,3 +146,65 @@ def test_traffic_skipped_on_internal_interface():
         interfaces=("lo0.0",),
     )
     assert run_check(InterfaceTrafficCheck(), ctx)[0].status is Status.SKIP
+
+
+from migration_validator.checks.ifaces import TrafficCeasedCheck
+
+
+def _ceased_ctx(subject_pps, baseline_pps, config=None):
+    from migration_validator.config import CheckConfig
+
+    config = config or CheckConfig({"traffic_ceased": {"enabled": True}})
+    return _ctx(
+        subject={
+            "interfaces": {
+                "ge-0/0/2.113": {"input_pps": subject_pps, "output_pps": subject_pps}
+            }
+        },
+        baseline={
+            "interfaces": {
+                "ge-0/0/2.113": {"input_pps": baseline_pps, "output_pps": baseline_pps}
+            }
+        },
+        config=config,
+    )
+
+
+def test_traffic_ceased_is_disabled_by_default():
+    ctx = _ctx(
+        subject={"interfaces": {"ge-0/0/2.113": {"input_pps": 400, "output_pps": 400}}},
+        baseline={"interfaces": {"ge-0/0/2.113": {"input_pps": 400, "output_pps": 400}}},
+    )
+    assert run_check(TrafficCeasedCheck(), ctx) == []
+
+
+def test_traffic_ceased_passes_when_old_port_went_quiet():
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(0, 400))[0]
+    assert result.status is Status.PASS
+
+
+def test_traffic_ceased_warns_when_old_port_still_carries_traffic():
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(380, 400))[0]
+    assert result.status is Status.WARN
+    assert "380" in result.message
+
+
+def test_traffic_ceased_tolerates_residual_pps():
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(1, 400))[0]
+    assert result.status is Status.PASS
+
+
+def test_traffic_ceased_residual_threshold_is_configurable():
+    from migration_validator.config import CheckConfig
+
+    config = CheckConfig(
+        {"traffic_ceased": {"enabled": True, "max_residual_pps": 500}}
+    )
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(380, 400, config))[0]
+    assert result.status is Status.PASS
+
+
+def test_traffic_ceased_skips_when_baseline_had_no_traffic():
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(0, 0))[0]
+    assert result.status is Status.SKIP
+    assert "baseline" in result.message
