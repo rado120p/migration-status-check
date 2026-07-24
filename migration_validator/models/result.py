@@ -42,7 +42,7 @@ class Severity(str, Enum):
 
 
 class Outcome(str, Enum):
-    """Co check namerí - status z toho odvodi framework."""
+    """Co check nameri - status z toho odvodi framework."""
 
     OK = "ok"
     DEGRADED = "degraded"

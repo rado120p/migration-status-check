@@ -24,6 +24,22 @@ def test_full_migration_run_is_green(synthetic_snapshot):
     assert json.loads(to_json(result))["schema_version"] == 1
 
 
+def test_evpn_checks_produce_real_verdicts_on_real_data(synthetic_snapshot):
+    """Guards against the EVPN fact-schema silently miskeying into all-SKIP."""
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    all_checks = [check for scope in result.scopes for check in scope.checks]
+
+    for check_id in ("evpn_vpws_status", "evpn_esi_status", "evpn_mac_count"):
+        matching = [check for check in all_checks if check.id == check_id]
+        assert any(check.status is not Status.SKIP for check in matching), (
+            f"expected at least one non-SKIP result for {check_id!r}"
+        )
+
+
 def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration", pps=400)
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration", pps=50)
