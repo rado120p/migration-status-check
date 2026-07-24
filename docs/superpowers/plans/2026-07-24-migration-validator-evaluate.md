@@ -5124,6 +5124,12 @@ def _load_snapshot(path: str) -> Snapshot:
         raise ToolError(str(error)) from error
     except json.JSONDecodeError as error:
         raise ToolError(f"{path}: nevalidni JSON ({error})") from error
+    except (KeyError, TypeError) as error:
+        # Snapshot je JSON-validni a ma spravnou schema_version, ale chybi mu
+        # povinne klice (device/capture) nebo maji spatny typ. Bez tohoto
+        # zachytu by KeyError propadl ven z main() jako traceback a exit 1 -
+        # coz by splynulo se selhanym testem. Chyba nastroje musi byt exit 2.
+        raise ToolError(f"{path}: poskozeny snapshot ({error})") from error
 
 
 def _parse_statuses(value: str | None) -> set[Status] | None:
