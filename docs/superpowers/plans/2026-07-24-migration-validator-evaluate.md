@@ -4153,6 +4153,28 @@ def test_evaluate_without_baseline_runs_state_checks_only():
     assert all(c.status is Status.SKIP for c in compare_only)
 
 
+def test_healthy_scope_without_baseline_is_pass_not_skip():
+    """Compare-only check dava SKIP, ale zdrava sluzba musi svitit zelene."""
+    result = api.evaluate(_old(), now=NOW)
+
+    scope = result.scopes[0]
+    assert any(check.status is Status.SKIP for check in scope.checks)
+    assert scope.status is Status.PASS
+
+
+def test_scope_is_skip_only_when_everything_skipped():
+    subject = _old()
+    subject.capture.collectors = {
+        name: {"status": "error", "message": "RpcError: timeout"}
+        for name in ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+    }
+    subject.probes = {"ping": []}  # bez cilu -> ping_reachability tez SKIP
+
+    result = api.evaluate(subject, now=NOW)
+
+    assert result.scopes[0].status is Status.SKIP
+
+
 def test_evaluate_with_baseline_matches_and_compares():
     result = api.evaluate(_new(), baseline=_old(), now=NOW)
 
@@ -4362,10 +4384,17 @@ def _run_scope(
     for check in all_checks():
         results.extend(run_check(check, ctx))
 
+    # SKIP vyhrava jen kdyz neni co lepsiho hlasit. Bez teto podminky by
+    # zdrava IPVPN sluzba v rezimu bez baseline svitila SKIP jen proto, ze
+    # bgp_prefix_counts je compare-only - a operator by prisel o zeleny
+    # signal prave u sluzeb s nejvic kontrolami.
+    reported = [result.status for result in results if result.status is not Status.SKIP]
+    status = Status.worst(reported) if reported else Status.SKIP
+
     return ScopeResult(
         scope_id=scope.id,
         key=scope.key.to_dict() if scope.key else {},
-        status=Status.worst(result.status for result in results),
+        status=status,
         match=match,
         checks=results,
     )
@@ -4517,7 +4546,7 @@ def list_checks() -> list[dict[str, Any]]:
 - [ ] **Step 6: Spusť test**
 
 Run: `.venv/bin/pytest tests/test_engine.py -v`
-Expected: PASS, 11 testů
+Expected: PASS, 13 testů
 
 - [ ] **Step 7: Spusť celou sadu**
 
