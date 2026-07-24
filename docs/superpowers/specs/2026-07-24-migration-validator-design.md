@@ -122,8 +122,11 @@ rozpadlé na služby. **Stejný kód, stejný JSON tvar, jiná granularita.**
 
 Důsledky:
 
-- **Sběr na inventory nezávisí.** `capture` jede pevnou sadu RPC podle platformy. Snapshot je
-  proto v obou režimech stejný.
+- **Bulk sběr na inventory nezávisí.** `capture` jede pevnou sadu RPC podle platformy, takže blok
+  `facts` je v obou režimech stejný.
+- **Aktivní probes na inventory závisí.** Ping potřebuje cíl a source adresu, což jsou informace
+  ze scope. V device režimu (bez inventory) se ping **nespouští** a snapshot má `probes.ping: []`.
+  Invariant tedy zní: *`facts` jsou inventory-independent, `probes` nikoliv.*
 - **Inventory se ukládá do snapshotu**, pokud byla použita → snapshot je self-contained.
 - Checky, které bez inventory nedávají smysl (ping potřebuje cíl a source adresu), to deklarují
   přes `requires_inventory` a bez ní vrací `SKIP`.
@@ -258,8 +261,8 @@ registry a objeví se v obou rozhraních.
 1. connect                    PyEZ Device, auth, facts (model, verze, platforma)
 2. bulk collectors            paralelně, jeden RPC = jedna oblast → facts
 3. build scopes               z inventory (nebo jediný device scope)
-4. resolve ping targets       scope + ARP facts → seznam cílů
-5. probes: ping               aktivní, per cíl
+4. resolve ping targets       scope + ARP facts → seznam cílů   (jen service scopy)
+5. probes: ping               aktivní, per cíl                  (v device režimu se přeskočí)
 6. freeze                     zápis snapshot.json
 ```
 
