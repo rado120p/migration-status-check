@@ -1,0 +1,164 @@
+"""CLI - tenky obal nad api.py.
+
+Cokoliv umi CLI, umi i GUI, protoze jdou stejnou cestou.
+capture podprikaz doplni Plan 2.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from migration_validator import api
+from migration_validator.config import default_config, load_config
+from migration_validator.models.result import Status
+from migration_validator.models.snapshot import (
+    Snapshot,
+    SnapshotVersionError,
+    load_snapshot,
+)
+from migration_validator.reporting.json_report import to_json, write_json
+from migration_validator.reporting.text_report import filter_result, render
+from migration_validator.scoping.mapping import empty_mapping, load_mapping
+from migration_validator.scoping.matcher import match_scopes
+
+EXIT_OK = 0
+EXIT_FAILED_CHECKS = 1
+EXIT_TOOL_ERROR = 2
+
+
+class ToolError(Exception):
+    """Nastroj selhal - jina vec nez selhany test."""
+
+
+def _load_snapshot(path: str) -> Snapshot:
+    try:
+        return load_snapshot(path)
+    except FileNotFoundError as error:
+        raise ToolError(f"snapshot nenalezen: {path}") from error
+    except SnapshotVersionError as error:
+        raise ToolError(str(error)) from error
+    except json.JSONDecodeError as error:
+        raise ToolError(f"{path}: nevalidni JSON ({error})") from error
+
+
+def _parse_statuses(value: str | None) -> set[Status] | None:
+    if not value:
+        return None
+    return {Status(item.strip().upper()) for item in value.split(",") if item.strip()}
+
+
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    subject = _load_snapshot(args.snapshot)
+    baseline = _load_snapshot(args.baseline) if args.baseline else None
+    mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
+    config = load_config(args.config) if args.config else default_config()
+
+    result = api.evaluate(subject, baseline=baseline, mapping=mapping, config=config)
+
+    shown = filter_result(result, text=args.filter, statuses=_parse_statuses(args.status))
+
+    if args.format == "json":
+        if args.output:
+            write_json(shown, args.output)
+        else:
+            print(to_json(shown))
+    else:
+        print(render(shown), end="")
+        if args.output:
+            write_json(result, args.output)
+
+    if result.summary["fail"]:
+        return EXIT_FAILED_CHECKS
+    if args.warn_as_error and result.summary["warn"]:
+        return EXIT_FAILED_CHECKS
+    return EXIT_OK
+
+
+def _cmd_match(args: argparse.Namespace) -> int:
+    baseline = _load_snapshot(args.baseline)
+    subject = _load_snapshot(args.subject)
+    mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
+
+    matches = match_scopes(baseline.scopes, subject.scopes, mapping)
+
+    print(f"SPAROVANO ({len(matches.pairs)})")
+    for pair in matches.pairs:
+        print(f"  {pair.confidence:<8} {pair.method:<45} {pair.baseline.id}")
+        print(f"           -> {pair.subject.id}")
+
+    print(f"\nNESPAROVANO baseline ({len(matches.unmatched_baseline)})")
+    for item in matches.unmatched_baseline:
+        print(f"  {item.scope.id:<50} {item.reason}")
+
+    print(f"\nNESPAROVANO subject ({len(matches.unmatched_subject)})")
+    for item in matches.unmatched_subject:
+        print(f"  {item.scope.id:<50} {item.reason}")
+
+    return EXIT_OK
+
+
+def _cmd_checks(args: argparse.Namespace) -> int:
+    described = api.list_checks()
+    if args.format == "json":
+        print(json.dumps(described, indent=2, ensure_ascii=False))
+        return EXIT_OK
+
+    print(f"{'ID':<24} {'MODE':<8} {'SEVERITY':<9} TYPY SLUZEB")
+    for item in described:
+        types = ", ".join(item["service_types"]) if item["service_types"] else "vsechny"
+        print(
+            f"{item['id']:<24} {item['mode']:<8} "
+            f"{item['default_severity']:<9} {types}"
+        )
+    return EXIT_OK
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="mig-validate",
+        description="Validace stavu sitovych sluzeb pri migraci Junos -> Junos EVO",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    evaluate = sub.add_parser("evaluate", help="vyhodnoti snapshot, volitelne proti baseline")
+    evaluate.add_argument("--snapshot", required=True)
+    evaluate.add_argument("--baseline")
+    evaluate.add_argument("--mapping")
+    evaluate.add_argument("--config")
+    evaluate.add_argument("--format", choices=("text", "json"), default="text")
+    evaluate.add_argument("--output")
+    evaluate.add_argument("--filter", help="podretezec v description nebo scope id")
+    evaluate.add_argument("--status", help="carkou oddeleny seznam: pass,warn,fail,skip")
+    evaluate.add_argument("--warn-as-error", action="store_true")
+    evaluate.set_defaults(func=_cmd_evaluate)
+
+    match = sub.add_parser("match", help="jen parovani sluzeb, pro ladeni mapping.yml")
+    match.add_argument("--baseline", required=True)
+    match.add_argument("--subject", required=True)
+    match.add_argument("--mapping")
+    match.set_defaults(func=_cmd_match)
+
+    checks = sub.add_parser("checks", help="vypise registrovane checky")
+    checks.add_argument("--format", choices=("text", "json"), default="text")
+    checks.set_defaults(func=_cmd_checks)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.func(args)
+    except ToolError as error:
+        print(f"chyba: {error}", file=sys.stderr)
+        return EXIT_TOOL_ERROR
+    except (OSError, ValueError) as error:
+        print(f"chyba: {error}", file=sys.stderr)
+        return EXIT_TOOL_ERROR
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
