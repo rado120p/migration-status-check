@@ -42,6 +42,8 @@ def _load_snapshot(path: str) -> Snapshot:
         raise ToolError(str(error)) from error
     except json.JSONDecodeError as error:
         raise ToolError(f"{path}: nevalidni JSON ({error})") from error
+    except (KeyError, TypeError) as error:
+        raise ToolError(f"{path}: poskozeny snapshot ({error})") from error
 
 
 def _parse_statuses(value: str | None) -> set[Status] | None:

@@ -106,6 +106,18 @@ def test_wrong_schema_version_is_tool_error(tmp_path, capsys):
     assert "99" in capsys.readouterr().err
 
 
+def test_incomplete_snapshot_is_tool_error(tmp_path, capsys):
+    path = tmp_path / "incomplete.json"
+    path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+
+    code = main(["evaluate", "--snapshot", str(path)])
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "chyba" in err
+    assert str(path) in err
+
+
 def test_checks_subcommand_lists_registry(capsys):
     assert main(["checks"]) == 0
     output = capsys.readouterr().out
