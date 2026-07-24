@@ -1,7 +1,11 @@
+from pathlib import Path
+
 import pytest
 
 from migration_validator.models.inventory import Inventory, ServiceEntry
 from migration_validator.scoping.builder import build_scopes, is_management
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def _entry(**kwargs) -> ServiceEntry:
@@ -134,8 +138,8 @@ def test_irb_virtual_gw_lands_in_selectors():
 def test_real_inventory_files_produce_expected_scope_counts():
     from migration_validator.models.inventory import load_inventory
 
-    for path in ("172.20.20.4.yml", "172.20.20.5.yml"):
-        scopes = build_scopes(load_inventory(path))
+    for name in ("172.20.20.4.yml", "172.20.20.5.yml"):
+        scopes = build_scopes(load_inventory(FIXTURES / name))
         types = {scope.key.service_type for scope in scopes}
         assert "Layer1" not in types
         assert not any(
