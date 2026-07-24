@@ -1949,6 +1949,25 @@ def test_ignored_scopes_are_dropped_from_both_sides():
     assert result.unmatched_subject == []
 
 
+def test_ambiguous_under_one_key_is_not_paired_under_a_sibling_key():
+    """Vicehodnotove selektory: scope zahozeny jako nejednoznacny pod jednim
+    klicem se nesmi sparovat pod jinym klicem tehoz pravidla."""
+    baseline = [_scope("ge-0/0/9.7", None, "Internet", vlans=["7", "8"])]
+    subject = [
+        _scope("et-0/0/1.7", None, "Internet", vlans=["7"]),
+        _scope("et-0/0/2.7", None, "Internet", vlans=["7"]),
+        _scope("et-0/0/3.8", None, "Internet", vlans=["8"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    paired_ids = {pair.baseline.id for pair in result.pairs}
+    unmatched_ids = {item.scope.id for item in result.unmatched_baseline}
+    assert not (paired_ids & unmatched_ids), "scope je zaroven sparovany i nesparovany"
+    assert result.pairs == []
+    assert "ambiguous" in result.unmatched_baseline[0].reason
+
+
 def test_different_service_type_never_matches_automatically():
     baseline = [_scope("ge-0/0/5.0", "SAME-NAME", "Internet")]
     subject = [_scope("ae0.14", "SAME-NAME", "E-LAN", subtype="vlan-aware")]
@@ -2141,7 +2160,16 @@ def match_scopes(
             if not s_hits:
                 continue
             if len(b_hits) == 1 and len(s_hits) == 1:
-                if id(b_hits[0]) in paired or id(s_hits[0]) in paired:
+                # Kontroluje se paired I dropped: subnet a vlan pravidla generuji
+                # vic klicu na scope, takze scope zahozeny jako nejednoznacny pod
+                # jednim klicem by se pod jinym klicem tehoz pravidla jinak
+                # sparoval - a skoncil by zaroven v pairs i v unmatched.
+                if (
+                    id(b_hits[0]) in paired
+                    or id(s_hits[0]) in paired
+                    or id(b_hits[0]) in dropped
+                    or id(s_hits[0]) in dropped
+                ):
                     continue
                 result.pairs.append(
                     MatchedPair(
