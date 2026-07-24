@@ -392,7 +392,7 @@ check si vždy vytáhne data přes `scope.select(facts)`.
   ],
 
   "unmatched": {
-    "baseline": [{"scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Layer1", "reason": "no candidate on subject"}],
+    "baseline": [{"scope_id": "svc:L3VPN-CPE99-NNI:IPVPN", "reason": "no candidate on subject"}],
     "subject":  [{"scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:E-LAN",  "reason": "new service, no baseline"}]
   },
 
@@ -551,7 +551,7 @@ výpovědní hodnotu — jen by generovaly šum.
 **Tranzitní rozhraní** (jediná, na kterých běží `interface_errors` a `interface_traffic`):
 
 ```
-ge   xe   et
+ge   xe   et   ae
 ```
 
 **Interní rozhraní** — pro counter-based checky se vždy přeskočí (`SKIP`, ne WARN):
@@ -569,6 +569,38 @@ přeskakovat a nástroj ztratí smysl.
 Klasifikace je **vlastnost checku, ne scope**. Rozhraní `irb.14` je na seznamu interních, takže
 nedostane counter checky — ale pořád je to plnohodnotná Internet služba a ARP, ping i BGP checky
 na něm proběhnou normálně.
+
+### Způsobilost pro service scope
+
+Odlišná vrstva od klasifikace výše. Ta říká *"na tomhle nemá smysl měřit countery"*; tahle říká
+*"tohle vůbec není migrovaná služba"*.
+
+**Service scope vzniká jen pro migrované typy služeb:**
+
+```
+Internet   IPVPN   E-Line   E-LAN   Core
+```
+
+**Záznamy `Layer1` / `physical-port` se nestanou samostatnými scopy.** Použijí se jako selektor
+rodičovského fyzického rozhraní u logických jednotek, které na nich sedí — `interface_state` na
+fyzickém portu tedy proběhne, jen jako součást služby, která přes něj jede.
+
+**Důvod:** `Layer1` je v reálných datech nejčastější typ (16 z 39 záznamů ve vzorku). Kdyby se
+z každého stal scope, tvořily by nespárované fyzické porty většinu seznamu `unmatched` a ten by
+přestal být čitelný — což by zabilo přesně tu vlastnost, kvůli které existuje.
+
+**Management rozhraní jsou vyloučena bez ohledu na `service_type`:**
+
+```
+fxp   em   me   vme   bme   re0:mgmt-*   re1:mgmt-*
+```
+
+Nestanou se scopem, nepárují se, neobjeví se v `unmatched` a **nepingují se**. To je nutné proto,
+že parser je stále kategorizuje jako `Internet` (`fxp0.0`, `re0:mgmt-0.0` ve vzorových datech) —
+bez tohoto pravidla by nástroj pingoval do management sítě.
+
+Vyloučení je zabudované v nástroji, ne v `mapping.yml`, aby ho nemusel vyplňovat každý operátor
+znovu. `ignore:` v `mapping.yml` zůstává pro případy specifické pro danou migraci.
 
 ### Detaily ping checku
 
@@ -643,25 +675,28 @@ v `summary` a musí být vidět v GUI i v terminálu.
 |---|---|
 | prázdná description (`ge-0/0/4.0` ↔ `et-0/0/10.0`, obojí IPVPN) | pravidlo 3 — `routing_instance: L3VPN-CPE14-UNI` |
 | duplicitní description na fyzickém i logickém rozhraní | složený klíč s `service_type` |
-| restrukturalizovaná služba (`ge-0/0/5.0` Internet ↔ `ae0.14` E-LAN + `irb.14` Internet) | Internet↔Internet se spáruje pravidlem 2; Layer1↔E-LAN zůstane nespárované a nahlásí se — což je správně, služba se opravdu změnila |
+| restrukturalizovaná služba (`ge-0/0/5.0` Internet ↔ `ae0.14` E-LAN + `irb.14` Internet) | Internet↔Internet (`ge-0/0/5.0` ↔ `irb.14`) se spáruje pravidlem 2. `ae0.14` (E-LAN) zůstane v `unmatched.subject` jako nová služba — což je správně, na starém boxu opravdu neexistovala. Doplní se ručně přes `mapping.yml`, pokud ji operátor chce spárovat. |
+| management rozhraní (`fxp0.0`, `re0:mgmt-0.0`, oboje `service_type: Internet`) | nestanou se scopem vůbec — vyloučeno způsobilostí, nikoli párováním |
 
 ### `mapping.yml`
 
 ```yaml
 mappings:
-  - baseline: {description: EVPN-VLAN-AWARE-INTERNET, service_type: Layer1}
+  - baseline: {description: EVPN-VLAN-AWARE-INTERNET, service_type: Internet}
     subject:  {description: EVPN-VLAN-AWARE-INTERNET, service_type: E-LAN}
     note: "služba restrukturalizována na EVPN vlan-aware s IRB gateway"
   - baseline: {interface: "ge-0/0/4.0"}
     subject:  {interface: "et-0/0/10.0"}
 
 ignore:
-  - {interface: "fxp0.0"}          # management, nemigruje se
-  - {interface: "re0:mgmt-0.0"}
+  - {description: "EVPN-VLAN-AWARE-L3VPN"}   # v této migraci se neřeší
+  - {interface: "ge-0/0/7.0"}
 ```
 
-`ignore` je součástí návrhu záměrně: bez něj bude mgmt rozhraní věčně v `unmatched` a operátor si
-zvykne ten seznam přeskakovat — čímž přijde o jeho hlavní hodnotu.
+`ignore` slouží pro případy specifické pro danou migraci. Management rozhraní se sem psát nemusí —
+jsou vyloučena už na úrovni způsobilosti pro scope (viz výše). Bez obojího by seznam `unmatched`
+zaplavily položky, které nikoho nezajímají, operátor by si zvykl ho přeskakovat a nástroj by přišel
+o svou hlavní pojistku.
 
 ---
 
@@ -717,8 +752,8 @@ EVPN-VPWS-CPE13-NNI           E-Line     ✗      vpws-sid-pe-status: Down
 EVPN-VLAN-AWARE-CPE13-NNI     E-LAN      ⚠      MAC v BD-313: 42 → 11
 
 NESPÁROVÁNO
-  baseline  EVPN-VLAN-AWARE-INTERNET (Layer1)   žádný kandidát na subject
-  subject   EVPN-VLAN-AWARE-INTERNET (E-LAN)    nová služba, chybí baseline
+  baseline  L3VPN-CPE99-NNI          (IPVPN)   žádný kandidát na subject
+  subject   EVPN-VLAN-AWARE-INTERNET (E-LAN)   nová služba, chybí baseline
 ```
 
 Nespárované jsou v tabulce **vždy**, i když je všechno ostatní zelené.
