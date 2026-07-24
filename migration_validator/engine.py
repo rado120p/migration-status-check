@@ -1,0 +1,214 @@
+"""Orchestrace vyhodnoceni snapshotu.
+
+Engine nesaha na sit. Vsechna data pochazeji ze snapshotu.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any
+
+from migration_validator.checks import all as _all_checks  # noqa: F401  (registrace)
+from migration_validator.checks.base import CheckContext, run_check
+from migration_validator.checks.registry import all_checks
+from migration_validator.config import CheckConfig, default_config
+from migration_validator.models.result import (
+    MatchInfo,
+    RunResult,
+    ScopeResult,
+    Status,
+)
+from migration_validator.models.scope import Scope, device_scope
+from migration_validator.models.snapshot import Snapshot
+from migration_validator.scoping.mapping import Mapping, empty_mapping
+from migration_validator.scoping.matcher import MatchedPair, match_scopes
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _snapshot_meta(snapshot: Snapshot) -> dict[str, Any]:
+    return {
+        "address": snapshot.device.address,
+        "phase": snapshot.capture.phase,
+        "captured_at": snapshot.capture.finished_at or snapshot.capture.started_at,
+    }
+
+
+def _scopes_of(snapshot: Snapshot) -> list[Scope]:
+    return snapshot.scopes if snapshot.scopes else [device_scope()]
+
+
+def _unmatched_entry(scope: Scope, reason: str) -> dict[str, Any]:
+    return {
+        "scope_id": scope.id,
+        "description": scope.key.description if scope.key else None,
+        "service_type": scope.key.service_type if scope.key else None,
+        "reason": reason,
+    }
+
+
+def _aligned_baseline_data(
+    baseline_scope: Scope, scope: Scope, baseline: Snapshot
+) -> dict[str, Any]:
+    """Vybere baseline data a preslovnuje klice interfaces na jmena subjektu.
+
+    Baseline scope selektuje podle sveho vlastniho jmena rozhrani (napr.
+    ge-0/0/2.113 na MX). Checky (Task 10, napr. interface_traffic) ale
+    hledaji baseline hodnotu pod stejnym klicem, jaky ma SUBJECT rozhrani
+    (et-0/0/8.113 na EVO) - to je bezny dusledek migrace na jiny hardware.
+    Bez preslovnovani by srovnani tise spadlo do stavoveho rezimu (baseline
+    nenalezena) a ztratil by se signal o poklesu provozu presne u sluzeb,
+    kde se rozhrani prejmenovalo. Presmerovani je poziciove: kazda sluzba
+    ma v selektoru prave jedno rozhrani (scoping/builder.py), takze zip
+    dvou jednoprvkovych seznamu je jednoznacny.
+    """
+    data = baseline_scope.select(baseline.facts, baseline.probes)
+    rename = dict(zip(baseline_scope.selectors.interfaces, scope.selectors.interfaces))
+    if rename:
+        data["interfaces"] = {
+            rename.get(name, name): iface_data
+            for name, iface_data in data.get("interfaces", {}).items()
+        }
+    return data
+
+
+def _run_scope(
+    scope: Scope,
+    subject: Snapshot,
+    baseline_scope: Scope | None,
+    baseline: Snapshot | None,
+    config: CheckConfig,
+    match: MatchInfo | None,
+) -> ScopeResult:
+    subject_data = scope.select(subject.facts, subject.probes)
+    baseline_data = (
+        _aligned_baseline_data(baseline_scope, scope, baseline)
+        if baseline_scope is not None and baseline is not None
+        else None
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject=subject_data,
+        baseline=baseline_data,
+        config=config,
+        failed_collectors=subject.capture.failed_collectors(),
+    )
+
+    results = []
+    for check in all_checks():
+        results.extend(run_check(check, ctx))
+
+    # SKIP vyhrava jen kdyz neni co lepsiho hlasit. Bez teto podminky by
+    # zdrava IPVPN sluzba v rezimu bez baseline svitila SKIP jen proto, ze
+    # bgp_prefix_counts je compare-only - a operator by prisel o zeleny
+    # signal prave u sluzeb s nejvic kontrolami.
+    reported = [result.status for result in results if result.status is not Status.SKIP]
+    status = Status.worst(reported) if reported else Status.SKIP
+
+    return ScopeResult(
+        scope_id=scope.id,
+        key=scope.key.to_dict() if scope.key else {},
+        status=status,
+        match=match,
+        checks=results,
+    )
+
+
+def _match_info(pair: MatchedPair) -> MatchInfo:
+    return MatchInfo(
+        status="matched",
+        method=pair.method,
+        confidence=pair.confidence,
+        baseline_interfaces=list(pair.baseline.selectors.interfaces),
+        subject_interfaces=list(pair.subject.selectors.interfaces),
+    )
+
+
+def _unassigned_bgp_peers(subject: Snapshot, scopes: list[Scope]) -> list[dict[str, Any]]:
+    assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    if any(scope.is_device for scope in scopes):
+        return []
+    return [
+        {
+            "peer": peer,
+            "routing_instance": data.get("routing_instance"),
+            "snapshot": "subject",
+        }
+        for peer, data in sorted((subject.facts.get("bgp") or {}).items())
+        if peer not in assigned
+    ]
+
+
+def evaluate_snapshots(
+    subject: Snapshot,
+    baseline: Snapshot | None = None,
+    mapping: Mapping | None = None,
+    config: CheckConfig | None = None,
+    now: str | None = None,
+) -> RunResult:
+    config = config or default_config()
+    mapping = mapping or empty_mapping()
+
+    subject_scopes = _scopes_of(subject)
+    scope_results: list[ScopeResult] = []
+    unmatched: dict[str, list[dict[str, Any]]] = {"baseline": [], "subject": []}
+    matched_count = 0
+
+    if baseline is None:
+        for scope in subject_scopes:
+            scope_results.append(_run_scope(scope, subject, None, None, config, None))
+    else:
+        matches = match_scopes(_scopes_of(baseline), subject_scopes, mapping)
+        matched_count = len(matches.pairs)
+
+        for pair in matches.pairs:
+            scope_results.append(
+                _run_scope(
+                    pair.subject, subject, pair.baseline, baseline, config, _match_info(pair)
+                )
+            )
+
+        for item in matches.unmatched_subject:
+            scope_results.append(
+                _run_scope(
+                    item.scope,
+                    subject,
+                    None,
+                    None,
+                    config,
+                    MatchInfo(
+                        status="unmatched",
+                        reason=item.reason,
+                        subject_interfaces=list(item.scope.selectors.interfaces),
+                    ),
+                )
+            )
+            unmatched["subject"].append(_unmatched_entry(item.scope, item.reason))
+
+        for item in matches.unmatched_baseline:
+            unmatched["baseline"].append(_unmatched_entry(item.scope, item.reason))
+
+    summary = {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "skip": 0,
+        "scopes_matched": matched_count,
+        "unmatched_baseline": len(unmatched["baseline"]),
+        "unmatched_subject": len(unmatched["subject"]),
+    }
+    for scope_result in scope_results:
+        for check in scope_result.checks:
+            summary[check.status.value.lower()] += 1
+
+    return RunResult(
+        evaluated_at=now or _now(),
+        subject=_snapshot_meta(subject),
+        baseline=_snapshot_meta(baseline) if baseline else None,
+        summary=summary,
+        scopes=scope_results,
+        unmatched=unmatched,
+        unassigned={"bgp_peers": _unassigned_bgp_peers(subject, subject_scopes)},
+    )
