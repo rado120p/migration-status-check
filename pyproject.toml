@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "migration-validator"
+version = "0.1.0"
+description = "Validace stavu sitovych sluzeb pri migraci Junos -> Junos EVO"
+requires-python = ">=3.11"
+dependencies = [
+    "junos-eznc>=2.7",
+    "PyYAML>=6.0",
+    "lxml>=5.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mig-validate = "migration_validator.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["migration_validator*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
