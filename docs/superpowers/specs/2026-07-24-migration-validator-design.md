@@ -693,6 +693,12 @@ ignore:
   - {interface: "ge-0/0/7.0"}
 ```
 
+**Jeden řádek = jedna služba.** Selektor `{interface: ...}` cílí na **logickou jednotku**
+(`ge-0/0/2.113`), ne na fyzický port. Napsat `ge-0/0/2` tedy nezasáhne pět služeb, které přes něj
+jedou — nezasáhne nic. Je to záměr: u `mappings` musí pravidlo vyjít na právě jeden scope na každé
+straně, jinak vznikne nejednoznačnost a pár se nevytvoří, a mít u `ignore` opačnou sémantiku téhož
+zápisu by bylo matoucí.
+
 `ignore` slouží pro případy specifické pro danou migraci. Management rozhraní se sem psát nemusí —
 jsou vyloučena už na úrovni způsobilosti pro scope (viz výše). Bez obojího by seznam `unmatched`
 zaplavily položky, které nikoho nezajímají, operátor by si zvykl ho přeskakovat a nástroj by přišel
