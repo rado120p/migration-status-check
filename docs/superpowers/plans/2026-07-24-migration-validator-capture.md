@@ -23,6 +23,14 @@ Platí všechna omezení z Plánu 1, plus:
 - **Každý collector musí mít fixture pro obě platformy** v `tests/fixtures/rpc/{junos,junos-evo}/`.
 - **XPath se nepíše naslepo.** Každý parser se ověřuje proti nahranému XML z laborky (`mig-validate record`).
 - Autentizace přebírá konvenci z existujících parserů: `--auth key|password`, `--username`, `--key-file`, default `ansible` + `~/.ssh/id_rsa`.
+- **Collectory MUSÍ dodržet kontrakt fact-schématu** ze specu (sekce *Kontrakt fact-schématu*).
+  Klíč mimo kontrakt způsobí, že check tiše vrátí SKIP — offline testy Plánu 1 to nechytnou,
+  protože jejich fixtures jsou konzistentní z konstrukce. Zvlášť pozor: `evpn_vpws` a `evpn_mac`
+  se klíčují **názvem routing-instance**, ne rozhraním; `evpn_esi.interface` musí být název, který
+  scope matchne (logická jednotka, nebo doplnit `routing_instance` do schématu). K tomu patří
+  **conformance test**: pro každou oblast test „collector emituje X → check konzumuje X" nad
+  nahraným XML, aby byly obě poloviny švu (AR-6) připnuté proti sobě, ne každá proti své vlastní
+  představě. Zvaž sdílený `SCHEMA` modul, který importuje collector i conformance test.
 
 ## Laboratorní prostředí
 

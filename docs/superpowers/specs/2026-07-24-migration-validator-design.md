@@ -842,6 +842,40 @@ Test suite běží pod `pytest`, bez markerů "potřebuje síť" u čehokoliv kr
 
 ---
 
+## Kontrakt fact-schématu (závazné pro collectory Plánu 2)
+
+Checky čtou `facts` přes `Scope.select()`. Klíče, podle kterých se filtruje, jsou proto **závazné
+rozhraní**: pokud collector v Plánu 2 vyprodukuje data pod jiným klíčem, check tiše vrátí `SKIP` —
+a protože SKIP není FAIL, offline testy to nemusí odhalit (fixtures v `conftest.py` si data staví
+ze stejných selektorů, takže jsou konzistentní z konstrukce). Proto je kontrakt sepsán zde
+explicitně a Plán 2 má u collectorů conformance test.
+
+| oblast | tvar | filtruje se podle |
+|---|---|---|
+| `interfaces` | `{ifname: {admin_status, oper_status, input_pps, output_pps, input_errors, output_errors, framing_errors}}` | název rozhraní (logická jednotka i fyzický rodič) |
+| `arp` | `[{ip, mac, interface, routing_instance}]` | `interface` |
+| `bgp` | `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted, advertised}}}` | `peer_ip` ∈ `bgp_neighbors` |
+| `evpn_vpws` | `{routing_instance: {status, local_sid, remote_sid}}` | **klíč = `routing_instance`** |
+| `evpn_esi` | `{esi: {status, df_role, interface}}` | `interface` (viz níže) |
+| `evpn_mac` | `{routing_instance: {bridge_domain: count}}` | **klíč = `routing_instance`**; `bridge_domain` je `"-"` u vlan-based |
+
+Dvě místa, kde je keying křehký a Plán 2 na ně musí dát pozor:
+
+- **`evpn_esi.interface` musí být název, který scope spolehlivě matchne.** Junos hlásí ESI status
+  s fyzickým/AE názvem (`ae0`, `et-0/0/8`), zatímco scope drží logickou jednotku (`ae0.14`).
+  Match projde jen tehdy, když je fyzický rodič v `physical_interfaces` — a ten se plní pouze
+  pokud v inventory existuje `Layer1` záznam pro daný port. Doporučení pro Plán 2: ESI collector
+  ať emituje `interface`, který scope má (logickou jednotku), **nebo** ať se do schématu doplní
+  `routing_instance` a ESI se matchuje i podle něj (robustnější). Regresní fixture s ESI na portu
+  bez `Layer1` rodiče to má pojistit.
+- **`evpn_vpws` a `evpn_mac` se klíčují názvem routing-instance, ne rozhraním.** To je záměr
+  (název instance je při migraci stabilní, název portu ne — viz AR-6b), ale collector to musí
+  dodržet přesně.
+
+**`unassigned.bgp_peers`** hlásí zatím jen peery na *subjektu* (nové zařízení), nepřiřazené k žádné
+službě — to je pro migrační workflow to podstatné. Baseline-side nepřiřazené peery se záměrně
+nehlásí; kdyby se ukázalo, že jsou potřeba, přidá se symetricky.
+
 ## Předpoklady a známé limity
 
 - **Inventory je vstup, ne výstup validatoru.** Kvalita párování je omezená kvalitou description
