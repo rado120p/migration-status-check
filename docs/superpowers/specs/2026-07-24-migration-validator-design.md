@@ -151,6 +151,22 @@ zařízení a výsledek se až následně rozdělí mezi služby.
 **Důsledek:** změní-li se kritérium, mění se check, ne sběr — a staré snapshoty zůstávají
 použitelné. Celá rozhodovací logika je testovatelná offline.
 
+### AR-6b: Zarovnání názvů rozhraní při porovnání (doplněno při implementaci)
+
+**Problém:** checky dostávají data profiltrovaná scopem a `interface_traffic` porovnává baseline vs
+subject **podle názvu rozhraní**. Při migraci se ale port přejmenuje (`ge-0/0/2.113` → `et-0/0/8.113`),
+takže baseline data jsou pod jiným klíčem, než jaký check hledá u subjektu. Bez ošetření by porovnání
+tiše spadlo do stavového režimu a ztratil se signál o poklesu datovosti — přesně u služeb, kde se
+rozhraní přejmenovalo.
+
+**Řešení:** engine u spárované dvojice přejmenuje klíče baseline rozhraní na názvy subjektu, než data
+předá checkům (`engine._aligned_baseline_data`). Je to poziční mapování a je jednoznačné, protože
+service scope má v selektoru právě jedno logické rozhraní (AR-8, `scoping/builder`).
+
+**Rozsah:** dotčen je jen `interface_traffic`. BGP se klíčuje IP adresou peera a EVPN názvem instance —
+obojí zůstává při migraci stabilní, takže se zarovnání netýká. Kdyby invariant „jedno rozhraní na scope"
+kdy padl, mapování se má chránit assertem, ať selže hlasitě.
+
 ### AR-7: Platformní rozdíly řeší collector, ne check
 
 **Rozhodnutí:** collector deklaruje podporované platformy a případně má variantu RPC per
