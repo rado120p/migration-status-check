@@ -127,6 +127,83 @@ def test_parse_ping_result():
     assert result["rtt_avg_ms"] == pytest.approx(1.24)
 
 
+def test_parse_ping_result_records_internal_error():
+    """'bind: Can't assign requested address' - ping vubec neodesel.
+
+    Tahle odpoved nema probe-results-summary. Bez zaznamu duvodu by vysledek
+    vypadal jako radne merenych nula paketu.
+    """
+    xml = etree.fromstring(
+        """
+        <ping-results>
+          <ping-failure>internal error</ping-failure>
+          <ping-error-message>bind: Can't assign requested address</ping-error-message>
+        </ping-results>
+        """
+    )
+    result = parse_ping_result(xml)
+
+    assert result["sent"] == 0
+    assert result["received"] == 0
+    assert result["loss_percent"] == 100
+    assert "bind" in result["error"]
+
+
+def test_parse_ping_result_no_response_is_a_measurement_not_an_error():
+    """'no response' ma platne summary - je to vysledek, ne porucha nastroje."""
+    xml = etree.fromstring(
+        """
+        <ping-results>
+          <ping-warning-message>sendto: No route to host</ping-warning-message>
+          <probe-results-summary>
+            <probes-sent>3</probes-sent>
+            <responses-received>0</responses-received>
+            <packet-loss>100</packet-loss>
+          </probe-results-summary>
+          <ping-failure>no response</ping-failure>
+        </ping-results>
+        """
+    )
+    result = parse_ping_result(xml)
+
+    assert result["sent"] == 3
+    assert result["loss_percent"] == 100
+    assert result["error"] == "no response"
+
+
+def test_parse_ping_result_strips_whitespace_values():
+    """Junos obaluje hodnoty novymi radky."""
+    xml = etree.fromstring(
+        """
+        <ping-results>
+          <probe-results-summary>
+            <probes-sent>
+3
+</probes-sent>
+            <responses-received>
+3
+</responses-received>
+            <packet-loss>
+0
+</packet-loss>
+            <rtt-average>
+22302
+</rtt-average>
+          </probe-results-summary>
+          <ping-success/>
+        </ping-results>
+        """
+    )
+    result = parse_ping_result(xml)
+
+    assert result == {
+        "sent": 3,
+        "received": 3,
+        "loss_percent": 0,
+        "rtt_avg_ms": pytest.approx(22.302),
+    }
+
+
 def test_parse_ping_result_handles_total_loss():
     xml = etree.fromstring(
         """

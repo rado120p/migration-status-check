@@ -111,6 +111,16 @@ def resolve_targets(
 
 
 def parse_ping_result(xml: etree._Element) -> dict[str, Any]:
+    """Prevede odpoved ping RPC na strukturovany vysledek.
+
+    Junos vraci dva druhy neuspechu a je potreba je rozlisit:
+
+    - 'no response' - ping odesel, nic se nevratilo. Summary existuje
+      a hlasi 100% loss. To je platny vysledek merani.
+    - 'internal error' + ping-error-message (napr. 'bind: Can't assign
+      requested address') - ping vubec neodesel a summary chybi. Bez
+      zaznamu duvodu by to vypadalo jako uspesne merenych nula paketu.
+    """
     summary = xml.find(".//probe-results-summary")
 
     def value(path: str) -> str | None:
@@ -124,16 +134,43 @@ def parse_ping_result(xml: etree._Element) -> dict[str, Any]:
     loss = value("packet-loss")
     rtt_us = value("rtt-average")
 
-    return {
+    result: dict[str, Any] = {
         "sent": sent,
         "received": received,
-        "loss_percent": int(loss) if loss is not None else None,
+        # Kdyz summary chybi, neprosel ani jeden paket - 100 je pravdivejsi
+        # nez None, ktere by se v reportu cetlo jako "nemereno".
+        "loss_percent": int(loss) if loss is not None else (None if summary is not None else 100),
         "rtt_avg_ms": round(int(rtt_us) / 1000.0, 3) if rtt_us and received else None,
     }
 
+    reason = _failure_reason(xml)
+    if reason and not received:
+        result["error"] = reason
+
+    return result
+
+
+def _failure_reason(xml: etree._Element) -> str | None:
+    """Text z ping-failure / ping-error-message, kdyz ping neuspel."""
+    parts = [
+        node.text.strip()
+        for tag in ("ping-failure", "ping-error-message")
+        for node in xml.iter(tag)
+        if node.text and node.text.strip()
+    ]
+    return "; ".join(dict.fromkeys(parts)) or None
+
 
 def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dict[str, Any]:
-    """Spusti ping z zarizeni. Neuspech neni chyba nastroje, ale vysledek."""
+    """Spusti ping z zarizeni. Neuspech neni chyba nastroje, ale vysledek.
+
+    Odchytava se zamerne cokoliv. Krome ocekavanych RPC chyb vMX obcas vrati
+    poskozene XML (`<ping-results>` bez uzaviraciho tagu), na kterem PyEZ
+    spadne na XMLSyntaxError - overeno jako prechodne, pri opakovani projde.
+    Argument `routing_instance` s tim nesouvisi, ten RPC prijima bez problemu.
+    Protoze je ping advisory, staci duvod zapsat a pokracovat; shodit celou
+    capture kvuli jednomu probu by bylo horsi.
+    """
     kwargs: dict[str, Any] = {"host": target.target, "count": str(count)}
     if target.source:
         kwargs["source"] = target.source
