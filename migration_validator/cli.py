@@ -12,7 +12,14 @@ import sys
 from pathlib import Path
 
 from migration_validator import api
+from migration_validator.collectors.registry import collectors_for
 from migration_validator.config import default_config, load_config
+from migration_validator.connection.junos import (
+    ConnectionOptions,
+    JunosConnectionError,
+    connect,
+    detect_platform,
+)
 from migration_validator.models.result import Status
 from migration_validator.models.snapshot import (
     Snapshot,
@@ -118,6 +125,56 @@ def _cmd_checks(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _add_auth_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--username", default="ansible")
+    parser.add_argument("--auth", choices=("key", "password"), default="key")
+    parser.add_argument("--key-file", default=str(Path.home() / ".ssh" / "id_rsa"))
+    parser.add_argument("--password")
+    parser.add_argument("--port", type=int, default=22)
+    parser.add_argument("--timeout", type=int, default=30)
+
+
+def _connection_options(args: argparse.Namespace) -> ConnectionOptions:
+    return ConnectionOptions(
+        host=args.device,
+        username=args.username,
+        auth_type=args.auth,
+        key_file=args.key_file,
+        password=args.password,
+        port=args.port,
+        timeout=args.timeout,
+    )
+
+
+def _cmd_record(args: argparse.Namespace) -> int:
+    from lxml import etree
+
+    import migration_validator.collectors.all  # noqa: F401  (registrace)
+
+    target_root = Path(args.output_dir)
+    try:
+        with connect(_connection_options(args)) as device:
+            platform = detect_platform(device)
+            target = target_root / platform
+            target.mkdir(parents=True, exist_ok=True)
+
+            for collector in collectors_for(platform):
+                rpc_name = collector.rpc_name(platform)
+                try:
+                    xml = getattr(device.rpc, rpc_name)(**collector.rpc_kwargs(platform))
+                except Exception as error:  # noqa: BLE001
+                    print(f"  {collector.name}: SELHALO - {error}", file=sys.stderr)
+                    continue
+
+                path = target / f"{collector.name}.xml"
+                path.write_bytes(etree.tostring(xml, pretty_print=True))
+                print(f"  {collector.name}: {path}")
+    except JunosConnectionError as error:
+        raise ToolError(str(error)) from error
+
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mig-validate",
@@ -146,6 +203,14 @@ def build_parser() -> argparse.ArgumentParser:
     checks = sub.add_parser("checks", help="vypise registrovane checky")
     checks.add_argument("--format", choices=("text", "json"), default="text")
     checks.set_defaults(func=_cmd_checks)
+
+    record = sub.add_parser(
+        "record", help="ulozi syrove RPC XML jako fixtures pro testy"
+    )
+    record.add_argument("--device", required=True)
+    record.add_argument("--output-dir", required=True)
+    _add_auth_arguments(record)
+    record.set_defaults(func=_cmd_record)
 
     return parser
 
