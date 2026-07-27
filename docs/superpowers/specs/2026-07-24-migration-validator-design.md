@@ -857,7 +857,15 @@ explicitně a Plán 2 má u collectorů conformance test.
 | `bgp` | `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted, advertised}}}` | `peer_ip` ∈ `bgp_neighbors` |
 | `evpn_vpws` | `{routing_instance: {status, local_sid, remote_sid}}` | **klíč = `routing_instance`** |
 | `evpn_esi` | `{esi: {status, df_role, interface}}` | `interface` (viz níže) |
-| `evpn_mac` | `{routing_instance: {bridge_domain: count}}` | **klíč = `routing_instance`**; `bridge_domain` je `"-"` u vlan-based |
+| `evpn_mac` | `{routing_instance: {vlan_id: count}}` | **klíč = `routing_instance`**; vnitřní klíč je **VLAN id** jako string (`"313"`), u vlan-based `"-"` |
+
+> **Upřesněno při implementaci Plánu 2 (2026-07-27).** Vnitřní klíč `evpn_mac` byl původně
+> zapsán jako `bridge_domain`, tedy název domény. Proti laborce se ukázalo, že tu samou domému
+> pojmenuje MX `BD-313` a EVO `VL-313`, takže klíčování názvem by po migraci znamenalo, že
+> `evpn_mac_count` nenajde domenu v baseline a místo porovnání počtu MAC adres vypíše jen stav.
+> VLAN id je na obou platformách totožné, proto je klíčem ono. Vlan-based instance vlastní domenu
+> nemá: MX to prozradí tím, že VLAN hlásí jako `none`, EVO tím, že doméně říká `VL-NONE` — VLAN id
+> ale uvede, takže podle něj samotného by vlan-based instance nesedely.
 
 Dvě místa, kde je keying křehký a Plán 2 na ně musí dát pozor:
 
@@ -868,6 +876,10 @@ Dvě místa, kde je keying křehký a Plán 2 na ně musí dát pozor:
   ať emituje `interface`, který scope má (logickou jednotku), **nebo** ať se do schématu doplní
   `routing_instance` a ESI se matchuje i podle něj (robustnější). Regresní fixture s ESI na portu
   bez `Layer1` rodiče to má pojistit.
+  > **Ověřeno 2026-07-27:** obava se nepotvrdila. `evpn-esi-local-intf-name` vrací rovnou logickou
+  > jednotku (`ae0.14`, `irb.14`), takže scope ji matchne bez `Layer1` rodiče. Schéma proto zůstává
+  > tříklíčové a `routing_instance` se do něj nedoplňoval. Pojistkou je conformance test
+  > `test_esi_interface_matches_a_scope`.
 - **`evpn_vpws` a `evpn_mac` se klíčují názvem routing-instance, ne rozhraním.** To je záměr
   (název instance je při migraci stabilní, název portu ne — viz AR-6b), ale collector to musí
   dodržet přesně.

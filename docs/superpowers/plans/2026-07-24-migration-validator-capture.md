@@ -2554,6 +2554,37 @@ mig-validate evaluate --snapshot post.json --baseline pre.json --filter CPE13 --
 mig-validate match --baseline pre.json --subject post.json
 ```
 
+## Co se při implementaci ukázalo jinak (2026-07-27)
+
+Plán byl proveden celý. Tyhle věci se ale proti laborce ukázaly jinak, než jak byly napsané —
+zapsané tady, aby se na ně nemuselo přicházet znovu:
+
+1. **RPC názvy v Tasku 5 neexistovaly na žádné z platforem.** Správně
+   `get_evpn_vpws_information` (ne `get_evpn_vpws_instance_information`) a
+   `get_mac_vrf_mac_table` (ne `get_mac_vrf_forwarding_mac_table`).
+   Ověřovací snippet v Tasku 5 Kroku 1 navíc nefunguje: `hasattr(dev.rpc, name)` vrací `True`
+   pro libovolné jméno, protože PyEZ RPC metody generuje dynamicky. RPC se musí zkusit zavolat.
+2. **ESI bloky jsou v odpovědi jen s `extensive`.** Bez něj collector tiše vrací prázdno.
+3. **MAC tabulka potřebuje na MX dvě RPC.** `show bridge mac-table` vidí jen vlan-aware instance,
+   `show evpn mac-table` jen vlan-based. Na EVO stačí jedno (`mac-vrf`), a `show evpn mac-table`
+   tam vůbec neexistuje. Řeší se přepsáním `collect()` v `EvpnMacCollector`, ne zásahem do base.
+4. **Vnitřním klíčem `evpn_mac` je VLAN id, ne název domény** — viz upřesnění kontraktu ve specu.
+5. **Dva checky z Plánu 1 byly proti realitě špatně** a implementace je opravila:
+   `evpn_vpws_status` bral `local_sid != remote_sid` jako BROKEN, ačkoliv `local 1000; remote 2000`
+   je správná konfigurace EVPN-VPWS; a stav se porovnával na přesnou rovnost s `"Up"`, zatímco
+   ESI hlásí `Up/Forwarding`.
+6. **`InterfacesCollector` musí emitovat `framing_errors`.** Kontrakt ve specu ho předepisuje a
+   `checks/ifaces.py` ho čte, ale v Tasku 3 chyběl — a protože ho check bere jako nepovinný,
+   žádný test by to nechytil.
+7. **`parse_ping_result` musí rozlišit dva druhy neúspěchu.** `no response` má platné summary
+   (výsledek měření), zatímco `internal error` + `bind: Can't assign requested address` summary
+   nemá vůbec a původní parser ho vracel jako čistou nulu.
+8. **vMX občas vrátí poškozené XML z ping RPC** (`<ping-results>` bez uzavíracího tagu). Je to
+   přechodné a `run_ping` to odchytí; argument `routing_instance` s tím nesouvisí, ten RPC bere.
+9. **Conformance testy nebyly v žádném kroku**, i když je Global Constraints vyžadují. Doplněny
+   jako `tests/collectors/test_conformance.py` a ověřeny mutací (překlíčování `evpn_mac` na
+   rozhraní shodí tři testy místo tichého SKIP).
+
 ## Otevřené body pro pozdější iterace
 
 Nejsou to nedodělky tohoto plánu — jsou to vědomě odložená rozhodnutí ze specu:
