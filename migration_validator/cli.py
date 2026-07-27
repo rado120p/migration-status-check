@@ -75,7 +75,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         else:
             print(to_json(shown))
     else:
-        print(render(shown), end="")
+        print(render(shown, detail=args.detail), end="")
         if args.output:
             write_json(result, args.output)
 
@@ -226,6 +226,11 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--output")
     evaluate.add_argument("--filter", help="podretezec v description nebo scope id")
     evaluate.add_argument("--status", help="carkou oddeleny seznam: pass,warn,fail,skip")
+    evaluate.add_argument(
+        "--detail",
+        action="store_true",
+        help="vypise vsechny checky kazde sluzby, ne jen nejhorsi nalez",
+    )
     evaluate.add_argument("--warn-as-error", action="store_true")
     evaluate.set_defaults(func=_cmd_evaluate)
 

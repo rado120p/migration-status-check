@@ -100,6 +100,38 @@ def test_render_lists_services_with_worst_check_message():
     assert "vpws-sid-pe-status: Down" in output
 
 
+def test_detail_expands_every_check_under_its_service():
+    output = render(_result(), detail=True)
+
+    # Shrnuti sluzby zustava, pod nim ale pribudou vsechny checky.
+    assert "L3VPN-CPE13-NNI" in output
+    assert "interface_traffic" in output
+    assert "interface_state" in output
+    assert "up/up" in output
+
+
+def test_default_render_hides_passing_checks():
+    """Bez --detail se ukazuje jen nejhorsi nalez, jinak by souhrn zmizel v sumu."""
+    output = render(_result())
+
+    assert "provoz -72 %" in output
+    assert "interface_state" not in output
+    assert "up/up" not in output
+
+
+def test_detail_shows_severity_of_each_check():
+    output = render(_result(), detail=True)
+    assert "advisory" in output
+
+
+def test_detail_respects_filtering():
+    """--detail se sklada s --filter, nevypisuje odfiltrovane sluzby."""
+    output = render(filter_result(_result(), text="L3VPN"), detail=True)
+
+    assert "interface_traffic" in output
+    assert "EVPN-VPWS-CPE13-NNI" not in output
+
+
 def test_render_always_shows_unmatched_section():
     output = render(_result())
     assert "NESPAROVANO" in output

@@ -55,7 +55,25 @@ def _worst_message(scope: ScopeResult) -> str:
     return ""
 
 
-def render(result: RunResult) -> str:
+def _detail_lines(scope: ScopeResult) -> list[str]:
+    """Vsechny checky sluzby, nejhorsi nahore.
+
+    Souhrnny radek ukazuje jen nejhorsi nalez, takze bez tohohle nejde poznat,
+    co dalsiho se kontrolovalo - a hlavne jestli PASS znamena "overeno", nebo
+    "check se vubec nespustil".
+    """
+    ordered = sorted(
+        scope.checks,
+        key=lambda check: (_STATUS_ORDER.index(check.status), check.id, check.label or ""),
+    )
+    return [
+        f"    {SYMBOL[check.status]:<5} {check.id:<22.22} "
+        f"{str(check.severity.value):<9.9} {check.message}"
+        for check in ordered
+    ]
+
+
+def render(result: RunResult, *, detail: bool = False) -> str:
     lines: list[str] = []
 
     subject = result.subject
@@ -89,6 +107,9 @@ def render(result: RunResult) -> str:
             f"{description:<32.32} {service_type:<10.10} "
             f"{SYMBOL[scope.status]:<5} {_worst_message(scope)}"
         )
+        if detail:
+            lines.extend(_detail_lines(scope))
+            lines.append("")
 
     lines.append("")
     lines.append("NESPAROVANO")
