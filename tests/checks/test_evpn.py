@@ -48,13 +48,28 @@ def test_vpws_down_fails():
     assert "Down" in result.message
 
 
-def test_vpws_sid_mismatch_fails():
+def test_vpws_differing_sids_pass():
+    """local a remote SID se u EVPN-VPWS zamerne lisi.
+
+    Laborka je nakonfigurovana 'local 1000; remote 2000' a sluzba je zdrava,
+    takze rovnost SID nesmi byt podminkou pro PASS.
+    """
     ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 213, "remote_sid": 999, "status": "Up"}}}
+        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}}
+    )
+    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
+    assert result.status is Status.PASS
+    assert "1000" in result.message and "2000" in result.message
+
+
+def test_vpws_missing_remote_sid_fails():
+    """Chybejici remote SID znamena, ze druha strana neinzeruje sluzbu."""
+    ctx = _vpws_ctx(
+        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 0, "status": "Up"}}}
     )
     result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
     assert result.status is Status.FAIL
-    assert "213" in result.message and "999" in result.message
+    assert "remote SID" in result.message
 
 
 def test_vpws_missing_data_skips():

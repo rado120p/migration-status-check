@@ -18,6 +18,15 @@ UP = "Up"
 NO_DOMAIN = "-"
 
 
+def _is_up(status: str) -> bool:
+    """Junos hlasi stav i s doplnkem za lomitkem.
+
+    Lokalni rozhrani v ESI je 'Up/Forwarding', VPWS rozhrani jen 'Up'.
+    Porovnani na presnou rovnost by to prvni oznacilo za rozbite.
+    """
+    return status.split("/", 1)[0].strip() == UP
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     id = "evpn_vpws_status"
@@ -43,11 +52,11 @@ class EvpnVpwsStatusCheck(Check):
             subject = {"status": status, "local_sid": local, "remote_sid": remote}
             baseline = baseline_instances.get(name)
 
-            if status != UP:
+            if not _is_up(status):
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
-                        f"{name}: vpws-sid-pe-status {status}, ocekavano {UP}",
+                        f"{name}: stav rozhrani {status}, ocekavano {UP}",
                         label=name,
                         baseline=baseline,
                         subject=subject,
@@ -55,11 +64,14 @@ class EvpnVpwsStatusCheck(Check):
                 )
                 continue
 
-            if local != remote:
+            # local a remote SID se u EVPN-VPWS zamerne lisi - kazda strana
+            # inzeruje svoje service ID ('local 1000; remote 2000'). Rovnost
+            # tady neni invariant, chybi az kdyz remote SID vubec neprijde.
+            if not remote:
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
-                        f"{name}: local SID {local} neodpovida remote SID {remote}",
+                        f"{name}: chybi remote SID (local {local})",
                         label=name,
                         baseline=baseline,
                         subject=subject,
@@ -70,7 +82,7 @@ class EvpnVpwsStatusCheck(Check):
             findings.append(
                 Finding(
                     Outcome.OK,
-                    f"{name}: {UP}, SID {local}",
+                    f"{name}: {UP}, SID {local} -> {remote}",
                     label=name,
                     baseline=baseline,
                     subject=subject,
@@ -105,11 +117,11 @@ class EvpnEsiStatusCheck(Check):
                 "interface": data.get("interface"),
             }
             baseline = baseline_entries.get(esi)
-            outcome = Outcome.OK if status == UP else Outcome.BROKEN
+            outcome = Outcome.OK if _is_up(status) else Outcome.BROKEN
             message = (
-                f"{esi}: {status}, DF role {subject['df_role']}"
+                f"{esi}: {status}, DF {subject['df_role']}"
                 if outcome is Outcome.OK
-                else f"{esi}: evpn-esi-status {status}, ocekavano {UP}"
+                else f"{esi}: stav rozhrani {status}, ocekavano {UP}"
             )
             findings.append(
                 Finding(outcome, message, label=esi, baseline=baseline, subject=subject)

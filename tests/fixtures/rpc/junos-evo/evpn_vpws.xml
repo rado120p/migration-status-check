@@ -1,0 +1,53 @@
+<evpn-vpws-information>
+  <evpn-vpws-instance style="normal">
+    <evpn-vpws-instance-name>EVPN-VPWS-CPE13-NNI</evpn-vpws-instance-name>
+    <evpn-vpws-instance-type>EVPN VPWS</evpn-vpws-instance-type>
+    <evpn-vpws-instance-encap-type>MPLS</evpn-vpws-instance-encap-type>
+    <evpn-vpws-instance-enhanced-convergence>Disabled</evpn-vpws-instance-enhanced-convergence>
+    <route-distinguisher>65000:213</route-distinguisher>
+    <local-interfaces>1</local-interfaces>
+    <local-interfaces-up>1</local-interfaces-up>
+    <evpn-vpws-interface-status-table style="normal">
+      <evpn-vpws-interface style="normal">
+        <evpn-vpws-interface-name>et-0/0/8.213</evpn-vpws-interface-name>
+        <evpn-vpws-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-interface-esi>
+        <evpn-vpws-interface-mode>single-homed</evpn-vpws-interface-mode>
+        <evpn-vpws-interface-role>Primary</evpn-vpws-interface-role>
+        <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+        <evpn-vpws-pseudowire-status>CCC-Up</evpn-vpws-pseudowire-status>
+        <evpn-vpws-control-word>Yes</evpn-vpws-control-word>
+        <evpn-vpws-flow-label-transmit>No</evpn-vpws-flow-label-transmit>
+        <evpn-vpws-flow-label-receive>No</evpn-vpws-flow-label-receive>
+        <evpn-vpws-service-id-local-status-table style="normal">
+          <evpn-vpws-sid-local style="normal">
+            <evpn-vpws-sid-local-value>1000</evpn-vpws-sid-local-value>
+            <evpn-vpws-sid-advertised-label>24</evpn-vpws-sid-advertised-label>
+            <evpn-vpws-sid-pe-status-table style="normal">
+</evpn-vpws-sid-pe-status-table>
+          </evpn-vpws-sid-local>
+        </evpn-vpws-service-id-local-status-table>
+        <evpn-vpws-service-id-remote-status-table style="normal">
+          <evpn-vpws-sid-remote style="normal">
+            <evpn-vpws-sid-remote-value>2000</evpn-vpws-sid-remote-value>
+            <evpn-vpws-sid-pe-status-table style="normal">
+              <evpn-vpws-sid-pe-info style="normal">
+                <evpn-vpws-sid-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-sid-interface-esi>
+                <evpn-vpws-sid-pe-ipaddr>150.0.0.13</evpn-vpws-sid-pe-ipaddr>
+                <evpn-vpws-sid-pe-label>299808</evpn-vpws-sid-pe-label>
+                <evpn-vpws-sid-pe-mode>single-homed</evpn-vpws-sid-pe-mode>
+                <evpn-vpws-sid-pe-role>Primary</evpn-vpws-sid-pe-role>
+                <evpn-vpws-sid-pe-ts>2026-07-27 08:41:25.338</evpn-vpws-sid-pe-ts>
+                <evpn-vpws-sid-pe-status>Resolved</evpn-vpws-sid-pe-status>
+              </evpn-vpws-sid-pe-info>
+            </evpn-vpws-sid-pe-status-table>
+          </evpn-vpws-sid-remote>
+        </evpn-vpws-service-id-remote-status-table>
+      </evpn-vpws-interface>
+    </evpn-vpws-interface-status-table>
+    <num-protect-interfaces>0</num-protect-interfaces>
+    <evpn-protect-interface-status-table style="normal">
+</evpn-protect-interface-status-table>
+    <evpn-vpws-esi-info-status-table style="normal">
+</evpn-vpws-esi-info-status-table>
+  </evpn-vpws-instance>
+</evpn-vpws-information>
