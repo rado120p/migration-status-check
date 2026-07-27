@@ -1,0 +1,392 @@
+<bgp-information>
+  <bgp-peer style="detail">
+    <peer-address>150.0.0.1+57010</peer-address>
+    <peer-as>65000</peer-as>
+    <local-address>150.0.0.12+179</local-address>
+    <local-as>65000</local-as>
+    <peer-group>ibgp-rr-v4</peer-group>
+    <peer-cfg-rti>master</peer-cfg-rti>
+    <peer-fwd-rti>master</peer-fwd-rti>
+    <peer-type>Internal</peer-type>
+    <peer-state>Established</peer-state>
+    <peer-flags>Sync</peer-flags>
+    <rsync-flags/>
+    <last-state>OpenConfirm</last-state>
+    <last-event>RecvKeepAlive</last-event>
+    <last-error>None</last-error>
+    <bgp-option-information>
+      <export-policy>
+bgp-export
+</export-policy>
+      <nlri-policy>
+        <nlri-type>inet-unicast</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>inet-vpn-unicast</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>route-target</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>inet-mvpn</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>evpn</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <bgp-options>LocalAddress AuthKey LogUpDown AddressFamily Multipath Rib-group Refresh</bgp-options>
+      <bgp-options2>MtuDiscovery</bgp-options2>
+      <bgp-options-extended>GracefulShutdownRcv</bgp-options-extended>
+      <bgp-options-extended2/>
+      <authentication-configured/>
+      <address-families>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</address-families>
+      <local-address>150.0.0.12</local-address>
+      <holdtime>90</holdtime>
+      <preference>170</preference>
+      <gshut-recv-local-preference>0</gshut-recv-local-preference>
+      <addpath-receive>
+        <nlri-type>inet-unicast</nlri-type>
+        <addpath-receive-type>enabled</addpath-receive-type>
+      </addpath-receive>
+    </bgp-option-information>
+    <flap-count>0</flap-count>
+    <recv-ebgp-origin-validation-state>Accept</recv-ebgp-origin-validation-state>
+    <bgp-malformed-attributes>
+      <malformed-information>
+        <log-interval>300</log-interval>
+        <route-limit>1000</route-limit>
+      </malformed-information>
+    </bgp-malformed-attributes>
+    <peer-id>150.0.0.1</peer-id>
+    <local-id>150.0.0.12</local-id>
+    <active-holdtime>90</active-holdtime>
+    <keepalive-interval>30</keepalive-interval>
+    <group-index>0</group-index>
+    <peer-index>1</peer-index>
+    <snmp-index>0</snmp-index>
+    <bgp-peer-iosession>
+      <iosession-thread-name>bgpio-0</iosession-thread-name>
+      <iosession-state>Enabled</iosession-state>
+    </bgp-peer-iosession>
+    <bgp-bfd>
+      <bfd-configuration-state>disabled</bfd-configuration-state>
+      <bfd-operational-state>down</bfd-operational-state>
+    </bgp-bfd>
+    <peer-restart-nlri-configured>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-restart-nlri-configured>
+    <nlri-type-peer>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</nlri-type-peer>
+    <nlri-type-session>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</nlri-type-session>
+    <peer-refresh-capability>2</peer-refresh-capability>
+    <peer-4byte-as-capability-advertised>65000</peer-4byte-as-capability-advertised>
+    <peer-addpath-ronly-nlri>inet-unicast</peer-addpath-ronly-nlri>
+    <local-ext-nh-color-nlri>inet-unicast inet-vpn-unicast evpn</local-ext-nh-color-nlri>
+    <bgp-rib style="detail">
+      <name>bgp.rtarget.0</name>
+      <rib-bit>10000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>5</received-prefix-count>
+      <accepted-prefix-count>5</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>inet.0</name>
+      <rib-bit>20000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>4</active-prefix-count>
+      <received-prefix-count>4</received-prefix-count>
+      <accepted-prefix-count>4</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>3</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.l3vpn.0</name>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>not advertising</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.evpn.0</name>
+      <rib-bit>40000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.mvpn.0</name>
+      <rib-bit>50000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <peer-stale-route-time-configured>300</peer-stale-route-time-configured>
+    <peer-no-restart/>
+    <peer-restart-flags-received>Notification</peer-restart-flags-received>
+    <peer-restart-nlri-negotiated>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-restart-nlri-negotiated>
+    <peer-end-of-rib-received>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-end-of-rib-received>
+    <peer-end-of-rib-sent>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-end-of-rib-sent>
+    <peer-end-of-rib-scheduled/>
+    <peer-no-llgr-restarter/>
+    <last-received>16</last-received>
+    <last-sent>20</last-sent>
+    <last-checked>968</last-checked>
+    <input-messages>47</input-messages>
+    <input-updates>11</input-updates>
+    <input-refreshes>0</input-refreshes>
+    <input-octets>1382</input-octets>
+    <output-messages>42</output-messages>
+    <output-updates>1</output-updates>
+    <output-refreshes>0</output-refreshes>
+    <output-octets>886</output-octets>
+    <bgp-output-queue>
+      <number>0</number>
+      <count>0</count>
+      <table-name>bgp.rtarget.0</table-name>
+      <rib-adv-nlri>route-target</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>1</number>
+      <count>0</count>
+      <table-name>inet.0</table-name>
+      <rib-adv-nlri>inet-unicast</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>3</number>
+      <count>0</count>
+      <table-name>bgp.evpn.0</table-name>
+      <rib-adv-nlri>evpn</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>4</number>
+      <count>0</count>
+      <table-name>bgp.mvpn.0</table-name>
+      <rib-adv-nlri>inet-mvpn</rib-adv-nlri>
+    </bgp-output-queue>
+  </bgp-peer>
+  <bgp-peer style="detail">
+    <peer-address>150.0.0.2+48758</peer-address>
+    <peer-as>65000</peer-as>
+    <local-address>150.0.0.12+179</local-address>
+    <local-as>65000</local-as>
+    <peer-group>ibgp-rr-v4</peer-group>
+    <peer-cfg-rti>master</peer-cfg-rti>
+    <peer-fwd-rti>master</peer-fwd-rti>
+    <peer-type>Internal</peer-type>
+    <peer-state>Established</peer-state>
+    <peer-flags>Sync</peer-flags>
+    <rsync-flags/>
+    <last-state>OpenConfirm</last-state>
+    <last-event>RecvKeepAlive</last-event>
+    <last-error>None</last-error>
+    <bgp-option-information>
+      <export-policy>
+bgp-export
+</export-policy>
+      <nlri-policy>
+        <nlri-type>inet-unicast</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>inet-vpn-unicast</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>route-target</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>inet-mvpn</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <nlri-policy>
+        <nlri-type>evpn</nlri-type>
+        <nlri-export-policy>
+bgp-export
+</nlri-export-policy>
+      </nlri-policy>
+      <bgp-options>LocalAddress AuthKey LogUpDown AddressFamily Multipath Rib-group Refresh</bgp-options>
+      <bgp-options2>MtuDiscovery</bgp-options2>
+      <bgp-options-extended>GracefulShutdownRcv</bgp-options-extended>
+      <bgp-options-extended2/>
+      <authentication-configured/>
+      <address-families>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</address-families>
+      <local-address>150.0.0.12</local-address>
+      <holdtime>90</holdtime>
+      <preference>170</preference>
+      <gshut-recv-local-preference>0</gshut-recv-local-preference>
+      <addpath-receive>
+        <nlri-type>inet-unicast</nlri-type>
+        <addpath-receive-type>enabled</addpath-receive-type>
+      </addpath-receive>
+    </bgp-option-information>
+    <flap-count>0</flap-count>
+    <recv-ebgp-origin-validation-state>Accept</recv-ebgp-origin-validation-state>
+    <bgp-malformed-attributes>
+      <malformed-information>
+        <log-interval>300</log-interval>
+        <route-limit>1000</route-limit>
+      </malformed-information>
+    </bgp-malformed-attributes>
+    <peer-id>150.0.0.2</peer-id>
+    <local-id>150.0.0.12</local-id>
+    <active-holdtime>90</active-holdtime>
+    <keepalive-interval>30</keepalive-interval>
+    <group-index>0</group-index>
+    <peer-index>0</peer-index>
+    <snmp-index>1</snmp-index>
+    <bgp-peer-iosession>
+      <iosession-thread-name>bgpio-0</iosession-thread-name>
+      <iosession-state>Enabled</iosession-state>
+    </bgp-peer-iosession>
+    <bgp-bfd>
+      <bfd-configuration-state>disabled</bfd-configuration-state>
+      <bfd-operational-state>down</bfd-operational-state>
+    </bgp-bfd>
+    <peer-restart-nlri-configured>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-restart-nlri-configured>
+    <nlri-type-peer>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</nlri-type-peer>
+    <nlri-type-session>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</nlri-type-session>
+    <peer-refresh-capability>2</peer-refresh-capability>
+    <peer-4byte-as-capability-advertised>65000</peer-4byte-as-capability-advertised>
+    <peer-addpath-ronly-nlri>inet-unicast</peer-addpath-ronly-nlri>
+    <local-ext-nh-color-nlri>inet-unicast inet-vpn-unicast evpn</local-ext-nh-color-nlri>
+    <bgp-rib style="detail">
+      <name>bgp.rtarget.0</name>
+      <rib-bit>10000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>5</active-prefix-count>
+      <received-prefix-count>5</received-prefix-count>
+      <accepted-prefix-count>5</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>inet.0</name>
+      <rib-bit>20000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>4</received-prefix-count>
+      <accepted-prefix-count>4</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>3</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.l3vpn.0</name>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>not advertising</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.evpn.0</name>
+      <rib-bit>40000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <bgp-rib style="detail">
+      <name>bgp.mvpn.0</name>
+      <rib-bit>50000</rib-bit>
+      <bgp-rib-state>BGP restart is complete</bgp-rib-state>
+      <vpn-rib-state>VPN restart is complete</vpn-rib-state>
+      <send-state>in sync</send-state>
+      <active-prefix-count>0</active-prefix-count>
+      <received-prefix-count>0</received-prefix-count>
+      <accepted-prefix-count>0</accepted-prefix-count>
+      <suppressed-prefix-count>0</suppressed-prefix-count>
+      <advertised-prefix-count>0</advertised-prefix-count>
+    </bgp-rib>
+    <peer-stale-route-time-configured>300</peer-stale-route-time-configured>
+    <peer-no-restart/>
+    <peer-restart-flags-received>Notification</peer-restart-flags-received>
+    <peer-restart-nlri-negotiated>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-restart-nlri-negotiated>
+    <peer-end-of-rib-received>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-end-of-rib-received>
+    <peer-end-of-rib-sent>inet-unicast inet-vpn-unicast route-target inet-mvpn evpn</peer-end-of-rib-sent>
+    <peer-end-of-rib-scheduled/>
+    <peer-no-llgr-restarter/>
+    <last-received>11</last-received>
+    <last-sent>15</last-sent>
+    <last-checked>1009</last-checked>
+    <input-messages>51</input-messages>
+    <input-updates>15</input-updates>
+    <input-refreshes>0</input-refreshes>
+    <input-octets>1730</input-octets>
+    <output-messages>44</output-messages>
+    <output-updates>1</output-updates>
+    <output-refreshes>0</output-refreshes>
+    <output-octets>924</output-octets>
+    <bgp-output-queue>
+      <number>0</number>
+      <count>0</count>
+      <table-name>bgp.rtarget.0</table-name>
+      <rib-adv-nlri>route-target</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>1</number>
+      <count>0</count>
+      <table-name>inet.0</table-name>
+      <rib-adv-nlri>inet-unicast</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>3</number>
+      <count>0</count>
+      <table-name>bgp.evpn.0</table-name>
+      <rib-adv-nlri>evpn</rib-adv-nlri>
+    </bgp-output-queue>
+    <bgp-output-queue>
+      <number>4</number>
+      <count>0</count>
+      <table-name>bgp.mvpn.0</table-name>
+      <rib-adv-nlri>inet-mvpn</rib-adv-nlri>
+    </bgp-output-queue>
+  </bgp-peer>
+</bgp-information>
