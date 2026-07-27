@@ -32,6 +32,15 @@ class Collector(ABC):
     def rpc_name(self, platform: str) -> str:
         """Nazev RPC metody na PyEZ Device.rpc (podtrzitkova varianta)."""
 
+    def rpc_names(self, platform: str) -> tuple[str, ...]:
+        """Vsechna RPC, ktera collector na dane platforme opravdu vola.
+
+        Vetsina collectoru ma jedno. Kdyz jich ma vic, musi tuhle metodu
+        prepsat, jinak `record` a `--record-raw` ulozi jen prvni z nich a
+        nahrane fixtures budou tise nekompletni.
+        """
+        return (self.rpc_name(platform),)
+
     def rpc_kwargs(self, platform: str) -> dict[str, Any]:
         return {}
 

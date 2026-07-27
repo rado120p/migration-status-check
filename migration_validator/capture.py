@@ -51,16 +51,23 @@ def _select_collectors(platform: str, names: list[str] | None):
 
 
 def _record(xml_root: Path, platform: str, name: str, device: Any, collector) -> None:
-    """Ulozi syrove RPC XML pro pozdejsi pouziti jako fixture."""
+    """Ulozi syrove RPC XML pro pozdejsi pouziti jako fixture.
+
+    Collector s vice RPC uklada kazde zvlast - prvni pod jmenem oblasti,
+    dalsi s poradovym cislem. Jinak by fixture nesla jen cast dat.
+    """
     target = Path(xml_root) / platform
     target.mkdir(parents=True, exist_ok=True)
-    try:
-        xml = getattr(device.rpc, collector.rpc_name(platform))(
-            **collector.rpc_kwargs(platform)
+
+    for index, rpc_name in enumerate(collector.rpc_names(platform)):
+        try:
+            xml = getattr(device.rpc, rpc_name)(**collector.rpc_kwargs(platform))
+        except Exception:  # noqa: BLE001 - nahravani je best effort
+            continue
+        suffix = "" if index == 0 else f".{index + 1}"
+        (target / f"{name}{suffix}.xml").write_bytes(
+            etree.tostring(xml, pretty_print=True)
         )
-    except Exception:  # noqa: BLE001 - nahravani je best effort
-        return
-    (target / f"{name}.xml").write_bytes(etree.tostring(xml, pretty_print=True))
 
 
 def capture_device(

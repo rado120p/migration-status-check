@@ -2584,6 +2584,17 @@ zapsané tady, aby se na ně nemuselo přicházet znovu:
 9. **Conformance testy nebyly v žádném kroku**, i když je Global Constraints vyžadují. Doplněny
    jako `tests/collectors/test_conformance.py` a ověřeny mutací (překlíčování `evpn_mac` na
    rozhraní shodí tři testy místo tichého SKIP).
+10. **Collector s více RPC potřebuje `rpc_names()`.** `record` i `--record-raw` původně ukládaly
+    jen `rpc_name()`, takže fixture `evpn_mac.xml` na MX obsahovala pouze vlan-aware instance —
+    a kdokoliv by fixtures regeneroval dokumentovaným postupem, tu mezeru zreprodukuje, aniž by
+    si toho všiml. Base má proto `rpc_names()` (default jednoprvková) a nahrávání ukládá druhé
+    a další RPC jako `evpn_mac.2.xml`. Conformance test je při skládání faktů slučuje, aby
+    testoval to, co capture opravdu sbírá.
+11. **Fixtures se nahrávají po celých sadách, ne po oblastech.** Sada pro `junos` byla chvíli
+    míchaná ze dvou okamžiků (rozhraní a ARP z doby před migrací, EVPN po ní). Na tvrzení o
+    schématu a klíčování to nevadí, ale hodnotové porovnání se na takové sadě postavit nedá.
+    Po doběhnutí Tasku 7 byla proto celá `junos` sada nahrána znovu jedním průchodem
+    `mig-validate record`.
 
 ## Otevřené body pro pozdější iterace
 

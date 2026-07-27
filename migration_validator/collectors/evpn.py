@@ -151,6 +151,9 @@ class EvpnMacCollector(Collector):
     def rpc_name(self, platform: str) -> str:
         return self.RPCS[platform][0]
 
+    def rpc_names(self, platform: str) -> tuple[str, ...]:
+        return self.RPCS[platform]
+
     def collect(self, device: Any, platform: str) -> dict[str, dict[str, int]]:
         """Slouci vysledky vsech RPC pro danou platformu.
 
@@ -167,7 +170,7 @@ class EvpnMacCollector(Collector):
         merged: dict[str, dict[str, int]] = {}
         failures: list[str] = []
 
-        for rpc_name in self.RPCS[platform]:
+        for rpc_name in self.rpc_names(platform):
             try:
                 xml = getattr(device.rpc, rpc_name)()
             except Exception as error:  # noqa: BLE001

@@ -1,0 +1,13 @@
+<l2ald-rtb-macdb>
+  <l2ald-mac-entry style="brief-rtb">
+    <l2-mac-routing-instance>EVPN-VLAN-BASED-CPE13-NNI</l2-mac-routing-instance>
+    <l2-mac-bridging-domain>__EVPN-VLAN-BASED-CPE13-NNI__</l2-mac-bridging-domain>
+    <l2-bridge-vlan>none</l2-bridge-vlan>
+    <l2-mac-entry>
+      <l2-mac-address>0c:00:a3:73:47:01</l2-mac-address>
+      <l2-mac-flags>DC</l2-mac-flags>
+      <l2-mac-fwd-next-hop>1048577</l2-mac-fwd-next-hop>
+      <l2-active-source>150.0.0.12</l2-active-source>
+    </l2-mac-entry>
+  </l2ald-mac-entry>
+</l2ald-rtb-macdb>

@@ -185,16 +185,25 @@ def _cmd_record(args: argparse.Namespace) -> int:
             target.mkdir(parents=True, exist_ok=True)
 
             for collector in collectors_for(platform):
-                rpc_name = collector.rpc_name(platform)
-                try:
-                    xml = getattr(device.rpc, rpc_name)(**collector.rpc_kwargs(platform))
-                except Exception as error:  # noqa: BLE001
-                    print(f"  {collector.name}: SELHALO - {error}", file=sys.stderr)
-                    continue
+                # Collector muze mit vic RPC (EVPN MAC tabulka na MX).
+                # Prvni se uklada pod jmenem oblasti, dalsi s poradovym
+                # cislem - jinak by fixture obsahovala jen pulku dat.
+                for index, rpc_name in enumerate(collector.rpc_names(platform)):
+                    try:
+                        xml = getattr(device.rpc, rpc_name)(
+                            **collector.rpc_kwargs(platform)
+                        )
+                    except Exception as error:  # noqa: BLE001
+                        print(
+                            f"  {collector.name} ({rpc_name}): SELHALO - {error}",
+                            file=sys.stderr,
+                        )
+                        continue
 
-                path = target / f"{collector.name}.xml"
-                path.write_bytes(etree.tostring(xml, pretty_print=True))
-                print(f"  {collector.name}: {path}")
+                    suffix = "" if index == 0 else f".{index + 1}"
+                    path = target / f"{collector.name}{suffix}.xml"
+                    path.write_bytes(etree.tostring(xml, pretty_print=True))
+                    print(f"  {collector.name} ({rpc_name}): {path}")
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error
 

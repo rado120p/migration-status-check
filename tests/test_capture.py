@@ -164,9 +164,39 @@ def test_failed_arp_collector_leaves_ping_empty():
     snapshot = capture_device(device, "172.20.20.4", inventory=inventory, now=NOW)
 
     assert snapshot.facts["arp"] == []
+    # Bez tohohle by all() prosel i na prazdnem seznamu a netvrdil nic.
+    assert snapshot.probes["ping"]
     assert all(
         probe["resolved_from"] == "subnet-fallback" for probe in snapshot.probes["ping"]
     )
+
+
+def test_every_area_is_registered_for_both_platforms():
+    """Collector zapomenuty v all.py by tise vypustil celou oblast.
+
+    Checky, ktere ji potrebuji, by pak vracely SKIP - a protoze SKIP neni
+    FAIL, neprojevilo by se to nikde jinde.
+    """
+    import migration_validator.collectors.all  # noqa: F401
+    from migration_validator.collectors.registry import collectors_for
+
+    expected = {"interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac"}
+    for platform in ("junos", "junos-evo"):
+        registered = {collector.name for collector in collectors_for(platform)}
+        # >= a ne ==, protoze tests/collectors/test_base.py registruje
+        # demo collectory do stejneho modulovaho registru.
+        assert registered >= expected, (
+            f"{platform}: chybi collectory {sorted(expected - registered)}"
+        )
+
+
+def test_record_raw_writes_every_rpc_of_multi_rpc_collector(tmp_path):
+    """evpn_mac ma na MX dve RPC - fixture musi vzniknout pro obe."""
+    capture_device(FakeDevice(), "172.20.20.4", now=NOW, record_raw=tmp_path)
+
+    target = tmp_path / "junos"
+    assert (target / "evpn_mac.xml").exists()
+    assert (target / "evpn_mac.2.xml").exists()
 
 
 def test_collector_subset_can_be_selected():

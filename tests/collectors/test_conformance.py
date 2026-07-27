@@ -14,6 +14,7 @@ zacal mlcet.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from lxml import etree
@@ -53,16 +54,47 @@ COLLECTORS = (
 )
 
 
+def _fixture_paths(platform: str, collector) -> list[Path]:
+    """Vsechny nahravky oblasti - collector muze mit vic RPC (evpn_mac na MX).
+
+    `record` uklada prvni RPC pod jmenem oblasti a dalsi s poradovym cislem.
+    Kdyby se tady cetla jen prvni, MX vlan-based instance by v faktech
+    chybela a test by tvrdil mensi pokryti, nez capture ve skutecnosti ma.
+    """
+    root = RPC_ROOT / platform
+    paths = [root / f"{collector.name}.xml"]
+    paths += [
+        root / f"{collector.name}.{index + 1}.xml"
+        for index in range(1, len(collector.rpc_names(platform)))
+    ]
+    return paths
+
+
 def _facts_from_recorded_xml(platform: str) -> dict:
     """Fakta presne tak, jak by je vyrobil capture - bez rucniho dolepovani."""
     facts = {}
     for collector in COLLECTORS:
-        path = RPC_ROOT / platform / f"{collector.name}.xml"
-        if not path.exists():
-            pytest.skip(f"chybi fixture {path}")
-        xml = etree.parse(str(path)).getroot()
-        facts[collector.name] = collector.parse(xml, platform)
+        merged: Any = None
+        for path in _fixture_paths(platform, collector):
+            if not path.exists():
+                pytest.skip(f"chybi fixture {path}")
+            parsed = collector.parse(etree.parse(str(path)).getroot(), platform)
+            merged = parsed if merged is None else _merge(merged, parsed)
+        facts[collector.name] = merged
     return facts
+
+
+def _merge(left: Any, right: Any) -> Any:
+    """Slouceni vysledku vic RPC stejne oblasti."""
+    if isinstance(left, list):
+        return left + right
+    combined = dict(left)
+    for key, value in right.items():
+        if key in combined and isinstance(value, dict):
+            combined[key] = {**combined[key], **value}
+        else:
+            combined[key] = value
+    return combined
 
 
 def _snapshot(platform: str) -> Snapshot:
