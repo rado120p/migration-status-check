@@ -146,6 +146,32 @@ def _connection_options(args: argparse.Namespace) -> ConnectionOptions:
     )
 
 
+def _cmd_capture(args: argparse.Namespace) -> int:
+    from migration_validator.models.snapshot import save_snapshot
+
+    try:
+        snapshot = api.capture(
+            args.device,
+            inventory=args.inventory,
+            options=_connection_options(args),
+            collectors=args.collectors.split(",") if args.collectors else None,
+            phase=args.phase,
+            ping_count=args.ping_count,
+            record_raw=args.record_raw,
+        )
+    except JunosConnectionError as error:
+        raise ToolError(str(error)) from error
+
+    save_snapshot(snapshot, args.output)
+    print(f"snapshot ulozen: {args.output}")
+
+    failed = snapshot.capture.failed_collectors()
+    for name, message in failed.items():
+        print(f"  varovani: collector '{name}' selhal - {message}", file=sys.stderr)
+
+    return EXIT_OK
+
+
 def _cmd_record(args: argparse.Namespace) -> int:
     from lxml import etree
 
@@ -203,6 +229,17 @@ def build_parser() -> argparse.ArgumentParser:
     checks = sub.add_parser("checks", help="vypise registrovane checky")
     checks.add_argument("--format", choices=("text", "json"), default="text")
     checks.set_defaults(func=_cmd_checks)
+
+    capture = sub.add_parser("capture", help="sebere stav zarizeni do snapshotu")
+    capture.add_argument("--device", required=True)
+    capture.add_argument("--inventory")
+    capture.add_argument("--phase")
+    capture.add_argument("--output", required=True)
+    capture.add_argument("--collectors", help="carkou oddeleny seznam")
+    capture.add_argument("--ping-count", type=int, default=5)
+    capture.add_argument("--record-raw")
+    _add_auth_arguments(capture)
+    capture.set_defaults(func=_cmd_capture)
 
     record = sub.add_parser(
         "record", help="ulozi syrove RPC XML jako fixtures pro testy"

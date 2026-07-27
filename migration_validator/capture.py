@@ -1,0 +1,116 @@
+"""Orchestrace fazi capture.
+
+Poradi: bulk collectory -> scopy -> resolve ping cilu -> ping probe -> freeze.
+Zavislost ARP -> ping se odehrava cela tady, takze checky uz jsou navzajem
+nezavisle.
+
+Selhani jednoho collectoru nezrusi capture - zapise se do capture.collectors
+a checky, ktere tu oblast potrebuji, dostanou SKIP.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from lxml import etree
+
+import migration_validator.collectors.all  # noqa: F401  (registrace)
+from migration_validator.collectors.base import CollectorError
+from migration_validator.collectors.registry import all_collectors, collectors_for
+from migration_validator.connection.junos import detect_platform, device_meta
+from migration_validator.models.inventory import Inventory
+from migration_validator.models.snapshot import CaptureMeta, Snapshot
+from migration_validator.probes.ping import DEFAULT_COUNT, resolve_targets, run_ping
+from migration_validator.scoping.builder import build_scopes
+
+LIST_AREAS = frozenset({"arp"})
+
+
+def _empty_for(area: str) -> Any:
+    """Prazdna hodnota spravneho typu pro oblast, jejiz collector selhal."""
+    return [] if area in LIST_AREAS else {}
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _select_collectors(platform: str, names: list[str] | None):
+    available = collectors_for(platform)
+    if names is None:
+        return available
+
+    known = {collector.name for collector in all_collectors()}
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        raise ValueError(f"neznamy collector: {', '.join(unknown)}")
+
+    return [collector for collector in available if collector.name in names]
+
+
+def _record(xml_root: Path, platform: str, name: str, device: Any, collector) -> None:
+    """Ulozi syrove RPC XML pro pozdejsi pouziti jako fixture."""
+    target = Path(xml_root) / platform
+    target.mkdir(parents=True, exist_ok=True)
+    try:
+        xml = getattr(device.rpc, collector.rpc_name(platform))(
+            **collector.rpc_kwargs(platform)
+        )
+    except Exception:  # noqa: BLE001 - nahravani je best effort
+        return
+    (target / f"{name}.xml").write_bytes(etree.tostring(xml, pretty_print=True))
+
+
+def capture_device(
+    device: Any,
+    address: str,
+    *,
+    inventory: Inventory | None = None,
+    collector_names: list[str] | None = None,
+    phase: str | None = None,
+    ping_count: int = DEFAULT_COUNT,
+    now: str | None = None,
+    record_raw: str | Path | None = None,
+) -> Snapshot:
+    started_at = now or _timestamp()
+    platform = detect_platform(device)
+
+    selected = _select_collectors(platform, collector_names)
+
+    facts: dict[str, Any] = {}
+    status: dict[str, dict[str, Any]] = {}
+
+    for collector in selected:
+        if record_raw is not None:
+            _record(Path(record_raw), platform, collector.name, device, collector)
+        try:
+            facts[collector.name] = collector.collect(device, platform)
+            status[collector.name] = {"status": "ok"}
+        except CollectorError as error:
+            # Oblast zustane prazdna se spravnym typem - check ji uvidi jako
+            # chybejici a diky failed_collectors() vrati SKIP, nikdy PASS.
+            facts[collector.name] = _empty_for(collector.name)
+            status[collector.name] = {"status": "error", "message": str(error)}
+
+    scopes = build_scopes(inventory) if inventory is not None else []
+
+    pings: list[dict[str, Any]] = []
+    if scopes:
+        for target in resolve_targets(scopes, facts.get("arp", [])):
+            pings.append(run_ping(device, target, count=ping_count))
+
+    return Snapshot(
+        device=device_meta(device, address),
+        capture=CaptureMeta(
+            started_at=started_at,
+            finished_at=now or _timestamp(),
+            phase=phase,
+            collectors=status,
+        ),
+        facts=facts,
+        probes={"ping": pings},
+        scopes=scopes,
+        inventory=inventory.entries if inventory is not None else None,
+    )
