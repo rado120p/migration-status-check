@@ -1,9 +1,8 @@
-"""Import vsech collectoru kvuli registraci.
-
-Naplni se v Tascich 3-5.
-"""
+"""Import vsech collectoru kvuli registraci."""
 
 from __future__ import annotations
+
+from migration_validator.collectors import arp, interfaces  # noqa: F401
 
 
 def load_all() -> None:
