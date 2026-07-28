@@ -11,6 +11,7 @@ Podporované typy služeb:
     L3:
         IPVPN
         Internet
+        Core
 
     E-Line:
         ccc
@@ -40,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import ipaddress
 import logging
 import re
 import sys
@@ -109,6 +111,7 @@ class RoutingInstance:
     vrf_targets: list[str] = field(default_factory=list)
     evpn_service_type: str | None = None
     instance_vlan_ids: list[str] = field(default_factory=list)
+    bgp_neighbors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -123,6 +126,7 @@ class InterfaceConfig:
     input_vlan_map: str | None = None
     output_vlan_map: str | None = None
     ip_addresses: list[str] = field(default_factory=list)
+    virtual_gw_ip_addresses: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -132,9 +136,11 @@ class InterfaceService:
     service_type: str
     service_subtype: str | None
     ip_address: list[str]
+    virtual_gw_ip_address: list[str]
     routing_instance: str | None
     protocol: list[str]
     active: bool = True
+    bgp_neighbor: list[str] = field(default_factory=list)
 
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
@@ -291,13 +297,19 @@ class JunosEvoAcxServiceParser:
         self.global_ccc_interfaces: set[str] = set()
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
+        self.default_bgp_neighbors: list[str] = []
 
     def parse(self) -> list[InterfaceService]:
         self._parse_routing_instances()
+        self._parse_default_bgp_neighbors()
         self._parse_global_l2circuits()
         self._parse_global_connections()
 
         interface_configs = self._parse_interfaces()
+        interface_configs_by_name = {
+            interface.name: interface
+            for interface in interface_configs
+        }
 
         services = [
             self._classify_interface(interface)
@@ -309,6 +321,11 @@ class JunosEvoAcxServiceParser:
             for service in services
             if service is not None
         ]
+
+        self._assign_bgp_neighbors(
+            services,
+            interface_configs_by_name,
+        )
 
         return sorted(
             services,
@@ -395,6 +412,11 @@ class JunosEvoAcxServiceParser:
                         "/*[local-name()='name']/text()",
                     )
                 ),
+                bgp_neighbors=self._parse_bgp_neighbors(
+                    node,
+                    "./*[local-name()='protocols']"
+                    "/*[local-name()='bgp']",
+                ),
             )
 
             self.routing_instances[instance_name] = instance
@@ -466,6 +488,30 @@ class JunosEvoAcxServiceParser:
             return value.lower()
 
         return None
+
+    def _parse_bgp_neighbors(
+        self,
+        node: etree._Element,
+        bgp_xpath: str,
+    ) -> list[str]:
+        neighbors: list[str] = []
+
+        for bgp_node in node.xpath(bgp_xpath):
+            for neighbor_node in bgp_node.xpath(
+                ".//*[local-name()='neighbor']"
+            ):
+                if self._is_inactive(neighbor_node):
+                    continue
+
+                neighbor = first_text(
+                    neighbor_node,
+                    "./*[local-name()='name']/text()",
+                ) or first_text(neighbor_node, "./text()")
+
+                if neighbor:
+                    neighbors.append(neighbor)
+
+        return unique(neighbors)
 
     def _parse_bridge_domains(
         self,
@@ -562,6 +608,20 @@ class JunosEvoAcxServiceParser:
     # ------------------------------------------------------------------
     # Globální E-Line konfigurace
     # ------------------------------------------------------------------
+
+    def _parse_default_bgp_neighbors(self) -> None:
+        """
+        Top-level BGP patří do default routing instance.
+
+        Tyto neighbory později párujeme jen se službami
+        klasifikovanými jako Internet.
+        """
+
+        self.default_bgp_neighbors = self._parse_bgp_neighbors(
+            self.config_xml,
+            "./*[local-name()='protocols']"
+            "/*[local-name()='bgp']",
+        )
 
     def _parse_global_l2circuits(self) -> None:
         """
@@ -764,6 +824,22 @@ class JunosEvoAcxServiceParser:
             "/*[local-name()='name']/text()",
         )
 
+        virtual_gw_ipv4_addresses = all_texts(
+            node,
+            "./*[local-name()='family']"
+            "/*[local-name()='inet']"
+            "/*[local-name()='address']"
+            "/*[local-name()='virtual-gateway-address']/text()",
+        )
+
+        virtual_gw_ipv6_addresses = all_texts(
+            node,
+            "./*[local-name()='family']"
+            "/*[local-name()='inet6']"
+            "/*[local-name()='address']"
+            "/*[local-name()='virtual-gateway-address']/text()",
+        )
+
         input_vlan_map = first_text(
             node,
             "./*[local-name()='input-vlan-map']"
@@ -788,6 +864,10 @@ class JunosEvoAcxServiceParser:
             output_vlan_map=output_vlan_map,
             ip_addresses=unique(
                 ipv4_addresses + ipv6_addresses
+            ),
+            virtual_gw_ip_addresses=unique(
+                virtual_gw_ipv4_addresses
+                + virtual_gw_ipv6_addresses
             ),
         )
 
@@ -841,6 +921,7 @@ class JunosEvoAcxServiceParser:
             service_type=service_type,
             service_subtype=service_subtype,
             ip_address=interface.ip_addresses,
+            virtual_gw_ip_address=interface.virtual_gw_ip_addresses,
             routing_instance=instance.name if instance else None,
             protocol=protocols,
             active=instance.active if instance else True,
@@ -984,6 +1065,77 @@ class JunosEvoAcxServiceParser:
                 protocols.append(instance.instance_type)
 
         return unique(protocols)
+
+    def _assign_bgp_neighbors(
+        self,
+        services: list[InterfaceService],
+        interface_configs_by_name: dict[str, InterfaceConfig],
+    ) -> None:
+        for service in services:
+            if service.service_type not in {"Internet", "IPVPN"}:
+                continue
+
+            interface = interface_configs_by_name.get(service.interface)
+
+            if interface is None:
+                continue
+
+            candidate_neighbors: list[str] = []
+
+            if service.service_type == "Internet":
+                candidate_neighbors = self.default_bgp_neighbors
+            elif service.routing_instance:
+                instance = self.routing_instances.get(
+                    service.routing_instance
+                )
+
+                if instance:
+                    candidate_neighbors = instance.bgp_neighbors
+
+            matched_neighbors = [
+                neighbor
+                for neighbor in candidate_neighbors
+                if self._bgp_neighbor_matches_interface(
+                    neighbor,
+                    interface,
+                )
+            ]
+
+            if not matched_neighbors:
+                continue
+
+            service.bgp_neighbor = unique(
+                service.bgp_neighbor + matched_neighbors
+            )
+            service.protocol = unique(service.protocol + ["bgp"])
+            service.detection_reason.append(
+                "BGP neighbor odpovídá subnetu rozhraní: "
+                + ", ".join(service.bgp_neighbor)
+            )
+
+    def _bgp_neighbor_matches_interface(
+        self,
+        neighbor: str,
+        interface: InterfaceConfig,
+    ) -> bool:
+        try:
+            neighbor_ip = ipaddress.ip_address(neighbor)
+        except ValueError:
+            return False
+
+        for address in interface.ip_addresses:
+            try:
+                interface_address = ipaddress.ip_interface(address)
+            except ValueError:
+                continue
+
+            if (
+                neighbor_ip.version == interface_address.version
+                and neighbor_ip in interface_address.network
+            ):
+                return True
+
+        return False
 
     def _find_interface_bridge_domains(
         self,
@@ -1189,6 +1341,22 @@ class JunosEvoAcxServiceParser:
             )
 
         # --------------------------------------------------------------
+        # Core / uplink
+        # --------------------------------------------------------------
+
+        if {"iso", "mpls"} & family_set:
+            reasons.append(
+                "Rozhraní používá family iso nebo family mpls."
+            )
+
+            return (
+                "Core",
+                None,
+                "high",
+                reasons,
+            )
+
+        # --------------------------------------------------------------
         # Internet
         # --------------------------------------------------------------
 
@@ -1330,6 +1498,9 @@ class JunosEvoAcxServiceParser:
         if interface.ip_addresses:
             return False
 
+        if interface.virtual_gw_ip_addresses:
+            return False
+
         if interface.families:
             return False
 
@@ -1369,6 +1540,7 @@ class JunosEvoAcxServiceParser:
     ) -> bool:
         return bool(
             interface.ip_addresses
+            or interface.virtual_gw_ip_addresses
             or "inet" in interface.families
             or "inet6" in interface.families
         )
@@ -1499,6 +1671,7 @@ class JunosEvoAcxServiceParser:
             and not interface.vlan_ids
             and not interface.vlan_id_list
             and not interface.ip_addresses
+            and not interface.virtual_gw_ip_addresses
             and instance is None
             and service_type == "Unknown"
         )
@@ -1627,9 +1800,11 @@ def clean_service_dict(
         "service_type",
         "service_subtype",
         "ip_address",
+        "virtual_gw_ip_address",
         "routing_instance",
         "active",
         "protocol",
+        "bgp_neighbor",
         "bridge_domain",
         "customer_vlan",
         "detection_confidence",
