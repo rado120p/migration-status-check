@@ -25,7 +25,7 @@ from migration_validator.models.snapshot import CaptureMeta, Snapshot
 from migration_validator.probes.ping import DEFAULT_COUNT, resolve_targets, run_ping
 from migration_validator.scoping.builder import build_scopes
 
-LIST_AREAS = frozenset({"arp"})
+LIST_AREAS = frozenset({"arp", "nd"})
 
 
 def _empty_for(area: str) -> Any:

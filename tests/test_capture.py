@@ -180,7 +180,7 @@ def test_every_area_is_registered_for_both_platforms():
     import migration_validator.collectors.all  # noqa: F401
     from migration_validator.collectors.registry import collectors_for
 
-    expected = {"interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac"}
+    expected = {"interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac"}
     for platform in ("junos", "junos-evo"):
         registered = {collector.name for collector in collectors_for(platform)}
         # >= a ne ==, protoze tests/collectors/test_base.py registruje

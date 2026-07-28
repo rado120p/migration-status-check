@@ -12,7 +12,7 @@ from typing import Any
 
 DEVICE_SCOPE_ID = "device"
 
-FACT_AREAS = ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+FACT_AREAS = ("interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
 
 
 @dataclass(frozen=True)
@@ -109,6 +109,11 @@ class Scope:
             for entry in (facts.get("arp") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
+        nd = [
+            entry
+            for entry in (facts.get("nd") or [])
+            if self.selectors.matches_interface(str(entry.get("interface", "")))
+        ]
         bgp = {
             peer: data
             for peer, data in (facts.get("bgp") or {}).items()
@@ -134,6 +139,7 @@ class Scope:
         return {
             "interfaces": interfaces,
             "arp": arp,
+            "nd": nd,
             "bgp": bgp,
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
@@ -161,7 +167,7 @@ class Scope:
 
 
 def _empty(area: str) -> Any:
-    return [] if area == "arp" else {}
+    return [] if area in ("arp", "nd") else {}
 
 
 def device_scope() -> Scope:

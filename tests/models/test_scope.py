@@ -1,4 +1,5 @@
 from migration_validator.models.scope import (
+    FACT_AREAS,
     Scope,
     ScopeKey,
     Selectors,
@@ -14,6 +15,10 @@ FACTS = {
     "arp": [
         {"ip": "198.11.13.2", "interface": "ge-0/0/2.113"},
         {"ip": "10.9.9.2", "interface": "ge-0/0/9.0"},
+    ],
+    "nd": [
+        {"ip": "fe80::1", "interface": "ge-0/0/2.113"},
+        {"ip": "2001:db8::9", "interface": "ge-0/0/9.0"},
     ],
     "bgp": {
         "198.11.13.2": {"state": "Established"},
@@ -62,6 +67,13 @@ def test_select_filters_arp_by_interface():
     assert [entry["ip"] for entry in selected["arp"]] == ["198.11.13.2"]
 
 
+def test_select_filters_nd_by_interface():
+    """Servisni vetev ma vlastni filtr - link-local adresa v nem musi projit,
+    filtruje se podle rozhrani, ne podle rodiny adres."""
+    selected = _service_scope().select(FACTS, PROBES)
+    assert [entry["ip"] for entry in selected["nd"]] == ["fe80::1"]
+
+
 def test_select_filters_bgp_by_neighbor():
     selected = _service_scope().select(FACTS, PROBES)
     assert list(selected["bgp"]) == ["198.11.13.2"]
@@ -102,6 +114,14 @@ def test_select_tolerates_missing_fact_areas():
 def test_scope_round_trip():
     scope = _service_scope()
     assert Scope.from_dict(scope.to_dict()) == scope
+
+
+def test_nd_area_is_a_list_when_missing():
+    """Spatny prazdny typ by check videl jako prazdny slovnik a tise prosel."""
+    selected = device_scope().select({})
+
+    assert selected["nd"] == []
+    assert "nd" in FACT_AREAS
 
 
 def test_selectors_survive_roundtrip():

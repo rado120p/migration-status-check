@@ -14,6 +14,7 @@ NOW = "2026-07-24T09:12:41Z"
 def _facts_for(scopes, pps: int) -> dict:
     interfaces = {}
     arp = []
+    nd = []
     bgp = {}
     evpn_vpws = {}
     evpn_esi = {}
@@ -60,6 +61,7 @@ def _facts_for(scopes, pps: int) -> dict:
     return {
         "interfaces": interfaces,
         "arp": arp,
+        "nd": nd,
         "bgp": bgp,
         "evpn_vpws": evpn_vpws,
         "evpn_esi": evpn_esi,
@@ -93,7 +95,10 @@ def synthetic_snapshot():
                 phase=phase,
                 collectors={
                     name: {"status": "ok"}
-                    for name in ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+                    for name in (
+                        "interfaces", "arp", "nd", "bgp",
+                        "evpn_vpws", "evpn_esi", "evpn_mac",
+                    )
                 },
             ),
             facts=_facts_for(scopes, pps),

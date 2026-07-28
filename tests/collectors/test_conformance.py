@@ -28,6 +28,7 @@ from migration_validator.collectors.evpn import (
     EvpnVpwsCollector,
 )
 from migration_validator.collectors.interfaces import InterfacesCollector
+from migration_validator.collectors.nd import NdCollector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -47,6 +48,7 @@ DEVICES = {
 COLLECTORS = (
     InterfacesCollector(),
     ArpCollector(),
+    NdCollector(),
     BgpCollector(),
     EvpnVpwsCollector(),
     EvpnEsiCollector(),
