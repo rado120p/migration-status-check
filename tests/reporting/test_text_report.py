@@ -98,10 +98,30 @@ def test_render_contains_summary_counts():
 
 
 def test_render_lists_services_with_worst_check_message():
+    """Musi tvrdit, ze zprava sedi na souhrnnem radku sluzby (NALEZ sloupec),
+    ne jen ze se retezec objevi nekde ve vystupu - jinak by test prezil i
+    smazani NALEZ sloupce, protoze WARN/FAIL sluzby se rozbaluji do bloku a
+    _legacy_check nema `value`, takze se zprava echuje i jako hodnota radku
+    uvnitr bloku.
+
+    Souhrnny radek sluzby nezacina mezerou (na rozdil od radku bloku, ktere
+    zacinaji " WARN " / " FAIL "), takze `startswith("WARN  ")` bez uvodni
+    mezery vybere presne jen souhrnny radek.
+    """
     output = render(_legacy_result())
-    assert "L3VPN-CPE13-NNI" in output
-    assert "provoz -72 %" in output
-    assert "vpws-sid-pe-status: Down" in output
+    lines = output.splitlines()
+
+    warn_row = next(
+        line for line in lines
+        if line.startswith("WARN  ") and "L3VPN-CPE13-NNI" in line
+    )
+    assert warn_row.endswith("provoz -72 % (410 -> 115 pps)")
+
+    fail_row = next(
+        line for line in lines
+        if line.startswith("FAIL  ") and "EVPN-VPWS-CPE13-NNI" in line
+    )
+    assert fail_row.endswith("vpws-sid-pe-status: Down")
 
 
 def test_filter_by_text_matches_description():
