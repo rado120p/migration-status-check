@@ -1,8 +1,9 @@
 import pytest
 
 from migration_validator import api
+from migration_validator.engine import _identity
 from migration_validator.models.result import Status
-from migration_validator.models.scope import Scope, ScopeKey, Selectors
+from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 
 NOW = "2026-07-24T11:40:02Z"
@@ -200,3 +201,57 @@ def test_result_is_json_serialisable():
 
     payload = api.evaluate(_new(), baseline=_old(), now=NOW).to_dict()
     assert json.loads(json.dumps(payload, ensure_ascii=False))["schema_version"] == 1
+
+
+def test_identity_maps_each_address_field_to_its_own_key():
+    """Distinct hodnoty pro kazde pole - zamena v4/v6 by tichem prosla, kdyby
+    hodnoty byly stejne."""
+    scope = Scope(
+        id="svc:X:Internet",
+        kind="service",
+        key=ScopeKey("X", "Internet", "residential"),
+        selectors=Selectors(
+            routing_instances=["VRF-X"],
+            local_ipv4=["192.0.2.1/30"],
+            local_ipv6=["2001:db8::1/64"],
+            virtual_gw_v4=["192.0.2.2"],
+            virtual_gw_v6=["2001:db8::2"],
+        ),
+    )
+
+    identity = _identity(scope)
+
+    assert identity["description"] == "X"
+    assert identity["service_type"] == "Internet"
+    assert identity["service_subtype"] == "residential"
+    assert identity["routing_instance"] == "VRF-X"
+    assert identity["ipv4"] == ["192.0.2.1/30"]
+    assert identity["ipv6"] == ["2001:db8::1/64"]
+    assert identity["virtual_gw_v4"] == ["192.0.2.2"]
+    assert identity["virtual_gw_v6"] == ["2001:db8::2"]
+
+
+def test_identity_on_device_scope_is_empty_not_crashing():
+    identity = _identity(device_scope())
+
+    assert identity == {
+        "description": None,
+        "service_type": None,
+        "service_subtype": None,
+        "routing_instance": None,
+        "ipv4": [],
+        "ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+    }
+
+
+def test_identity_without_routing_instance_is_none_not_indexerror():
+    scope = Scope(
+        id="svc:Y:Internet",
+        kind="service",
+        key=ScopeKey("Y", "Internet", None),
+        selectors=Selectors(),
+    )
+
+    assert _identity(scope)["routing_instance"] is None

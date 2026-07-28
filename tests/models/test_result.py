@@ -60,6 +60,7 @@ def test_finding_carries_presentation_fields():
     assert finding.family == 4
     assert finding.value == "Up"
     assert finding.baseline_value == "Up"
+    assert finding.delta is None
 
 
 def test_check_result_omits_empty_presentation_fields():
@@ -75,6 +76,8 @@ def test_check_result_omits_empty_presentation_fields():
 
     assert "family" not in payload
     assert "value" not in payload
+    assert "baseline_value" not in payload
+    assert "delta" not in payload
 
 
 def test_check_result_serialises_presentation_fields():
