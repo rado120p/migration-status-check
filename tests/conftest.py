@@ -54,7 +54,15 @@ def _facts_for(scopes, pps: int) -> dict:
                     if scope.selectors.routing_instances
                     else None
                 ),
-                "prefixes": {"received": 14, "accepted": 14, "advertised": 3},
+                "ribs": {
+                    "inet.0": {
+                        "received": 14,
+                        "accepted": 14,
+                        "advertised": 3,
+                        "active": 14,
+                        "suppressed": 0,
+                    }
+                },
             }
         service_type = scope.key.service_type
         instance = (

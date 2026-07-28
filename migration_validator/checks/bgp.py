@@ -9,6 +9,7 @@ mnozstvi FAILu kvuli rozdilu nekolika rout, coz neni signifikantni.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
@@ -18,7 +19,19 @@ from migration_validator.models.result import Finding, Outcome, Severity
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 ESTABLISHED = "Established"
-PREFIX_KEYS = ("received", "accepted", "advertised")
+PREFIX_KEYS = ("active", "received", "accepted", "advertised", "suppressed")
+
+
+def peer_family(peer: str) -> int | None:
+    """Rodina se odvozuje z adresy peeru, ne ze jmena RIB.
+
+    Jmeno RIB rodinu nemusi obsahovat vubec (bgp.l3vpn.0). Zname omezeni:
+    peer s IPv4 adresou nesouci IPv6 RIB se cely zaradi do sekce IPv4.
+    """
+    try:
+        return ipaddress.ip_address(peer).version
+    except ValueError:
+        return None
 
 
 @register
@@ -47,7 +60,9 @@ class BgpSessionStateCheck(Check):
                     Finding(
                         Outcome.BROKEN,
                         f"{peer}: stav {state}, ocekavano {ESTABLISHED}",
-                        label=peer,
+                        label="BGP status",
+                        family=peer_family(peer),
+                        value=state,
                         subject=subject,
                     )
                 )
@@ -63,7 +78,9 @@ class BgpSessionStateCheck(Check):
                     Finding(
                         Outcome.DEGRADED,
                         f"{peer}: stav se zmenil {baseline_state} -> {state}",
-                        label=peer,
+                        label="BGP status",
+                        family=peer_family(peer),
+                        value=state,
                         baseline={"state": baseline_state},
                         subject=subject,
                     )
@@ -74,7 +91,10 @@ class BgpSessionStateCheck(Check):
                 Finding(
                     Outcome.OK,
                     f"{peer}: {ESTABLISHED}",
-                    label=peer,
+                    label="BGP status",
+                    family=peer_family(peer),
+                    value=state,
+                    baseline_value=baseline_state,
                     baseline={"state": baseline_state} if baseline_state else None,
                     subject=subject,
                 )
@@ -101,55 +121,83 @@ class BgpPrefixCountsCheck(Check):
 
         findings = []
         for peer in sorted(peers):
+            family = peer_family(peer)
             if peer not in baseline_peers:
                 findings.append(
                     Finding(
                         Outcome.SKIP,
                         f"{peer}: peer neni v baseline snapshotu, nelze porovnat",
-                        label=peer,
+                        label="BGP prefixy",
+                        family=family,
                     )
                 )
                 continue
 
-            subject = _counts(peers[peer])
-            baseline = _counts(baseline_peers[peer])
-            details: dict[str, Any] = {"tolerance_percent": tolerance}
-            drops = []
+            subject_ribs = peers[peer].get("ribs", {})
+            baseline_ribs = baseline_peers[peer].get("ribs", {})
 
-            for key in PREFIX_KEYS:
-                change = percent_change(baseline[key], subject[key])
-                if change is None:
+            for rib_name in sorted(subject_ribs):
+                subject = subject_ribs[rib_name]
+                baseline = baseline_ribs.get(rib_name)
+                if baseline is None:
+                    findings.append(
+                        Finding(
+                            Outcome.SKIP,
+                            f"{peer}/{rib_name}: RIB neni v baseline, nelze porovnat",
+                            label=f"BGP prefixy ({rib_name})",
+                            family=family,
+                        )
+                    )
                     continue
-                details[f"{key}_change_percent"] = round(change, 1)
-                if change < tolerance:
-                    drops.append(f"{key} {baseline[key]} -> {subject[key]}")
 
-            if drops:
-                findings.append(
-                    Finding(
-                        Outcome.BROKEN,
-                        f"{peer}: pokles prefixu ({'; '.join(drops)}), "
-                        f"prah je {tolerance:.0f} %",
-                        label=peer,
-                        baseline=baseline,
-                        subject=subject,
-                        details=details,
+                for key in PREFIX_KEYS:
+                    findings.append(
+                        _prefix_finding(
+                            peer, rib_name, key, baseline[key], subject[key],
+                            tolerance, family,
+                        )
                     )
-                )
-            else:
-                findings.append(
-                    Finding(
-                        Outcome.OK,
-                        f"{peer}: pocty prefixu v toleranci {tolerance:.0f} %",
-                        label=peer,
-                        baseline=baseline,
-                        subject=subject,
-                        details=details,
-                    )
-                )
         return findings
 
 
-def _counts(peer: dict[str, Any]) -> dict[str, int]:
-    prefixes = peer.get("prefixes", {})
-    return {key: int(prefixes.get(key, 0)) for key in PREFIX_KEYS}
+def _prefix_finding(
+    peer: str,
+    rib_name: str,
+    key: str,
+    baseline: int,
+    subject: int,
+    tolerance: float,
+    family: int | None,
+) -> Finding:
+    """Jeden radek na counter - report je vypisuje jednotlive."""
+    label = f"BGP {key}-prefix-count"
+    change = percent_change(baseline, subject)
+    delta = None
+    if subject != baseline:
+        delta = f"{subject - baseline:+d}"
+
+    details = {"rib": rib_name, "tolerance_percent": tolerance}
+    if change is not None:
+        details["change_percent"] = round(change, 1)
+
+    outcome = Outcome.OK
+    message = f"{peer}/{rib_name}: {key} {subject}"
+    if change is not None and change < tolerance:
+        outcome = Outcome.BROKEN
+        message = (
+            f"{peer}/{rib_name}: pokles {key} {baseline} -> {subject}, "
+            f"prah je {tolerance:.0f} %"
+        )
+
+    return Finding(
+        outcome,
+        message,
+        label=label,
+        family=family,
+        value=str(subject),
+        baseline_value=str(baseline),
+        delta=delta,
+        baseline={key: baseline},
+        subject={key: subject},
+        details=details,
+    )
