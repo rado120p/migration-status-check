@@ -283,13 +283,15 @@ jen 146 řádky a tato změna se jich netýká. Čísla řádků níže jsou z
 | ř. 811–841 | rodiny se už dnes počítají zvlášť (`ipv4_addresses`, `ipv6_addresses`, `virtual_gw_ipv4_addresses`, `virtual_gw_ipv6_addresses`) — beze změny |
 | ř. 865–871 | **přestane slévat** `unique(ipv4 + ipv6)`; `InterfaceConfig` ponese čtyři seznamy |
 | ř. 923–924 | `InterfaceService` ponese čtyři pole |
-| ř. ~1122–1126 | `_assign_bgp_neighbors` bude **family-correct**: v6 peer se páruje jen proti v6 adresám rozhraní |
+| ř. ~1126 | `_bgp_neighbor_matches_interface` iteruje `interface.ip_addresses` — projde nově obě rodiny. Shodu rodin **už kontroluje** (ř. 1133, `neighbor_ip.version == interface_address.version`), takže jde jen o zdroj adres, ne o logiku |
 | ř. 1498, 1542, 1673 | podmínky typu „rozhraní nemá žádnou adresu" se přepíšou na „nemá adresu ani v jedné rodině" |
 | ř. ~1802 | seznam klíčů YAML výstupu + `schema_version: 2` |
 
-`_assign_bgp_neighbors` je tímto load-bearing pro tři mapování: BGP sousedy dnes,
-a ve druhé spec next-hopy statických rout a BFD. Family-correctness se proto
-opravuje tady, dokud na tom stojí jen jedna věc.
+`_bgp_neighbor_matches_interface` je load-bearing pro tři mapování: BGP sousedy
+dnes, a ve druhé spec next-hopy statických rout a BFD. Kontrola shody rodin v něm
+už je (ověřeno čtením kódu v obou parserech, ř. 1132–1136), takže se jen napojí
+na oba nové seznamy adres. Testy na to ale ve spec 1 přibudou, protože ve spec 2
+na tom bude stát víc.
 
 ### `models/scope.py`
 
