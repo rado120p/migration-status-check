@@ -229,11 +229,14 @@ Sdílené pomocné funkce:
   rodiny popsal, ke kterému rozsahu řádek patří; report ho vypíše v labelu, jen když má
   rodina víc než jednu adresu (`view.py::_row`, `qualify=len(own) > 1`) — u jediné adresy je
   zbytečný, protože už je v hlavičce sekce.
-- **`link_local_is_configured(scope)`** (v `nd_present`) / stejná logika v `probes/ping.py`
-  — má služba link-local adresu přímo nakonfigurovanou pod rozhraním? Link-local sousedé se
-  objeví u každého IPv6 rozhraní a o zákaznické službě neříkají nic, ale existují nasazení,
-  kde je link-local jediná nakonfigurovaná adresa — pak je to legitimní soused. Rozhoduje
-  konfigurace, ne heuristika.
+- **`link_local_is_configured(scope)`** (v `nd_present`) / funkčně stejná
+  `_link_local_configured()` v `probes/ping.py` — má služba link-local adresu přímo
+  nakonfigurovanou pod rozhraním? Testuje se **přítomnost, ne výlučnost**: stačí, aby mezi
+  nakonfigurovanými adresami byla jedna link-local, klidně i vedle běžné routovatelné, a
+  vrací `True`. Link-local sousedé se objeví u každého IPv6 rozhraní a o zákaznické službě
+  sami o sobě neříkají nic — proto se jinak vyřazují. Existují ale nasazení, kde služba
+  link-local používá — pak jsou to přesně ti sousedé, se kterými služba mluví, a filtr je
+  musí nechat projít. Rozhoduje konfigurace, ne heuristika.
 
 ### `arp_present` (state, advisory)
 

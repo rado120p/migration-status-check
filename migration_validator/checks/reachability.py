@@ -25,9 +25,10 @@ def link_local_is_configured(scope: Scope) -> bool:
     """Ma sluzba link-local adresu primo pod rozhranim?
 
     Link-local sousede se objevi u kazdeho IPv6 rozhrani a o zakaznicke
-    sluzbe nerikaji nic. Existuji ale nasazeni, kde je link-local jedina
-    nakonfigurovana adresa - pak je to legitimni soused. Rozhoduje
-    konfigurace, ne heuristika.
+    sluzbe nerikaji nic. Existuji ale nasazeni, kde sluzba pouziva link-local
+    - staci, aby mela mezi nakonfigurovanymi adresami jednu link-local, klidne
+    i vedle bezne routovatelne - pak je link-local soused legitimni cil.
+    Rozhoduje konfigurace (pritomnost, ne vylucnost), ne heuristika.
     """
     for address in scope.selectors.local_ipv6:
         try:

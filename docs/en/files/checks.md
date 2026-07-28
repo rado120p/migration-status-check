@@ -242,11 +242,15 @@ Shared helpers:
   that says which range it belongs to; the report only prints it in the label when the
   family has more than one address (`view.py::_row`, `qualify=len(own) > 1`) — with a single
   address it is redundant, since the address is already in the section header.
-- **`link_local_is_configured(scope)`** (in `nd_present`) / the same logic in
-  `probes/ping.py` — does the service have a link-local address configured directly under the
-  interface? Link-local neighbours show up on every IPv6 interface and say nothing about the
-  customer service, but some deployments configure link-local as the only address — then it
-  is a legitimate neighbour. Configuration decides, not a heuristic.
+- **`link_local_is_configured(scope)`** (in `nd_present`) / the functionally identical
+  `_link_local_configured()` in `probes/ping.py` — does the service have a link-local address
+  configured directly under the interface? This checks **presence, not exclusivity**: one
+  link-local address among the configured ones is enough, even alongside an ordinary
+  routable address — either way it returns `True`. Link-local neighbours show up on every
+  IPv6 interface and say nothing about the customer service by themselves, which is why they
+  are otherwise filtered out. But some deployments have the service use link-local — then
+  those neighbours are exactly what the service talks to, and the filter must let them
+  through. Configuration decides, not a heuristic.
 
 ### `arp_present` (state, advisory)
 
