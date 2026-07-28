@@ -135,9 +135,10 @@ zvlášť. Mechanismus na to už existuje (`Finding.label`), jen se nevyužívá
 
 ### AR-5: Šířky sloupců se počítají z obsahu a nikdy se neořezává
 
-**Rozhodnutí:** šířky sloupců se v každém bloku služby spočítají z řádků, které
-v něm skutečně jsou. Ořezávání se neprovádí. Jméno RIB nejde do sloupce s
-popiskem, ale na odsazený podřádek pod řádkem `BGP status`.
+**Rozhodnutí:** šířky sloupců se počítají **z celého bloku jedné služby** — tedy
+ze všech jeho sekcí dohromady, ne zvlášť pro každou rodinu. Ořezávání se
+neprovádí. Jméno RIB nejde do sloupce s popiskem, ale na odsazený podřádek pod
+řádkem `BGP status`; podřádek je volný text bez sloupců.
 
 **Důvod:** dnešní renderer ořezává (`{check.id:<22.22}`). Řádek
 `0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b` má 39 znaků a
@@ -145,6 +146,38 @@ popiskem, ale na odsazený podřádek pod řádkem `BGP status`.
 sloupce, a to právě na IPv6 řádcích, kvůli kterým se celá změna dělá. Ořezaná
 IPv6 adresa nebo ořezané jméno RIB jsou horší než nic. Bloky mohou být různě
 široké; čtou se po jednom, ne jako jedna tabulka.
+
+Šířky jsou **per blok, ne per sekce**, protože hlavička a oddělovací čára se
+kreslí jednou pro celou službu — kdyby si každá rodina počítala vlastní šířky,
+neseděly by na ně. IPv6 sekce tak může mít u kratších hodnot volné místo; to je
+přijatelná cena za to, že sloupce v rámci služby drží linku.
+
+### AR-5b: Více adres jedné rodiny — jedna sekce, adresa v popisku
+
+**Rozhodnutí:** sekce je vždy jedna na rodinu, i když má služba víc rozsahů
+téže rodiny. Hlavička sekce vypíše všechny adresy dané rodiny. Řádky vázané na
+konkrétní adresu (ARP, ND, ping) dostanou tuto adresu do popisku; řádky platné
+pro celou rodinu (BGP a spol.) ji nemají. Má-li rodina jedinou adresu — běžný
+případ — adresa se z popisků vypustí, protože už je v hlavičce.
+
+```
+ -- IPv4  152.11.13.1/30, 152.11.20.1/29 ------------------------------------
+ PASS | ARP (152.11.13.1/30)         : 0c:00:ef:5e:df:01 -> 152.11.13.2
+ PASS | ARP (152.11.20.1/29)         : 0c:00:ef:5e:df:02 -> 152.11.20.2
+ PASS | Ping (152.11.13.2)           : 1/1  2.1 ms
+ PASS | Ping (152.11.20.2)           : 1/1  2.4 ms
+ PASS | BGP status                   : Established
+```
+
+**Důvod:** zadání žádá smysluplné oddělení i pro službu s víc rozsahy, ne jen
+pro dual-stack. Sekce na adresu by ale musela duplikovat řádky, které na adresu
+vázané nejsou — BGP session visí na peeru, ne na rozsahu — a stav služby by pak
+šlo přečíst dvakrát různě. Vnořené podsekce zase přidávají třetí úroveň odsazení
+kvůli případu, který je v praxi vzácný. Adresa v popisku degraduje na dnešní
+podobu, jakmile je adresa jediná.
+
+**Poznámka:** žádná služba v `172.20.20.4.yml` ani `.5.yml` dnes dvě adresy téže
+rodiny nemá, takže tenhle případ testy musí pokrýt syntetickou inventory.
 
 ### AR-6: Rozbalování řídí stav, ne interaktivita
 
@@ -174,6 +207,13 @@ prefixů v `inet6.0` kompenzovaný nárůstem v `inet.0` prošel jako beze změn
 
 **Rodina BGP řádku** se odvodí z adresy peeru (`ipaddress.ip_address(peer).version`),
 ne ze jména RIB — jméno RIB nemusí rodinu obsahovat (`bgp.l3vpn.0`).
+
+**Známé omezení:** peer s adresou IPv4, který nese IPv6 RIB (`inet6.0` přes jednu
+v4 session), by se celý zařadil do sekce IPv4. V laboratoři takový peer není —
+fixtures obsahují `inet.0`, `bgp.l3vpn.0`, `bgp.evpn.0`, `bgp.mvpn.0`,
+`bgp.rtarget.0` a `L3VPN-CPE13-NNI.inet.0` — a řešit to jménem RIB by rozbilo
+`bgp.l3vpn.0`, kde rodina ve jménu není. Zůstává jako vědomé omezení, ne jako
+opomenutí.
 
 ### AR-8: Link-local ND záznamy se ignorují, pokud nejsou nakonfigurované
 
@@ -362,33 +402,33 @@ PASS  L3VPN-CPE13-NNI           IPVPN     ge-0/0/2.113  et-0/0/8.113  L3VPN-CPE1
 PASS  L3VPN-CPE14-UNI           IPVPN     ge-0/0/4.0    et-0/0/10.0   L3VPN-CPE14-UNI  -
 FAIL  EVPN-VLAN-AWARE-INTERNET  Internet  ge-0/0/5.0    irb.14        -                zadny ARP zaznam, ping 0/1
 
-========================================================================================================
+=====================================================================================================
  WARN  INTERNET-CPE13-NNI          Internet    ge-0/0/2.13 -> et-0/0/8.13     RI: -
-========================================================================================================
- STAV | CHECK                        : POST (et-0/0/8.13)               | ZMENA PROTI ge-0/0/2.13
- -----+------------------------------+---------------------------------+------------------------------
- PASS | Interface admin status       : Up                               |
- PASS | Interface operational status : Up                               |
- PASS | Interface traffic in         : 460 pps                          | bylo 520 pps    -12 %
- PASS | Interface traffic out        : 330 pps                          | bylo 360 pps    -8 %
+=====================================================================================================
+ STAV | CHECK                        : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+------------------------------+-----------------------------------------+---------------------
+ PASS | Interface admin status       : Up                                      |
+ PASS | Interface operational status : Up                                      |
+ PASS | Interface traffic in         : 460 pps                                 | bylo 520 pps   -12 %
+ PASS | Interface traffic out        : 330 pps                                 | bylo 360 pps   -8 %
 
- -- IPv4  152.11.13.1/30 --------------------------------------------------------------------------------
- PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2 |
- PASS | BGP status                   : Established                      |
-      |   RIB inet.0                                                    |
- PASS | BGP active-prefix-count      : 2                                |
- WARN | BGP received-prefix-count    : 1                                | bylo 2          -1
- WARN | BGP accepted-prefix-count    : 1                                | bylo 2          -1
- PASS | BGP suppressed-prefix-count  : 0                                |
- PASS | Ping                         : 1/1  2.1 ms                      |
-      | (budouci: BFD, Static routes)                                   |
+ -- IPv4  152.11.13.1/30 ----------------------------------------------------------------------------
+ PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ PASS | BGP status                   : Established                             |
+      |   RIB inet.0
+ PASS | BGP active-prefix-count      : 2                                       |
+ WARN | BGP received-prefix-count    : 1                                       | bylo 2         -1
+ WARN | BGP accepted-prefix-count    : 1                                       | bylo 2         -1
+ PASS | BGP suppressed-prefix-count  : 0                                       |
+ PASS | Ping                         : 1/1  2.1 ms                             |
+      |   budouci: BFD, Static routes
 
- -- IPv6  2001:abcd:11:13::a/127 ------------------------------------------------------------------------
+ -- IPv6  2001:abcd:11:13::a/127 --------------------------------------------------------------------
  PASS | ND                           : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
- PASS | BGP status                   : Established                            |
-      |   RIB inet6.0                                                         |
- PASS | BGP received-prefix-count    : 0                                      |
- PASS | Ping                         : 1/1  2.4 ms                            |
+ PASS | BGP status                   : Established                             |
+      |   RIB inet6.0
+ PASS | BGP received-prefix-count    : 0                                       |
+ PASS | Ping                         : 1/1  2.4 ms                             |
 
 (sluzby se stavem PASS jsou jen v tabulce nahore - rozbali je --detail)
 
@@ -401,19 +441,27 @@ NESPAROVANO
 | situace | co se vytiskne |
 |---|---|
 | baseline vůbec není (`evaluate` bez `--baseline`) | sloupec ZMENA se nevykreslí |
-| baseline je, ale check pro ni hodnotu nemá | `bez baseline` |
+| check je `Mode.STATE` | prázdno — nemá se s čím srovnávat **z principu** |
+| check je `Mode.COMPARE` / `Mode.BOTH`, ale `baseline_value` chybí | `bez baseline` |
 | `baseline_value == value` | prázdno |
 | jinak | `bylo <hodnota>` a `<delta>` |
 
-Explicitní `bez baseline` je podstatné: prázdné místo jinak znamená současně
-*shodu* i *chybějící srovnání* (nový check, nová služba, spadlý collector), což
-jsou opačné zprávy.
+Rozlišení podle `Check.mode` je nutné, ne kosmetické: `arp_present`,
+`nd_present`, `ping_reachability` i `interface_state` jsou STATE checky a
+`baseline_value` nemají **z definice**. Bez toho by se `bez baseline` vytisklo
+na většině řádků a hlášku by nikdo nečetl.
+
+Explicitní `bez baseline` u porovnávacích checků je naopak podstatné: prázdné
+místo by tam jinak znamenalo současně *shodu* i *chybějící srovnání* (nový
+check, nová služba, spadlý collector), což jsou opačné zprávy.
 
 ### Služba s virtual gateway
 
 ```
  -- IPv4  152.11.14.2/29   VGW 152.11.14.1 ---------------------------------------------------------------
 ```
+
+Má-li rodina víc adres, vypíše hlavička všechny, oddělené čárkou (AR-5b).
 
 ### Pořadí
 
@@ -475,7 +523,11 @@ Beze změny proti stávajícímu návrhu; nové oblasti se do něj jen zařadí.
 - služba s virtual gateway (`irb.14`)
 - služba, kde baseline chybí → sloupec `bez baseline`
 - běh bez `--baseline` → sloupec ZMENA se nevykreslí
-- šířka sloupců u dlouhé IPv6 adresy — kontrola, že se **neořezává**
+- šířka sloupců u dlouhé IPv6 adresy — kontrola, že se **neořezává** a že sloupce
+  drží linku napříč sekcemi jednoho bloku (AR-5)
+- služba se dvěma rozsahy téže rodiny — adresa v popisku (AR-5b). Vyžaduje
+  syntetickou inventory, v laboratoři takový případ není
+- STATE check s načtenou baseline → sloupec ZMENA **prázdný**, ne `bez baseline`
 
 **Testy na hlasitý pád:** inventory i snapshot se starou `schema_version`.
 
