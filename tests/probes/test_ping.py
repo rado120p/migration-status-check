@@ -223,6 +223,77 @@ def test_no_resolved_target_ever_equals_its_own_source():
     assert all(target.target != target.source for target in targets)
 
 
+def test_arp_guard_drops_own_address_reflected_back():
+    """Gratuitous ARP / duplicitni adresa: vlastni zdrojova adresa se muze
+    objevit primo v ARP tabulce, ne jen dojit z owned/VGW smeru. `owned` na
+    tohle nema dosah - ARP vetev vubec nevola subnet_fallback. Jedine, co
+    tu self-ping brani, je filtr `if address != source` v resolve_targets.
+
+    Vedle sebe je i legitimni soused (198.11.13.2), aby test nemohl projit
+    jen diky tomu, ze prazdny seznam adres po filtru spustil `if addresses:`
+    vetev jako celek - musi se overit, ze filtr vyradi presne jednu polozku
+    a druhou necha byt.
+    """
+    arp = [
+        {"ip": "198.11.13.1", "interface": "ge-0/0/2.113"},  # vlastni zdroj scope
+        {"ip": "198.11.13.2", "interface": "ge-0/0/2.113"},  # skutecny soused
+    ]
+
+    targets = resolve_targets([_scope()], arp)
+
+    assert [t.target for t in targets] == ["198.11.13.2"]
+    assert all(t.target != t.source for t in targets)
+
+
+def test_nd_guard_drops_own_address_reflected_back():
+    """IPv6 obdoba: IRB muze odpovidat za svou vlastni adresu v ND (nebo jde
+    o duplicate-address stav behem cutoveru) - vlastni adresa se objevi
+    primo v ND tabulce. Zase mimo dosah `owned` (ND vetev take nevola
+    subnet_fallback) - chrani jen `if address != source`.
+    """
+    scope = _scope(
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/127",)
+    )
+    nd = [
+        {
+            "ip": "2001:abcd:11:13::a",  # vlastni zdrojova adresa scope
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        },
+        {
+            "ip": "2001:abcd:11:13::b",  # skutecny soused
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        },
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [t.target for t in targets] == ["2001:abcd:11:13::b"]
+    assert all(t.target != t.source for t in targets)
+
+
+def test_fallback_guard_catches_self_ping_owned_does_not_cover():
+    """Fallback shape, kde `owned` (prazdny - zadny VGW) self-ping nechyti,
+    ale obecny strazce `fallback != source` ano.
+
+    Scope ma dve IPv4 adresy: "10.0.0.1/32" (source_address bere prvni v
+    poradi jako zdroj - zadny VGW) a "10.0.0.2/30". Prvni adresa je /32,
+    subnet_fallback ji preskoci (network.prefixlen >= max_prefixlen). Padne
+    to na druhou adresu, jejiz sit 10.0.0.0/30 obsahuje 10.0.0.1 jako
+    validniho kandidata - a ten je presne roven zdroji. `owned` o tomhle
+    prekryvu nic nevi (neni to VGW), takze bez obecneho strazce by fallback
+    tuhle adresu vratil jako cil.
+    """
+    scope = _scope(addresses=("10.0.0.1/32", "10.0.0.2/30"), virtual_gw_v4=())
+
+    targets = resolve_targets([scope], [])
+
+    assert targets == []
+
+
 def test_no_targets_for_core_or_elan_scopes():
     scopes = [
         _scope(scope_id="svc:C:Core", service_type="Core"),
