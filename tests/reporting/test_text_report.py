@@ -81,6 +81,29 @@ def _legacy_result() -> RunResult:
     )
 
 
+def test_render_contains_header_with_both_devices():
+    """Zjistuje i chybu, kterou puvodni test nechytil: adresa/faze subjektu
+    tvrdil jen test_cli.py, ne tento soubor."""
+    output = render(_legacy_result())
+    assert "172.20.20.4" in output and "172.20.20.5" in output
+    assert "pre-migration" in output and "post-migration" in output
+
+
+def test_render_contains_summary_counts():
+    output = render(_legacy_result())
+    assert "3 PASS" in output
+    assert "1 WARN" in output
+    assert "1 FAIL" in output
+    assert "Sparovano 2" in output
+
+
+def test_render_lists_services_with_worst_check_message():
+    output = render(_legacy_result())
+    assert "L3VPN-CPE13-NNI" in output
+    assert "provoz -72 %" in output
+    assert "vpws-sid-pe-status: Down" in output
+
+
 def test_filter_by_text_matches_description():
     filtered = filter_result(_legacy_result(), text="L3VPN")
     assert [scope.scope_id for scope in filtered.scopes] == ["svc:L3VPN-CPE13-NNI:IPVPN"]
@@ -226,6 +249,18 @@ def test_detail_expands_passing_service():
     assert "-- IPv4" in output
 
 
+def test_pass_subcheck_is_shown_inside_a_non_pass_block():
+    """Headline chovani tohoto tasku: blok WARN/FAIL sluzby ukazuje VSECHNY
+    radky bloku, ne jen ten, ktery zpusobil WARN/FAIL - jinak by PASS radek
+    (Interface admin status) v ramci WARN sluzby uvnitr bloku chybel."""
+    output = render(_result([_dual_stack_scope(status=Status.WARN)]))
+    lines = output.splitlines()
+
+    assert any(line.startswith(" PASS | Interface admin status") for line in lines), (
+        "PASS radek (Interface admin status) chybi uvnitr WARN bloku"
+    )
+
+
 def test_change_column_is_absent_without_baseline():
     output = render(_result([_dual_stack_scope()], baseline=False))
 
@@ -286,7 +321,13 @@ def test_service_without_ipv6_has_no_ipv6_section():
 
 
 def test_block_frame_agrees_with_its_widest_line():
-    """Presne to selhani, ktere AR-5 resi: ramec kratsi nez hlavicka."""
+    """Presne to selhani, ktere AR-5 resi: ramec kratsi nez hlavicka.
+
+    Hlavicka bloku (SYMBOL, description, service_type, porty, RI) nese
+    volny text bez horni meze delky, takze musi byt v `body` zahrnuta -
+    puvodni filtr ji vynechaval (" STAV |" apod. nesedi na format hlavicky
+    " PASS  <description> ...") a test tak nemohl chybu vubec zachytit.
+    """
     output = render(_result([_dual_stack_scope()]))
     lines = output.splitlines()
 
@@ -295,8 +336,59 @@ def test_block_frame_agrees_with_its_widest_line():
 
     body = [
         line for line in lines
-        if line.startswith((" STAV |", " PASS |", " WARN |", " FAIL |", " SKIP |", " -----+"))
+        if line.startswith((
+            " STAV |", " PASS |", " WARN |", " FAIL |", " SKIP |", " -----+",
+            " PASS  ", " WARN  ", " FAIL  ", " SKIP  ",
+        ))
     ]
     assert body, "blok nema zadny radek"
 
     assert max(len(line) for line in body) <= len(frame[0])
+
+
+def _long_description_scope() -> ScopeResult:
+    """Description a RI delsi nez cela sloupcova tabulka - dukaz na AR-5."""
+    return ScopeResult(
+        scope_id="svc:LONG:Internet",
+        key={"description": "LONG", "service_type": "Internet"},
+        status=Status.FAIL,
+        match=MatchInfo(
+            status="matched",
+            baseline_interfaces=["ge-0/0/5.0"],
+            subject_interfaces=["irb.14"],
+        ),
+        checks=[
+            _check("arp_present", Status.FAIL, "zadny zaznam", label="ARP", family=4,
+                   value="x"),
+        ],
+        identity={
+            "description": "VELMI-DLOUHY-NAZEV-SLUZBY-KTERY-JE-DELSI-NEZ-CELA-TABULKA-SLOUPCU",
+            "service_type": "Internet",
+            "service_subtype": None,
+            "routing_instance": "STEJNE-VELMI-DLOUHY-NAZEV-ROUTING-INSTANCE-Z-LABORATORE",
+            "ipv4": ["152.11.14.2/29"],
+            "ipv6": [],
+            "virtual_gw_v4": [],
+            "virtual_gw_v6": [],
+        },
+    )
+
+
+def test_frame_covers_a_header_line_longer_than_the_column_table():
+    """Sirka bloku se pocita i z hlavickoveho radku, ne jen ze sloupcu.
+
+    Description i routing_instance jsou tu zamerne delsi, nez cely sloupcovy
+    blok (STAV/CHECK/HODNOTA/ZMENA) kdy vysazen sam - kdyby `width` bral v
+    uvahu jen ten, ramec by byl kratsi nez hlavicka.
+    """
+    output = render(_result([_long_description_scope()]))
+    lines = output.splitlines()
+
+    frame_index = next(i for i, line in enumerate(lines) if line and set(line) == {"="})
+    frame_line = lines[frame_index]
+    header = lines[frame_index + 1]
+    assert "VELMI-DLOUHY-NAZEV-SLUZBY" in header, "spatny radek - to neni hlavicka bloku"
+
+    assert len(header) <= len(frame_line), (
+        f"hlavicka bloku ({len(header)}) prerustla ramec ({len(frame_line)})"
+    )

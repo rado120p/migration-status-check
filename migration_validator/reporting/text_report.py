@@ -89,19 +89,27 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
             return text.rstrip()
         return f"{text} | {change}".rstrip()
 
-    width = 1 + 4 + 3 + label_width + 3 + value_width
+    table_width = 1 + 4 + 3 + label_width + 3 + value_width
     if has_baseline:
-        width += 3 + change_width
+        table_width += 3 + change_width
 
     ports = (
         f"{baseline_port} -> {subject_port}" if has_baseline else subject_port
     )
     instance = view.routing_instance or "-"
 
+    # Popisek sluzby je volny text bez horni meze delky (description,
+    # routing instance) - ramec musi obalit i tenhle radek, ne jen tabulku
+    # sloupcu. Jinak by dlouhy nazev sluzby prerostl "=" caru.
+    header_line = (
+        f" {SYMBOL[view.status].strip():<4}  {view.description}   "
+        f"{view.service_type}   {ports}   RI: {instance}"
+    )
+    width = max(table_width, len(header_line))
+
     lines = [
         "=" * width,
-        f" {SYMBOL[view.status].strip():<4}  {view.description}   "
-        f"{view.service_type}   {ports}   RI: {instance}",
+        header_line,
         "=" * width,
         line("STAV", label_title, value_title, change_title),
     ]
