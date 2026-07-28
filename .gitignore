@@ -5,3 +5,4 @@ pyats-venv/
 *.egg-info/
 .pytest_cache/
 runs/
+.superpowers/
