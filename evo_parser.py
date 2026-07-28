@@ -125,8 +125,10 @@ class InterfaceConfig:
     vlan_id_list: list[str] = field(default_factory=list)
     input_vlan_map: str | None = None
     output_vlan_map: str | None = None
-    ip_addresses: list[str] = field(default_factory=list)
-    virtual_gw_ip_addresses: list[str] = field(default_factory=list)
+    ipv4_addresses: list[str] = field(default_factory=list)
+    ipv6_addresses: list[str] = field(default_factory=list)
+    virtual_gw_ipv4_addresses: list[str] = field(default_factory=list)
+    virtual_gw_ipv6_addresses: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -135,8 +137,10 @@ class InterfaceService:
     description: str | None
     service_type: str
     service_subtype: str | None
-    ip_address: list[str]
-    virtual_gw_ip_address: list[str]
+    ipv4_address: list[str]
+    ipv6_address: list[str]
+    virtual_gw_ipv4_address: list[str]
+    virtual_gw_ipv6_address: list[str]
     routing_instance: str | None
     protocol: list[str]
     active: bool = True
@@ -862,13 +866,10 @@ class JunosEvoAcxServiceParser:
             vlan_id_list=vlan_id_list,
             input_vlan_map=input_vlan_map,
             output_vlan_map=output_vlan_map,
-            ip_addresses=unique(
-                ipv4_addresses + ipv6_addresses
-            ),
-            virtual_gw_ip_addresses=unique(
-                virtual_gw_ipv4_addresses
-                + virtual_gw_ipv6_addresses
-            ),
+            ipv4_addresses=unique(ipv4_addresses),
+            ipv6_addresses=unique(ipv6_addresses),
+            virtual_gw_ipv4_addresses=unique(virtual_gw_ipv4_addresses),
+            virtual_gw_ipv6_addresses=unique(virtual_gw_ipv6_addresses),
         )
 
     # ------------------------------------------------------------------
@@ -920,8 +921,10 @@ class JunosEvoAcxServiceParser:
             description=interface.description,
             service_type=service_type,
             service_subtype=service_subtype,
-            ip_address=interface.ip_addresses,
-            virtual_gw_ip_address=interface.virtual_gw_ip_addresses,
+            ipv4_address=interface.ipv4_addresses,
+            ipv6_address=interface.ipv6_addresses,
+            virtual_gw_ipv4_address=interface.virtual_gw_ipv4_addresses,
+            virtual_gw_ipv6_address=interface.virtual_gw_ipv6_addresses,
             routing_instance=instance.name if instance else None,
             protocol=protocols,
             active=instance.active if instance else True,
@@ -1123,7 +1126,7 @@ class JunosEvoAcxServiceParser:
         except ValueError:
             return False
 
-        for address in interface.ip_addresses:
+        for address in interface.ipv4_addresses + interface.ipv6_addresses:
             try:
                 interface_address = ipaddress.ip_interface(address)
             except ValueError:
@@ -1495,10 +1498,10 @@ class JunosEvoAcxServiceParser:
         if instance is not None:
             return False
 
-        if interface.ip_addresses:
+        if interface.ipv4_addresses or interface.ipv6_addresses:
             return False
 
-        if interface.virtual_gw_ip_addresses:
+        if interface.virtual_gw_ipv4_addresses or interface.virtual_gw_ipv6_addresses:
             return False
 
         if interface.families:
@@ -1539,8 +1542,10 @@ class JunosEvoAcxServiceParser:
         interface: InterfaceConfig,
     ) -> bool:
         return bool(
-            interface.ip_addresses
-            or interface.virtual_gw_ip_addresses
+            interface.ipv4_addresses
+            or interface.ipv6_addresses
+            or interface.virtual_gw_ipv4_addresses
+            or interface.virtual_gw_ipv6_addresses
             or "inet" in interface.families
             or "inet6" in interface.families
         )
@@ -1670,8 +1675,10 @@ class JunosEvoAcxServiceParser:
             and interface.encapsulation is None
             and not interface.vlan_ids
             and not interface.vlan_id_list
-            and not interface.ip_addresses
-            and not interface.virtual_gw_ip_addresses
+            and not interface.ipv4_addresses
+            and not interface.ipv6_addresses
+            and not interface.virtual_gw_ipv4_addresses
+            and not interface.virtual_gw_ipv6_addresses
             and instance is None
             and service_type == "Unknown"
         )
@@ -1773,11 +1780,15 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
+INVENTORY_SCHEMA_VERSION = 2
+
+
 def create_yaml_data(
     hostname: str,
     services: list[InterfaceService],
 ) -> dict[str, Any]:
     return {
+        "schema_version": INVENTORY_SCHEMA_VERSION,
         "device": hostname,
         "interfaces": [
             clean_service_dict(asdict(service))
@@ -1799,8 +1810,10 @@ def clean_service_dict(
         "description",
         "service_type",
         "service_subtype",
-        "ip_address",
-        "virtual_gw_ip_address",
+        "ipv4_address",
+        "ipv6_address",
+        "virtual_gw_ipv4_address",
+        "virtual_gw_ipv6_address",
         "routing_instance",
         "active",
         "protocol",
