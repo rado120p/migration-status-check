@@ -66,8 +66,23 @@ def source_address(scope: Scope, family: int) -> str | None:
 IPV6_FALLBACK_MIN_PREFIX = 126
 
 
-def subnet_fallback(addresses: list[str], family: int) -> str | None:
-    """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni."""
+def subnet_fallback(
+    addresses: list[str], family: int, owned: list[str] | None = None
+) -> str | None:
+    """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni.
+
+    `owned` jsou dalsi adresy, ktere scope vlastni a ktere se nesmi vratit
+    jako cil - typicky virtual-gateway adresa IRB rozhrani. Bez tohohle
+    fallback vraci VGW jako cil, zatimco `source_address()` uz VGW pouzila
+    jako zdroj - vysledkem je ping sam na sebe (overeno proti laborce).
+    """
+    owned_ips: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+    for own in owned or ():
+        try:
+            owned_ips.add(ipaddress.ip_interface(own).ip)
+        except ValueError:
+            continue
+
     for address in addresses:
         try:
             interface = ipaddress.ip_interface(address)
@@ -82,6 +97,8 @@ def subnet_fallback(addresses: list[str], family: int) -> str | None:
 
         for candidate in network:
             if candidate == interface.ip:
+                continue
+            if candidate in owned_ips:
                 continue
             # Vyloucit sit a broadcast je IPv4 uvaha - v IPv6 je adresa se
             # samymi nulami subnet-router anycast, ne broadcast.
@@ -154,6 +171,7 @@ def resolve_targets(
                 ]
                 origin = "arp"
                 local = scope.selectors.local_ipv4
+                owned = scope.selectors.virtual_gw_v4
             else:
                 addresses = [
                     (
@@ -169,16 +187,21 @@ def resolve_targets(
                 ]
                 origin = "nd"
                 local = scope.selectors.local_ipv6
+                owned = scope.selectors.virtual_gw_v6
 
             if addresses:
                 targets.extend(
                     PingTarget(scope.id, address, source, instance, origin, family, interface)
                     for address, interface in addresses
+                    # Neplati typicky, ale kdyby ARP/ND vratila nasi vlastni
+                    # adresu, ping sam na sebe je nesmyslny vysledek - radsi
+                    # zadny cil nez lhavy.
+                    if address != source
                 )
                 continue
 
-            fallback = subnet_fallback(local, family)
-            if fallback:
+            fallback = subnet_fallback(local, family, owned=owned)
+            if fallback and fallback != source:
                 targets.append(
                     PingTarget(
                         scope.id, fallback, source, instance, "subnet-fallback", family

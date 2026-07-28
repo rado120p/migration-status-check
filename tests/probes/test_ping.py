@@ -95,6 +95,46 @@ def test_ipv6_fallback_only_on_point_to_point():
     assert subnet_fallback(["2001:db8::2/64"], 6) is None
 
 
+def test_subnet_fallback_excludes_virtual_gateway_v4():
+    """Regrese na self-ping: irb.14 ma adresu .2/29 a VGW .1.
+
+    Bez `owned` fallback vrati .1 (prvni kandidat po vynechani sitove .0),
+    coz je presne adresa, kterou `source_address()` uz zvolila jako zdroj -
+    ping sam na sebe. Overeno proti realne laborce (172.20.20.5, EVO).
+    """
+    without_fix = subnet_fallback(["152.11.14.2/29"], 4)
+    assert without_fix == "152.11.14.1"  # bug: to je VGW
+
+    with_fix = subnet_fallback(["152.11.14.2/29"], 4, owned=["152.11.14.1"])
+    assert with_fix == "152.11.14.3"
+    assert with_fix != "152.11.14.1"
+
+
+def test_subnet_fallback_excludes_virtual_gateway_v6():
+    """Stejna chyba je rodino-agnosticka - overeno i na IPv6 strane.
+
+    /127 by fallback nikdy nespustil (jen 2 adresy, obe uz vyloucene), takze
+    scenar potrebuje kratsi prefix - /126, ktery je jeste v ramci
+    IPV6_FALLBACK_MIN_PREFIX. Vlastni adresa je na ::0 (site-adresa se v
+    IPv6 nevylucuje - viz komentar u subnet_fallback), VGW na ::1 - presne
+    tvar, ktery bez `owned` vrati VGW jako prvniho kandidata po vlastni
+    adrese.
+    """
+    without_fix = subnet_fallback(["2001:db8:11:14::0/126"], 6)
+    assert without_fix == "2001:db8:11:14::1"  # bug: to je VGW
+
+    with_fix = subnet_fallback(
+        ["2001:db8:11:14::0/126"], 6, owned=["2001:db8:11:14::1"]
+    )
+    assert with_fix == "2001:db8:11:14::2"
+    assert with_fix != "2001:db8:11:14::1"
+
+
+def test_subnet_fallback_without_owned_keeps_old_behaviour():
+    """`owned` je volitelny - scopy bez VGW se chovaji jako drive."""
+    assert subnet_fallback(["152.11.14.1/29"], 4) == "152.11.14.2"
+
+
 def test_targets_come_from_arp():
     arp = [
         {"ip": "198.11.13.2", "interface": "ge-0/0/2.113"},
@@ -122,6 +162,65 @@ def test_empty_arp_falls_back_to_subnet():
     assert len(targets) == 1
     assert targets[0].target == "198.11.13.2"
     assert targets[0].resolved_from == "subnet-fallback"
+
+
+def test_irb_fallback_never_pings_own_virtual_gateway():
+    """Regrese na live nalez: irb.14, 152.11.14.2/29, VGW 152.11.14.1.
+
+    Bez opravy vraci ARP-prazdny scope fallback na 152.11.14.1 - presne tu
+    adresu, kterou `source_address()` zvolila jako zdroj. Ping tak jde sam
+    na sebe a sluzba dostane verdikt o nicem. Overeno proti 172.20.20.5.
+    """
+    scope = _scope(
+        scope_id="svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+        service_type="Internet",
+        interfaces=("irb.14",),
+        addresses=("152.11.14.2/29",),
+        virtual_gw_v4=("152.11.14.1",),
+        routing_instance=None,
+    )
+
+    targets = resolve_targets([scope], [])
+
+    assert len(targets) == 1
+    assert targets[0].source == "152.11.14.1"
+    assert targets[0].target != targets[0].source
+    assert targets[0].target == "152.11.14.3"
+
+
+def test_no_resolved_target_ever_equals_its_own_source():
+    """Invariant, ne implementacni detail: ping zdroj == cil je vzdy nesmysl.
+
+    Pinuje se pres vsechny cesty, ktere resolve_targets muze vzit - ARP,
+    ND i subnet-fallback, s i bez virtual-gw - aby regrese kdekoliv v
+    tomhle toku spolehlive spadla na tomhle testu.
+    """
+    scopes = [
+        _scope(
+            scope_id="svc:irb-v4:Internet",
+            service_type="Internet",
+            interfaces=("irb.14",),
+            addresses=("152.11.14.2/29",),
+            virtual_gw_v4=("152.11.14.1",),
+            routing_instance=None,
+        ),
+        _scope(
+            scope_id="svc:irb-v6:Internet",
+            service_type="Internet",
+            interfaces=("irb.15",),
+            addresses=(),
+            local_ipv6=("2001:db8:11:15::0/126",),
+            virtual_gw_v6=("2001:db8:11:15::1",),
+            routing_instance=None,
+        ),
+        _scope(),
+    ]
+    arp = [{"ip": "198.11.13.2", "interface": "ge-0/0/2.113"}]
+
+    targets = resolve_targets(scopes, arp)
+
+    assert targets  # sanity - test by jinak proslo prazdnym seznamem
+    assert all(target.target != target.source for target in targets)
 
 
 def test_no_targets_for_core_or_elan_scopes():

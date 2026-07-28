@@ -81,6 +81,7 @@ class BgpSessionStateCheck(Check):
                         label="BGP status",
                         family=peer_family(peer),
                         value=state,
+                        baseline_value=baseline_state,
                         baseline={"state": baseline_state},
                         subject=subject,
                     )

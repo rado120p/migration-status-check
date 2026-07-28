@@ -113,6 +113,24 @@ def test_state_change_from_active_to_established_is_warn_not_fail():
     assert "Active" in result.message and "Established" in result.message
 
 
+def test_changed_session_carries_baseline_value():
+    """Regrese na live nalez: svc:et-0/0/10.0:IPVPN hlasilo v souhrnu 'stav
+    se zmenil Connect -> Established', ale radek bloku ukazoval 'bez
+    baseline' - protoze DEGRADED vetev nastavovala jen `baseline` (dict
+    pro JSON), ne `baseline_value` (pole, ze ktereho report sklada sloupec
+    ZMENA). Bez `baseline_value` ZMENA cte baseline_value is None jako
+    'bez baseline', presestoze check presne vi, jaky stav byl predtim.
+    """
+    ctx = _ctx(
+        subject={"bgp": {"198.11.13.2": _peer(state="Established")}},
+        baseline={"bgp": {"198.11.13.2": _peer(state="Connect")}},
+    )
+    result = run_check(BgpSessionStateCheck(), ctx)[0]
+
+    assert result.status is Status.WARN
+    assert result.baseline_value == "Connect"
+
+
 def test_peer_missing_in_baseline_is_evaluated_as_state_only():
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer()}},

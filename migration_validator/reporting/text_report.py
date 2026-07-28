@@ -161,17 +161,41 @@ def render(result: RunResult, *, detail: bool = False) -> str:
 
     views = [(scope, build_view(scope)) for scope in result.scopes]
 
+    # Sirky sloupcu se pocitaji z realnych dat, stejne jako v _block() -
+    # napevno dane sirky prekypuji na skutecnych nazvech (dlouhy nazev
+    # sluzby/RI z laborky), coz posune vsechny sloupce napravo a rozjede
+    # zarovnani. Bez orezavani - orezany nazev je horsi nez nic.
+    rows = [
+        (
+            SYMBOL[view.status],
+            view.description,
+            view.service_type,
+            view.baseline_interfaces[0] if view.baseline_interfaces else "-",
+            view.subject_interfaces[0] if view.subject_interfaces else "-",
+            view.routing_instance or "-",
+            view.worst_message,
+        )
+        for _scope, view in views
+    ]
+
+    # STAV je uzavrena mnozina ctyrpismennych symbolu (viz SYMBOL) - napevno
+    # dana sirka mu nikdy nemuze prerust, stejne jako sloupci STAV v _block().
+    status_w = 5
+    service_w = max([len(r[1]) for r in rows] + [len("SLUZBA")])
+    type_w = max([len(r[2]) for r in rows] + [len("TYP")])
+    old_port_w = max([len(r[3]) for r in rows] + [len("STARY PORT")])
+    new_port_w = max([len(r[4]) for r in rows] + [len("NOVY PORT")])
+    ri_w = max([len(r[5]) for r in rows] + [len("RI")])
+
     lines.append(
-        f"{'STAV':<5} {'SLUZBA':<26} {'TYP':<9} {'STARY PORT':<13} "
-        f"{'NOVY PORT':<13} {'RI':<17} NALEZ"
+        f"{'STAV':<{status_w}} {'SLUZBA':<{service_w}} {'TYP':<{type_w}} "
+        f"{'STARY PORT':<{old_port_w}} {'NOVY PORT':<{new_port_w}} {'RI':<{ri_w}} NALEZ"
     )
-    for _scope, view in views:
-        old_port = view.baseline_interfaces[0] if view.baseline_interfaces else "-"
-        new_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
+    for status, description, service_type, old_port, new_port, instance, message in rows:
         lines.append(
-            f"{SYMBOL[view.status]:<5} {view.description:<26} {view.service_type:<9} "
-            f"{old_port:<13} {new_port:<13} {view.routing_instance or '-':<17} "
-            f"{view.worst_message}".rstrip()
+            f"{status:<{status_w}} {description:<{service_w}} {service_type:<{type_w}} "
+            f"{old_port:<{old_port_w}} {new_port:<{new_port_w}} {instance:<{ri_w}} "
+            f"{message}".rstrip()
         )
     lines.append("")
 

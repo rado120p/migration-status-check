@@ -300,6 +300,70 @@ def test_ports_are_in_the_summary_row():
     assert "et-0/0/8.13" in output
 
 
+def _long_named_scope() -> ScopeResult:
+    """Realny tvar z laborky: nazev sluzby i RI delsi nez stare napevno dane
+    sirky sloupcu (SLUZBA 26, RI 17) - presne to, co na 172.20.20.5
+    rozjelo zarovnani souhrnne tabulky."""
+    return ScopeResult(
+        scope_id="svc:clab-pop-migration-MX1-POP1 ge-0/0/1:Core",
+        key={
+            "description": "clab-pop-migration-MX1-POP1 ge-0/0/1",  # 37 znaku
+            "service_type": "Core",
+        },
+        status=Status.WARN,
+        match=MatchInfo(
+            status="matched",
+            baseline_interfaces=["ge-0/0/1.0"],
+            subject_interfaces=["et-0/0/1.0"],
+        ),
+        checks=[
+            _check(
+                "interface_traffic", Status.WARN, "et-0/0/1: input_pps 0 pps",
+                label="Interface traffic in", value="0 pps", mode="both",
+            ),
+        ],
+        identity={
+            "description": "clab-pop-migration-MX1-POP1 ge-0/0/1",
+            "service_type": "Core",
+            "service_subtype": None,
+            "routing_instance": "EVPN-VLAN-AWARE-EX-POP1",  # 23 znaku
+            "ipv4": [],
+            "ipv6": [],
+            "virtual_gw_v4": [],
+            "virtual_gw_v6": [],
+        },
+    )
+
+
+def test_summary_table_columns_stay_aligned_for_long_real_names():
+    """Regrese na live nalez: souhrnna tabulka mela napevno dane sirky
+    sloupcu (SLUZBA:<26, RI:<17), ktere realna data z laborky prekrocila -
+    dlouhy nazev sluzby/RI se nalepil na dalsi sloupec bez mezery a vsechno
+    napravo se posunulo. Sirky se ted pocitaji z dat, stejne jako v _block().
+    """
+    long_scope = _long_named_scope()
+    output = render(_result([_dual_stack_scope(), long_scope]))
+    lines = output.splitlines()
+
+    header = next(line for line in lines if line.startswith("STAV "))
+    long_row = next(
+        line for line in lines if "clab-pop-migration-MX1-POP1 ge-0/0/1" in line
+    )
+    short_row = next(
+        line for line in lines if "INTERNET-CPE13-NNI" in line and line.startswith("WARN")
+    )
+
+    # Nic se neorizne - cely nazev i RI musi byt ve vystupu cele.
+    assert "clab-pop-migration-MX1-POP1 ge-0/0/1" in long_row
+    assert "EVPN-VLAN-AWARE-EX-POP1" in long_row
+
+    # TYP sloupec zacina na stejne pozici na vsech radcich vcetne hlavicky -
+    # to je presne to, co pri napevno dane sirce prestalo platit.
+    type_col = header.index("TYP")
+    assert long_row[type_col:type_col + 4].strip() == "Core"
+    assert short_row[type_col:type_col + 8].strip() == "Internet"
+
+
 def _vgw_scope() -> ScopeResult:
     """EVPN-VLAN-AWARE-INTERNET z laborky: irb.14 ma virtual gateway."""
     return ScopeResult(
