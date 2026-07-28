@@ -42,8 +42,10 @@ def _service_scope() -> Scope:
             physical_interfaces=["ge-0/0/2"],
             routing_instances=["L3VPN-CPE13-NNI"],
             bgp_neighbors=["198.11.13.2"],
-            local_addresses=["198.11.13.1/30"],
-            virtual_gw=[],
+            local_ipv4=["198.11.13.1/30"],
+            local_ipv6=[],
+            virtual_gw_v4=[],
+            virtual_gw_v6=[],
             vlans=["113"],
             bridge_domains=[],
         ),
@@ -100,3 +102,20 @@ def test_select_tolerates_missing_fact_areas():
 def test_scope_round_trip():
     scope = _service_scope()
     assert Scope.from_dict(scope.to_dict()) == scope
+
+
+def test_selectors_survive_roundtrip():
+    selectors = Selectors(
+        interfaces=["et-0/0/8.13"],
+        local_ipv4=["152.11.13.1/30"],
+        local_ipv6=["2001:abcd:11:13::a/127"],
+        virtual_gw_v4=["152.11.13.254"],
+        virtual_gw_v6=["2001:abcd:11:13::1"],
+    )
+
+    restored = Selectors.from_dict(selectors.to_dict())
+
+    assert restored.local_ipv4 == ["152.11.13.1/30"]
+    assert restored.local_ipv6 == ["2001:abcd:11:13::a/127"]
+    assert restored.virtual_gw_v4 == ["152.11.13.254"]
+    assert restored.virtual_gw_v6 == ["2001:abcd:11:13::1"]

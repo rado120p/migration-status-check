@@ -10,6 +10,7 @@ def _scope(
     subtype=None,
     routing_instance=None,
     addresses=(),
+    addresses_v6=(),
     vlans=(),
 ):
     label = description or interface
@@ -20,7 +21,8 @@ def _scope(
         selectors=Selectors(
             interfaces=[interface],
             routing_instances=[routing_instance] if routing_instance else [],
-            local_addresses=list(addresses),
+            local_ipv4=list(addresses),
+            local_ipv6=list(addresses_v6),
             vlans=list(vlans),
         ),
     )
@@ -63,6 +65,16 @@ def test_falls_back_to_routing_instance_when_description_missing():
 def test_falls_back_to_subnet():
     baseline = [_scope("ge-0/0/9.0", None, "Internet", addresses=["10.5.5.1/30"])]
     subject = [_scope("et-0/0/9.0", None, "Internet", addresses=["10.5.5.1/30"])]
+
+    pair = match_scopes(baseline, subject).pairs[0]
+
+    assert pair.method == "subnet+service_type"
+
+
+def test_falls_back_to_subnet_on_ipv6():
+    v6 = ["2001:db8:5:5::1/64"]
+    baseline = [_scope("ge-0/0/9.0", None, "Internet", addresses_v6=v6)]
+    subject = [_scope("et-0/0/9.0", None, "Internet", addresses_v6=v6)]
 
     pair = match_scopes(baseline, subject).pairs[0]
 

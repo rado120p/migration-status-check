@@ -5,6 +5,7 @@ import pytest
 from migration_validator.cli import main
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import (
+    SCHEMA_VERSION,
     CaptureMeta,
     DeviceMeta,
     Snapshot,
@@ -107,8 +108,10 @@ def test_wrong_schema_version_is_tool_error(tmp_path, capsys):
 
 
 def test_incomplete_snapshot_is_tool_error(tmp_path, capsys):
+    # schema_version musi souhlasit, jinak spadne na kontrole verze drive,
+    # nez se stihne poznat, ze chybi device/capture.
     path = tmp_path / "incomplete.json"
-    path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+    path.write_text(json.dumps({"schema_version": SCHEMA_VERSION}), encoding="utf-8")
 
     code = main(["evaluate", "--snapshot", str(path)])
 

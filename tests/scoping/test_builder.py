@@ -131,8 +131,32 @@ def test_irb_virtual_gw_lands_in_selectors():
 
     scope = build_scopes(inventory)[0]
 
-    assert scope.selectors.virtual_gw == ["152.11.14.1"]
-    assert scope.selectors.local_addresses == ["152.11.14.2/29"]
+    assert scope.selectors.virtual_gw_v4 == ["152.11.14.1"]
+    assert scope.selectors.local_ipv4 == ["152.11.14.2/29"]
+
+
+def test_selectors_keep_families_apart():
+    inventory = Inventory(
+        device="172.20.20.5",
+        entries=[
+            ServiceEntry(
+                interface="et-0/0/8.13",
+                service_type="Internet",
+                description="INTERNET-CPE13-NNI",
+                ipv4_address=["152.11.13.1/30"],
+                ipv6_address=["2001:abcd:11:13::a/127"],
+                virtual_gw_ipv4_address=["152.11.13.254"],
+                virtual_gw_ipv6_address=[],
+            )
+        ],
+    )
+
+    scope = build_scopes(inventory)[0]
+
+    assert scope.selectors.local_ipv4 == ["152.11.13.1/30"]
+    assert scope.selectors.local_ipv6 == ["2001:abcd:11:13::a/127"]
+    assert scope.selectors.virtual_gw_v4 == ["152.11.13.254"]
+    assert scope.selectors.virtual_gw_v6 == []
 
 
 def test_real_inventory_files_produce_expected_scope_counts():

@@ -43,8 +43,10 @@ class Selectors:
     physical_interfaces: list[str] = field(default_factory=list)
     routing_instances: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
-    local_addresses: list[str] = field(default_factory=list)
-    virtual_gw: list[str] = field(default_factory=list)
+    local_ipv4: list[str] = field(default_factory=list)
+    local_ipv6: list[str] = field(default_factory=list)
+    virtual_gw_v4: list[str] = field(default_factory=list)
+    virtual_gw_v6: list[str] = field(default_factory=list)
     vlans: list[str] = field(default_factory=list)
     bridge_domains: list[str] = field(default_factory=list)
 
@@ -57,8 +59,10 @@ class Selectors:
             "physical_interfaces": list(self.physical_interfaces),
             "routing_instances": list(self.routing_instances),
             "bgp_neighbors": list(self.bgp_neighbors),
-            "local_addresses": list(self.local_addresses),
-            "virtual_gw": list(self.virtual_gw),
+            "local_ipv4": list(self.local_ipv4),
+            "local_ipv6": list(self.local_ipv6),
+            "virtual_gw_v4": list(self.virtual_gw_v4),
+            "virtual_gw_v6": list(self.virtual_gw_v6),
             "vlans": list(self.vlans),
             "bridge_domains": list(self.bridge_domains),
         }

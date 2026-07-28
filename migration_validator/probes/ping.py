@@ -40,17 +40,24 @@ class PingTarget:
 
 
 def source_address(scope: Scope) -> str | None:
-    """Adresa rozhrani. U IRB se pouziva virtual-gw."""
-    if scope.selectors.virtual_gw:
-        return scope.selectors.virtual_gw[0].split("/")[0]
-    if scope.selectors.local_addresses:
-        return scope.selectors.local_addresses[0].split("/")[0]
+    """Adresa rozhrani. U IRB se pouziva virtual-gw.
+
+    Rodiny se tu jen provizorne spojuji zpet dohromady - vyber spravne
+    rodiny podle cile resi az pozdejsi task, tady se jen zachovava dnesni
+    chovani nad rozdelenymi selektory.
+    """
+    virtual_gw = scope.selectors.virtual_gw_v4 + scope.selectors.virtual_gw_v6
+    if virtual_gw:
+        return virtual_gw[0].split("/")[0]
+    local = scope.selectors.local_ipv4 + scope.selectors.local_ipv6
+    if local:
+        return local[0].split("/")[0]
     return None
 
 
 def subnet_fallback(scope: Scope) -> str | None:
     """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni."""
-    for address in scope.selectors.local_addresses:
+    for address in scope.selectors.local_ipv4 + scope.selectors.local_ipv6:
         try:
             interface = ipaddress.ip_interface(address)
         except ValueError:

@@ -15,7 +15,7 @@ def _scope(
     service_type="IPVPN",
     interfaces=("ge-0/0/2.113",),
     addresses=("198.11.13.1/30",),
-    virtual_gw=(),
+    virtual_gw_v4=(),
     routing_instance="L3VPN-CPE13-NNI",
 ):
     return Scope(
@@ -24,8 +24,8 @@ def _scope(
         key=ScopeKey("X", service_type, None),
         selectors=Selectors(
             interfaces=list(interfaces),
-            local_addresses=list(addresses),
-            virtual_gw=list(virtual_gw),
+            local_ipv4=list(addresses),
+            virtual_gw_v4=list(virtual_gw_v4),
             routing_instances=[routing_instance] if routing_instance else [],
         ),
     )
@@ -39,7 +39,7 @@ def test_source_prefers_virtual_gw_on_irb():
     scope = _scope(
         interfaces=("irb.14",),
         addresses=("152.11.14.2/29",),
-        virtual_gw=("152.11.14.1",),
+        virtual_gw_v4=("152.11.14.1",),
     )
     assert source_address(scope) == "152.11.14.1"
 

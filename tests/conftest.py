@@ -76,14 +76,14 @@ def synthetic_snapshot():
             {
                 "scope_id": scope.id,
                 "target": scope.selectors.bgp_neighbors[0],
-                "source": scope.selectors.local_addresses[0].split("/")[0],
+                "source": scope.selectors.local_ipv4[0].split("/")[0],
                 "sent": 5,
                 "received": 5,
                 "loss_percent": 0,
                 "resolved_from": "arp",
             }
             for scope in scopes
-            if scope.selectors.bgp_neighbors and scope.selectors.local_addresses
+            if scope.selectors.bgp_neighbors and scope.selectors.local_ipv4
         ]
         return Snapshot(
             device=DeviceMeta(address=address),
