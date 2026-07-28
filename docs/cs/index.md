@@ -49,6 +49,7 @@ Každý zdrojový soubor repozitáře je popsaný v některém z dokumentů ní�
 | `migration_validator/collectors/all.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/interfaces.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/arp.py` | [files/collectors.md](files/collectors.md) |
+| `migration_validator/collectors/nd.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/bgp.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/evpn.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/probes/ping.py` | [files/probes.md](files/probes.md) |
@@ -63,6 +64,7 @@ Každý zdrojový soubor repozitáře je popsaný v některém z dokumentů ní�
 | `migration_validator/checks/evpn.py` | [files/checks.md](files/checks.md) |
 | `migration_validator/checks/reachability.py` | [files/checks.md](files/checks.md) |
 | `migration_validator/reporting/json_report.py` | [files/reporting.md](files/reporting.md) |
+| `migration_validator/reporting/view.py` | [files/reporting.md](files/reporting.md) |
 | `migration_validator/reporting/text_report.py` | [files/reporting.md](files/reporting.md) |
 | `mx_parser.py` | [files/parsers.md](files/parsers.md) |
 | `evo_parser.py` | [files/parsers.md](files/parsers.md) |
@@ -89,7 +91,7 @@ migration-status-check/
 │   │
 │   ├── models/                # Inventory, Scope, Snapshot, Result    → files/models.md
 │   ├── connection/            # PyEZ, jediná vrstva sahající na síť   → files/connection.md
-│   ├── collectors/            # RPC XML → strukturovaná data          → files/collectors.md
+│   ├── collectors/            # RPC XML → strukturovaná data (vč. nd) → files/collectors.md
 │   ├── probes/                # aktivní ping                          → files/probes.md
 │   ├── scoping/               # inventory → scopy, párování           → files/scoping.md
 │   ├── checks/                # čisté funkce (fakta, scope) → verdikt  → files/checks.md

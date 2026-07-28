@@ -22,8 +22,10 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `service_type` | `str` | povinné (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`, `Layer1`, ...) |
 | `description` | `str \| None` | popisek z konfigurace — nese hlavní tíhu párování |
 | `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `physical-port`, ... |
-| `ip_address` | `list[str]` | adresy s prefixem |
-| `virtual_gw_ip_address` | `list[str]` | virtual-gateway-address u IRB |
+| `ipv4_address` | `list[str]` | IPv4 adresy s prefixem |
+| `ipv6_address` | `list[str]` | IPv6 adresy s prefixem |
+| `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address u IRB |
+| `virtual_gw_ipv6_address` | `list[str]` | IPv6 virtual-gateway-address u IRB |
 | `routing_instance` | `str \| None` | |
 | `active` | `bool` | |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
@@ -43,6 +45,12 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 2`).
+`load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu. Adresy se
+totiž přejmenovaly na rodiny (`ip_address` → `ipv4_address`/`ipv6_address`), takže tolerantní
+čtení starého souboru by tiše vrátilo službu bez jediné adresy — ping by se nespustil a
+služba by přesto svítila zeleně.
+
 ---
 
 ## `scope.py` — filtr nad fakty
@@ -57,8 +65,11 @@ použít jako klíč slovníku — čehož využívá `builder.py` při detekci 
 
 ### `Selectors`
 
-Osm seznamů: `interfaces`, `physical_interfaces`, `routing_instances`, `bgp_neighbors`,
-`local_addresses`, `virtual_gw`, `vlans`, `bridge_domains`.
+Deset seznamů: `interfaces`, `physical_interfaces`, `routing_instances`, `bgp_neighbors`,
+`local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`, `bridge_domains`.
+Adresy i virtual-gateway jsou rozdělené podle rodiny — stejně jako `ServiceEntry` výš —
+protože ping a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne podle pořadí v jednom
+smíchaném seznamu.
 
 `matches_interface(name)` vrací `True`, když je název mezi logickými **nebo** fyzickými
 rozhraními. Díky tomu se stavové checky spustí i na fyzickém rodiči (`et-0/0/8`), pokud
@@ -67,7 +78,7 @@ inventory obsahuje odpovídající `Layer1` záznam.
 ### `Scope` a `Scope.select()`
 
 ```python
-scope.select(facts, probes) -> dict   # klíče: interfaces, arp, bgp,
+scope.select(facts, probes) -> dict   # klíče: interfaces, arp, nd, bgp,
                                       #        evpn_vpws, evpn_esi, evpn_mac, ping
 ```
 
@@ -77,6 +88,7 @@ Filtrování per oblast:
 |---|---|
 | `interfaces` | `matches_interface(název)` |
 | `arp` | `matches_interface(entry["interface"])` |
+| `nd` | `matches_interface(entry["interface"])` |
 | `bgp` | `peer ∈ selectors.bgp_neighbors` |
 | `evpn_vpws` | klíč (název instance) `∈ selectors.routing_instances` |
 | `evpn_esi` | `matches_interface(data["interface"])` |
@@ -153,15 +165,28 @@ je tím zapsané jednou na jednom místě.
 
 ### `Finding` → `CheckResult`
 
-`Finding` je surový výstup checku (`outcome`, `message`, `label`, `baseline`, `subject`,
-`details`). `CheckResult` je totéž **po odvození statusu** plus `id`, `mode` a `severity`.
-Převod dělá `checks/base.py::run_check()`, ne check sám.
+`Finding` je surový výstup checku: `outcome`, `message`, `label`, `family` (4 / 6 / `None`),
+`value`, `baseline_value`, `delta`, `baseline`, `subject`, `details`. `CheckResult` je totéž
+**po odvození statusu** plus `id`, `mode` a `severity`. Převod dělá
+`checks/base.py::run_check()`, ne check sám.
+
+`label`/`value`/`baseline_value`/`delta` existují kvůli reportu: rozklad naměřené hodnoty na
+popisek a hodnotu ve sloupcích musí udělat check, protože jen on ví, co je u dané veličiny
+hodnota a co vysvětlení — renderer čísla zpětně neparsuje ze `message`. `family` řadí nález do
+sekce `IPv4`/`IPv6` v textovém reportu (`reporting/view.py`); `None` znamená řádek vázaný na
+rozhraní, ne na adresu (např. stav rozhraní).
 
 `CheckResult.to_dict()` vynechává prázdné volitelné klíče, takže JSON nezaplaví `null`.
 
 ### `ScopeResult` a `RunResult`
 
-`ScopeResult`: `scope_id`, `key`, `status`, `match` (`MatchInfo | None`), `checks`.
+`ScopeResult`: `scope_id`, `key`, `status`, `match` (`MatchInfo | None`), `checks`, `identity`.
+
+`identity` (naplňuje `engine.py::_identity()`) nese vše, co report o službě potřebuje a co by
+jinak zůstalo jen ve `Scope`: `description`, `service_type`, `service_subtype`,
+`routing_instance`, `ipv4`, `ipv6`, `virtual_gw_v4`, `virtual_gw_v6`. Renderer nemá přístup ke
+scopům, jen k `RunResult`, takže bez tohohle by sloupce s adresami a virtual gateway neměly
+odkud vzít data.
 
 `MatchInfo`: `status` (`matched` | `unmatched`), `method`, `confidence`,
 `baseline_interfaces`, `subject_interfaces`, `reason`.

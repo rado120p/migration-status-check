@@ -54,13 +54,14 @@ cli._cmd_capture
             ├─ collectors.registry.collectors_for ... picks collectors for the platform
             ├─ collector.collect(device, platform) .. per area → facts[area]
             ├─ scoping.builder.build_scopes ......... inventory → [Scope]
-            ├─ probes.ping.resolve_targets .......... scopes + facts["arp"] → targets
+            ├─ probes.ping.resolve_targets .......... scopes + facts["arp"|"nd"] → targets
             ├─ probes.ping.run_ping ................. active ICMP, per target
             └─ models.snapshot.Snapshot ............. + save_snapshot() to disk
 ```
 
-The order inside `capture_device` is **not arbitrary**: ping needs targets derived from ARP,
-so the bulk collection must happen first. That entire dependency plays out **here**. The
+The order inside `capture_device` is **not arbitrary**: ping needs targets derived from ARP
+(IPv4) and ND (IPv6), so the bulk collection must happen first. That entire dependency plays
+out **here**. The
 finished ping result is stored in the snapshot as ordinary data — which is why, at evaluation
 time, checks are mutually independent and can run in any order.
 
@@ -100,7 +101,8 @@ checking an entire area.
 |---|---|---|
 | `interfaces` | `{ifname: {admin_status, oper_status, input_pps, output_pps, input_errors, output_errors, framing_errors}}` | interface name (logical unit as well as physical parent) |
 | `arp` | `[{ip, mac, interface, routing_instance}]` | `interface` |
-| `bgp` | `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted, advertised}}}` | `peer_ip` ∈ `bgp_neighbors` |
+| `nd` | `[{ip, mac, interface, state}]` — the IPv6 counterpart of `arp`, the ND table | `interface` |
+| `bgp` | `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted, advertised, active, suppressed}}}}` — counters are kept **per RIB**, never summed | `peer_ip` ∈ `bgp_neighbors` |
 | `evpn_vpws` | `{routing_instance: {status, local_sid, remote_sid}}` | **key = routing instance** |
 | `evpn_esi` | `{esi: {status, df_role, interface}}` | `interface` |
 | `evpn_mac` | `{routing_instance: {vlan_id: count}}` | **key = routing instance**; the inner key is the **VLAN id** as a string (`"313"`), or `"-"` for vlan-based |
@@ -206,7 +208,7 @@ worth seeing together:
 Collectors and checks register themselves via the `@register` decorator **when their module
 is imported**. Somebody has to import them:
 
-- `collectors/all.py` imports `arp`, `bgp`, `evpn`, `interfaces`; `capture.py` imports it at
+- `collectors/all.py` imports `arp`, `bgp`, `evpn`, `interfaces`, `nd`; `capture.py` imports it at
   module level.
 - `checks/all.py` imports `bgp`, `evpn`, `ifaces`, `reachability`; `api.evaluate()` and
   `api.list_checks()` call `load_all()` explicitly, so the registry is populated even when a

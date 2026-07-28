@@ -7,18 +7,19 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `d0d024a`):
+Matches the output of `mig-validate checks` (as of commit `1584a43`):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
-| `interface_state` | state | critical | all | both `admin_status` and `oper_status` are `up` |
+| `interface_state` | state | critical | all | both `admin_status` and `oper_status` are `up` — one finding for each, separately |
 | `interface_errors` | state | advisory | all | zero `input/output/framing` errors — **transit interfaces only** |
-| `interface_traffic` | both | advisory | all | `input_pps`/`output_pps` > 0; with a baseline, also the drop against tolerance — **transit interfaces only** |
+| `interface_traffic` | both | advisory | all | `input_pps`/`output_pps` > 0; with a baseline, also the drop against tolerance — **transit interfaces only**, one finding per direction |
 | `traffic_ceased` | compare | advisory | all | traffic on the old interface went quiet after the migration — **disabled by default** |
-| `arp_present` | state | advisory | Internet, IPVPN | at least one ARP entry on the service's interfaces |
-| `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets resolved during `capture` |
+| `arp_present` | state | advisory | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
+| `nd_present` | state | advisory | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
+| `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN | state is `Established`; with a baseline it also reports a state change |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised against tolerance |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active / suppressed against tolerance — **per RIB** |
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
 | `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
@@ -42,6 +43,13 @@ Per-check behaviour: [files/checks.md](files/checks.md).
   worth flagging that the state moved.
 - **`evpn_vpws_status` does not require local and remote SIDs to match.** Each side advertises
   its own service ID; equality is not an invariant. It FAILs when no remote SID arrives at all.
+- **`arp_present`/`nd_present` return `SKIP`, not WARN, when the service has no address in
+  that family.** Without this, a pure-IPv6 service would get a WARN for a missing ARP entry
+  that could never have existed — neighbours are also never folded into one sentence, each
+  entry is its own `Finding` (`MAC -> IP`), so the report prints one row per neighbour.
+- **`bgp_prefix_counts` never sums counts across RIBs.** A peer with several RIBs (`inet.0`,
+  `bgp.l3vpn.0`, ...) gets its own set of rows per RIB — a drop confined to a single RIB
+  would otherwise disappear into the sum with the others.
 
 ### Interface classification
 
@@ -192,12 +200,14 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 1`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
-nor the network. A different schema version is a hard error, not an attempt at data migration.
+`schema_version: 2` (was `1` — the version bumped together with the address-by-family split,
+see below). A snapshot is **self-contained** — `evaluate` needs neither an inventory nor the
+network. A different schema version is a hard error (`SnapshotVersionError`), not an attempt
+at data migration.
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -209,6 +219,7 @@ nor the network. A different schema version is a hard error, not an attempt at d
     "collectors": {
       "interfaces": {"status": "ok"},
       "bgp":        {"status": "ok"},
+      "nd":         {"status": "ok"},
       "evpn_esi":   {"status": "error", "message": "RpcError: syntax error"}
     }
   },
@@ -222,10 +233,17 @@ nor the network. A different schema version is a hard error, not an attempt at d
     },
     "arp": [{"ip": "198.11.13.2", "mac": "00:11:...", "interface": "ge-0/0/2.113",
              "routing_instance": null}],
+    "nd": [{"ip": "2001:db8:11:13::b", "mac": "00:11:...", "interface": "ge-0/0/2.113",
+            "state": "reachable"}],
     "bgp": {
-      "198.11.13.2": {"state": "Established", "peer_as": 65013,
-                      "routing_instance": "L3VPN-CPE13-NNI",
-                      "prefixes": {"received": 14, "accepted": 14, "advertised": 3}}
+      "198.11.13.2": {
+        "state": "Established", "peer_as": 65013,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ribs": {
+          "inet.0": {"received": 14, "accepted": 14, "advertised": 3,
+                     "active": 3, "suppressed": 0}
+        }
+      }
     },
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
@@ -236,8 +254,12 @@ nor the network. A different schema version is a hard error, not an attempt at d
     "ping": [
       {"scope_id": "svc:L3VPN-CPE13-NNI:IPVPN", "target": "198.11.13.2",
        "source": "198.11.13.1", "routing_instance": "L3VPN-CPE13-NNI",
-       "resolved_from": "arp",
-       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.24}
+       "resolved_from": "arp", "family": 4, "interface": null,
+       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.24},
+      {"scope_id": "svc:L3VPN-CPE13-NNI:IPVPN", "target": "2001:db8:11:13::b",
+       "source": "2001:db8:11:13::a", "routing_instance": "L3VPN-CPE13-NNI",
+       "resolved_from": "nd", "family": 6, "interface": null,
+       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.31}
     ]
   }
 }
@@ -248,10 +270,15 @@ Properties:
 - `facts` are **raw, device-scoped data** keyed by their natural key. No `service_id` inside.
   If the pairing turns out to be wrong, it gets fixed and old snapshots are re-evaluated
   without touching the devices.
+- `facts.nd` is the IPv6 counterpart of `facts.arp` — same shape, plus a `state` field.
+- `facts.bgp[peer].ribs` keeps counts **per RIB, never summed** — one peer may have up to 11
+  RIBs (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...).
 - `capture.collectors` records the status of each collection separately — a single failed RPC
   does not abort the capture.
 - `device.uptime_seconds` exists in the model, but `device_meta()` currently always sets it to
   `None`.
+- A ping record carries `family` (4/6) and `interface` — the latter is only set for an IPv6
+  link-local target, because Junos ping rejects one without an outgoing interface.
 - A ping record may gain an `error` key with the reason when ICMP never left the box (e.g.
   `bind: Can't assign requested address`) — without it, that would look like a successful
   measurement of zero packets.
@@ -268,8 +295,10 @@ Properties:
     "physical_interfaces": ["ge-0/0/2"],
     "routing_instances":   ["L3VPN-CPE13-NNI"],
     "bgp_neighbors":       ["198.11.13.2", "2001:db8:11:13::b"],
-    "local_addresses":     ["198.11.13.1/30"],
-    "virtual_gw":          [],
+    "local_ipv4":          ["198.11.13.1/30"],
+    "local_ipv6":          ["2001:db8:11:13::a/127"],
+    "virtual_gw_v4":       [],
+    "virtual_gw_v6":       [],
     "vlans":               ["113"],
     "bridge_domains":      []
   }
@@ -277,7 +306,9 @@ Properties:
 ```
 
 A scope is **purely a filter** and holds no measured data. The device scope has
-`kind: "device"` and empty selectors = "take everything".
+`kind: "device"` and empty selectors = "take everything". Addresses and virtual-gateway are
+split by family (`local_ipv4`/`local_ipv6`, `virtual_gw_v4`/`virtual_gw_v6`) — same as in the
+inventory YAML (see [files/parsers.md](files/parsers.md#output-format)).
 
 `id` is `svc:<description or interface name>:<service_type>`. If two services would produce
 the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
@@ -286,7 +317,8 @@ the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
 
 ## 5. Result format
 
-`schema_version: 1`.
+`schema_version: 1` — **unchanged** by the IPv4/IPv6 split (unlike the inventory and the
+snapshot above); `models/result.py::RunResult.schema_version` stays `1`.
 
 ```jsonc
 {
@@ -309,15 +341,31 @@ the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
         "status": "matched", "method": "description+service_type", "confidence": "high",
         "baseline_interfaces": ["ge-0/0/2.113"], "subject_interfaces": ["et-0/0/8.113"]
       },
+      "identity": {
+        "description": "L3VPN-CPE13-NNI", "service_type": "IPVPN", "service_subtype": null,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ipv4": ["198.11.13.1/30"], "ipv6": ["2001:db8:11:13::a/127"],
+        "virtual_gw_v4": [], "virtual_gw_v6": []
+      },
       "checks": [
         {
           "id": "interface_traffic", "mode": "both",
           "status": "WARN", "severity": "advisory",
           "message": "et-0/0/8.113: output_pps kleslo o 72 % (410 -> 115), prah je -60 %",
-          "label": "et-0/0/8.113",
-          "baseline": {"input_pps": 412, "output_pps": 410},
-          "subject":  {"input_pps": 398, "output_pps": 115},
-          "details":  {"tolerance_percent": -60.0, "output_pps_change_percent": -72.0}
+          "label": "Interface traffic out",
+          "value": "115 pps", "baseline_value": "410 pps", "delta": "-72 %",
+          "baseline": {"output_pps": 410},
+          "subject":  {"output_pps": 115},
+          "details":  {"tolerance_percent": -60.0}
+        },
+        {
+          "id": "bgp_prefix_counts", "mode": "compare",
+          "status": "WARN", "severity": "advisory", "family": 4,
+          "message": "198.11.13.2/inet.0: pokles advertised 14 -> 3, prah je -10 %",
+          "label": "BGP advertised-prefix-count",
+          "value": "3", "baseline_value": "14", "delta": "-11",
+          "baseline": {"advertised": 14}, "subject": {"advertised": 3},
+          "details": {"rib": "inet.0", "tolerance_percent": -10.0, "change_percent": -78.6}
         }
       ]
     }
@@ -339,12 +387,22 @@ the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
 Properties:
 
 - **Every check carries both a `baseline` and a `subject` block with raw numbers**, not just a
-  verdict.
+  verdict, and (since the report rewrite) also `label`, `value`, `baseline_value`, `delta` and
+  an optional `family` — splitting a measured value into a label and a value for the report's
+  columns has to be done by the check, because only it knows what counts as the value and what
+  counts as explanation (`CheckResult.to_dict()` omits empty optional keys).
+- `interface_state` and `interface_traffic` now return **one check result per fact/direction**
+  (`Interface admin status` / `Interface operational status`; `Interface traffic in` /
+  `Interface traffic out`), not one summary result per interface. `bgp_prefix_counts` returns
+  one per **RIB × counter** (`BGP <counter>-prefix-count`), not one summary across RIBs.
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
   better to report); `summary` aggregates across all checks. Neither the terminal nor a GUI
   computes anything.
 - `match` is `null` for a run without a baseline; for an unpaired subject scope it carries
   `status: "unmatched"` and a `reason`.
+- `identity` carries everything the report needs about the service (addresses, VGW, RI,
+  description) — without it, that would stay inside the `Scope`, which the renderer cannot
+  see.
 - **Unpaired baseline scopes get no entry in `scopes`** — they are not on the subject, so
   there is nothing to measure. They appear only in `unmatched.baseline`.
 - `unassigned.bgp_peers` currently reports only peers on the **subject** (the new device). In
@@ -374,11 +432,12 @@ being believed.
 |---|---|---|---|
 | `interfaces` | `get_interface_information` | same | `extensive=True` |
 | `arp` | `get_arp_table_information` | same | `no_resolve=True` |
+| `nd` | `get_ipv6_nd_information` | same | — |
 | `bgp` | `get_bgp_neighbor_information` | same | — |
 | `evpn_vpws` | `get_evpn_vpws_information` | same | — |
 | `evpn_esi` | `get_evpn_instance_information` | same | `extensive=True` |
 | `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
-| ping (probe) | `ping` | same | `host`, `count`, optionally `source`, `routing_instance` |
+| ping (probe) | `ping` | same | `host`, `count`, `rapid=True`, optionally `source`, `routing_instance`, `interface` (IPv6 link-local target only) |
 
 `extensive` on `evpn_esi` is not cosmetic: without it, `show evpn instance` returns a summary
 with no ESI at all and the collector would silently return nothing.

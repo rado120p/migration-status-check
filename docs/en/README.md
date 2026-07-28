@@ -158,58 +158,101 @@ Comparison checks return `SKIP` with the reason `porovnavaci check bez baseline 
 
 ## 4. Reading the output
 
-Real output from a lab run:
+Real output from a lab run (trimmed — the summary table actually has 11 rows, only a
+selection is shown here, and one of the per-service blocks is omitted):
 
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  68 PASS   15 WARN   1 FAIL   7 SKIP
+  79 PASS   36 WARN   8 FAIL   10 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
-SLUZBA                           TYP        STAV  DETAIL
-EVPN-VPWS-CPE13-NNI              E-Line     WARN  et-0/0/8.213: provoz netece (in 0 pps, out 0 pps)
-INTERNET-CPE13-NNI               Internet   WARN  152.11.13.2: stav se zmenil Idle -> Established
-EVPN-VLAN-AWARE-INTERNET         Internet   FAIL  152.11.14.4: stav Active, ocekavano Established
-clab-pop-migration-P2;et-0/0/0   Core       OK
+STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
+WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps 0 pps
+FAIL  INTERNET-CPE13-NNI                   Internet ge-0/0/2.13  et-0/0/8.13  -                         152.11.13.2: stav Connect, ocekavano Established
+FAIL  L3VPN-CPE13-NNI                      IPVPN    ge-0/0/2.113 et-0/0/8.113 L3VPN-CPE13-NNI           198.11.13.2: stav Connect, ocekavano Established
+PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
+
+========================================================================================================
+ FAIL  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
+========================================================================================================
+ STAV | CHECK                        : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+------------------------------+-----------------------------------------+------------------------
+ PASS | et-0/0/8                     : et-0/0/8: bez chyb                      |
+ PASS | et-0/0/8.13                  : et-0/0/8.13: bez chyb                   |
+ PASS | Interface admin status       : Up                                      |
+ PASS | Interface operational status : Up                                      |
+ PASS | Interface admin status       : Up                                      |
+ PASS | Interface operational status : Up                                      |
+ WARN | Interface traffic in         : 0 pps                                   | bez baseline
+ WARN | Interface traffic out        : 0 pps                                   | bez baseline
+ PASS | Interface traffic in         : 0 pps                                   |
+ PASS | Interface traffic out        : 0 pps                                   |
+
+ -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------------
+ PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ FAIL | BGP status                   : Connect                                 | bez baseline
+ WARN | Ping                         : 0/5  152.11.13.2 neodpovedel            |
+
+ -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------------
+ FAIL | BGP status                   : Connect                                 | bez baseline
+ PASS | ND                           : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
   baseline  clab-pop-migration-P1;et-0/0/0   (Core)  zadny kandidat na subject
+  baseline  svc:lo0.0:Core                   (Core)  zadny kandidat na subject
   subject   EVPN-VLAN-AWARE-INTERNET         (E-LAN)  nova sluzba, chybi baseline
+  subject   clab-pop-migration-P2;et-0/0/0   (Core)  nova sluzba, chybi baseline
+  subject   svc:lo0.0:Core                   (Core)  nova sluzba, chybi baseline
 ```
 
-Column headers: `SLUZBA` = service, `TYP` = type, `STAV` = status, `DETAIL` = detail.
-`Sparovano N sluzeb` = "N services paired". `NESPAROVANO` = "unpaired".
+Column headers: `STAV` = status, `SLUZBA` = service, `TYP` = type, `STARY PORT` /
+`NOVY PORT` = old/new port (the logical unit from the scope, not the physical parent),
+`RI` = routing instance, `NALEZ` = finding. Inside a block: `CHECK` = check, `ZMENA PROTI
+<port>` = change against `<port>`. `Sparovano N sluzeb` = "N services paired". `NESPAROVANO`
+= "unpaired".
 
 What matters here:
 
-- **The per-service line shows only the worst finding.** The remaining checks appear with
-  `--detail`.
-- **`OK` does not automatically mean "everything was verified".** It can also mean that only
-  some of the checks ran. That is exactly why `--detail` exists — it shows what was actually
-  checked.
+- **The summary table has one row per service and shows only the worst finding.**
+- **Every service that is not `PASS` gets its full block printed automatically — no
+  `--detail` needed.** `--detail` additionally expands the blocks of `PASS` services too.
+- **A block runs top to bottom: interface-bound rows first (state, error counters, traffic),
+  then an `IPv4` section, then `IPv6`.** A section for an empty family is never created — a
+  service without IPv6 has no empty IPv6 section. The section header carries the configured
+  addresses and, on an IRB, the `VGW` address.
+- **The `ZMENA` (change) column** shows `bylo <value>` ("was `<value>`") plus a delta when
+  there is one (`-100 %`, `+3`); for checks that have no baseline by definition (`arp_present`,
+  `ping_reachability`, `interface_state`, ...) it stays empty. **With no baseline loaded, the
+  `ZMENA` column is dropped entirely**, not just left blank.
+- Every column's width **is computed from its content** — a long service name, routing
+  instance, or IPv6 address is never truncated.
 - **Filters (`--filter`, `--status`) narrow the service table only.** The summary counts at the
   top still describe the whole run — with `--status fail` you may see one row while the summary
-  still reports all 68 PASS. That is intentional: a filter is a view, not a recomputation.
+  still reports all 79 PASS. That is intentional: a filter is a view, not a recomputation.
 - **The `NESPAROVANO` section is always printed**, even when everything else is green, and
   **filters do not apply to it.** It is the main safeguard against an overlooked service:
   - `baseline` = the service existed on the old box and is missing on the new one → suspect a
     forgotten migration,
   - `subject` = the new box has something extra → a new or restructured service.
-- Statuses are `OK` / `WARN` / `FAIL` / `SKIP`. **`SKIP` means "not measured"**, not "fine" —
-  missing data never yields a PASS.
+- Statuses are `PASS` / `WARN` / `FAIL` / `SKIP`. **`SKIP` means "not measured"**, not "fine" —
+  missing data never yields a `PASS`.
 
 Common message strings, translated:
 
 | Czech string in the output | meaning |
 |---|---|
-| `provoz netece (in 0 pps, out 0 pps)` | no traffic flowing |
-| `stav se zmenil Idle -> Established` | state changed from Idle to Established |
-| `stav Active, ocekavano Established` | state is Active, expected Established |
+| `et-0/0/8: input_pps 0 pps` | interface traffic-in counter reads 0 pps |
+| `stav Connect, ocekavano Established` | state is Connect, expected Established |
+| `stav se zmenil Connect -> Established` | state changed from Connect to Established |
+| `0/5  <ip> neodpovedel` | 0 of 5 pings answered, `<ip>` did not respond |
 | `zadny kandidat na subject` | no candidate on the subject device |
 | `nova sluzba, chybi baseline` | new service, no baseline |
 | `ambiguous: N kandidatu (...)` | ambiguous: N candidates, so no pairing was made |
 | `pocty prefixu v toleranci -10 %` | prefix counts within the −10 % tolerance |
-| `vsech N cilu odpovedelo` | all N targets responded |
+| `bez chyb` | no errors (interface error counters) |
+| `bez baseline` | no baseline (this check has no baseline value by definition) |
 
 ### Exit codes
 
@@ -355,7 +398,7 @@ No path is hard-wired anywhere — `--output` is always explicit.
 | Everything is `SKIP` | typically the collectors failed — inspect `capture.collectors` in the snapshot |
 | A service is missing from the listing | it is not a migrated service type (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`), it is a management interface, or it is in `ignore` in `mapping.yml` |
 | Lots of `ambiguous` entries in `NESPAROVANO` | duplicate `description` values on the device — pair them manually via `mapping.yml` |
-| `interface_traffic` reports `provoz netece` on a freshly migrated service | expected if nothing is flowing through the port yet; the check is `advisory`, so WARN, not FAIL |
+| `interface_traffic` reports `input_pps 0 pps` / `output_pps 0 pps` on a freshly migrated service | expected if nothing is flowing through the port yet; the check is `advisory`, so WARN, not FAIL |
 
 One unusual detail to watch: with `--format text` **and** `--output`, the terminal gets text
 but the **file receives JSON** — and unfiltered, the complete result.
@@ -374,6 +417,6 @@ but the **file receives JSON** — and unfiltered, the complete result.
   which is exactly why they are configurable.
 - **A capture is a single point in time.** The tool does not do continuous monitoring.
 - **At runtime the tool speaks Czech without diacritics** — CLI help, logs and result messages
-  alike (`provoz netece`, `zadny kandidat na subject`), because output goes to terminals where
+  alike (`input_pps 0 pps`, `zadny kandidat na subject`), because output goes to terminals where
   diacritics cannot be relied upon. That constraint applies to the tool, not to this
   documentation; every Czech string quoted here is verbatim so it can be grepped.

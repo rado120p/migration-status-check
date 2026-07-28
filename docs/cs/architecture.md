@@ -54,13 +54,14 @@ cli._cmd_capture
             ├─ collectors.registry.collectors_for ... vybere collectory pro platformu
             ├─ collector.collect(device, platform) .. per oblast → facts[oblast]
             ├─ scoping.builder.build_scopes ......... inventory → [Scope]
-            ├─ probes.ping.resolve_targets .......... scopy + facts["arp"] → cíle
+            ├─ probes.ping.resolve_targets .......... scopy + facts["arp"|"nd"] → cíle
             ├─ probes.ping.run_ping ................. aktivní ICMP, per cíl
             └─ models.snapshot.Snapshot ............. + save_snapshot() na disk
 ```
 
 Pořadí uvnitř `capture_device` **není libovolné**: ping potřebuje cíle, které se odvozují
-z ARP, takže bulk sběr musí proběhnout dřív. Celá tahle závislost se odehraje **tady**.
+z ARP (IPv4) a ND (IPv6), takže bulk sběr musí proběhnout dřív. Celá tahle závislost se
+odehraje **tady**.
 Do snapshotu se uloží už hotový výsledek pingu jako obyčejná data — a proto jsou checky
 při vyhodnocení navzájem nezávislé a můžou běžet v libovolném pořadí.
 
@@ -100,7 +101,8 @@ kontrolovat celou oblast.
 |---|---|---|
 | `interfaces` | `{ifname: {admin_status, oper_status, input_pps, output_pps, input_errors, output_errors, framing_errors}}` | název rozhraní (logická jednotka i fyzický rodič) |
 | `arp` | `[{ip, mac, interface, routing_instance}]` | `interface` |
-| `bgp` | `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted, advertised}}}` | `peer_ip` ∈ `bgp_neighbors` |
+| `nd` | `[{ip, mac, interface, state}]` — IPv6 protějšek `arp`, ND tabulka | `interface` |
+| `bgp` | `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted, advertised, active, suppressed}}}}` — počty se drží **za každou RIB zvlášť**, nesčítají se | `peer_ip` ∈ `bgp_neighbors` |
 | `evpn_vpws` | `{routing_instance: {status, local_sid, remote_sid}}` | **klíč = routing-instance** |
 | `evpn_esi` | `{esi: {status, df_role, interface}}` | `interface` |
 | `evpn_mac` | `{routing_instance: {vlan_id: count}}` | **klíč = routing-instance**; vnitřní klíč je **VLAN id** jako string (`"313"`), u vlan-based `"-"` |
@@ -199,8 +201,8 @@ vidět pohromadě:
 Collectory i checky se registrují dekorátorem `@register` **při importu svého modulu**.
 Naimportovat je musí někdo:
 
-- `collectors/all.py` importuje `arp`, `bgp`, `evpn`, `interfaces`; `capture.py` ho importuje
-  na úrovni modulu.
+- `collectors/all.py` importuje `arp`, `bgp`, `evpn`, `interfaces`, `nd`; `capture.py` ho
+  importuje na úrovni modulu.
 - `checks/all.py` importuje `bgp`, `evpn`, `ifaces`, `reachability`; `api.evaluate()` a
   `api.list_checks()` volají `load_all()` explicitně, aby registry byla naplněná i tehdy,
   když GUI nebo test volá API přímo bez CLI.

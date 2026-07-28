@@ -150,39 +150,79 @@ Porovnávací checky vrátí `SKIP` s důvodem `porovnavaci check bez baseline s
 
 ## 4. Jak číst výstup
 
-Skutečný výstup z laboratorního běhu:
+Skutečný výstup z laboratorního běhu (zkráceno — souhrnná tabulka má ve skutečnosti
+11 řádků, zde jen výběr; vynechaný je i jeden z bloků):
 
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  68 PASS   15 WARN   1 FAIL   7 SKIP
+  79 PASS   36 WARN   8 FAIL   10 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
-SLUZBA                           TYP        STAV  DETAIL
-EVPN-VPWS-CPE13-NNI              E-Line     WARN  et-0/0/8.213: provoz netece (in 0 pps, out 0 pps)
-INTERNET-CPE13-NNI               Internet   WARN  152.11.13.2: stav se zmenil Idle -> Established
-EVPN-VLAN-AWARE-INTERNET         Internet   FAIL  152.11.14.4: stav Active, ocekavano Established
-clab-pop-migration-P2;et-0/0/0   Core       OK
+STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
+WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps 0 pps
+FAIL  INTERNET-CPE13-NNI                   Internet ge-0/0/2.13  et-0/0/8.13  -                         152.11.13.2: stav Connect, ocekavano Established
+FAIL  L3VPN-CPE13-NNI                      IPVPN    ge-0/0/2.113 et-0/0/8.113 L3VPN-CPE13-NNI           198.11.13.2: stav Connect, ocekavano Established
+PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
+
+========================================================================================================
+ FAIL  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
+========================================================================================================
+ STAV | CHECK                        : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+------------------------------+-----------------------------------------+------------------------
+ PASS | et-0/0/8                     : et-0/0/8: bez chyb                      |
+ PASS | et-0/0/8.13                  : et-0/0/8.13: bez chyb                   |
+ PASS | Interface admin status       : Up                                      |
+ PASS | Interface operational status : Up                                      |
+ PASS | Interface admin status       : Up                                      |
+ PASS | Interface operational status : Up                                      |
+ WARN | Interface traffic in         : 0 pps                                   | bez baseline
+ WARN | Interface traffic out        : 0 pps                                   | bez baseline
+ PASS | Interface traffic in         : 0 pps                                   |
+ PASS | Interface traffic out        : 0 pps                                   |
+
+ -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------------
+ PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ FAIL | BGP status                   : Connect                                 | bez baseline
+ WARN | Ping                         : 0/5  152.11.13.2 neodpovedel            |
+
+ -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------------
+ FAIL | BGP status                   : Connect                                 | bez baseline
+ PASS | ND                           : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
   baseline  clab-pop-migration-P1;et-0/0/0   (Core)  zadny kandidat na subject
+  baseline  svc:lo0.0:Core                   (Core)  zadny kandidat na subject
   subject   EVPN-VLAN-AWARE-INTERNET         (E-LAN)  nova sluzba, chybi baseline
+  subject   clab-pop-migration-P2;et-0/0/0   (Core)  nova sluzba, chybi baseline
+  subject   svc:lo0.0:Core                   (Core)  nova sluzba, chybi baseline
 ```
 
 Co je na tom podstatné:
 
-- **Řádek na službu ukazuje jen nejhorší nález.** Zbytek checků zobrazí `--detail`.
-- **`OK` neznamená automaticky „vše ověřeno".** Může znamenat i to, že proběhla jen část
-  checků. Právě proto existuje `--detail` — ukáže, co konkrétně se kontrolovalo.
+- **Souhrnná tabulka (`STAV`/`SLUZBA`/`TYP`/`STARY PORT`/`NOVY PORT`/`RI`/`NALEZ`) má jeden
+  řádek na službu a ukazuje jen nejhorší nález.** Sloupce `STARY PORT` a `NOVY PORT` jsou
+  logické jednotky ze scopu, ne fyzický rodič.
+- **Pod tabulkou se automaticky vypíše plný blok pro každou službu, která není `PASS`** —
+  není potřeba `--detail`. `--detail` navíc rozbalí i bloky u služeb se stavem `PASS`.
+- **Blok jde shora dolů: řádky vázané na rozhraní (stav, countery, provoz), pak sekce `IPv4`,
+  pak `IPv6`.** Sekce prázdné rodiny se nevytváří — služba bez IPv6 nemá prázdnou sekci
+  IPv6. Hlavička sekce nese nakonfigurované adresy a případnou `VGW` adresu u IRB.
+- **Sloupec `ZMENA`** ukazuje `bylo <hodnota>` a případně deltu (`-100 %`, `+3`); u checků bez
+  baseline (`arp_present`, `ping_reachability`, `interface_state`, ...) zůstává prázdný.
+  **Bez načtené baseline se sloupec `ZMENA` nevypisuje vůbec** (viz `--detail` bez `--baseline`).
+- Šířky všech sloupců **se počítají z obsahu** — dlouhý název služby, routing instance nebo
+  IPv6 adresa se nikdy neořízne.
 - **Filtry (`--filter`, `--status`) zúží jen tabulku služeb.** Souhrnné počty nahoře zůstávají
   za celý běh — u `--status fail` tedy uvidíte jeden řádek, ale souhrn pořád hlásí všech
-  68 PASS. Je to záměr: filtr je pohled, ne nový výpočet.
+  79 PASS. Je to záměr: filtr je pohled, ne nový výpočet.
 - **Sekce `NESPAROVANO` se vypisuje vždy**, i když je všechno ostatní zelené, a **filtry se
   na ni nevztahují.** Je to hlavní pojistka proti přehlédnuté službě:
   - `baseline` = služba byla na starém boxu a na novém není → podezření na zapomenutou migraci,
   - `subject` = na novém je něco navíc → nová nebo restrukturalizovaná služba.
-- Stavy jsou `OK` / `WARN` / `FAIL` / `SKIP`. `SKIP` znamená **„nezměřeno"**, ne „v pořádku" —
-  chybějící data nikdy nedají PASS.
+- Stavy jsou `PASS` / `WARN` / `FAIL` / `SKIP`. `SKIP` znamená **„nezměřeno"**, ne „v pořádku" —
+  chybějící data nikdy nedají `PASS`.
 
 ### Návratové kódy
 
@@ -321,7 +361,7 @@ Cesty nejsou nikde zadrátované — `--output` je vždy explicitní.
 | Všechno je `SKIP` | typicky selhaly collectory — podívejte se do `capture.collectors` ve snapshotu |
 | Služba chybí ve výpisu | není to migrovaný typ služby (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`), je to management rozhraní, nebo je v `ignore` v `mapping.yml` |
 | Hodně `ambiguous` v `NESPAROVANO` | duplicitní `description` na zařízení — dopárujte přes `mapping.yml` |
-| `interface_traffic` hlásí `provoz netece` na čerstvě migrované službě | očekávatelné, pokud přes port ještě nic nejede; check je `advisory`, tedy WARN, ne FAIL |
+| `interface_traffic` hlásí `input_pps 0 pps` / `output_pps 0 pps` na čerstvě migrované službě | očekávatelné, pokud přes port ještě nic nejede; check je `advisory`, tedy WARN, ne FAIL |
 
 Pozor na jeden nezvyklý detail: při `--format text` a zadaném `--output` jde na terminál
 text, ale **do souboru se zapisuje JSON** (a to nefiltrovaný, celý výsledek).
@@ -338,6 +378,6 @@ text, ale **do souboru se zapisuje JSON** (a to nefiltrovaný, celý výsledek).
 - **Tolerance jsou úvodní odhady** a mají se doladit podle provozu — proto jsou konfigurovatelné.
 - **Sběr je snímek jednoho okamžiku.** Nástroj nedělá kontinuální monitoring.
 - **Za běhu je nástroj česky bez diakritiky** — nápověda CLI, logy i hlášky ve výsledku
-  (`provoz netece`, `zadny kandidat na subject`). Je to kvůli terminálům, kde na diakritiku
+  (`input_pps 0 pps`, `zadny kandidat na subject`). Je to kvůli terminálům, kde na diakritiku
   není spoleh. Tahle dokumentace je proti tomu psaná normální češtinou; ukázky výstupu a
   citované hlášky jsou vždy doslovné, aby se daly grepovat.

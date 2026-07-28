@@ -21,8 +21,10 @@ One entry = one interface and the service running on it.
 | `service_type` | `str` | required (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`, `Layer1`, ...) |
 | `description` | `str \| None` | the configuration description — carries most of the pairing weight |
 | `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `physical-port`, ... |
-| `ip_address` | `list[str]` | addresses with prefix |
-| `virtual_gw_ip_address` | `list[str]` | virtual-gateway-address on IRB |
+| `ipv4_address` | `list[str]` | IPv4 addresses with prefix |
+| `ipv6_address` | `list[str]` | IPv6 addresses with prefix |
+| `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address on IRB |
+| `virtual_gw_ipv6_address` | `list[str]` | IPv6 virtual-gateway-address on IRB |
 | `routing_instance` | `str \| None` | |
 | `active` | `bool` | |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
@@ -43,6 +45,12 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 2`).
+`load_inventory()` **rejects any other value outright** rather than tolerating it — the
+address fields were renamed by family (`ip_address` → `ipv4_address`/`ipv6_address`), so a
+tolerant read of a stale file would silently return a service with no addresses at all: ping
+would never run, yet the service would still show green.
+
 ---
 
 ## `scope.py` — the filter over facts
@@ -57,8 +65,11 @@ serve as a dict key — which `builder.py` relies on when detecting duplicates.
 
 ### `Selectors`
 
-Eight lists: `interfaces`, `physical_interfaces`, `routing_instances`, `bgp_neighbors`,
-`local_addresses`, `virtual_gw`, `vlans`, `bridge_domains`.
+Ten lists: `interfaces`, `physical_interfaces`, `routing_instances`, `bgp_neighbors`,
+`local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`, `bridge_domains`.
+Addresses and virtual-gateway are split by family here too — same as on `ServiceEntry` above
+— because ping and the report both need to pick a source/target by the target's family, not
+by position in one mixed list.
 
 `matches_interface(name)` returns `True` when the name is among the logical **or** the
 physical interfaces. That is what lets state checks run on the physical parent (`et-0/0/8`)
@@ -67,7 +78,7 @@ as well, provided the inventory contains the corresponding `Layer1` entry.
 ### `Scope` and `Scope.select()`
 
 ```python
-scope.select(facts, probes) -> dict   # keys: interfaces, arp, bgp,
+scope.select(facts, probes) -> dict   # keys: interfaces, arp, nd, bgp,
                                       #       evpn_vpws, evpn_esi, evpn_mac, ping
 ```
 
@@ -77,6 +88,7 @@ Filtering per area:
 |---|---|
 | `interfaces` | `matches_interface(name)` |
 | `arp` | `matches_interface(entry["interface"])` |
+| `nd` | `matches_interface(entry["interface"])` |
 | `bgp` | `peer ∈ selectors.bgp_neighbors` |
 | `evpn_vpws` | key (instance name) `∈ selectors.routing_instances` |
 | `evpn_esi` | `matches_interface(data["interface"])` |
@@ -155,15 +167,29 @@ is thus written once, in one place.
 
 ### `Finding` → `CheckResult`
 
-`Finding` is a check's raw output (`outcome`, `message`, `label`, `baseline`, `subject`,
-`details`). `CheckResult` is the same thing **after status derivation**, plus `id`, `mode` and
-`severity`. The conversion is done by `checks/base.py::run_check()`, not by the check itself.
+`Finding` is a check's raw output: `outcome`, `message`, `label`, `family` (4 / 6 / `None`),
+`value`, `baseline_value`, `delta`, `baseline`, `subject`, `details`. `CheckResult` is the
+same thing **after status derivation**, plus `id`, `mode` and `severity`. The conversion is
+done by `checks/base.py::run_check()`, not by the check itself.
+
+`label`/`value`/`baseline_value`/`delta` exist for the report: splitting a measured value
+into a label and a value for the report's columns has to be done by the check, because only
+the check knows what counts as the value for a given quantity and what counts as
+explanation — the renderer never parses numbers back out of `message`. `family` places a
+finding into the `IPv4`/`IPv6` section in the text report (`reporting/view.py`); `None`
+marks a row bound to the interface itself, not to an address (e.g. interface state).
 
 `CheckResult.to_dict()` omits empty optional keys, so the JSON is not flooded with `null`.
 
 ### `ScopeResult` and `RunResult`
 
-`ScopeResult`: `scope_id`, `key`, `status`, `match` (`MatchInfo | None`), `checks`.
+`ScopeResult`: `scope_id`, `key`, `status`, `match` (`MatchInfo | None`), `checks`, `identity`.
+
+`identity` (filled in by `engine.py::_identity()`) carries everything the report needs about
+a service that would otherwise stay inside the `Scope`: `description`, `service_type`,
+`service_subtype`, `routing_instance`, `ipv4`, `ipv6`, `virtual_gw_v4`, `virtual_gw_v6`. The
+renderer never sees scopes, only the `RunResult`, so without this the address and
+virtual-gateway columns would have nowhere to read from.
 
 `MatchInfo`: `status` (`matched` | `unmatched`), `method`, `confidence`,
 `baseline_interfaces`, `subject_interfaces`, `reason`.

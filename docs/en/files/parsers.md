@@ -134,28 +134,44 @@ finely:
 ## Output format
 
 ```yaml
+schema_version: 2
 device: 172.20.20.4
 interfaces:
 - interface: ge-0/0/2.113
   description: L3VPN-CPE13-NNI
   service_type: IPVPN
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 198.11.13.1/30
-  virtual_gw_ip_address: []
+  ipv6_address:
+  - 2001:db8:11:13::a/127
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
   active: true
   protocol:
   - inet
+  - inet6
+  - bgp
+  - vrf
   bgp_neighbor:
   - 198.11.13.2
+  - 2001:db8:11:13::b
   bridge_domain: []
   customer_vlan:
   - '113'
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.13.2, 2001:db8:11:13::b'
 ```
+
+Addresses are now split by family — `ipv4_address`/`ipv6_address` and
+`virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — and the YAML always carries a
+top-level `schema_version: 2` key. The validator **rejects any other `schema_version`
+outright** (`models/inventory.py::load_inventory()`) instead of silently reading a stale
+file as a service with no addresses — see
+[models.md](models.md#inventorypy--the-input-from-the-parsers).
 
 The key order is fixed (`clean_service_dict()`) and `service_subtype` stays in the YAML even
 when `null`, so downstream scripts get a stable structure.
