@@ -2948,10 +2948,10 @@ from dataclasses import dataclass, field
 
 from migration_validator.models.result import CheckResult, ScopeResult, Status
 
-# Poradi sekci. None jsou radky, ktere na rodine nezavisi (stav rozhrani).
+# Poradi sekci. None jsou radky, ktere na rodine nezavisi (stav rozhrani) -
+# ty stoji hned pod hlavickou bloku a vlastni nadpis nemaji, protoze nadpis
+# sekce nese adresu a tyhle radky zadnou nemaji.
 FAMILY_ORDER = (None, 4, 6)
-
-FAMILY_LABEL = {None: "SPOLECNE", 4: "IPv4", 6: "IPv6"}
 
 _STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.PASS)
 
@@ -3293,6 +3293,23 @@ def test_service_without_ipv6_has_no_ipv6_section():
     output = render(_result([_vgw_scope()]))
 
     assert "-- IPv6" not in output
+
+
+def test_block_frame_agrees_with_its_widest_line():
+    """Presne to selhani, ktere AR-5 resi: ramec kratsi nez hlavicka."""
+    output = render(_result([_dual_stack_scope()]))
+    lines = output.splitlines()
+
+    frame = [line for line in lines if line and set(line) == {"="}]
+    assert frame, "blok nema ramec"
+
+    body = [
+        line for line in lines
+        if line.startswith((" STAV |", " PASS |", " WARN |", " FAIL |", " SKIP |", " -----+"))
+    ]
+    assert body, "blok nema zadny radek"
+
+    assert max(len(line) for line in body) <= len(frame[0])
 ```
 
 - [ ] **Step 2: Spusť testy a ověř, že padají**
@@ -3342,11 +3359,18 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     rows = [row for section in view.sections for row in section.rows]
     changes = {id(row): change_text(row, has_baseline) for row in rows}
 
-    label_width = max([len(row.label) for row in rows] + [len("CHECK")])
     subject_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
+    baseline_port = view.baseline_interfaces[0] if view.baseline_interfaces else "-"
+
+    # Nadpisy sloupcu se do sirek zapocitavaji taky - jinak by ramec bloku
+    # a oddelovaci cara byly kratsi nez hlavicka a vypis by se rozjel.
+    label_title = "CHECK"
     value_title = f"POST ({subject_port})" if has_baseline else "HODNOTA"
+    change_title = f"ZMENA PROTI {baseline_port}"
+
+    label_width = max([len(row.label) for row in rows] + [len(label_title)])
     value_width = max([len(row.value) for row in rows] + [len(value_title)])
-    change_width = max([len(text) for text in changes.values()] + [0])
+    change_width = max([len(text) for text in changes.values()] + [len(change_title)])
 
     def line(status: str, label: str, value: str, change: str) -> str:
         text = f" {status:<4} | {label:<{label_width}} : {value:<{value_width}}"
@@ -3358,7 +3382,6 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     if has_baseline:
         width += 3 + change_width
 
-    baseline_port = view.baseline_interfaces[0] if view.baseline_interfaces else "-"
     ports = (
         f"{baseline_port} -> {subject_port}" if has_baseline else subject_port
     )
@@ -3369,7 +3392,7 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
         f" {SYMBOL[view.status].strip():<4}  {view.description}   "
         f"{view.service_type}   {ports}   RI: {instance}",
         "=" * width,
-        line("STAV", "CHECK", value_title, f"ZMENA PROTI {baseline_port}"),
+        line("STAV", label_title, value_title, change_title),
     ]
     separator = f" {'-'*4}-+-{'-'*label_width}-+-{'-'*value_width}"
     if has_baseline:
@@ -3613,6 +3636,13 @@ Projdi a uprav místa, která popisují změněné chování:
 
 ```bash
 grep -rln "ip_address\|virtual_gw_ip_address\|local_addresses\|prefixes" docs/cs docs/en README.md
+grep -rn "OK \|SYMBOL" docs/cs docs/en README.md | grep -v "^Binary"
+```
+
+Druhý grep je kvůli tomu, že symbol pro PASS se v Tasku 12 změnil z `OK ` na `PASS`. Anglická dokumentace **cituje výstupní řetězce doslova**, aby se daly grepovat v reálném výstupu, takže každý ukázkový výpis s `OK ` je teď zastaralý. Zkontroluj i zbylé testy v `tests/reporting/test_text_report.py`, jestli neobsahují literál `"OK "`:
+
+```bash
+grep -rn '"OK ' tests/
 ```
 
 Uprav zejména:
