@@ -109,6 +109,22 @@ def test_second_address_of_the_same_family_enters_the_label():
     ]
 
 
+def test_single_address_stays_unqualified_even_when_check_has_an_address():
+    """Doplnek k testu vyse: rozliseni je poradi adres v identite, ne pritomnost
+    check.details['address'] - jinak by 'kvalifikuj vzdy' proslo beze zmeny."""
+    view = build_view(
+        _scope(
+            [
+                _check("arp_present", family=4, label="ARP", value="mac -> 152.11.13.2",
+                       address="152.11.13.1/30"),
+            ]
+        )
+    )
+    section = next(s for s in view.sections if s.family == 4)
+
+    assert section.rows[0].label == "ARP"
+
+
 def test_state_check_never_says_missing_baseline():
     """STATE check nema baseline z definice - 'bez baseline' by bylo na vsem."""
     row = build_view(_scope([_check("arp_present", family=4, mode="state")])).sections[0].rows[0]
