@@ -67,11 +67,21 @@ def derive_status(outcome: Outcome, severity: Severity) -> Status:
 
 @dataclass
 class Finding:
-    """Namereny vysledek jednoho checku pred odvozenim statusu."""
+    """Namereny vysledek jednoho checku pred odvozenim statusu.
+
+    `message` je duvod pro sbaleny radek reportu. `value`, `baseline_value`
+    a `delta` jsou to, co se tiskne ve sloupcich rozbaleneho bloku - rozklad
+    na popisek a hodnotu musi udelat check, protoze jen on vi, co je u dane
+    veliciny hodnota a co vysvetleni.
+    """
 
     outcome: Outcome
     message: str
     label: str | None = None
+    family: int | None = None
+    value: str | None = None
+    baseline_value: str | None = None
+    delta: str | None = None
     baseline: dict[str, Any] | None = None
     subject: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)
@@ -85,6 +95,10 @@ class CheckResult:
     severity: Severity
     message: str
     label: str | None = None
+    family: int | None = None
+    value: str | None = None
+    baseline_value: str | None = None
+    delta: str | None = None
     baseline: dict[str, Any] | None = None
     subject: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)
@@ -99,6 +113,10 @@ class CheckResult:
         }
         if self.label is not None:
             payload["label"] = self.label
+        for name in ("family", "value", "baseline_value", "delta"):
+            attribute = getattr(self, name)
+            if attribute is not None:
+                payload[name] = attribute
         if self.baseline is not None:
             payload["baseline"] = self.baseline
         if self.subject is not None:
@@ -135,11 +153,13 @@ class ScopeResult:
     status: Status
     match: MatchInfo | None
     checks: list[CheckResult] = field(default_factory=list)
+    identity: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "scope_id": self.scope_id,
             "key": self.key,
+            "identity": self.identity,
             "status": self.status.value,
             "match": self.match.to_dict() if self.match else None,
             "checks": [check.to_dict() for check in self.checks],

@@ -74,6 +74,28 @@ def _aligned_baseline_data(
     return data
 
 
+def _identity(scope: Scope) -> dict[str, Any]:
+    """Vse, co report o sluzbe vypisuje - jinak by to zustalo ve scope.
+
+    Renderer nema pristup ke scopum, jen k vysledku, takze bez tohoto by
+    sloupce s adresami, virtual gateway a routing-instanci nemel odkud vzit.
+    """
+    key = scope.key
+    selectors = scope.selectors
+    return {
+        "description": key.description if key else None,
+        "service_type": key.service_type if key else None,
+        "service_subtype": key.service_subtype if key else None,
+        "routing_instance": (
+            selectors.routing_instances[0] if selectors.routing_instances else None
+        ),
+        "ipv4": list(selectors.local_ipv4),
+        "ipv6": list(selectors.local_ipv6),
+        "virtual_gw_v4": list(selectors.virtual_gw_v4),
+        "virtual_gw_v6": list(selectors.virtual_gw_v6),
+    }
+
+
 def _run_scope(
     scope: Scope,
     subject: Snapshot,
@@ -113,6 +135,7 @@ def _run_scope(
         status=status,
         match=match,
         checks=results,
+        identity=_identity(scope),
     )
 
 
