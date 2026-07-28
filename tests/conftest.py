@@ -79,6 +79,7 @@ def synthetic_snapshot():
                 "scope_id": scope.id,
                 "target": scope.selectors.bgp_neighbors[0],
                 "source": scope.selectors.local_ipv4[0].split("/")[0],
+                "family": 4,
                 "sent": 5,
                 "received": 5,
                 "loss_percent": 0,

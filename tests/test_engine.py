@@ -31,6 +31,14 @@ def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-mig
             }
         },
         "arp": [{"ip": "198.11.13.2", "interface": interface}],
+        "nd": [
+            {
+                "ip": "2001:db8:11:13::2",
+                "mac": "0c:00:ef:5e:df:01",
+                "interface": interface,
+                "state": "reachable",
+            }
+        ],
         "bgp": peers if peers is not None else {},
     }
     return Snapshot(
@@ -43,7 +51,7 @@ def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-mig
         ),
         facts=facts,
         probes={"ping": [{"scope_id": scopes[0].id, "target": "198.11.13.2",
-                          "sent": 5, "received": 5}]},
+                          "family": 4, "sent": 5, "received": 5}]},
         scopes=scopes,
         inventory=[],
     )
@@ -95,7 +103,7 @@ def test_scope_is_skip_only_when_everything_skipped():
     subject = _old()
     subject.capture.collectors = {
         name: {"status": "error", "message": "RpcError: timeout"}
-        for name in ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+        for name in ("interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
     }
     subject.probes = {"ping": []}  # bez cilu -> ping_reachability tez SKIP
 
