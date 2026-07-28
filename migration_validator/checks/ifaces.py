@@ -65,20 +65,19 @@ class InterfaceStateCheck(Check):
         findings = []
         for name in sorted(interfaces):
             data = interfaces[name]
-            admin = str(data.get("admin_status", "unknown"))
-            oper = str(data.get("oper_status", "unknown"))
-            state = {"admin_status": admin, "oper_status": oper}
-            if admin == "up" and oper == "up":
-                findings.append(
-                    Finding(Outcome.OK, f"{name}: up/up", label=name, subject=state)
-                )
-            else:
+            for label, key in (
+                ("Interface admin status", "admin_status"),
+                ("Interface operational status", "oper_status"),
+            ):
+                state = str(data.get(key, "unknown"))
+                ok = state == "up"
                 findings.append(
                     Finding(
-                        Outcome.BROKEN,
-                        f"{name}: admin {admin}, oper {oper}",
-                        label=name,
-                        subject=state,
+                        Outcome.OK if ok else Outcome.BROKEN,
+                        f"{name}: {key} {state}",
+                        label=label,
+                        value=state.capitalize(),
+                        subject={key: state},
                     )
                 )
         return findings
@@ -144,13 +143,19 @@ class InterfaceTrafficCheck(Check):
         for name in names:
             subject = _rates(ctx.subject["interfaces"][name])
             baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
+            baseline = _rates(baseline_data) if baseline_data else None
 
-            if baseline_data is None:
-                findings.append(_state_finding(name, subject, require_nonzero))
-                continue
-
-            baseline = _rates(baseline_data)
-            findings.append(_compare_finding(name, baseline, subject, tolerance))
+            for label, key in (
+                ("Interface traffic in", "input_pps"),
+                ("Interface traffic out", "output_pps"),
+            ):
+                findings.append(
+                    _traffic_finding(
+                        name, label, key, subject[key],
+                        baseline[key] if baseline else None,
+                        tolerance, require_nonzero,
+                    )
+                )
         return findings
 
 
@@ -161,56 +166,51 @@ def _rates(data: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def _state_finding(name: str, subject: dict[str, int], require_nonzero: bool) -> Finding:
-    if require_nonzero and (subject["input_pps"] == 0 or subject["output_pps"] == 0):
-        return Finding(
-            Outcome.BROKEN,
-            f"{name}: provoz netece (in {subject['input_pps']} pps, "
-            f"out {subject['output_pps']} pps)",
-            label=name,
-            subject=subject,
-        )
-    return Finding(
-        Outcome.OK,
-        f"{name}: provoz tece (in {subject['input_pps']} pps, "
-        f"out {subject['output_pps']} pps)",
-        label=name,
-        subject=subject,
-    )
-
-
-def _compare_finding(
-    name: str, baseline: dict[str, int], subject: dict[str, int], tolerance: float
+def _traffic_finding(
+    name: str,
+    label: str,
+    key: str,
+    subject: int,
+    baseline: int | None,
+    tolerance: float,
+    require_nonzero: bool,
 ) -> Finding:
-    details = {"tolerance_percent": tolerance}
-    drops = []
-    for key in ("input_pps", "output_pps"):
-        change = percent_change(baseline[key], subject[key])
-        if change is None:
-            continue
-        details[f"{key}_change_percent"] = round(change, 1)
-        if change < tolerance:
-            drops.append(
-                f"{key} kleslo o {abs(round(change))} % "
-                f"({baseline[key]} -> {subject[key]})"
-            )
+    """Jeden smer provozu = jeden radek reportu.
 
-    if drops:
+    Bez baseline se hodnoti jen absolutni hodnota; delta zustava None a
+    report ve sloupci ZMENA nevypise nic.
+    """
+    value = f"{subject} pps"
+
+    if baseline is None:
+        broken = require_nonzero and subject == 0
         return Finding(
-            Outcome.BROKEN,
-            f"{name}: " + "; ".join(drops) + f", prah je {tolerance:.0f} %",
-            label=name,
-            baseline=baseline,
-            subject=subject,
-            details=details,
+            Outcome.BROKEN if broken else Outcome.OK,
+            f"{name}: {key} {subject} pps",
+            label=label,
+            value=value,
+            subject={key: subject},
         )
+
+    change = percent_change(baseline, subject)
+    delta = None if change is None else f"{change:+.0f} %"
+    broken = change is not None and change < tolerance
+
     return Finding(
-        Outcome.OK,
-        f"{name}: provoz v toleranci {tolerance:.0f} %",
-        label=name,
-        baseline=baseline,
-        subject=subject,
-        details=details,
+        Outcome.BROKEN if broken else Outcome.OK,
+        (
+            f"{name}: {key} kleslo o {abs(round(change))} % "
+            f"({baseline} -> {subject}), prah je {tolerance:.0f} %"
+            if broken
+            else f"{name}: {key} v toleranci {tolerance:.0f} %"
+        ),
+        label=label,
+        value=value,
+        baseline_value=f"{baseline} pps",
+        delta=delta,
+        baseline={key: baseline},
+        subject={key: subject},
+        details={"tolerance_percent": tolerance},
     )
 
 
