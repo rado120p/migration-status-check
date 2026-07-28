@@ -239,7 +239,7 @@ Sdílené pomocné funkce:
 
 - **žádná IPv4 adresa nakonfigurovaná** (`scope.selectors.local_ipv4` prázdné) → `SKIP` se
   zprávou `sluzba nema nakonfigurovanou IPv4 adresu` — služba bez IPv4 nemá mít ARP nález
-  vůbec, natož WARN za sousedа, který nikdy nemohl existovat;
+  vůbec, natož WARN za souseda, který nikdy nemohl existovat;
 - žádný ARP záznam na rozhraních služby → `broken` → FAIL/WARN, zpráva `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
 - jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,

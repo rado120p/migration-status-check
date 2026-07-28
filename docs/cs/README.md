@@ -143,7 +143,7 @@ Porovnávací checky vrátí `SKIP` s důvodem `porovnavaci check bez baseline s
 | `--output` | soubor s výstupem (u `--format text` se do souboru zapíše **JSON**) |
 | `--filter` | podřetězec v description nebo scope id |
 | `--status` | čárkou oddělený seznam: `pass,warn,fail,skip` |
-| `--detail` | vypíše všechny checky každé služby, ne jen nejhorší nález |
+| `--detail` | rozbalí plný blok i u služeb se stavem PASS (WARN/FAIL se rozbalují vždy) |
 | `--warn-as-error` | WARN pak také vrací návratový kód 1 |
 
 ---
@@ -151,7 +151,8 @@ Porovnávací checky vrátí `SKIP` s důvodem `porovnavaci check bez baseline s
 ## 4. Jak číst výstup
 
 Skutečný výstup z laboratorního běhu (zkráceno — souhrnná tabulka má ve skutečnosti
-11 řádků, zde jen výběr; vynechaný je i jeden z bloků):
+11 řádků, zde jen výběr; 10 z těch 11 služeb není `PASS`, takže se automaticky rozbalí do
+plného bloku — ukázaný je jen jeden, zbylých devět je vynecháno):
 
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
@@ -192,11 +193,11 @@ PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
  WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
-  baseline  clab-pop-migration-P1;et-0/0/0   (Core)  zadny kandidat na subject
-  baseline  svc:lo0.0:Core                   (Core)  zadny kandidat na subject
-  subject   EVPN-VLAN-AWARE-INTERNET         (E-LAN)  nova sluzba, chybi baseline
-  subject   clab-pop-migration-P2;et-0/0/0   (Core)  nova sluzba, chybi baseline
-  subject   svc:lo0.0:Core                   (Core)  nova sluzba, chybi baseline
+  baseline  clab-pop-migration-P1;et-0/0/0 (Core)  zadny kandidat na subject
+  baseline  svc:lo0.0:Core                 (Core)  zadny kandidat na subject
+  subject   EVPN-VLAN-AWARE-INTERNET       (E-LAN)  nova sluzba, chybi baseline
+  subject   clab-pop-migration-P2;et-0/0/0 (Core)  nova sluzba, chybi baseline
+  subject   svc:lo0.0:Core                 (Core)  nova sluzba, chybi baseline
 ```
 
 Co je na tom podstatné:
@@ -213,7 +214,7 @@ Co je na tom podstatné:
   baseline (`arp_present`, `ping_reachability`, `interface_state`, ...) zůstává prázdný.
   **Bez načtené baseline se sloupec `ZMENA` nevypisuje vůbec** (viz `--detail` bez `--baseline`).
 - Šířky všech sloupců **se počítají z obsahu** — dlouhý název služby, routing instance nebo
-  IPv6 adresa se nikdy neořízne.
+  IPv6 adresa se nikdy neořízne. Platí to i pro popisek v sekci `NESPAROVANO`.
 - **Filtry (`--filter`, `--status`) zúží jen tabulku služeb.** Souhrnné počty nahoře zůstávají
   za celý běh — u `--status fail` tedy uvidíte jeden řádek, ale souhrn pořád hlásí všech
   79 PASS. Je to záměr: filtr je pohled, ne nový výpočet.

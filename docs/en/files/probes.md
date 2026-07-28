@@ -70,10 +70,11 @@ The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) 
   `Internet` runs in the default `inet.0`;
 - **IPv4**: takes all ARP addresses learned on the scope's interfaces;
 - **IPv6**: takes only ND entries that are **usable** (`_usable_nd()`: have a MAC and a state
-  that is not `unreachable`/`incomplete`) and are not link-local — **unless the service itself
-  is configured with a link-local address as its only address**
-  (`_link_local_configured()`), in which case the link-local neighbour is kept as a
-  legitimate target;
+  that is not `unreachable`/`incomplete`) and are not link-local — **unless the service has a
+  link-local address configured directly under the interface**
+  (`_link_local_configured()`: this checks for *presence*, not exclusivity — one link-local
+  address among the configured addresses is enough, even alongside an ordinary routable one),
+  in which case link-local neighbours are kept as legitimate targets;
 - **a link-local target without an interface is rejected by Junos ping** — so
   `PingTarget.interface` carries the ND entry's interface name whenever the target is
   link-local;

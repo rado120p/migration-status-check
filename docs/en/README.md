@@ -151,7 +151,7 @@ Comparison checks return `SKIP` with the reason `porovnavaci check bez baseline 
 | `--output` | output file (with `--format text` the file receives **JSON**) |
 | `--filter` | substring in the description or scope id |
 | `--status` | comma-separated list: `pass,warn,fail,skip` |
-| `--detail` | prints every check of every service, not just the worst finding |
+| `--detail` | expands the full block for services with status PASS too (WARN/FAIL always expand) |
 | `--warn-as-error` | WARN then also yields exit code 1 |
 
 ---
@@ -159,7 +159,8 @@ Comparison checks return `SKIP` with the reason `porovnavaci check bez baseline 
 ## 4. Reading the output
 
 Real output from a lab run (trimmed — the summary table actually has 11 rows, only a
-selection is shown here, and one of the per-service blocks is omitted):
+selection is shown here; 10 of those 11 services are not `PASS` and therefore auto-expand
+into a full block — only one is shown, the other nine are omitted):
 
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
@@ -200,11 +201,11 @@ PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
  WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
-  baseline  clab-pop-migration-P1;et-0/0/0   (Core)  zadny kandidat na subject
-  baseline  svc:lo0.0:Core                   (Core)  zadny kandidat na subject
-  subject   EVPN-VLAN-AWARE-INTERNET         (E-LAN)  nova sluzba, chybi baseline
-  subject   clab-pop-migration-P2;et-0/0/0   (Core)  nova sluzba, chybi baseline
-  subject   svc:lo0.0:Core                   (Core)  nova sluzba, chybi baseline
+  baseline  clab-pop-migration-P1;et-0/0/0 (Core)  zadny kandidat na subject
+  baseline  svc:lo0.0:Core                 (Core)  zadny kandidat na subject
+  subject   EVPN-VLAN-AWARE-INTERNET       (E-LAN)  nova sluzba, chybi baseline
+  subject   clab-pop-migration-P2;et-0/0/0 (Core)  nova sluzba, chybi baseline
+  subject   svc:lo0.0:Core                 (Core)  nova sluzba, chybi baseline
 ```
 
 Column headers: `STAV` = status, `SLUZBA` = service, `TYP` = type, `STARY PORT` /
@@ -227,7 +228,8 @@ What matters here:
   `ping_reachability`, `interface_state`, ...) it stays empty. **With no baseline loaded, the
   `ZMENA` column is dropped entirely**, not just left blank.
 - Every column's width **is computed from its content** — a long service name, routing
-  instance, or IPv6 address is never truncated.
+  instance, or IPv6 address is never truncated. That holds for the `NESPAROVANO` section's
+  label too.
 - **Filters (`--filter`, `--status`) narrow the service table only.** The summary counts at the
   top still describe the whole run — with `--status fail` you may see one row while the summary
   still reports all 79 PASS. That is intentional: a filter is a view, not a recomputation.
@@ -250,7 +252,7 @@ Common message strings, translated:
 | `zadny kandidat na subject` | no candidate on the subject device |
 | `nova sluzba, chybi baseline` | new service, no baseline |
 | `ambiguous: N kandidatu (...)` | ambiguous: N candidates, so no pairing was made |
-| `pocty prefixu v toleranci -10 %` | prefix counts within the −10 % tolerance |
+| `198.11.13.2/inet.0: pokles advertised 14 -> 3, prah je -10 %` | advertised prefixes on that RIB dropped from 14 to 3, past the −10 % tolerance |
 | `bez chyb` | no errors (interface error counters) |
 | `bez baseline` | no baseline (this check has no baseline value by definition) |
 

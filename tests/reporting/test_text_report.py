@@ -163,6 +163,28 @@ def test_unmatched_section_present_even_when_all_green():
     assert "NESPAROVANO" in render(result)
 
 
+def test_unmatched_label_longer_than_32_chars_is_not_truncated():
+    """Regrese: NESPAROVANO drivejsi sazelo popisek napevno na {:<32.32},
+    stejna vada jako kdysi v souhrnne tabulce. Realny nazev sluzby z laborky
+    (clab-pop-migration-MX1-POP1 ge-0/0/1, 37 znaku) je delsi nez 32 - orezany
+    nazev je presne to, co ma NESPAROVANO zabranit prehlednout."""
+    result = _legacy_result()
+    long_name = "clab-pop-migration-MX1-POP1 ge-0/0/1"
+    assert len(long_name) > 32
+    result.unmatched["baseline"].append(
+        {
+            "scope_id": "svc:clab-pop-migration-MX1-POP1 ge-0/0/1:Core",
+            "description": long_name,
+            "service_type": "Core",
+            "reason": "zadny kandidat na subject",
+        }
+    )
+
+    output = render(result)
+
+    assert long_name in output
+
+
 def _check(check_id, status, message, *, label, value, family=None,
            mode="state", baseline_value=None, delta=None):
     return CheckResult(

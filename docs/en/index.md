@@ -98,6 +98,6 @@ migration-status-check/
 │   ├── checks/                # pure functions (facts, scope) → verdict → files/checks.md
 │   └── reporting/             # result → text / JSON                   → files/reporting.md
 │
-├── tests/                     # 306 tests, none of them need a network → files/tests.md
+├── tests/                     # none of the tests need a network       → files/tests.md
 └── docs/                      # this documentation + spec and plans
 ```

@@ -1,7 +1,7 @@
 # `tests/` — the test suite
 
 ```bash
-.venv/bin/pytest          # 305 passed, 1 skipped (~1.2 s)
+.venv/bin/pytest          # all passed except one skipped (~1.2 s)
 ```
 
 **No test needs a network or a lab.** That is a direct dividend of the checks being pure

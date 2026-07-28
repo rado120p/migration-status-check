@@ -69,9 +69,11 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
   `Internet` jede v default `inet.0`;
 - **IPv4**: vezme všechny ARP adresy naučené na rozhraních scope;
 - **IPv6**: vezme jen ND záznamy, které jsou **použitelné** (`_usable_nd()`: mají MAC a stav
-  není `unreachable`/`incomplete`) a nejsou link-local — **pokud sama služba nemá jako
-  jedinou adresu nakonfigurovanou link-local** (`_link_local_configured()`); pak se link-local
-  soused ponechá jako legitimní cíl;
+  není `unreachable`/`incomplete`) a nejsou link-local — **pokud služba nemá link-local
+  adresu nakonfigurovanou přímo pod rozhraním** (`_link_local_configured()`: kontroluje jen
+  přítomnost, ne výlučnost — stačí, aby mezi nakonfigurovanými adresami byla jedna
+  link-local, i vedle běžné routovatelné); pak se link-local sousedé ponechají jako legitimní
+  cíle;
 - **link-local cíl bez rozhraní Junos ping odmítne** — proto `PingTarget.interface` nese
   název rozhraní ND záznamu, kdykoli je cíl link-local;
 - u obou rodin: neplatí typicky, ale kdyby ARP/ND vrátila naši vlastní adresu, cíl se

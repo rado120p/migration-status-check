@@ -97,6 +97,6 @@ migration-status-check/
 │   ├── checks/                # čisté funkce (fakta, scope) → verdikt  → files/checks.md
 │   └── reporting/             # výsledek → text / JSON                → files/reporting.md
 │
-├── tests/                     # 306 testů, žádný nepotřebuje síť      → files/tests.md
+├── tests/                     # žádný test nepotřebuje síť            → files/tests.md
 └── docs/                      # tato dokumentace + spec a plány
 ```

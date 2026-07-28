@@ -208,10 +208,17 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     lines.append("NESPAROVANO")
     if not result.unmatched["baseline"] and not result.unmatched["subject"]:
         lines.append("  (nic)")
-    for side in ("baseline", "subject"):
-        for item in result.unmatched[side]:
-            label = item.get("description") or item["scope_id"]
-            service_type = item.get("service_type") or "-"
-            lines.append(f"  {side:<9} {label:<32.32} ({service_type})  {item['reason']}")
+    else:
+        # Sirka se pocita z dat, ne napevno (byval "{:<32.32}") - realny nazev
+        # sluzby z laborky umi byt delsi nez 32 znaku a orezany je presne to,
+        # co ma NESPAROVANO zabranit prehlednout.
+        rows = [
+            (side, item.get("description") or item["scope_id"], item.get("service_type") or "-", item["reason"])
+            for side in ("baseline", "subject")
+            for item in result.unmatched[side]
+        ]
+        label_width = max(len(label) for _, label, _, _ in rows)
+        for side, label, service_type, reason in rows:
+            lines.append(f"  {side:<9} {label:<{label_width}} ({service_type})  {reason}")
 
     return "\n".join(lines) + "\n"
