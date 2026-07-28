@@ -106,6 +106,20 @@ def test_to_json_is_valid_and_keeps_czech_characters():
     assert payload["scopes"][0]["checks"][0]["message"] == "rozhrani je v poradku"
 
 
+def test_render_always_shows_unmatched_section():
+    output = render(_legacy_result())
+    assert "NESPAROVANO" in output
+    assert "L3VPN-CPE99-NNI" in output
+    assert "EVPN-VLAN-AWARE-INTERNET" in output
+
+
+def test_unmatched_section_present_even_when_all_green():
+    result = _legacy_result()
+    for scope in result.scopes:
+        scope.status = Status.PASS
+    assert "NESPAROVANO" in render(result)
+
+
 def _check(check_id, status, message, *, label, value, family=None,
            mode="state", baseline_value=None, delta=None):
     return CheckResult(
