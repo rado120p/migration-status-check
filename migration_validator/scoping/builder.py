@@ -73,8 +73,12 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                         [entry.routing_instance] if entry.routing_instance else []
                     ),
                     bgp_neighbors=list(entry.bgp_neighbor),
-                    local_addresses=list(entry.ip_address),
-                    virtual_gw=list(entry.virtual_gw_ip_address),
+                    # Selector ma zatim jeden spolecny seznam adres bez ohledu na
+                    # rodinu, proto se ipv4 a ipv6 tady spojuji dohromady.
+                    local_addresses=list(entry.ipv4_address + entry.ipv6_address),
+                    virtual_gw=list(
+                        entry.virtual_gw_ipv4_address + entry.virtual_gw_ipv6_address
+                    ),
                     vlans=list(entry.customer_vlan),
                     bridge_domains=list(entry.bridge_domain),
                 ),

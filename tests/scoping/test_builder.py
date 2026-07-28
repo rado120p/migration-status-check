@@ -44,7 +44,7 @@ def test_layer1_does_not_become_a_scope_but_feeds_physical_selector():
                 service_type="IPVPN",
                 routing_instance="L3VPN-CPE13-NNI",
                 bgp_neighbor=["198.11.13.2"],
-                ip_address=["198.11.13.1/30"],
+                ipv4_address=["198.11.13.1/30"],
                 customer_vlan=["113"],
             ),
         ],
@@ -65,11 +65,11 @@ def test_management_interfaces_are_excluded_even_when_typed_internet():
     inventory = Inventory(
         device="172.20.20.5",
         entries=[
-            _entry(interface="fxp0.0", service_type="Internet", ip_address=["10.0.0.15/24"]),
+            _entry(interface="fxp0.0", service_type="Internet", ipv4_address=["10.0.0.15/24"]),
             _entry(
                 interface="re0:mgmt-0.0",
                 service_type="Internet",
-                ip_address=["172.20.20.5/24"],
+                ipv4_address=["172.20.20.5/24"],
             ),
         ],
     )
@@ -81,7 +81,7 @@ def test_core_and_loopback_produce_scopes():
     inventory = Inventory(
         device="172.20.20.4",
         entries=[
-            _entry(interface="lo0.0", service_type="Core", ip_address=["150.0.0.11/32"]),
+            _entry(interface="lo0.0", service_type="Core", ipv4_address=["150.0.0.11/32"]),
             _entry(
                 interface="ge-0/0/0.0",
                 description="clab-pop-migration-P1;et-0/0/0",
@@ -122,8 +122,8 @@ def test_irb_virtual_gw_lands_in_selectors():
                 interface="irb.14",
                 description="EVPN-VLAN-AWARE-INTERNET",
                 service_type="Internet",
-                ip_address=["152.11.14.2/29"],
-                virtual_gw_ip_address=["152.11.14.1"],
+                ipv4_address=["152.11.14.2/29"],
+                virtual_gw_ipv4_address=["152.11.14.1"],
                 bgp_neighbor=["152.11.14.4"],
             )
         ],
