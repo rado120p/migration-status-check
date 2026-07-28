@@ -39,6 +39,18 @@ def test_link_local_entries_are_kept_by_collector(rpc_fixture, platform):
     assert any(entry["ip"].lower().startswith("fe80:") for entry in result)
 
 
+def test_entry_without_usable_mac_survives_collection(rpc_fixture):
+    """Rozhodnuti, co je pouzitelny cil pingu, nepatri collectoru.
+
+    Na vMX ma zaznam pro 2001:db8::1 (fxp0.0) mac 'none' jako obycejny text,
+    ne prazdnou hodnotu - budouci "uklid" v collectoru by ho nesmel zahodit.
+    """
+    result = NdCollector().parse(rpc_fixture("junos", "nd"), "junos")
+    matching = [entry for entry in result if entry["ip"] == "2001:db8::1"]
+    assert matching, "fixture uz neobsahuje zaznam bez pouzitelne MAC"
+    assert matching[0]["mac"] == "none"
+
+
 def test_collector_metadata():
     collector = NdCollector()
     assert collector.name == "nd"
