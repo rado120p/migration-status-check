@@ -105,7 +105,7 @@ def capture_device(
 
     pings: list[dict[str, Any]] = []
     if scopes:
-        for target in resolve_targets(scopes, facts.get("arp", [])):
+        for target in resolve_targets(scopes, facts.get("arp", []), facts.get("nd", [])):
             pings.append(run_ping(device, target, count=ping_count))
 
     return Snapshot(

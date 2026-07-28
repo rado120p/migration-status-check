@@ -15,9 +15,14 @@ def _scope(
     service_type="IPVPN",
     interfaces=("ge-0/0/2.113",),
     addresses=("198.11.13.1/30",),
+    local_ipv6=(),
     virtual_gw_v4=(),
+    virtual_gw_v6=(),
     routing_instance="L3VPN-CPE13-NNI",
 ):
+    # local_ipv6/virtual_gw_v6 doplneny, aby na ne slo sahnout - drivejsi
+    # verze tenhle helper rozdelila jen napul (IPv4 vetev), IPv6 byla skrz
+    # nej nedosazitelna.
     return Scope(
         id=scope_id,
         kind="service",
@@ -25,14 +30,16 @@ def _scope(
         selectors=Selectors(
             interfaces=list(interfaces),
             local_ipv4=list(addresses),
+            local_ipv6=list(local_ipv6),
             virtual_gw_v4=list(virtual_gw_v4),
+            virtual_gw_v6=list(virtual_gw_v6),
             routing_instances=[routing_instance] if routing_instance else [],
         ),
     )
 
 
 def test_source_is_interface_address():
-    assert source_address(_scope()) == "198.11.13.1"
+    assert source_address(_scope(), 4) == "198.11.13.1"
 
 
 def test_source_prefers_virtual_gw_on_irb():
@@ -41,11 +48,30 @@ def test_source_prefers_virtual_gw_on_irb():
         addresses=("152.11.14.2/29",),
         virtual_gw_v4=("152.11.14.1",),
     )
-    assert source_address(scope) == "152.11.14.1"
+    assert source_address(scope, 4) == "152.11.14.1"
 
 
 def test_source_none_when_no_address():
-    assert source_address(_scope(addresses=())) is None
+    assert source_address(_scope(addresses=()), 4) is None
+
+
+def test_source_follows_target_family():
+    scope = _scope(
+        addresses=("152.11.13.1/30",),
+        local_ipv6=("2001:abcd:11:13::a/127",),
+    )
+
+    assert source_address(scope, 4) == "152.11.13.1"
+    assert source_address(scope, 6) == "2001:abcd:11:13::a"
+
+
+def test_virtual_gateway_wins_over_interface_address():
+    scope = _scope(
+        addresses=("152.11.14.2/29",),
+        virtual_gw_v4=("152.11.14.1",),
+    )
+
+    assert source_address(scope, 4) == "152.11.14.1"
 
 
 @pytest.mark.parametrize(
@@ -60,7 +86,13 @@ def test_source_none_when_no_address():
     ],
 )
 def test_subnet_fallback(address, expected):
-    assert subnet_fallback(_scope(addresses=(address,))) == expected
+    assert subnet_fallback([address], 4) == expected
+
+
+def test_ipv6_fallback_only_on_point_to_point():
+    """Do /64 se nestrili - zarucene neuspesny ping se cte jako nedostupne CPE."""
+    assert subnet_fallback(["2001:abcd:11:13::a/127"], 6) == "2001:abcd:11:13::b"
+    assert subnet_fallback(["2001:db8::2/64"], 6) is None
 
 
 def test_targets_come_from_arp():
@@ -104,6 +136,102 @@ def test_device_scope_produces_no_targets():
     from migration_validator.models.scope import device_scope
 
     assert resolve_targets([device_scope()], [{"ip": "1.2.3.4", "interface": "ge-0/0/0"}]) == []
+
+
+def test_ipv6_targets_come_from_nd():
+    scope = _scope(
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/127",)
+    )
+    nd = [
+        {
+            "ip": "2001:abcd:11:13::b",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [t.target for t in targets] == ["2001:abcd:11:13::b"]
+    assert targets[0].family == 6
+    assert targets[0].resolved_from == "nd"
+
+
+def test_incomplete_nd_entry_is_not_a_target():
+    """Zaznam bez MAC neni cil - strilet na nej nema smysl."""
+    scope = _scope(interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:db8::2/64",))
+    nd = [
+        {
+            "ip": "2001:db8::1",
+            "mac": "none",
+            "interface": "et-0/0/8.13",
+            "state": "unreachable",
+        }
+    ]
+
+    assert resolve_targets([scope], [], nd) == []
+
+
+def test_link_local_target_carries_interface():
+    scope = _scope(interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("fe80::1/64",))
+    nd = [
+        {
+            "ip": "fe80::c66b:b8ff:fe48:0",
+            "mac": "c4:6b:b8:48:00:00",
+            "interface": "et-0/0/8.13",
+            "state": "stale",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert targets[0].interface == "et-0/0/8.13"
+
+
+def test_link_local_ignored_when_not_configured():
+    """Bez nakonfigurovane link-local adresy se link-local soused ignoruje.
+
+    Cil misto toho vznikne z /127 fallbacku na stejnem scope - je to p2p
+    linka, fallback tam neni nahodny strel jako u /64.
+    """
+    scope = _scope(
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/127",)
+    )
+    nd = [
+        {
+            "ip": "fe80::c66b:b8ff:fe48:0",
+            "mac": "c4:6b:b8:48:00:00",
+            "interface": "et-0/0/8.13",
+            "state": "stale",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [t.resolved_from for t in targets] == ["subnet-fallback"]
+    assert not any(t.target.startswith("fe80:") for t in targets)
+
+
+def test_targets_are_ordered_ipv4_before_ipv6():
+    scope = _scope(
+        interfaces=("et-0/0/8.13",),
+        addresses=("152.11.13.1/30",),
+        local_ipv6=("2001:abcd:11:13::a/127",),
+    )
+    arp = [{"ip": "152.11.13.2", "interface": "et-0/0/8.13"}]
+    nd = [
+        {
+            "ip": "2001:abcd:11:13::b",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        }
+    ]
+
+    targets = resolve_targets([scope], arp, nd)
+
+    assert [t.family for t in targets] == [4, 6]
 
 
 def test_parse_ping_result():
