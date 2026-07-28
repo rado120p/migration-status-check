@@ -210,6 +210,20 @@ class PingReachabilityCheck(Check):
                 else ctx.scope.selectors.local_ipv4
             )
             findings.extend(_ping_findings(batch, family, prefixes))
+
+        # Probe bez rodiny by jinak proste zmizel z vysledku - check by
+        # tise nevratil nic misto toho, aby rekl, ze neco nevyhodnotil.
+        unclassified = [probe for probe in probes if probe.get("family") not in (4, 6)]
+        if unclassified:
+            targets = ", ".join(str(probe.get("target")) for probe in unclassified)
+            findings.append(
+                Finding(
+                    Outcome.SKIP,
+                    f"probe bez rodiny nelze vyhodnotit: {targets}",
+                    label="Ping",
+                )
+            )
+
         return findings
 
 

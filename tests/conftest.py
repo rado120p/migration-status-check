@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 import pytest
 
 from migration_validator.models.inventory import load_inventory
@@ -31,7 +33,20 @@ def _facts_for(scopes, pps: int) -> dict:
                 "output_errors": 0,
             }
         for peer in scope.selectors.bgp_neighbors:
-            arp.append({"ip": peer, "interface": scope.selectors.interfaces[0]})
+            # bgp_neighbors mixa v4 a v6 sousedy - bez rozliseni rodiny by
+            # v6 peer skoncil v ARP tabulce jako falesny family-4 zaznam.
+            interface = scope.selectors.interfaces[0]
+            if ipaddress.ip_address(peer).version == 6:
+                nd.append(
+                    {
+                        "ip": peer,
+                        "mac": "0c:00:ef:5e:df:01",
+                        "interface": interface,
+                        "state": "reachable",
+                    }
+                )
+            else:
+                arp.append({"ip": peer, "interface": interface})
             bgp[peer] = {
                 "state": "Established",
                 "routing_instance": (

@@ -20,6 +20,10 @@ def test_full_migration_run_is_green(synthetic_snapshot):
     result = api.evaluate(new, baseline=old, now=NOW)
 
     assert result.summary["fail"] == 0
+    # Ne jen "nic neselhalo" - "clean migration" znamena i zadne trvale
+    # varovani. Bez tohohle by check, ktery je vzdy WARN na zdrave sluzbe,
+    # prosel tichem stejne jako FAIL.
+    assert result.summary["warn"] == 0
     assert result.summary["scopes_matched"] >= 5
     assert json.loads(to_json(result))["schema_version"] == 1
 

@@ -156,6 +156,21 @@ def test_ping_without_targets_skips():
     assert "cile" in result.message
 
 
+def test_ping_probe_without_family_skips_instead_of_vanishing():
+    """Probe bez rodiny nesmi tise zmizet - check musi zustat v poli checku.
+
+    ping.py zatim nenastavuje "family" (dalsi task) - do te doby to musi
+    check hlasit jako SKIP, ne ho proste vynechat z vysledku.
+    """
+    ctx = _ctx({"ping": [{"target": "198.11.13.2", "sent": 5, "received": 5}]})
+
+    results = run_check(PingReachabilityCheck(), ctx)
+
+    assert any(result.id == "ping_reachability" for result in results)
+    assert results[0].status is Status.SKIP
+    assert "rodin" in results[0].message
+
+
 def test_ping_records_fallback_resolution():
     ctx = _ctx(
         {
