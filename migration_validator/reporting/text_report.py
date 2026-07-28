@@ -1,5 +1,8 @@
 """Terminalovy vystup.
 
+Vychozi vypis je souhrn, radek na sluzbu a plny blok u sluzeb se stavem
+WARN nebo FAIL. --detail rozbali bloky u vsech vcetne PASS.
+
 Sekce NESPAROVANO se vypisuje vzdy, i kdyz je vsechno ostatni zelene, a
 filtrovani se na ni nevztahuje - je to hlavni pojistka proti prehlednuti
 nezmigrovane sluzby.
@@ -9,16 +12,17 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from migration_validator.models.result import RunResult, ScopeResult, Status
+from migration_validator.models.result import RunResult, Status
+from migration_validator.reporting.view import Section, ServiceView, build_view, change_text
 
 SYMBOL = {
-    Status.PASS: "OK ",
+    Status.PASS: "PASS",
     Status.WARN: "WARN",
     Status.FAIL: "FAIL",
     Status.SKIP: "SKIP",
 }
 
-_STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.PASS)
+FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
 
 
 def filter_result(
@@ -45,32 +49,79 @@ def filter_result(
     return replace(result, scopes=scopes)
 
 
-def _worst_message(scope: ScopeResult) -> str:
-    if scope.status is Status.PASS:
+def _section_header(section: Section, width: int) -> str:
+    """Nadpis sekce. U vice adres jedne rodiny je vypise vsechny."""
+    if section.family is None:
         return ""
-    for status in _STATUS_ORDER:
-        for check in scope.checks:
-            if check.status is status and status is not Status.PASS:
-                return check.message
-    return ""
+    title = FAMILY_TITLE[section.family]
+    addresses = ", ".join(section.addresses) or "-"
+    gateway = f"   VGW {', '.join(section.virtual_gw)}" if section.virtual_gw else ""
+    text = f" -- {title}  {addresses}{gateway} "
+    return text + "-" * max(0, width - len(text))
 
 
-def _detail_lines(scope: ScopeResult) -> list[str]:
-    """Vsechny checky sluzby, nejhorsi nahore.
+def _block(view: ServiceView, has_baseline: bool) -> list[str]:
+    """Blok jedne sluzby. Sirky se pocitaji ze VSECH radku bloku.
 
-    Souhrnny radek ukazuje jen nejhorsi nalez, takze bez tohohle nejde poznat,
-    co dalsiho se kontrolovalo - a hlavne jestli PASS znamena "overeno", nebo
-    "check se vubec nespustil".
+    Kdyby si je pocitala kazda sekce zvlast, neseden by na spolecnou
+    oddelovaci caru, ktera se kresli jednou. Neorezava se: orezana IPv6
+    adresa nebo jmeno RIB jsou horsi nez nic.
     """
-    ordered = sorted(
-        scope.checks,
-        key=lambda check: (_STATUS_ORDER.index(check.status), check.id, check.label or ""),
+    rows = [row for section in view.sections for row in section.rows]
+    changes = {id(row): change_text(row, has_baseline) for row in rows}
+
+    subject_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
+    baseline_port = view.baseline_interfaces[0] if view.baseline_interfaces else "-"
+
+    # Nadpisy sloupcu se do sirek zapocitavaji taky - jinak by ramec bloku
+    # a oddelovaci cara byly kratsi nez hlavicka a vypis by se rozjel.
+    label_title = "CHECK"
+    value_title = f"POST ({subject_port})" if has_baseline else "HODNOTA"
+    change_title = f"ZMENA PROTI {baseline_port}"
+
+    label_width = max([len(row.label) for row in rows] + [len(label_title)])
+    value_width = max([len(row.value) for row in rows] + [len(value_title)])
+    change_width = max([len(text) for text in changes.values()] + [len(change_title)])
+
+    def line(status: str, label: str, value: str, change: str) -> str:
+        text = f" {status:<4} | {label:<{label_width}} : {value:<{value_width}}"
+        if not has_baseline:
+            return text.rstrip()
+        return f"{text} | {change}".rstrip()
+
+    width = 1 + 4 + 3 + label_width + 3 + value_width
+    if has_baseline:
+        width += 3 + change_width
+
+    ports = (
+        f"{baseline_port} -> {subject_port}" if has_baseline else subject_port
     )
-    return [
-        f"    {SYMBOL[check.status]:<5} {check.id:<22.22} "
-        f"{str(check.severity.value):<9.9} {check.message}"
-        for check in ordered
+    instance = view.routing_instance or "-"
+
+    lines = [
+        "=" * width,
+        f" {SYMBOL[view.status].strip():<4}  {view.description}   "
+        f"{view.service_type}   {ports}   RI: {instance}",
+        "=" * width,
+        line("STAV", label_title, value_title, change_title),
     ]
+    separator = f" {'-'*4}-+-{'-'*label_width}-+-{'-'*value_width}"
+    if has_baseline:
+        separator += f"-+-{'-'*change_width}"
+    lines.append(separator)
+
+    for section in view.sections:
+        header = _section_header(section, width)
+        if header:
+            lines.append("")
+            lines.append(header)
+        for row in section.rows:
+            lines.append(
+                line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
+            )
+
+    lines.append("")
+    return lines
 
 
 def render(result: RunResult, *, detail: bool = False) -> str:
@@ -78,7 +129,8 @@ def render(result: RunResult, *, detail: bool = False) -> str:
 
     subject = result.subject
     baseline = result.baseline
-    if baseline:
+    has_baseline = baseline is not None
+    if has_baseline:
         lines.append(
             f"Migrace: {baseline['address']} ({baseline['phase']}) -> "
             f"{subject['address']} ({subject['phase']})"
@@ -99,19 +151,28 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     )
     lines.append("")
 
-    lines.append(f"{'SLUZBA':<32} {'TYP':<10} {'STAV':<5} DETAIL")
-    for scope in result.scopes:
-        description = scope.key.get("description") or scope.scope_id
-        service_type = scope.key.get("service_type") or "-"
-        lines.append(
-            f"{description:<32.32} {service_type:<10.10} "
-            f"{SYMBOL[scope.status]:<5} {_worst_message(scope)}"
-        )
-        if detail:
-            lines.extend(_detail_lines(scope))
-            lines.append("")
+    views = [(scope, build_view(scope)) for scope in result.scopes]
 
+    lines.append(
+        f"{'STAV':<5} {'SLUZBA':<26} {'TYP':<9} {'STARY PORT':<13} "
+        f"{'NOVY PORT':<13} {'RI':<17} NALEZ"
+    )
+    for _scope, view in views:
+        old_port = view.baseline_interfaces[0] if view.baseline_interfaces else "-"
+        new_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
+        lines.append(
+            f"{SYMBOL[view.status]:<5} {view.description:<26} {view.service_type:<9} "
+            f"{old_port:<13} {new_port:<13} {view.routing_instance or '-':<17} "
+            f"{view.worst_message}".rstrip()
+        )
     lines.append("")
+
+    # Rozbaluje stav, ne interaktivita: v terminalu se neklikne, ale detail
+    # je potreba prave tam, kde je neco rozbite. --detail rozbali i PASS.
+    for _scope, view in views:
+        if detail or view.status is not Status.PASS:
+            lines.extend(_block(view, has_baseline))
+
     lines.append("NESPAROVANO")
     if not result.unmatched["baseline"] and not result.unmatched["subject"]:
         lines.append("  (nic)")
