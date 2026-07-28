@@ -110,7 +110,7 @@ def test_second_address_of_the_same_family_enters_the_label():
 
 
 def test_single_address_stays_unqualified_even_when_check_has_an_address():
-    """Doplnek k testu vyse: rozliseni je poradi adres v identite, ne pritomnost
+    """Doplnek k testu vyse: rozliseni je pocet adres v identite, ne pritomnost
     check.details['address'] - jinak by 'kvalifikuj vzdy' proslo beze zmeny."""
     view = build_view(
         _scope(
@@ -156,6 +156,17 @@ def test_changed_value_prints_previous_and_delta():
     ).sections[0].rows[0]
 
     assert change_text(row, has_baseline=True) == "bylo 520 pps   -12 %"
+
+
+def test_changed_value_without_delta_omits_the_delta_part():
+    """Compare check bez spocitane delty - jen 'bylo <hodnota>', ne 'bylo
+    <hodnota>   None'."""
+    row = build_view(
+        _scope([_check("bgp_prefix_counts", family=4, mode="compare", value="460",
+                       baseline_value="520")])
+    ).sections[0].rows[0]
+
+    assert change_text(row, has_baseline=True) == "bylo 520"
 
 
 def test_no_baseline_at_all_prints_nothing():
