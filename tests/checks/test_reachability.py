@@ -14,7 +14,9 @@ def _ctx(subject, service_type="IPVPN", scope=None):
         id="svc:X:" + service_type,
         kind="service",
         key=ScopeKey("X", service_type, None),
-        selectors=Selectors(interfaces=["ge-0/0/2.113"]),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.113"], local_ipv4=["198.11.13.1/30"]
+        ),
     )
     return CheckContext(
         scope=scope,
@@ -46,6 +48,36 @@ def test_arp_skips_on_device_scope():
     result = run_check(ArpPresentCheck(), ctx)[0]
     assert result.status is Status.SKIP
     assert "inventory" in result.message
+
+
+def test_arp_skips_when_no_ipv4_configured():
+    """Sluzba bez IPv4 adresy nema co s ARP overovat - SKIP, ne WARN.
+
+    Kdyby check misto toho vratil BROKEN, kazda ciste IPv6 sluzba by
+    trvale svitila oranzove za neco, co u ni vubec nedava smysl.
+    """
+    scope = Scope(
+        id="svc:X:IPVPN",
+        kind="service",
+        key=ScopeKey("X", "IPVPN", None),
+        selectors=Selectors(interfaces=["ge-0/0/2.113"]),
+    )
+    ctx = _ctx({"arp": []}, scope=scope)
+
+    findings = ArpPresentCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
+
+
+def test_arp_reports_broken_when_ipv4_configured_but_no_entries():
+    """Rozliseni od predchoziho testu: adresa je, zaznam neni - to uz je BROKEN."""
+    ctx = _ctx({"arp": []})
+
+    findings = ArpPresentCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
 
 
 def test_ping_all_targets_reachable_passes():
@@ -228,6 +260,33 @@ def test_nd_finding_shows_mac_and_family():
     assert findings[0].family == 6
     assert findings[0].label == "ND"
     assert findings[0].value == "0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b"
+    assert findings[0].outcome is Outcome.OK
+
+
+def test_nd_skips_when_no_ipv6_configured():
+    """Sluzba bez IPv6 adresy nema co s ND overovat - SKIP, ne WARN.
+
+    Zrcadli test_arp_skips_when_no_ipv4_configured: bez tohodle by kazda
+    ciste IPv4 sluzba (zatim vetsina) trvale svitila oranzove za IPv6
+    sousedy, ktere u ni nikdy nemuzou existovat.
+    """
+    scope = Scope(
+        id="svc:X:IPVPN",
+        kind="service",
+        key=ScopeKey("X", "IPVPN", None),
+        selectors=Selectors(interfaces=["et-0/0/8.13"]),
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={"nd": []},
+        baseline=None,
+        config=default_config(),
+    )
+
+    findings = NdPresentCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
 
 
 def test_nd_ignores_link_local_when_not_configured():

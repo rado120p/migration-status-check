@@ -78,6 +78,17 @@ class ArpPresentCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        prefixes = ctx.scope.selectors.local_ipv4
+        if not prefixes:
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "sluzba nema nakonfigurovanou IPv4 adresu",
+                    label="ARP",
+                    family=4,
+                )
+            ]
+
         entries: list[dict[str, Any]] = ctx.subject.get("arp", [])
         entries = [entry for entry in entries if entry.get("ip")]
 
@@ -93,7 +104,6 @@ class ArpPresentCheck(Check):
                 )
             ]
 
-        prefixes = ctx.scope.selectors.local_ipv4
         return [
             Finding(
                 Outcome.OK,
@@ -119,6 +129,17 @@ class NdPresentCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        prefixes = ctx.scope.selectors.local_ipv6
+        if not prefixes:
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "sluzba nema nakonfigurovanou IPv6 adresu",
+                    label="ND",
+                    family=6,
+                )
+            ]
+
         keep_link_local = link_local_is_configured(ctx.scope)
         entries = [
             entry
@@ -139,7 +160,6 @@ class NdPresentCheck(Check):
                 )
             ]
 
-        prefixes = ctx.scope.selectors.local_ipv6
         return [
             Finding(
                 Outcome.OK,
