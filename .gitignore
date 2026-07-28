@@ -6,3 +6,4 @@ pyats-venv/
 .pytest_cache/
 runs/
 .superpowers/
+.claude/worktrees/
