@@ -156,21 +156,43 @@ def test_ipv6_targets_come_from_nd():
     assert [t.target for t in targets] == ["2001:abcd:11:13::b"]
     assert targets[0].family == 6
     assert targets[0].resolved_from == "nd"
+    # Bez toho by prosel i regres, ktery interface pripoji vzdy - normalni
+    # (ne link-local) cil by pak byl pripnuty na jednu linku misto smerovani.
+    assert targets[0].interface is None
 
 
-def test_incomplete_nd_entry_is_not_a_target():
-    """Zaznam bez MAC neni cil - strilet na nej nema smysl."""
+def test_unusable_nd_entries_are_not_targets():
+    """Zaznam bez MAC nebo v nedokoncenem stavu neni cil - strilet na nej nema smysl.
+
+    Kazda podminka (mac, state) je overena samostatnym zaznamem, aby test
+    poznal, kdyby _usable_nd testovala jen jednu z nich. Treti, plne pouzitelny
+    zaznam dokazuje, ze filtr neodmita vsechno paplosne.
+    """
     scope = _scope(interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:db8::2/64",))
     nd = [
         {
             "ip": "2001:db8::1",
             "mac": "none",
             "interface": "et-0/0/8.13",
-            "state": "unreachable",
-        }
+            "state": "reachable",
+        },
+        {
+            "ip": "2001:db8::4",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "incomplete",
+        },
+        {
+            "ip": "2001:db8::3",
+            "mac": "0c:00:ef:5e:df:02",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        },
     ]
 
-    assert resolve_targets([scope], [], nd) == []
+    targets = resolve_targets([scope], [], nd)
+
+    assert [t.target for t in targets] == ["2001:db8::3"]
 
 
 def test_link_local_target_carries_interface():

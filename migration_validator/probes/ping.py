@@ -123,8 +123,10 @@ def resolve_targets(
 ) -> list[PingTarget]:
     """Odvodi cile pingu ze scopu, ARP tabulky (IPv4) a ND tabulky (IPv6).
 
-    Cile se vraci setridene IPv4 pred IPv6, aby report nemusel rodinu hadat
-    zpetne z textu adresy.
+    V ramci jednoho scope prijdou cile IPv4 pred IPv6 - napric vice scopy uz
+    poradi neplati (je to scopeA-v4, scopeA-v6, scopeB-v4, ...). Na poradi
+    stejne nic nezavisi, checky rodinu ctou z pole `family`, ne z pozice
+    v seznamu.
     """
     nd_entries = nd_entries or []
     targets: list[PingTarget] = []
