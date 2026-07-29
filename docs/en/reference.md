@@ -19,7 +19,7 @@ Matches the output of `mig-validate checks` (as of commit `1584a43`):
 | `nd_present` | state | advisory | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
 | `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN | state is `Established`; with a baseline it also reports a state change |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active / suppressed against tolerance — **per RIB** |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active against tolerance — **per RIB** |
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
 | `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
@@ -38,15 +38,20 @@ Per-check behaviour: [files/checks.md](files/checks.md).
 - **`traffic_ceased` lists "vsechny" (all) service types, not just Core.** The spec presents
   it as an optional check; in the code it is not restricted by service type, only disabled by
   default.
-- **`bgp_session_state` with a baseline does not FAIL on a state change to Established.**
-  `Idle -> Established` is `degraded`, i.e. WARN — an improvement rather than a breakage, but
-  worth flagging that the state moved.
+- **`bgp_session_state` with a baseline returns neither FAIL nor WARN on a state change to
+  Established.** `Idle -> Established` is PASS — an improvement rather than a breakage, and an
+  orange row on a healthy service is a false alarm (decision R-2). The message and the `ZMENA`
+  column still say that the state moved.
 - **`evpn_vpws_status` does not require local and remote SIDs to match.** Each side advertises
   its own service ID; equality is not an invariant. It FAILs when no remote SID arrives at all.
-- **`arp_present`/`nd_present` return `SKIP`, not WARN, when the service has no address in
+- **`arp_present`/`nd_present` return nothing at all when the service has no address in
   that family.** Without this, a pure-IPv6 service would get a WARN for a missing ARP entry
-  that could never have existed — neighbours are also never folded into one sentence, each
-  entry is its own `Finding` (`MAC -> IP`), so the report prints one row per neighbour.
+  that could never have existed. It used to return a `SKIP` stamped with the family — but that
+  stamp forced a section for a family the renderer is supposed to omit, so emitting no
+  `Finding` is the only thing that satisfies both rules at once (decision R-1). The price: such
+  a check is indistinguishable from one that passed. Neighbours are also never folded into one
+  sentence, each entry is its own `Finding` (`MAC -> IP`), so the report prints one row per
+  neighbour.
 - **`bgp_prefix_counts` never sums counts across RIBs.** A peer with several RIBs (`inet.0`,
   `bgp.l3vpn.0`, ...) gets its own set of rows per RIB — a drop confined to a single RIB
   would otherwise disappear into the sum with the others.
@@ -352,7 +357,7 @@ snapshot above); `models/result.py::RunResult.schema_version` stays `1`.
           "id": "interface_traffic", "mode": "both",
           "status": "WARN", "severity": "advisory",
           "message": "et-0/0/8.113: output_pps kleslo o 72 % (410 -> 115), prah je -60 %",
-          "label": "Interface traffic out",
+          "label": "Interface traffic out (et-0/0/8.113)",
           "value": "115 pps", "baseline_value": "410 pps", "delta": "-72 %",
           "baseline": {"output_pps": 410},
           "subject":  {"output_pps": 115},
@@ -392,8 +397,9 @@ Properties:
   columns has to be done by the check, because only it knows what counts as the value and what
   counts as explanation (`CheckResult.to_dict()` omits empty optional keys).
 - `interface_state` and `interface_traffic` now return **one check result per fact/direction**
-  (`Interface admin status` / `Interface operational status`; `Interface traffic in` /
-  `Interface traffic out`), not one summary result per interface. `bgp_prefix_counts` returns
+  (`Interface admin status (<name>)` / `Interface operational status (<name>)`;
+  `Interface traffic in (<name>)` / `Interface traffic out (<name>)`), not one summary result
+  per interface. `bgp_prefix_counts` returns
   one per **RIB × counter** (`BGP <counter>-prefix-count`), not one summary across RIBs.
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
   better to report); `summary` aggregates across all checks. Neither the terminal nor a GUI

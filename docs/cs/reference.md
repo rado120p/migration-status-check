@@ -19,7 +19,7 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
 | `nd_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
 | `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN | stav je `Established`; s baseline navíc hlásí změnu stavu |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active / suppressed proti toleranci — **za každou RIB zvlášť** |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť** |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
 | `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
@@ -36,15 +36,19 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
 
 - **`traffic_ceased` má v `service_types` „vsechny", ne omezení na Core.** Spec ho popisuje
   jako volitelný check; v kódu opravdu není omezený typem služby, jen vypnutý defaultem.
-- **`bgp_session_state` s baseline nevrací FAIL při změně stavu na Established.** Změna
-  `Idle -> Established` je `degraded`, tedy WARN — je to zlepšení, ne rozbití, ale stojí za
-  zmínku, že se stav změnil.
+- **`bgp_session_state` s baseline nevrací FAIL ani WARN při změně stavu na Established.**
+  Změna `Idle -> Established` je PASS — je to zlepšení, ne rozbití, a oranžový řádek na zdravé
+  službě je falešný poplach (rozhodnutí R-2). Že se stav změnil, řekne zpráva a sloupec
+  `ZMENA`.
 - **`evpn_vpws_status` nevyžaduje shodu local a remote SID.** Každá strana inzeruje svoje
   service ID; rovnost není invariant. FAIL nastane, když remote SID vůbec nepřijde.
-- **`arp_present`/`nd_present` dávají `SKIP`, ne WARN, když služba nemá adresu dané rodiny.**
+- **`arp_present`/`nd_present` nevrátí vůbec nic, když služba nemá adresu dané rodiny.**
   Bez toho by třeba čistě IPv6 služba dostala WARN za chybějící ARP záznam, který nikdy
-  nemohl vzniknout — sousedé se navíc nikdy nesčítají do jedné věty, každý záznam je vlastní
-  `Finding` (`MAC -> IP`), takže report vypíše řádek na každého souseda.
+  nemohl vzniknout. Dřív se vracel `SKIP` označkovaný rodinou — jenže právě ta značka si
+  v bloku vynutila sekci rodiny, kterou má renderer vynechat, takže žádný `Finding` je
+  jediné, co obě pravidla splní naráz (rozhodnutí R-1). Cena: takový check je v reportu
+  k nerozeznání od checku, který prošel. Sousedé se navíc nikdy nesčítají do jedné věty,
+  každý záznam je vlastní `Finding` (`MAC -> IP`), takže report vypíše řádek na každého souseda.
 - **`bgp_prefix_counts` počty nesčítá napříč RIB.** Peer s víc RIB (`inet.0`, `bgp.l3vpn.0`,
   ...) dostane samostatnou sadu řádků na každou — pokles jen v jedné RIB se jinak ztratí
   v součtu s ostatními.
@@ -342,7 +346,7 @@ a snapshotu výš); `models/result.py::RunResult.schema_version` zůstává `1`.
           "id": "interface_traffic", "mode": "both",
           "status": "WARN", "severity": "advisory",
           "message": "et-0/0/8.113: output_pps kleslo o 72 % (410 -> 115), prah je -60 %",
-          "label": "Interface traffic out",
+          "label": "Interface traffic out (et-0/0/8.113)",
           "value": "115 pps", "baseline_value": "410 pps", "delta": "-72 %",
           "baseline": {"output_pps": 410},
           "subject":  {"output_pps": 115},
@@ -382,8 +386,9 @@ Vlastnosti:
   protože jen on ví, co je hodnota a co vysvětlení (`CheckResult.to_dict()` prázdné volitelné
   klíče vynechá).
 - `interface_state` a `interface_traffic` teď vrací **jeden check-výsledek na fakt/směr**
-  (`Interface admin status` / `Interface operational status`; `Interface traffic in` /
-  `Interface traffic out`), ne jeden souhrnný na rozhraní. `bgp_prefix_counts` vrací jeden na
+  (`Interface admin status (<jméno>)` / `Interface operational status (<jméno>)`;
+  `Interface traffic in (<jméno>)` / `Interface traffic out (<jméno>)`), ne jeden souhrnný
+  na rozhraní. `bgp_prefix_counts` vrací jeden na
   **RIB × counter** (`BGP <counter>-prefix-count`), ne souhrn napříč RIB.
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
   `summary` = agregát přes všechny checky. Terminál ani GUI nic nepočítají.

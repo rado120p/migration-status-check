@@ -107,7 +107,8 @@ pořád plnohodnotná Internet služba a ARP, ping i BGP checky na něm proběhn
 interních — u nich má stav smysl, na rozdíl od counterů. Bez dat vrací `SKIP`.
 
 **Jeden Finding na fakt, ne na rozhraní**: `admin_status` a `oper_status` se hlásí jako dva
-samostatné řádky (label `Interface admin status` / `Interface operational status`), takže
+samostatné řádky (label `Interface admin status (<jméno>)` / `Interface operational status
+(<jméno>)`), takže
 report umí ukázat, který z obou je rozbitý, ne jen že „rozhraní není v pořádku". Zpráva je
 `<jméno>: admin_status <stav>` resp. `<jméno>: oper_status <stav>`, hodnota ve sloupci je
 stav s velkým první písmenem (`Up`, `Down`).
@@ -115,8 +116,9 @@ stav s velkým první písmenem (`Up`, `Down`).
 ### `interface_errors` (state, advisory)
 
 Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Jen tranzitní rozhraní.
-Jeden Finding na rozhraní — countery se do zprávy sesypou dohromady (`input_errors=3`), na
-rozdíl od `interface_state`/`interface_traffic` se nerozpadají na samostatné řádky.
+Jeden Finding na rozhraní (label `Interface errors (<jméno>)`) — countery se do zprávy sesypou
+dohromady (`input_errors=3`), na rozdíl od `interface_state`/`interface_traffic` se nerozpadají
+na samostatné řádky.
 
 ### `interface_traffic` (both, advisory)
 
@@ -126,9 +128,13 @@ rozdíl od `interface_state`/`interface_traffic` se nerozpadají na samostatné 
 - **s baseline**: pokles v procentech proti `tolerance_percent` (default −60 %). Do `details`
   se zapíše změna per směr, do `baseline`/`subject` surová čísla.
 
-**Jeden Finding na směr, ne na rozhraní**: `input_pps` (label `Interface traffic in`) a
-`output_pps` (label `Interface traffic out`) jsou dva samostatné řádky, takže report ukáže
-pokles jen na tom směru, kde se opravdu stal.
+**Jeden Finding na směr, ne na rozhraní**: `input_pps` (label `Interface traffic in (<jméno>)`)
+a `output_pps` (label `Interface traffic out (<jméno>)`) jsou dva samostatné řádky, takže report
+ukáže pokles jen na tom směru, kde se opravdu stal.
+
+**Každý popisek nese jméno rozhraní v závorce.** Scope drží fyzické i logické rozhraní, takže
+bez něj by v bloku stály dvojice řádků se stejným popiskem, jinými hodnotami a protichůdnými
+sloupci `ZMENA` — a nešlo by poznat, které rozhraní je které.
 
 Baseline data má už přejmenovaná rozhraní — viz `engine._aligned_baseline_data()`.
 
@@ -149,9 +155,13 @@ Oba checky běží jen na `Internet` a `IPVPN` a bez peerů ve scope vrací `SKI
 
 ### `bgp_session_state` (both, critical)
 
-- stav ≠ `Established` → `broken` → **FAIL**,
-- stav `Established`, ale **v baseline byl jiný** → `degraded` → **WARN** se zprávou
-  `stav se zmenil X -> Established`. I zlepšení stojí za zmínku, ale není to porucha,
+- stav ≠ `Established` → `broken` → **FAIL**. Nese `baseline_value`, takže sloupec `ZMENA`
+  ukáže `bylo Established` — regrese je vidět přesně tam, kde na ní záleží,
+- stav `Established`, ale **v baseline byl jiný** → **PASS** se zprávou
+  `stav se zmenil X -> Established`. Tahle větev je dosažitelná jen se stavem `Established`
+  (horší stavy odejdou výš), takže pokrývá právě a jen případ, kdy se relace během migrace
+  **zlepšila** — a zlepšení není varování (rozhodnutí R-2). Změna nezmizí: pojmenuje ji
+  zpráva a sloupec `ZMENA` píše předchozí stav,
 - stav `Established` a shodný (nebo bez baseline) → PASS.
 
 Každý Finding nese `label="BGP status"` a `family` odvozenou `peer_family()` z adresy peeru —
@@ -159,7 +169,7 @@ report tak řádek zařadí do sekce `IPv4`/`IPv6`.
 
 ### `bgp_prefix_counts` (compare, advisory)
 
-Porovnává `received` / `accepted` / `advertised` / `active` / `suppressed` proti
+Porovnává `received` / `accepted` / `advertised` / `active` proti
 `tolerance_percent` (default −10 %). Peer, který v baseline není, dostane `SKIP` — ne PASS
 (zpráva `<peer>: peer neni v baseline snapshotu, nelze porovnat`).
 
@@ -240,9 +250,10 @@ Sdílené pomocné funkce:
 
 ### `arp_present` (state, advisory)
 
-- **žádná IPv4 adresa nakonfigurovaná** (`scope.selectors.local_ipv4` prázdné) → `SKIP` se
-  zprávou `sluzba nema nakonfigurovanou IPv4 adresu` — služba bez IPv4 nemá mít ARP nález
-  vůbec, natož WARN za souseda, který nikdy nemohl existovat;
+- **žádná IPv4 adresa nakonfigurovaná** (`scope.selectors.local_ipv4` prázdné) → **žádný
+  Finding** — služba bez IPv4 nemá mít ARP nález vůbec, natož WARN za souseda, který nikdy
+  nemohl existovat. Dřív se vracel `SKIP` označkovaný `family=4`, jenže právě ta značka si
+  v bloku vynutila sekci rodiny, kterou má renderer vynechat (rozhodnutí R-1);
 - žádný ARP záznam na rozhraních služby → `broken` → FAIL/WARN, zpráva `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
 - jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,
@@ -252,8 +263,7 @@ Sdílené pomocné funkce:
 
 Zrcadlí `arp_present` pro IPv6:
 
-- žádná IPv6 adresa nakonfigurovaná → `SKIP` se zprávou `sluzba nema nakonfigurovanou IPv6
-  adresu`;
+- žádná IPv6 adresa nakonfigurovaná → **žádný Finding** (viz `arp_present` výše);
 - link-local sousedé se **vyřadí**, pokud služba sama nemá link-local jako nakonfigurovanou
   adresu (`link_local_is_configured()`);
 - žádný **použitelný** ND záznam nezbyde → `broken`, zpráva `na rozhranich sluzby neni zadny

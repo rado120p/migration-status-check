@@ -113,7 +113,8 @@ interfaces, including internal ones — unlike counters, state is meaningful the
 it returns `SKIP`.
 
 **One `Finding` per fact, not per interface**: `admin_status` and `oper_status` are reported
-as two separate rows (label `Interface admin status` / `Interface operational status`), so
+as two separate rows (label `Interface admin status (<name>)` / `Interface operational status
+(<name>)`), so
 the report can show which of the two is actually broken instead of just "interface not OK".
 The message is `<name>: admin_status <state>` resp. `<name>: oper_status <state>`; the value
 column carries the state capitalised (`Up`, `Down`).
@@ -121,9 +122,9 @@ column carries the state capitalised (`Up`, `Down`).
 ### `interface_errors` (state, advisory)
 
 The sum of `input_errors`, `output_errors` and `framing_errors` must be 0. Transit interfaces
-only. One `Finding` per interface — the counters are folded into a single message
-(`input_errors=3`), unlike `interface_state`/`interface_traffic` this one does not split into
-separate rows.
+only. One `Finding` per interface (label `Interface errors (<name>)`) — the counters are folded
+into a single message (`input_errors=3`), unlike `interface_state`/`interface_traffic` this one
+does not split into separate rows.
 
 ### `interface_traffic` (both, advisory)
 
@@ -134,9 +135,14 @@ separate rows.
 - **with a baseline**: the percentage drop against `tolerance_percent` (default −60 %). The
   per-direction change goes into `details`, the raw numbers into `baseline`/`subject`.
 
-**One `Finding` per direction, not per interface**: `input_pps` (label `Interface traffic
-in`) and `output_pps` (label `Interface traffic out`) are two separate rows, so the report
-shows a drop only on the direction where it actually happened.
+**One `Finding` per direction, not per interface**: `input_pps` (label `Interface traffic in
+(<name>)`) and `output_pps` (label `Interface traffic out (<name>)`) are two separate rows, so
+the report shows a drop only on the direction where it actually happened.
+
+**Every label carries the interface name in parentheses.** A scope holds both the physical and
+the logical interface, so without it a block would carry pairs of rows with identical labels,
+different values and contradictory `ZMENA` columns — with no way to tell which interface is
+which.
 
 The baseline data arrives with its interfaces already renamed — see
 `engine._aligned_baseline_data()`.
@@ -159,10 +165,13 @@ Both checks run only on `Internet` and `IPVPN` and return `SKIP` when the scope 
 
 ### `bgp_session_state` (both, critical)
 
-- state ≠ `Established` → `broken` → **FAIL**,
-- state `Established` but **different in the baseline** → `degraded` → **WARN** with the
-  message `stav se zmenil X -> Established`. An improvement is still worth mentioning, but it
-  is not a fault,
+- state ≠ `Established` → `broken` → **FAIL**. It carries `baseline_value`, so the `ZMENA`
+  column shows `bylo Established` — the regression is visible exactly where it matters,
+- state `Established` but **different in the baseline** → **PASS** with the message
+  `stav se zmenil X -> Established`. This branch is only reachable with state `Established`
+  (worse states leave earlier), so it covers precisely and only the case where the session
+  **improved** during the migration — and an improvement is not a warning (decision R-2). The
+  change does not vanish: the message names it and the `ZMENA` column shows the previous state,
 - state `Established` and unchanged (or no baseline) → PASS.
 
 Every `Finding` carries `label="BGP status"` and a `family` derived by `peer_family()` from
@@ -170,7 +179,7 @@ the peer's address — the report uses it to place the row in the `IPv4`/`IPv6` 
 
 ### `bgp_prefix_counts` (compare, advisory)
 
-Compares `received` / `accepted` / `advertised` / `active` / `suppressed` against
+Compares `received` / `accepted` / `advertised` / `active` against
 `tolerance_percent` (default −10 %). A peer absent from the baseline gets a `SKIP` — not a
 PASS (message `<peer>: peer neni v baseline snapshotu, nelze porovnat`).
 
@@ -254,9 +263,10 @@ Shared helpers:
 
 ### `arp_present` (state, advisory)
 
-- **no IPv4 address configured** (`scope.selectors.local_ipv4` empty) → `SKIP` with the
-  message `sluzba nema nakonfigurovanou IPv4 adresu` — a service without IPv4 should not get
-  an ARP finding at all, let alone a WARN for a neighbour that could never have existed;
+- **no IPv4 address configured** (`scope.selectors.local_ipv4` empty) → **no `Finding` at all**
+  — a service without IPv4 should not get an ARP finding, let alone a WARN for a neighbour that
+  could never have existed. It used to return a `SKIP` stamped `family=4`, but that stamp was
+  exactly what forced a section for a family the renderer is supposed to omit (decision R-1);
 - no ARP entry on the service's interfaces → `broken` → FAIL/WARN, message `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
 - otherwise **one `Finding` per ARP entry**: message `ARP zaznam <ip>`, `label="ARP"`,
@@ -266,8 +276,7 @@ Shared helpers:
 
 Mirrors `arp_present` for IPv6:
 
-- no IPv6 address configured → `SKIP` with the message `sluzba nema nakonfigurovanou IPv6
-  adresu`;
+- no IPv6 address configured → **no `Finding` at all** (see `arp_present` above);
 - link-local neighbours are **dropped** unless the service itself has link-local as a
   configured address (`link_local_is_configured()`);
 - no **usable** ND entry remains → `broken`, message `na rozhranich sluzby neni zadny

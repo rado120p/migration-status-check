@@ -165,40 +165,40 @@ into a full block — only one is shown, the other nine are omitted):
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  79 PASS   36 WARN   8 FAIL   10 SKIP
+  83 PASS   32 WARN   8 FAIL   9 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
 STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
-WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps 0 pps
+WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps kleslo o 100 % (9 -> 0), prah je -60 %
 FAIL  INTERNET-CPE13-NNI                   Internet ge-0/0/2.13  et-0/0/8.13  -                         152.11.13.2: stav Connect, ocekavano Established
 FAIL  L3VPN-CPE13-NNI                      IPVPN    ge-0/0/2.113 et-0/0/8.113 L3VPN-CPE13-NNI           198.11.13.2: stav Connect, ocekavano Established
 PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
 
-========================================================================================================
+======================================================================================================================
  FAIL  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
-========================================================================================================
- STAV | CHECK                        : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
- -----+------------------------------+-----------------------------------------+------------------------
- PASS | et-0/0/8                     : et-0/0/8: bez chyb                      |
- PASS | et-0/0/8.13                  : et-0/0/8.13: bez chyb                   |
- PASS | Interface admin status       : Up                                      |
- PASS | Interface operational status : Up                                      |
- PASS | Interface admin status       : Up                                      |
- PASS | Interface operational status : Up                                      |
- WARN | Interface traffic in         : 0 pps                                   | bez baseline
- WARN | Interface traffic out        : 0 pps                                   | bez baseline
- PASS | Interface traffic in         : 0 pps                                   |
- PASS | Interface traffic out        : 0 pps                                   |
+======================================================================================================================
+ STAV | CHECK                                      : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+--------------------------------------------+-----------------------------------------+------------------------
+ PASS | Interface errors (et-0/0/8)                : et-0/0/8: bez chyb                      |
+ PASS | Interface errors (et-0/0/8.13)             : et-0/0/8.13: bez chyb                   |
+ PASS | Interface admin status (et-0/0/8)          : Up                                      |
+ PASS | Interface operational status (et-0/0/8)    : Up                                      |
+ PASS | Interface admin status (et-0/0/8.13)       : Up                                      |
+ PASS | Interface operational status (et-0/0/8.13) : Up                                      |
+ WARN | Interface traffic in (et-0/0/8)            : 0 pps                                   | bylo 9 pps   -100 %
+ WARN | Interface traffic out (et-0/0/8)           : 0 pps                                   | bylo 995 pps   -100 %
+ PASS | Interface traffic in (et-0/0/8.13)         : 0 pps                                   |
+ PASS | Interface traffic out (et-0/0/8.13)        : 0 pps                                   |
 
- -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------------
- PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
- FAIL | BGP status                   : Connect                                 | bez baseline
- WARN | Ping                         : 0/5  152.11.13.2 neodpovedel            |
+ -- IPv4  152.11.13.1/30 ---------------------------------------------------------------------------------------------
+ PASS | ARP                                        : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ FAIL | BGP status                                 : Connect                                 | bylo Established
+ WARN | Ping                                       : 0/5  152.11.13.2 neodpovedel            |
 
- -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------------
- FAIL | BGP status                   : Connect                                 | bez baseline
- PASS | ND                           : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
- WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
+ -- IPv6  2001:abcd:11:13::a/127 -------------------------------------------------------------------------------------
+ FAIL | BGP status                                 : Connect                                 | bylo Idle
+ PASS | ND                                         : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ WARN | Ping                                       : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
   baseline  clab-pop-migration-P1;et-0/0/0 (Core)  zadny kandidat na subject
@@ -220,9 +220,15 @@ What matters here:
 - **Every service that is not `PASS` gets its full block printed automatically — no
   `--detail` needed.** `--detail` additionally expands the blocks of `PASS` services too.
 - **A block runs top to bottom: interface-bound rows first (state, error counters, traffic),
-  then an `IPv4` section, then `IPv6`.** A section for an empty family is never created — a
-  service without IPv6 has no empty IPv6 section. The section header carries the configured
-  addresses and, on an IRB, the `VGW` address.
+  then an `IPv4` section, then `IPv6`.** The section header carries the configured addresses
+  and, on an IRB, the `VGW` address.
+- **A family the service has not configured does not appear at all** — no section and no row.
+  An IPv4-only service therefore has no mention of IPv6 anywhere in the report. The price of
+  that decision: such a check is indistinguishable from one that passed.
+- **Every interface-bound row names its interface in parentheses** (`Interface admin status
+  (et-0/0/8.13)`). A scope holds both the physical and the logical interface, so without the
+  name a block would carry pairs of rows with identical labels, different values and
+  contradictory `ZMENA` columns.
 - **The `ZMENA` (change) column** shows `bylo <value>` ("was `<value>`") plus a delta when
   there is one (`-100 %`, `+3`); for checks that have no baseline by definition (`arp_present`,
   `ping_reachability`, `interface_state`, ...) it stays empty. **With no baseline loaded, the

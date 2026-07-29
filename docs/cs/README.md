@@ -157,40 +157,40 @@ plného bloku — ukázaný je jen jeden, zbylých devět je vynecháno):
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  79 PASS   36 WARN   8 FAIL   10 SKIP
+  83 PASS   32 WARN   8 FAIL   9 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
 STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
-WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps 0 pps
+WARN  EVPN-VPWS-CPE13-NNI                  E-Line   ge-0/0/2.213 et-0/0/8.213 EVPN-VPWS-CPE13-NNI       et-0/0/8: input_pps kleslo o 100 % (9 -> 0), prah je -60 %
 FAIL  INTERNET-CPE13-NNI                   Internet ge-0/0/2.13  et-0/0/8.13  -                         152.11.13.2: stav Connect, ocekavano Established
 FAIL  L3VPN-CPE13-NNI                      IPVPN    ge-0/0/2.113 et-0/0/8.113 L3VPN-CPE13-NNI           198.11.13.2: stav Connect, ocekavano Established
 PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
 
-========================================================================================================
+======================================================================================================================
  FAIL  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
-========================================================================================================
- STAV | CHECK                        : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
- -----+------------------------------+-----------------------------------------+------------------------
- PASS | et-0/0/8                     : et-0/0/8: bez chyb                      |
- PASS | et-0/0/8.13                  : et-0/0/8.13: bez chyb                   |
- PASS | Interface admin status       : Up                                      |
- PASS | Interface operational status : Up                                      |
- PASS | Interface admin status       : Up                                      |
- PASS | Interface operational status : Up                                      |
- WARN | Interface traffic in         : 0 pps                                   | bez baseline
- WARN | Interface traffic out        : 0 pps                                   | bez baseline
- PASS | Interface traffic in         : 0 pps                                   |
- PASS | Interface traffic out        : 0 pps                                   |
+======================================================================================================================
+ STAV | CHECK                                      : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+--------------------------------------------+-----------------------------------------+------------------------
+ PASS | Interface errors (et-0/0/8)                : et-0/0/8: bez chyb                      |
+ PASS | Interface errors (et-0/0/8.13)             : et-0/0/8.13: bez chyb                   |
+ PASS | Interface admin status (et-0/0/8)          : Up                                      |
+ PASS | Interface operational status (et-0/0/8)    : Up                                      |
+ PASS | Interface admin status (et-0/0/8.13)       : Up                                      |
+ PASS | Interface operational status (et-0/0/8.13) : Up                                      |
+ WARN | Interface traffic in (et-0/0/8)            : 0 pps                                   | bylo 9 pps   -100 %
+ WARN | Interface traffic out (et-0/0/8)           : 0 pps                                   | bylo 995 pps   -100 %
+ PASS | Interface traffic in (et-0/0/8.13)         : 0 pps                                   |
+ PASS | Interface traffic out (et-0/0/8.13)        : 0 pps                                   |
 
- -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------------
- PASS | ARP                          : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
- FAIL | BGP status                   : Connect                                 | bez baseline
- WARN | Ping                         : 0/5  152.11.13.2 neodpovedel            |
+ -- IPv4  152.11.13.1/30 ---------------------------------------------------------------------------------------------
+ PASS | ARP                                        : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ FAIL | BGP status                                 : Connect                                 | bylo Established
+ WARN | Ping                                       : 0/5  152.11.13.2 neodpovedel            |
 
- -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------------
- FAIL | BGP status                   : Connect                                 | bez baseline
- PASS | ND                           : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
- WARN | Ping                         : 0/5  2001:abcd:11:13::b neodpovedel     |
+ -- IPv6  2001:abcd:11:13::a/127 -------------------------------------------------------------------------------------
+ FAIL | BGP status                                 : Connect                                 | bylo Idle
+ PASS | ND                                         : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ WARN | Ping                                       : 0/5  2001:abcd:11:13::b neodpovedel     |
 
 NESPAROVANO
   baseline  clab-pop-migration-P1;et-0/0/0 (Core)  zadny kandidat na subject
@@ -208,8 +208,13 @@ Co je na tom podstatné:
 - **Pod tabulkou se automaticky vypíše plný blok pro každou službu, která není `PASS`** —
   není potřeba `--detail`. `--detail` navíc rozbalí i bloky u služeb se stavem `PASS`.
 - **Blok jde shora dolů: řádky vázané na rozhraní (stav, countery, provoz), pak sekce `IPv4`,
-  pak `IPv6`.** Sekce prázdné rodiny se nevytváří — služba bez IPv6 nemá prázdnou sekci
-  IPv6. Hlavička sekce nese nakonfigurované adresy a případnou `VGW` adresu u IRB.
+  pak `IPv6`.** Hlavička sekce nese nakonfigurované adresy a případnou `VGW` adresu u IRB.
+- **Rodina, kterou služba nemá nakonfigurovanou, se v bloku neobjeví vůbec** — ani sekcí, ani
+  řádkem. Čistě IPv4 služba tedy o IPv6 nemá v reportu ani zmínku. Cena toho rozhodnutí: takový
+  check je v reportu k nerozeznání od checku, který prošel.
+- **Každý řádek vázaný na rozhraní nese jméno rozhraní v závorce** (`Interface admin status
+  (et-0/0/8.13)`). Scope drží fyzické i logické rozhraní, takže bez toho by v bloku stály dvojice
+  řádků se stejným popiskem, jinými hodnotami a protichůdnými sloupci `ZMENA`.
 - **Sloupec `ZMENA`** ukazuje `bylo <hodnota>` a případně deltu (`-100 %`, `+3`); u checků bez
   baseline (`arp_present`, `ping_reachability`, `interface_state`, ...) zůstává prázdný.
   **Bez načtené baseline se sloupec `ZMENA` nevypisuje vůbec** (viz `--detail` bez `--baseline`).
@@ -217,7 +222,7 @@ Co je na tom podstatné:
   IPv6 adresa se nikdy neořízne. Platí to i pro popisek v sekci `NESPAROVANO`.
 - **Filtry (`--filter`, `--status`) zúží jen tabulku služeb.** Souhrnné počty nahoře zůstávají
   za celý běh — u `--status fail` tedy uvidíte jeden řádek, ale souhrn pořád hlásí všech
-  79 PASS. Je to záměr: filtr je pohled, ne nový výpočet.
+  83 PASS. Je to záměr: filtr je pohled, ne nový výpočet.
 - **Sekce `NESPAROVANO` se vypisuje vždy**, i když je všechno ostatní zelené, a **filtry se
   na ni nevztahují.** Je to hlavní pojistka proti přehlédnuté službě:
   - `baseline` = služba byla na starém boxu a na novém není → podezření na zapomenutou migraci,
