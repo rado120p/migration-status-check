@@ -72,8 +72,44 @@ def test_service_without_ipv6_has_no_ipv6_section(synthetic_snapshot):
 
     rendered = render(result, detail=True)
     for scope in ipv4_only:
-        block = rendered.split(scope.identity["description"])[-1]
-        assert not block.lstrip().startswith("-- IPv6")
+        block = _block_of(
+            rendered, scope.identity["description"], scope.identity["service_type"]
+        )
+        assert "-- IPv6" not in block
+
+
+def _block_of(rendered: str, description: str, service_type: str) -> str:
+    """Vyrizne blok jedne sluzby. Bloky oddeluji cary ze samych '='.
+
+    Krajet podle `rendered.split(description)[-1]` nestaci: vratilo by to
+    zbytek hlavickoveho radku posledniho vyskytu, tedy nikdy nic, co
+    zacina '-- IPv6'. Takova kontrola by nemohla selhat, at se kod chova
+    jakkoliv - a hollow test je presne to, co tenhle test opravoval.
+
+    Samotny popis taky nestaci: v laborce nesou dve ruzne sluzby popis
+    EVPN-VLAN-AWARE-INTERNET a lisi se az typem (E-LAN vs Internet).
+    """
+    lines = rendered.splitlines()
+    starts = [i for i, line in enumerate(lines) if line and set(line) == {"="}]
+
+    blocks = []
+    for index in starts:
+        header = lines[index + 1] if index + 1 < len(lines) else ""
+        if description not in header or service_type not in header:
+            continue
+        # Blok ma dve cary '=': nad hlavickou a pod ni. Dalsi blok proto
+        # zacina az tou treti - hledat od index+1 by useklo vyrez hned za
+        # hlavickou a telo bloku by se vubec nemerilo.
+        rest = [i for i in starts if i > index + 2]
+        end = rest[0] if rest else lines.index("NESPAROVANO")
+        blocks.append("\n".join(lines[index:end]))
+
+    assert len(blocks) == 1, (
+        f"ocekavan 1 blok pro {description!r}/{service_type!r}, je jich {len(blocks)}"
+    )
+    # Bez tohohle by prazdny nebo useknuty vyrez prosel jako "IPv6 tam neni".
+    assert " STAV |" in blocks[0], "vyrez neobsahuje telo bloku"
+    return blocks[0]
 
 
 def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):

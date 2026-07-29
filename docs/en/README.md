@@ -238,7 +238,7 @@ What matters here:
   label too.
 - **Filters (`--filter`, `--status`) narrow the service table only.** The summary counts at the
   top still describe the whole run — with `--status fail` you may see one row while the summary
-  still reports all 79 PASS. That is intentional: a filter is a view, not a recomputation.
+  still reports all 83 PASS. That is intentional: a filter is a view, not a recomputation.
 - **The `NESPAROVANO` section is always printed**, even when everything else is green, and
   **filters do not apply to it.** It is the main safeguard against an overlooked service:
   - `baseline` = the service existed on the old box and is missing on the new one → suspect a
