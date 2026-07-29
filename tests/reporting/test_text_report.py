@@ -496,6 +496,20 @@ def test_block_frame_agrees_with_its_widest_line_when_family_has_many_ranges():
     _assert_frame_wraps_block(render(_result([_many_ranges_scope()])))
 
 
+def test_each_block_is_measured_against_its_own_frame():
+    """Dva bloky ruznych sirek v jednom vystupu.
+
+    Kazdy blok si sirku pocita sam, takze uzsi z nich musi sedet na svuj
+    vlastni ramec - ne na ten sirsi vedle nej.
+    """
+    output = render(_result([_dual_stack_scope(), _many_ranges_scope()]))
+
+    widths = {len(line) for line in output.splitlines() if line and set(line) == {"="}}
+    assert len(widths) > 1, "oba bloky vysly stejne siroke - test by nic neoveril"
+
+    _assert_frame_wraps_block(output)
+
+
 def _assert_frame_wraps_block(output: str) -> None:
     """Zadny radek bloku nesmi prerust jeho ramec.
 
@@ -509,16 +523,26 @@ def _assert_frame_wraps_block(output: str) -> None:
 
     start = next(i for i, line in enumerate(lines) if line and set(line) == {"="})
     end = lines.index("NESPAROVANO")
-    block = [line for line in lines[start:end] if line.strip()]
 
-    frame = [line for line in block if set(line) == {"="}]
-    assert frame, "blok nema ramec"
-    assert len(block) > len(frame), "blok nema zadny radek"
+    # Kazdy radek se meri proti ramecku SVEHO bloku. Porovnavat vsechno
+    # proti prvnimu ramecku by u jednoscopoveho vystupu davalo stejny
+    # vysledek, ale u dvou sluzeb by uzsi blok tise merilo proti sirsimu
+    # ramecku toho druheho.
+    frame = None
+    measured = 0
+    for line in lines[start:end]:
+        if line and set(line) == {"="}:
+            frame = len(line)
+            continue
+        if not line.strip():
+            continue
+        assert frame is not None, "radek bloku pred jeho ramcem"
+        measured += 1
+        assert len(line) <= frame, (
+            f"radek {len(line)} znaku prerusta ramec {frame} znaku:\n{line}"
+        )
 
-    widest = max(block, key=len)
-    assert len(widest) <= len(frame[0]), (
-        f"radek {len(widest)} znaku prerusta ramec {len(frame[0])} znaku:\n{widest}"
-    )
+    assert measured, "blok nema zadny radek"
 
 
 def _long_description_scope() -> ScopeResult:

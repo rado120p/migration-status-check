@@ -314,6 +314,18 @@ def test_traffic_ceased_passes_when_old_port_went_quiet():
     assert result.status is Status.PASS
 
 
+def test_traffic_ceased_rows_name_their_interface_the_same_way():
+    """Posledni check v modulu, ktery jeste pouzival holy nazev rozhrani
+    jako popisek. Vychozi je vypnuty, takze do ostreho reportu nikdy
+    neprosakoval - o to snadneji by v nem zustal nesourody."""
+    labels = [
+        run_check(TrafficCeasedCheck(), ctx)[0].label
+        for ctx in (_ceased_ctx(0, 400), _ceased_ctx(400, 400), _ceased_ctx(0, 0))
+    ]
+
+    assert labels == ["Interface traffic ceased (ge-0/0/2.113)"] * 3
+
+
 def test_traffic_ceased_warns_when_old_port_still_carries_traffic():
     result = run_check(TrafficCeasedCheck(), _ceased_ctx(380, 400))[0]
     assert result.status is Status.WARN

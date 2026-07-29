@@ -251,7 +251,7 @@ class TrafficCeasedCheck(Check):
 
         findings = []
         for name in names:
-            label = qualified("Utichnuti", name)
+            label = qualified("Interface traffic ceased", name)
             subject = _rates(ctx.subject["interfaces"][name])
             baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
             if baseline_data is None:
