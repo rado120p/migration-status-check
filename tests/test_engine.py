@@ -264,7 +264,7 @@ def test_route_claimed_by_a_scope_is_not_unassigned():
     assert result.unassigned["static_routes"] == []
 
 
-def test_static_route_claim_must_match_rib_not_just_prefix():
+def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
     """Klic je (rib, prefix) - shoda jen na prefixu nestaci.
 
     0.0.0.0/0 casto existuje soucasne v inet.0 i v mgmt_junos.inet.0. Kdyby
@@ -325,6 +325,34 @@ def test_bfd_session_of_known_peer_is_not_unassigned():
     result = api.evaluate(subject, baseline=_old(), now=NOW)
 
     assert result.unassigned["bfd_sessions"] == []
+
+
+def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
+    """Assigned mnozina se klicuje bgp_neighbors, ne bfd_peers zamerem.
+
+    Chyti implementaci, ktera by do "assigned" sjednotila i zamer
+    (`{str(b.get("peer")) for scope in scopes for b in
+    scope.selectors.bfd_peers}`) - presne anti-vzor, ktery AR-14 a komentar
+    u `Scope.select()` (`models/scope.py:177-181`) zakazuji. Peer je
+    v zameru (`bfd_peers`), ale nikdy se nedostal do `bgp_neighbors` -
+    to je zrovna ten pripad meznery v parsovani, kvuli ktere `unassigned`
+    existuje. Kdyby se zamer sjednotil do "assigned", session by se tise
+    ztratila misto aby upozornila na rozpor.
+    """
+    subject = _new()
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.scopes[0].selectors.bfd_peers = [{"peer": "10.1.1.1"}]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bfd_sessions"] == [
+        {
+            "peer": "10.1.1.1",
+            "interface": "et-0/0/9.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
 
 
 def test_device_scope_reports_nothing_as_unassigned():
