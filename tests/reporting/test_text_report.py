@@ -226,6 +226,42 @@ def _dual_stack_scope(status=Status.WARN) -> ScopeResult:
     )
 
 
+def _many_ranges_scope() -> ScopeResult:
+    """Sluzba se ctyrmi IPv6 rozsahy - hlavicka sekce prerusta tabulku.
+
+    Radky jsou zamerne kratke, aby o sirce bloku rozhodovala prave ta
+    hlavicka a nic jineho.
+    """
+    return ScopeResult(
+        scope_id="svc:MANY:Internet",
+        key={"description": "MANY", "service_type": "Internet"},
+        status=Status.WARN,
+        match=MatchInfo(
+            status="matched",
+            baseline_interfaces=["ge-0/0/2.13"],
+            subject_interfaces=["et-0/0/8.13"],
+        ),
+        checks=[
+            _check("nd_present", Status.PASS, "nd ok", label="ND", family=6, value="ok"),
+        ],
+        identity={
+            "description": "MANY",
+            "service_type": "Internet",
+            "service_subtype": None,
+            "routing_instance": None,
+            "ipv4": [],
+            "ipv6": [
+                "2001:abcd:11:13::a/127",
+                "2001:abcd:11:14::a/127",
+                "2001:abcd:11:15::a/127",
+                "2001:abcd:11:16::a/127",
+            ],
+            "virtual_gw_v4": [],
+            "virtual_gw_v6": [],
+        },
+    )
+
+
 def _result(scopes, *, baseline=True) -> RunResult:
     return RunResult(
         evaluated_at="2026-07-28T11:40:02Z",
@@ -434,22 +470,44 @@ def test_block_frame_agrees_with_its_widest_line():
     puvodni filtr ji vynechaval (" STAV |" apod. nesedi na format hlavicky
     " PASS  <description> ...") a test tak nemohl chybu vubec zachytit.
     """
-    output = render(_result([_dual_stack_scope()]))
+    _assert_frame_wraps_block(render(_result([_dual_stack_scope()])))
+
+
+def test_block_frame_agrees_with_its_widest_line_when_family_has_many_ranges():
+    """Sluzba s vice rozsahy v rodine - presne ten pripad, kvuli kteremu
+    vzniklo AR-5b, a na kterem ramec praskl potreti.
+
+    Hlavicka sekce se doplnovala NA sirku bloku, ale jeji vlastni delka se
+    do te sirky nikdy nezapocitala. U jedne adresy na rodinu je hlavicka
+    kratsi nez tabulka a nepozna se to; u ctyr rozsahu prerostla ramec o
+    desitky znaku.
+    """
+    _assert_frame_wraps_block(render(_result([_many_ranges_scope()])))
+
+
+def _assert_frame_wraps_block(output: str) -> None:
+    """Zadny radek bloku nesmi prerust jeho ramec.
+
+    Meri se VSECHNY neprazdne radky bloku, ne vyjmenovane prefixy. Puvodni
+    allowlist (" STAV |", " PASS |" a spol.) hlavicky sekci zacinajici
+    " -- " z mereni vylucoval, takze test napsany na tohle selhani byl
+    vuci nemu slepy - a stejne slepy by byl vuci kazdemu novemu druhu
+    radku, ktery renderer pribude.
+    """
     lines = output.splitlines()
 
-    frame = [line for line in lines if line and set(line) == {"="}]
+    start = next(i for i, line in enumerate(lines) if line and set(line) == {"="})
+    end = lines.index("NESPAROVANO")
+    block = [line for line in lines[start:end] if line.strip()]
+
+    frame = [line for line in block if set(line) == {"="}]
     assert frame, "blok nema ramec"
+    assert len(block) > len(frame), "blok nema zadny radek"
 
-    body = [
-        line for line in lines
-        if line.startswith((
-            " STAV |", " PASS |", " WARN |", " FAIL |", " SKIP |", " -----+",
-            " PASS  ", " WARN  ", " FAIL  ", " SKIP  ",
-        ))
-    ]
-    assert body, "blok nema zadny radek"
-
-    assert max(len(line) for line in body) <= len(frame[0])
+    widest = max(block, key=len)
+    assert len(widest) <= len(frame[0]), (
+        f"radek {len(widest)} znaku prerusta ramec {len(frame[0])} znaku:\n{widest}"
+    )
 
 
 def _long_description_scope() -> ScopeResult:

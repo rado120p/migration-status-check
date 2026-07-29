@@ -49,15 +49,20 @@ def filter_result(
     return replace(result, scopes=scopes)
 
 
-def _section_header(section: Section, width: int) -> str:
-    """Nadpis sekce. U vice adres jedne rodiny je vypise vsechny."""
+def _section_header(section: Section) -> str:
+    """Nadpis sekce bez doplneni na sirku bloku.
+
+    Doplneni je zamerne az na volajicim: nadpis musi do sirky bloku vstoupit
+    svou vlastni delkou drive, nez se sirka spocita. Kdyz se doplnoval NA
+    sirku, ale do ni se nezapocitaval, prerostl u sluzby s vice rozsahy
+    ramec o desitky znaku.
+    """
     if section.family is None:
         return ""
     title = FAMILY_TITLE[section.family]
     addresses = ", ".join(section.addresses) or "-"
     gateway = f"   VGW {', '.join(section.virtual_gw)}" if section.virtual_gw else ""
-    text = f" -- {title}  {addresses}{gateway} "
-    return text + "-" * max(0, width - len(text))
+    return f" -- {title}  {addresses}{gateway} "
 
 
 def _block(view: ServiceView, has_baseline: bool) -> list[str]:
@@ -105,7 +110,13 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
         f" {SYMBOL[view.status].strip():<4}  {view.description}   "
         f"{view.service_type}   {ports}   RI: {instance}"
     )
-    width = max(table_width, len(header_line))
+
+    # Nadpisy sekci taky - nesou adresy rodiny, kterych muze byt vic, a u
+    # ctyr rozsahu jsou delsi nez cela tabulka sloupcu. Treti vyskyt tehoz
+    # tvaru: u hlavicky bloku i u souhrnne tabulky uz to ostre overeni
+    # naslo, pokazde na skutecnych datech z laborky.
+    headers = [_section_header(section) for section in view.sections]
+    width = max([table_width, len(header_line)] + [len(text) for text in headers])
 
     lines = [
         "=" * width,
@@ -118,11 +129,10 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
         separator += f"-+-{'-'*change_width}"
     lines.append(separator)
 
-    for section in view.sections:
-        header = _section_header(section, width)
+    for section, header in zip(view.sections, headers):
         if header:
             lines.append("")
-            lines.append(header)
+            lines.append(header + "-" * max(0, width - len(header)))
         for row in section.rows:
             lines.append(
                 line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
