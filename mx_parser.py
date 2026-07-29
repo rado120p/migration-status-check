@@ -154,6 +154,7 @@ class InterfaceService:
     protocol: list[str]
     active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
+    static_route: list[dict[str, Any]] = field(default_factory=list)
 
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
@@ -349,6 +350,11 @@ class JunosServiceParser:
         ]
 
         self._assign_bgp_neighbors(
+            services,
+            interface_configs_by_name,
+        )
+
+        self._assign_static_routes(
             services,
             interface_configs_by_name,
         )
@@ -1281,6 +1287,53 @@ class JunosServiceParser:
 
         return False
 
+    def _assign_static_routes(
+        self,
+        services: list[InterfaceService],
+        interface_configs_by_name: dict[str, InterfaceConfig],
+    ) -> None:
+        """Routa patří službě, která má next-hop ve svém subnetu a leží v téže RIB.
+
+        Obě podmínky musí platit současně. Bez shody routing-instance by
+        next-hop, který náhodou padne do subnetu rozhraní v jiné VRF, sedl
+        na špatnou službu.
+
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type:
+        L2 rozhraní nemá IP adresu, takže se namatchovat nemůže, a filtr by
+        byl duplikát podmínky, kterou už dělá shoda adres.
+        """
+
+        for service in services:
+            interface = interface_configs_by_name.get(service.interface)
+
+            if interface is None:
+                continue
+
+            matched = [
+                route
+                for route in self.static_routes
+                if rib_instance(route.rib) == service.routing_instance
+                and any(
+                    self._bgp_neighbor_matches_interface(
+                        next_hop,
+                        interface,
+                    )
+                    for next_hop in route.next_hop
+                )
+            ]
+
+            if not matched:
+                continue
+
+            service.static_route = [
+                asdict(route)
+                for route in matched
+            ]
+            service.detection_reason.append(
+                "Statická routa odpovídá subnetu rozhraní: "
+                + ", ".join(route.prefix for route in matched)
+            )
+
     def _find_interface_bridge_domains(
         self,
         interface: InterfaceConfig,
@@ -1885,6 +1938,7 @@ def retrieve_configuration(
 
     Použit je jeden filtr, aby parser viděl vazby mezi:
         interfaces
+        routing-options
         routing-instances
         protocols
         bridge-domains
@@ -1895,6 +1949,7 @@ def retrieve_configuration(
         b"""
         <configuration>
             <interfaces/>
+            <routing-options/>
             <routing-instances/>
             <protocols/>
             <bridge-domains/>

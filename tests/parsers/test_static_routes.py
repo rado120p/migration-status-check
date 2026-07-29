@@ -136,3 +136,147 @@ def test_rib_instance_maps_global_tables_to_none(module, parser_class):
     assert module.rib_instance("L3VPN-CPE13-NNI.inet.0") == "L3VPN-CPE13-NNI"
     assert module.rib_instance("L3VPN-CPE13-NNI.inet6.0") == "L3VPN-CPE13-NNI"
     assert module.rib_instance("mgmt_junos.inet6.0") == "mgmt_junos"
+
+
+UNMAPPABLE = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+    <interface>
+      <name>fxp0</name>
+      <unit>
+        <name>0</name>
+        <family>
+          <inet><address><name>10.0.0.15/24</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+    <instance>
+      <name>mgmt_junos</name>
+      <routing-options>
+        <static>
+          <route>
+            <name>0.0.0.0/0</name>
+            <next-hop>10.0.0.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+WRONG_VRF = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+    </instance>
+    <instance>
+      <name>L3VPN-JINA</name>
+      <instance-type>vrf</instance-type>
+      <routing-options>
+        <static>
+          <route>
+            <name>10.9.9.0/24</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_route_lands_on_service_whose_subnet_contains_next_hop(module, parser_class):
+    services = _parse(module, parser_class, BOTH_FAMILIES)
+    by_interface = {service.interface: service for service in services}
+
+    assert {
+        (route["rib"], route["prefix"])
+        for route in by_interface["et-0/0/8.113"].static_route
+    } == {
+        ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29"),
+        ("L3VPN-CPE13-NNI.inet6.0", "2001:eeee::/64"),
+    }
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_next_hop_is_carried_as_value(module, parser_class):
+    services = _parse(module, parser_class, BOTH_FAMILIES)
+    by_interface = {service.interface: service for service in services}
+
+    routes = {
+        route["prefix"]: route["next_hop"]
+        for route in by_interface["et-0/0/8.113"].static_route
+    }
+    assert routes["172.26.1.0/29"] == ["198.11.13.2"]
+    assert routes["2001:eeee::/64"] == ["2001:db8:11:13::b"]
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_management_route_lands_on_no_service(module, parser_class):
+    """Statika v mgmt_junos padne na fxp0.0, ze ktere se scope nikdy nestane.
+
+    Do inventory se nedostane. Kdyz je nainstalovana, chyti ji
+    RunResult.unassigned z routovaci tabulky - viz Task 9.
+    """
+    services = _parse(module, parser_class, UNMAPPABLE)
+
+    assert all(
+        route["prefix"] != "0.0.0.0/0"
+        for service in services
+        for route in service.static_route
+    )
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_next_hop_in_foreign_vrf_does_not_match(module, parser_class):
+    """Shoda subnetu sama nestaci - musi sedet i routing-instance.
+
+    Next-hop 198.11.13.2 padne do subnetu et-0/0/8.113, ale routa lezi
+    v L3VPN-JINA. Bez podminky na instanci by sedla na spatnou sluzbu.
+    """
+    services = _parse(module, parser_class, WRONG_VRF)
+
+    assert all(not service.static_route for service in services)
