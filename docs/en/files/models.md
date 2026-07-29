@@ -195,5 +195,15 @@ virtual-gateway columns would have nowhere to read from.
 `baseline_interfaces`, `subject_interfaces`, `reason`.
 
 `RunResult`: `evaluated_at`, `subject`, `baseline`, `summary`, `scopes`, `unmatched`,
-`unassigned`, `schema_version`. It is the only thing reporting receives — **everything is
-computed beforehand**, so the text output and a GUI cannot disagree on the numbers.
+`unassigned`, `filtered`, `schema_version`. It is the only thing reporting receives —
+**everything is computed beforehand**, so the text output and a GUI cannot disagree on the
+numbers.
+
+`filtered` is `None` for a whole run and a dict (`scopes_shown`, `scopes_total`, optionally
+`text` and `statuses`) for a result that went through `filter_result()`. In the first case
+`to_dict()` omits the key entirely, so unfiltered output keeps exactly the shape it had.
+
+`count_statuses(statuses)` breaks any statuses down into the four counters. It takes statuses
+rather than checks precisely so that the per-check summary (engine, filter) and the
+per-service summary (renderer) can share it — and the difference between those two units was
+what went unlabelled in the report.

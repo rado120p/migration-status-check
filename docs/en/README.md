@@ -180,8 +180,8 @@ PASS  svc:lo0.0:Core                       Core     -            lo0.0        -
 ======================================================================================================================
  STAV | CHECK                                      : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
  -----+--------------------------------------------+-----------------------------------------+------------------------
- PASS | Interface errors (et-0/0/8)                : et-0/0/8: bez chyb                      |
- PASS | Interface errors (et-0/0/8.13)             : et-0/0/8.13: bez chyb                   |
+ PASS | Interface errors (et-0/0/8)                : bez chyb                                |
+ PASS | Interface errors (et-0/0/8.13)             : bez chyb                                |
  PASS | Interface admin status (et-0/0/8)          : Up                                      |
  PASS | Interface operational status (et-0/0/8)    : Up                                      |
  PASS | Interface admin status (et-0/0/8.13)       : Up                                      |
