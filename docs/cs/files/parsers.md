@@ -43,9 +43,13 @@ main()
  └─ write_yaml()
 ```
 
-`retrieve_configuration()` bere **jedním filtrem** `interfaces`, `routing-instances`,
-`protocols`, `bridge-domains`, `vlans` a `switch-options`, aby parser viděl vazby mezi nimi
-naráz. `inherit` znamená, že se aplikují `apply-groups`.
+`retrieve_configuration()` bere **jedním filtrem** `interfaces`, `routing-options`,
+`routing-instances`, `protocols`, `bridge-domains`, `vlans` a `switch-options`, aby parser
+viděl vazby mezi nimi naráz. `inherit` znamená, že se aplikují `apply-groups`.
+
+**`routing-options` je ve filtru kvůli statickým routám globální instance.** Bez něj by
+parser viděl jen statiky uvnitř `routing-instances` a routy v default instanci by z inventory
+tiše zmizely — služba by pak vypadala, že žádný záměr nemá.
 
 ---
 
@@ -54,13 +58,22 @@ naráz. `inherit` znamená, že se aplikují `apply-groups`.
 `JunosServiceParser.parse()` (v EVO variantě `JunosEvoAcxServiceParser`) jede v pořadí:
 
 1. `_parse_routing_instances()` — instance, jejich typ, protokoly, RD/RT, bridge domény,
-   VLAN, BGP neighbory;
-2. `_parse_default_bgp_neighbors()` — top-level `protocols bgp` patří do default instance;
-3. `_parse_global_l2circuits()`, `_parse_global_connections()` — E-Line mimo instance;
-4. `_parse_interfaces()` → `_build_interface_config()` — rozhraní, family, VLAN, adresy,
+   VLAN, BGP neighbory **a BFD záměr instance**;
+2. `_parse_static_routes()` — statiky z globálních `routing-options` i ze všech instancí;
+3. `_parse_default_bgp_neighbors()` — top-level `protocols bgp` patří do default instance
+   (naplní i `self.default_bfd`);
+4. `_parse_global_l2circuits()`, `_parse_global_connections()` — E-Line mimo instance;
+5. `_parse_interfaces()` → `_build_interface_config()` — rozhraní, family, VLAN, adresy,
    virtual-gateway;
-5. `_classify_interface()` → `_detect_service()` — vlastní rozhodnutí o typu služby;
-6. `_assign_bgp_neighbors()` — přiřazení peerů ke službám podle shody se subnetem rozhraní.
+6. `_classify_interface()` → `_detect_service()` — vlastní rozhodnutí o typu služby;
+7. `_assign_bgp_neighbors()` — přiřazení peerů ke službám podle shody se subnetem rozhraní;
+8. `_assign_static_routes()` — přiřazení statik podle next-hopu **a** shody RIB;
+9. `_assign_bfd()` — přiřazení BFD záměru ke službám.
+
+**Pořadí posledních tří kroků není libovolné.** `_assign_bfd()` čte už naplněné
+`service.bgp_neighbor`; spuštěné dřív než `_assign_bgp_neighbors()` by tiše nepřiřadilo nic —
+seznam peerů by byl prázdný a výsledek „služba bez BFD" je legitimní stav, takže by na to
+nemusel upozornit žádný test.
 
 `_detect_service()` zkouší v pořadí: **IPVPN → E-Line VPWS → E-Line CCC → E-LAN VPLS →
 E-LAN EVPN → Core → Internet → Layer 1 → nerozpoznané L2.** Pořadí je podstatné: dřívější
@@ -73,6 +86,61 @@ nespárovaných služeb jsou v YAML k nezaplacení.
 `_should_ignore_interface()` vypustí z výstupu jen doopravdy prázdná rozhraní (bez
 description, family, VLAN, adres, encapsulation a bez instance) — ne rozhraní jen proto, že
 typ vyšel `Unknown`.
+
+---
+
+## Statické routy: normalizace jména RIB
+
+Konfigurace **není mezi rodinami symetrická**:
+
+| rodina | kde v konfiguraci leží |
+|---|---|
+| IPv4 | přímo pod `routing-options/static` |
+| IPv6 | pod `routing-options/rib <jméno>.inet6.0/static` |
+
+`show route` ale v poli `table-name` tenhle rozdíl nezná — vrací plné jméno RIB u obou rodin.
+`_parse_static_routes()` proto asymetrii **zahladí hned na vstupu**: `static` bez `rib`
+dostane odvozené jméno (`inet.0` v globální instanci, `<instance>.inet.0` v pojmenované),
+`rib` si nese jméno vlastní. Dál se rozdíl nešíří a check porovnává jméno z konfigurace
+přímo se jménem z RPC, bez jediné převodní tabulky.
+
+`_assign_static_routes()` přiřadí routu službě, jen když platí **obě** podmínky současně:
+next-hop leží v subnetu rozhraní **a** RIB patří téže routing-instanci
+(`rib_instance(route.rib) == service.routing_instance`). Bez druhé podmínky by next-hop, který
+náhodou padne do subnetu rozhraní v jiné VRF, sedl na špatnou službu.
+
+Routa, která nesedne na žádnou službu (typicky `mgmt_junos.inet.0 0.0.0.0/0` přes `fxp0.0`),
+v inventory nikde není. Ve výsledku validace se objeví v `unassigned.static_routes` —
+viz [../reference.md](../reference.md#5-formát-výsledku).
+
+---
+
+## BFD: dědění hierarchií BGP
+
+`_parse_bfd()` čte `bfd-liveness-detection` na třech úrovních a specifičtější přepisuje
+obecnější:
+
+```
+protocols bgp                      →  source: bgp
+  group <jméno>                    →  source: group
+    neighbor <adresa>              →  source: neighbor
+```
+
+Dvě věci, na kterých to stojí:
+
+- **Přepisuje se celá hodnota, ne položka po položce.** Soused s vlastním `minimum-interval`
+  si nedědí `multiplier` ze skupiny. Slévání po položkách by vyrobilo záměr, který v žádné
+  úrovni konfigurace takhle nestojí.
+- **Junosí `inherit` tuhle hierarchii nerozbaluje.** Rozbaluje `apply-groups`, ne hierarchii
+  protokolu. Ověřeno proti laborce 2026‑07‑29, kdy skupina `CPE14` nesla BFD a její sousedé ho
+  neměli ani v konfiguraci stažené s `inherit` — kdyby se parser na `inherit` spolehl, oba
+  peery skupiny (včetně toho IPv6) by v inventory zůstaly bez BFD.
+
+Pole `source` v YAML říká, na které úrovni byl záměr nalezen — je to jediná stopa po tom, že
+řádek v reportu pochází ze skupiny, a ne od souseda.
+
+Služba bez routing-instance sahá do `self.default_bfd` (top-level `protocols bgp`), služba
+v instanci do `instance.bfd`.
 
 ---
 
@@ -130,8 +198,10 @@ usage: mx_parser.py [-h] [--auth {key,password}] [-u USERNAME] [-k KEY_FILE]
 
 ## Výstupní formát
 
+Ukázka je vygenerovaná z `tests/fixtures/172.20.20.4.yml`, ne psaná ručně:
+
 ```yaml
-schema_version: 2
+schema_version: 3
 device: 172.20.20.4
 interfaces:
 - interface: ge-0/0/2.113
@@ -157,17 +227,32 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  static_route:
+  - rib: L3VPN-CPE13-NNI.inet.0
+    prefix: 172.26.1.0/29
+    next_hop:
+    - 198.11.13.2
+  - rib: L3VPN-CPE13-NNI.inet6.0
+    prefix: 2001:eeee::/64
+    next_hop:
+    - 2001:db8:11:13::b
+  bfd:
+  - peer: 198.11.13.2
+    minimum_interval: 3000
+    multiplier: 3
+    source: neighbor
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
   - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.13.2, 2001:db8:11:13::b'
+  - 'Statická routa odpovídá subnetu rozhraní: 172.26.1.0/29, 2001:eeee::/64'
 ```
 
 Adresy jsou rozdělené podle rodiny — `ipv4_address`/`ipv6_address` a
 `virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — a nezávisle na obsahu se do YAML vždy
-zapíše top-level klíč `schema_version: 2`. Validator jinou hodnotu `schema_version` **tvrdě
+zapíše top-level klíč `schema_version: 3`. Validator jinou hodnotu `schema_version` **tvrdě
 odmítne** (`models/inventory.py::load_inventory()`), místo aby starou inventory tiše přečetl
-jako službu bez adres — viz [models.md](models.md#inventorypy--vstup-z-parserů).
+jako službu bez adres nebo bez záměru — viz [models.md](models.md#inventorypy--vstup-z-parserů).
 
 Pořadí klíčů je pevné (`clean_service_dict()`) a `service_subtype` zůstane v YAML i s
 hodnotou `null`, aby měly navazující skripty stabilní strukturu.
@@ -178,10 +263,10 @@ Které klíče validator opravdu čte, je popsáno v [models.md](models.md#inven
 
 ## `172.20.20.4.yml` a `172.20.20.5.yml` v kořeni
 
-Vzorové výstupy z laboratorní topologie (MX a PTX). V gitu jsou **nesledované** — jsou to
-pracovní artefakty.
+Vzorové výstupy z laboratorní topologie (MX a PTX), v gitu **sledované**.
 
-Reprodukovatelné kopie, na kterých běží testy, žijí v **`tests/fixtures/`** (commity
-`26d8461` a `671615b` je tam přesunuly právě proto, aby testy nezávisely na tom, co je
-zrovna v kořeni). Když testujete, upravujte fixtures; kořenové soubory klidně přepisujte
-novým během parseru.
+Kopie, na kterých běží testy, žijí v **`tests/fixtures/`** (commity `26d8461` a `671615b` je
+tam přesunuly právě proto, aby testy nezávisely na tom, co je zrovna v kořeni). Obojí jsou
+doslovné výstupy parseru — **neupravujte je ručně**; po změně parseru nebo po zvýšení
+`schema_version` se oba páry regenerují novým během parseru proti laborce a zkopírují do
+`tests/fixtures/`.

@@ -5,6 +5,11 @@ A tool for verifying the state of network services during a migration from an **
 the migration, after the migration, and compares both — despite the fact that port names
 differ between the two devices (`ge-0/0/2.113` → `et-0/0/8.113`).
 
+It verifies interface state, BGP, EVPN (both E-Line and E-LAN), reachability (ARP/ND/ping),
+**static routes** and **BFD sessions**. The last two are the only ones where the measured
+state is also compared against the **configured intent** — a configured static route that
+never made it into the routing table is otherwise invisible.
+
 - Architecture and how the files relate to each other: [architecture.md](architecture.md)
 - Per-file documentation: [index.md](index.md)
 - Reference tables (check catalogue, `config.yml`, `mapping.yml`, JSON schemas): [reference.md](reference.md)
@@ -409,7 +414,10 @@ No path is hard-wired anywhere — `--output` is always explicit.
 | `chyba: ...: autentizace selhala` + code 2 | authentication failed. Check `--username`, `--key-file`, or use `--auth password --password ...` |
 | `chyba: ...: timeout po 30 s` + code 2 | device unreachable, or NETCONF not enabled on port 22 |
 | `varovani: collector 'X' selhal` on stderr | an RPC failed, capture continued. The snapshot exists, but checks over area `X` will be `SKIP` |
-| `chyba: snapshot ma schema_version N` | snapshot from a different tool version; re-capture it |
+| `chyba: snapshot ma schema_version N` | snapshot from a different tool version; **re-capture it**. The data cannot be derived from the old snapshot — a version 2 snapshot contains neither the `routes` nor the `bfd` area, so the new checks would stay silent. This applies to the stored runs `runs/ipv6/` and `runs/ipv6-live-2026-07-29/` as well |
+| `ValueError: ... schema_version 2` during `capture` | the inventory YAML comes from an older parser version; **regenerate it** (`mx_parser.py` / `evo_parser.py`). A version 2 inventory has no `static_route` or `bfd` fields, so the service would look as if it carried no intent |
+| A service shows `FAIL … neni v tabulce` for a static route | the route **is** in the configuration but missing from the routing table — typically because its next hop became unreachable (a deactivated interface). This is a finding, not a tool error |
+| `SKIP … BGP neni Established` on BFD | BFD is configured but the BGP peer has not come up yet. BFD cannot come up without BGP, so the state is not reported as a failure |
 | Everything is `SKIP` | typically the collectors failed — inspect `capture.collectors` in the snapshot |
 | A service is missing from the listing | it is not a migrated service type (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`), it is a management interface, or it is in `ignore` in `mapping.yml` |
 | Lots of `ambiguous` entries in `NESPAROVANO` | duplicate `description` values on the device — pair them manually via `mapping.yml` |

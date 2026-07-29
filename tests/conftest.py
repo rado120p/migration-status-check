@@ -12,6 +12,44 @@ from migration_validator.scoping.builder import build_scopes
 
 NOW = "2026-07-24T09:12:41Z"
 
+MAC = "0c:00:ef:5e:df:01"
+
+# Oblasti, ktere musi snapshot nest. Drzi se zamerne u FACT_AREAS: kdyby
+# tady oblast chybela, check nad ni nedostane SKIP (chybejici collector
+# neni totez co selhany), ale spusti se nad prazdnymi fakty a vrati FAIL.
+COLLECTOR_NAMES = (
+    "interfaces",
+    "arp",
+    "nd",
+    "bgp",
+    "evpn_vpws",
+    "evpn_esi",
+    "evpn_mac",
+    "routes",
+    "bfd",
+)
+
+
+def _neighbour_for(prefix: str) -> str | None:
+    """Protejsek na stejnem linku - prvni adresa v subnetu, ktera neni nase.
+
+    Sluzba muze mit adresu a zadneho BGP souseda (napr. rozhrani, ktere po
+    migraci zbylo bez peeru). `arp_present` / `nd_present` na ni presto bezi,
+    takze bez odvozeneho souseda by synteticka fixture hlasila WARN za
+    prazdnou tabulku - a to je vlastnost fixture, ne zdravi sluzby.
+    """
+    try:
+        interface = ipaddress.ip_interface(prefix)
+    except ValueError:
+        return None
+
+    for candidate in interface.network.hosts():
+        if candidate != interface.ip:
+            return str(candidate)
+
+    # /32 a /128 zadneho souseda nemaji - na loopbacku se ARP nedela.
+    return None
+
 
 def _facts_for(scopes, pps: int) -> dict:
     interfaces = {}
@@ -21,6 +59,8 @@ def _facts_for(scopes, pps: int) -> dict:
     evpn_vpws = {}
     evpn_esi = {}
     evpn_mac = {}
+    routes: dict[str, dict[str, dict]] = {}
+    bfd = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -32,15 +72,18 @@ def _facts_for(scopes, pps: int) -> dict:
                 "input_errors": 0,
                 "output_errors": 0,
             }
+        seen_families = set()
         for peer in scope.selectors.bgp_neighbors:
             # bgp_neighbors mixa v4 a v6 sousedy - bez rozliseni rodiny by
             # v6 peer skoncil v ARP tabulce jako falesny family-4 zaznam.
             interface = scope.selectors.interfaces[0]
-            if ipaddress.ip_address(peer).version == 6:
+            family = ipaddress.ip_address(peer).version
+            seen_families.add(family)
+            if family == 6:
                 nd.append(
                     {
                         "ip": peer,
-                        "mac": "0c:00:ef:5e:df:01",
+                        "mac": MAC,
                         "interface": interface,
                         "state": "reachable",
                     }
@@ -64,6 +107,58 @@ def _facts_for(scopes, pps: int) -> dict:
                     }
                 },
             }
+        # Sluzba s adresou, ale bez peeru te rodiny, by jinak zustala s
+        # prazdnou ARP/ND tabulkou. Fabrikuje se proto soused odvozeny ze
+        # subnetu - stejne, jako se fabrikuje uplne vsechno ostatni.
+        if scope.selectors.interfaces:
+            interface = scope.selectors.interfaces[0]
+            for family, prefixes in (
+                (4, scope.selectors.local_ipv4),
+                (6, scope.selectors.local_ipv6),
+            ):
+                if family in seen_families or not prefixes:
+                    continue
+                neighbour = _neighbour_for(prefixes[0])
+                if neighbour is None:
+                    continue
+                if family == 6:
+                    nd.append(
+                        {
+                            "ip": neighbour,
+                            "mac": MAC,
+                            "interface": interface,
+                            "state": "reachable",
+                        }
+                    )
+                else:
+                    arp.append({"ip": neighbour, "interface": interface})
+
+        # Zamer z inventory se zrcadli do namerenych faktu jako zdravy stav:
+        # routa je v tabulce se stejnym next-hopem, session je Up.
+        for route in scope.selectors.static_routes:
+            routes.setdefault(str(route["rib"]), {})[str(route["prefix"])] = {
+                "next_hop": list(route.get("next_hop") or []),
+                "via": list(scope.selectors.interfaces[:1]),
+                "active": True,
+            }
+
+        for intent in scope.selectors.bfd_peers:
+            peer = str(intent["peer"])
+            bfd[peer] = {
+                "state": "Up",
+                "interface": (
+                    scope.selectors.interfaces[0]
+                    if scope.selectors.interfaces
+                    else None
+                ),
+                "remote_state": "Up",
+                "local_diagnostic": "None",
+                "clients": ["BGP"],
+                "detection_time": "9.000",
+                "transmission_interval": "3.000",
+                "multiplier": intent.get("multiplier"),
+            }
+
         service_type = scope.key.service_type
         instance = (
             scope.selectors.routing_instances[0]
@@ -89,6 +184,8 @@ def _facts_for(scopes, pps: int) -> dict:
         "evpn_vpws": evpn_vpws,
         "evpn_esi": evpn_esi,
         "evpn_mac": evpn_mac,
+        "routes": routes,
+        "bfd": bfd,
     }
 
 
@@ -117,13 +214,7 @@ def synthetic_snapshot():
                 started_at=NOW,
                 finished_at=NOW,
                 phase=phase,
-                collectors={
-                    name: {"status": "ok"}
-                    for name in (
-                        "interfaces", "arp", "nd", "bgp",
-                        "evpn_vpws", "evpn_esi", "evpn_mac",
-                    )
-                },
+                collectors={name: {"status": "ok"} for name in COLLECTOR_NAMES},
             ),
             facts=_facts_for(scopes, pps),
             probes={"ping": pings},

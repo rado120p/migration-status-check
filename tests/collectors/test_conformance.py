@@ -21,6 +21,7 @@ from lxml import etree
 
 from migration_validator import api
 from migration_validator.collectors.arp import ArpCollector
+from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.collectors.bgp import BgpCollector
 from migration_validator.collectors.evpn import (
     EvpnEsiCollector,
@@ -29,6 +30,7 @@ from migration_validator.collectors.evpn import (
 )
 from migration_validator.collectors.interfaces import InterfacesCollector
 from migration_validator.collectors.nd import NdCollector
+from migration_validator.collectors.routes import RoutesCollector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -53,6 +55,8 @@ COLLECTORS = (
     EvpnVpwsCollector(),
     EvpnEsiCollector(),
     EvpnMacCollector(),
+    RoutesCollector(),
+    BfdCollector(),
 )
 
 

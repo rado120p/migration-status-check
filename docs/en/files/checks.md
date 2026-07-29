@@ -1,7 +1,7 @@
 # `checks/` — the evaluation logic
 
 Files: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py` and an empty `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py` and an empty `__init__.py`.
 
 Two rules:
 
@@ -97,7 +97,7 @@ returns an alphabetically sorted list — which is why check ordering in the out
 
 ## `all.py`
 
-Imports `bgp`, `evpn`, `ifaces`, `reachability`. It is a separate module **because of a
+Imports `bfd`, `bgp`, `evpn`, `ifaces`, `reachability`, `routes`. It is a separate module **because of a
 circular import**: `checks/ifaces.py` imports `checks/base.py`, so `checks/__init__.py` must
 not import `ifaces`. `load_all()` is an idempotent no-op — the import already did the work.
 
@@ -318,3 +318,80 @@ Reads finished results from the snapshot — the targets were resolved back duri
 `  <target> neodpovedel`. `details` carries `resolved_from` (`arp` | `nd` |
 `subnet-fallback`) and `address` (`owning_prefix()`), so the result shows which configured
 range the target belongs to and whether it came from ARP/ND or was derived from the subnet.
+
+---
+
+## `routes.py` — static routes
+
+### `static_route_status` (both, critical)
+
+The only check that **compares configured intent against measured reality**. Every other
+check asks "is it up?"; this one asks "is what you ordered actually there?".
+
+**It iterates over the union of three sources** (AR‑14) — the subject's configuration
+(`Selectors.static_routes`), the subject's measurement (`facts["routes"]`) and the
+baseline's measurement. Each closes one gap:
+
+| without this source | what would silently disappear |
+|---|---|
+| configuration | the "configured, not in the table" discrepancy |
+| subject measurement | there would be nothing to print in inventory-less mode |
+| baseline measurement | a route removed from the configuration — it never reaches the subject's selectors, so no scope would ever ask about it being gone |
+
+**A route's identity is the pair (RIB, prefix); the next hop is the value.** That way a
+next-hop change reads as a *changed* route — one row with a `ZMENA` column — rather than
+"one route vanished and another appeared".
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| in the table, next hop unchanged or no baseline | `ok` | PASS | next hops joined by commas (`-` when none) |
+| in the table, next hop changed vs. baseline | `degraded` | WARN | new next hop; `ZMENA` carries the old one |
+| configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
+| present in baseline, absent from subject | `broken` | FAIL | `chybi` |
+
+`is_device` separates the last two rows: in a device scope the intent is unknown (AR‑17), so
+the tool reports `chybi`, not `neni v tabulce`.
+
+The label is `Staticka routa (<RIB> <prefix>)` — the RIB name goes into the label qualifier,
+not onto a sub-row of its own. `family` is derived **from the prefix**, not from the RIB
+name, because the name need not carry a family at all (`bgp.l3vpn.0`).
+
+**Recorded assumption:** RIB names survive the migration. `_aligned_baseline_data` in the
+engine re-keys only the `interfaces` area between baseline and subject; `routes` are keyed
+`table -> prefix` and get no re-keying. Should a future migration rename a VRF, every route
+in it would read as "missing" plus "new".
+
+---
+
+## `bfd.py` — BFD sessions
+
+### `bfd_session_state` (both, critical)
+
+Like `static_route_status`, it **iterates over the union of three sources** (AR‑14): the
+intent from the configuration (`Selectors.bfd_peers`), the session in the subject and the
+session in the baseline. **A peer that never had BFD gets no row** (decision R‑1) — so a
+service without BFD carries no mention of BFD in the report at all.
+
+The check requires **two areas**: `("bfd", "bgp")`.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| session exists, state `Up` | `ok` | PASS | `Up` |
+| session exists, any other state | `broken` | FAIL | measured state (`Down`, …) |
+| session exists but is not in the service configuration (service scope) | `degraded` | WARN | `bez konfigurace` |
+| no session and no intent, but the baseline had one | `broken` | FAIL | `BFD odstraneno` |
+| intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
+| intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
+
+**The dependency on BGP state is deliberate, not cosmetic.** BFD cannot come up while BGP is
+down, so without it a service with a dropped BGP session would collect two FAIL rows for one
+cause. In a live run that would repeat for every service that has not yet come up, and the
+operator would learn to skim past the listing.
+
+**Branch order matters:** `BFD odstraneno` is tested **before** `BGP neni Established`. The
+reverse order would silently lose the case where the migration dropped protection that used
+to be there *and* BGP had not come up — which is exactly the combination worth seeing.
+
+The label is `BFD (<peer>)`, with `family` derived by `peer_family()` from the peer address
+(shared with `checks/bgp.py`), so an IPv6 peer inherited from a BGP group lands in the
+`IPv6` section.

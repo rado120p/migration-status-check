@@ -29,6 +29,14 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `routing_instance` | `str \| None` | |
 | `active` | `bool` | |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
+| `static_route` | `list[dict]` | záměr z konfigurace: `{rib, prefix, next_hop: list[str]}` |
+| `bfd` | `list[dict]` | záměr z konfigurace: `{peer, minimum_interval, multiplier, source}` |
+
+`static_route` a `bfd` jsou **konfigurační záměr, ne měření**. Právě proti nim checky
+`static_route_status` a `bfd_session_state` porovnávají, co se v tabulce a v session
+skutečně našlo — bez nich by nešlo odlišit „nakonfigurováno a nefunguje" od „nic tu nebylo".
+`bfd[].source` je `neighbor` nebo `group` podle toho, na které úrovni BGP hierarchie byl
+záměr nalezen.
 
 Vlastnost `physical_name` vrátí část před tečkou (`ge-0/0/2.113` → `ge-0/0/2`).
 
@@ -45,11 +53,20 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 2`).
-`load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu. Adresy se
-totiž přejmenovaly na rodiny (`ip_address` → `ipv4_address`/`ipv6_address`), takže tolerantní
-čtení starého souboru by tiše vrátilo službu bez jediné adresy — ping by se nespustil a
-služba by přesto svítila zeleně.
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 3`).
+`load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
+
+Důvod je u obou zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
+zelená služba.
+
+- **1 → 2**: adresy se přejmenovaly na rodiny (`ip_address` → `ipv4_address` /
+  `ipv6_address`), takže tolerantní čtení starého souboru by tiše vrátilo službu bez jediné
+  adresy — ping by se nespustil a služba by přesto svítila zeleně.
+- **2 → 3**: přibyla pole `static_route` a `bfd`. Inventory verze 2 je nemá, takže by
+  `Selectors.static_routes` i `.bfd_peers` zůstaly prázdné, checky by neměly co porovnávat
+  a nakonfigurovaná routa chybějící v tabulce by se nikdy neohlásila.
+
+Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 
 ---
 
@@ -65,11 +82,22 @@ použít jako klíč slovníku — čehož využívá `builder.py` při detekci 
 
 ### `Selectors`
 
-Deset seznamů: `interfaces`, `physical_interfaces`, `routing_instances`, `bgp_neighbors`,
-`local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`, `bridge_domains`.
-Adresy i virtual-gateway jsou rozdělené podle rodiny — stejně jako `ServiceEntry` výš —
-protože ping a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne podle pořadí v jednom
-smíchaném seznamu.
+Deset seznamů řetězců: `interfaces`, `physical_interfaces`, `routing_instances`,
+`bgp_neighbors`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`,
+`bridge_domains`. Adresy i virtual-gateway jsou rozdělené podle rodiny — stejně jako
+`ServiceEntry` výš — protože ping a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne
+podle pořadí v jednom smíchaném seznamu.
+
+K nim dva seznamy slovníků, které nesou **konfigurační záměr**:
+
+| selektor | tvar položky | role |
+|---|---|---|
+| `static_routes` | `{rib, prefix, next_hop}` | zároveň **filtr** (vybírá routy podle dvojice `(rib, prefix)`) i **množina**, proti které check pozná, že nakonfigurovaná routa v tabulce chybí |
+| `bfd_peers` | `{peer, minimum_interval, multiplier, source}` | **jen záměr** — session se vybírají přes `bgp_neighbors` |
+
+Že `bfd_peers` neslouží jako filtr, je záměr: jsou to dvě různé věci a slít je do jednoho
+seznamu by znamenalo držet je v synchronu. Session peeru, kterého parser do záměru
+nedoplnil, by se do scope nedostala a chyba v průchodu parseru by zmizela beze stopy.
 
 `matches_interface(name)` vrací `True`, když je název mezi logickými **nebo** fyzickými
 rozhraními. Díky tomu se stavové checky spustí i na fyzickém rodiči (`et-0/0/8`), pokud
@@ -79,8 +107,14 @@ inventory obsahuje odpovídající `Layer1` záznam.
 
 ```python
 scope.select(facts, probes) -> dict   # klíče: interfaces, arp, nd, bgp,
-                                      #        evpn_vpws, evpn_esi, evpn_mac, ping
+                                      #        evpn_vpws, evpn_esi, evpn_mac,
+                                      #        routes, bfd, ping
 ```
+
+Modulová konstanta **`FACT_AREAS`** vyjmenovává oblasti, které smí ve faktech být:
+`interfaces`, `arp`, `nd`, `bgp`, `evpn_vpws`, `evpn_esi`, `evpn_mac`, `routes`, `bfd`.
+Device scope podle ní vrací všechny oblasti beze změny, takže **oblast zapomenutá v tomhle
+seznamu by v režimu bez inventory zmizela**.
 
 Filtrování per oblast:
 
@@ -93,7 +127,18 @@ Filtrování per oblast:
 | `evpn_vpws` | klíč (název instance) `∈ selectors.routing_instances` |
 | `evpn_esi` | `matches_interface(data["interface"])` |
 | `evpn_mac` | klíč (název instance) `∈ selectors.routing_instances` |
+| `routes` | dvojice `(RIB, prefix)` `∈ selectors.static_routes` |
+| `bfd` | `peer ∈ selectors.bgp_neighbors` |
 | `ping` | `probe["scope_id"] == scope.id` |
+
+Dvě věci, které stojí za zdůraznění:
+
+- **`routes` se filtrují na dvojici, ne jen na prefix.** Stejný prefix může existovat ve víc
+  RIB (typicky `0.0.0.0/0`) a výběr podle samotného prefixu by službě přiřadil cizí routu.
+  Prázdná tabulka se nevrací — v reportu by nic neřekla a check by ji musel přeskakovat.
+- **`bfd` se filtruje podle `bgp_neighbors`, ne podle `bfd_peers`.** Kdyby se vybíralo podle
+  záměru, session peeru, kterého parser do záměru nedoplnil, by se do scope nedostala —
+  a chyba v průchodu parseru by tím zmizela beze stopy.
 
 **Device scope** (`kind: "device"`, prázdné selektory) je zkratka: vrátí všechny oblasti
 beze změny. Tím se realizuje režim bez inventory tak, že checky nemají jedinou větev navíc.

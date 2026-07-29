@@ -23,6 +23,8 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
 | `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
+| `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
+| `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |
 
 Význam `mode`:
 
@@ -52,6 +54,18 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
 - **`bgp_prefix_counts` počty nesčítá napříč RIB.** Peer s víc RIB (`inet.0`, `bgp.l3vpn.0`,
   ...) dostane samostatnou sadu řádků na každou — pokles jen v jedné RIB se jinak ztratí
   v součtu s ostatními.
+- **`static_route_status` a `bfd_session_state` mají v `service_types` „vsechny", ale řádek
+  dostane jen služba, která ten záměr v konfiguraci má.** Služba bez BFD nemá v reportu
+  o BFD ani zmínku (rozhodnutí R‑1); omezovat je typem služby by bylo zbytečné, protože L2
+  rozhraní se na statiku ani na peera stejně namatchovat nemůže.
+- **`static_route_status` je jediný check, který porovnává konfigurační *záměr* proti
+  naměřené realitě.** Ostatní se ptají „je to nahoře?", tenhle „je tam to, co jsi si
+  objednal?". Právě proto odhalí routu, která je v konfiguraci, ale do tabulky se nikdy
+  nedostala (`neni v tabulce`) — třeba když se její next-hop stal nedosažitelným po
+  deaktivaci rozhraní.
+- **`bfd_session_state` čeká na BGP.** Dokud peer není `Established`, vrací `SKIP`
+  s hodnotou `BGP neni Established` místo FAILu. BFD nemůže naběhnout bez BGP a dva červené
+  řádky za jednu příčinu jsou důvod, proč operátoři výpisy přeskakují.
 
 ### Klasifikace rozhraní
 
@@ -198,13 +212,27 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 2` (dřív `1` — verze se zvýšila spolu s rozdělením adres na rodiny, viz
-níž). Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani inventory, ani síť.
-Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne k pokusu o migraci dat.
+`schema_version: 3`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
+k pokusu o migraci dat.
+
+Historie verzí:
+
+| verze | co se změnilo |
+|---|---|
+| 1 → 2 | adresy rozdělené na rodiny, přibyla oblast `nd` |
+| 2 → 3 | přibyly oblasti `routes` a `bfd` a klíče `unassigned.static_routes` / `.bfd_sessions` |
+
+> **Starší snímky nejdou přehrát.** Zvýšení na 3 znamená, že `runs/ipv6/`
+> a `runs/ipv6-live-2026-07-29/` — pořízené se `schema_version: 2` — už `evaluate` odmítne.
+> Není to chyba: snímek verze 2 oblasti `routes` ani `bfd` neobsahuje, takže by oba nové
+> checky neměly co číst a služba s nakonfigurovanou, ale neinstalovanou routou by prošla
+> jako zdravá. Kdo takový snímek potřebuje vyhodnotit, musí **pořídit nový `capture`**;
+> dopočítat chybějící oblasti ze starého souboru nejde.
 
 ```jsonc
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -245,7 +273,17 @@ Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne k pokusu
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
                                    "interface": "ae0.14"}},
-    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}}
+    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}},
+    // Doslovne z runs/bfd-static-2026-07-29/pre.json: na tomhle zarizeni je
+    // pet servisnich statik nakonfigurovanych, ale v tabulce nejsou (next-hop
+    // zesel po deaktivaci ge-0/0/2), a BFD session nevznikla ani jedna.
+    "routes": {
+      "mgmt_junos.inet.0":  {"0.0.0.0/0": {"next_hop": ["10.0.0.2"],
+                                           "via": ["fxp0.0"], "active": true}},
+      "mgmt_junos.inet6.0": {"::/0": {"next_hop": ["2001:db8::1"],
+                                      "via": ["fxp0.0"], "active": true}}
+    },
+    "bfd": {}
   },
   "probes": {
     "ping": [
@@ -270,6 +308,12 @@ Vlastnosti:
 - `facts.nd` je IPv6 protějšek `facts.arp` — stejný tvar, navíc pole `state`.
 - `facts.bgp[peer].ribs` drží počty **za každou RIB zvlášť**, nikdy sečtené — jeden peer
   může mít až 11 RIB (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...).
+- `facts.routes` je klíčované **jménem RIB, pak prefixem**. Jméno nese rodinu
+  (`...inet6.0`), takže asymetrie, kterou má mezi IPv4 a IPv6 konfigurace, se ve snímku
+  nevyskytuje. Prázdné tabulky se neukládají — RPC jich vrací přes dvacet.
+- `facts.bfd` je klíčované **adresou souseda** — pod stejným klíčem hledá check i záměr
+  z inventory a stav BGP. Prázdný slovník je platný stav (BFD nakonfigurované, session
+  nevznikla), ne chyba sběru.
 - `capture.collectors` nese stav každého sběru zvlášť — selhání jednoho RPC nezruší capture.
 - `device.uptime_seconds` je v modelu, ale `device_meta()` ho zatím vždy plní `None`.
 - Ping záznam nese `family` (4/6) a `interface` — to druhé je vyplněné jen u IPv6 link-local
@@ -294,10 +338,26 @@ Vlastnosti:
     "virtual_gw_v4":       [],
     "virtual_gw_v6":       [],
     "vlans":               ["113"],
-    "bridge_domains":      []
+    "bridge_domains":      [],
+    "static_routes": [
+      {"rib": "L3VPN-CPE13-NNI.inet.0",  "prefix": "172.26.1.0/29",
+       "next_hop": ["198.11.13.2"]},
+      {"rib": "L3VPN-CPE13-NNI.inet6.0", "prefix": "2001:eeee::/64",
+       "next_hop": ["2001:db8:11:13::b"]}
+    ],
+    "bfd_peers": [
+      {"peer": "198.11.13.2", "minimum_interval": 3000, "multiplier": 3,
+       "source": "neighbor"}
+    ]
   }
 }
 ```
+
+`static_routes` a `bfd_peers` jsou **konfigurační záměr**, ne měření — jsou to jediné
+selektory, které nesou hodnoty, a ne jen jména. `static_routes` slouží zároveň jako filtr
+(routa patří scope, když sedí dvojice `(rib, prefix)`); `bfd_peers` jako filtr **neslouží** —
+session se vybírají přes `bgp_neighbors`, aby session peeru chybějícího v záměru nezmizela
+beze stopy.
 
 Scope je **čistě filtr**, neobsahuje naměřená data. Device scope má `kind: "device"`
 a prázdné selektory = „ber všechno". Adresy i virtual-gateway jsou rozdělené podle rodiny
@@ -376,7 +436,17 @@ a snapshotu výš); `models/result.py::RunResult.schema_version` zůstává `1`.
   },
 
   "unassigned": {
-    "bgp_peers": [{"peer": "10.1.0.5", "routing_instance": null, "snapshot": "subject"}]
+    "bgp_peers": [{"peer": "10.1.0.5", "routing_instance": null, "snapshot": "subject"}],
+    "static_routes": [
+      {"rib": "mgmt_junos.inet.0", "prefix": "0.0.0.0/0", "next_hop": ["10.0.0.2"],
+       "via": ["fxp0.0"], "snapshot": "subject"},
+      {"rib": "mgmt_junos.inet6.0", "prefix": "::/0", "next_hop": ["2001:db8::1"],
+       "via": ["fxp0.0"], "snapshot": "subject"}
+    ],
+    "bfd_sessions": [
+      {"peer": "10.1.0.5", "interface": "ge-0/0/9.0", "state": "Up",
+       "snapshot": "subject"}
+    ]
   }
 }
 ```
@@ -406,8 +476,18 @@ Vlastnosti:
   to zůstalo jen ve `Scope`, ke kterému renderer nemá přístup.
 - **Nespárované baseline scopy nemají vlastní záznam v `scopes`** — nejsou v subjektu, není
   co měřit. Jsou jen v `unmatched.baseline`.
-- `unassigned.bgp_peers` hlásí zatím jen peery na **subjektu** (nové zařízení). V device
-  režimu je seznam vždy prázdný.
+- `unassigned` hlásí zatím jen data ze **subjektu** (nové zařízení) a ve všech třech
+  seznamech (`bgp_peers`, `static_routes`, `bfd_sessions`) je v device režimu vždy prázdno —
+  device scope si nárokuje všechno, takže „nepřiřazené" nemá význam.
+- **`unassigned.static_routes` je zároveň pojistka proti mezerám v parsování.** Spadne sem
+  statika v management instanci (`mgmt_junos.inet.0 0.0.0.0/0` přes `fxp0.0` — `fxp0.0` se
+  scopem nikdy nestane), ale i routa, jejíž konfigurační tvar parser neuměl přečíst: do
+  selektorů se nedostane, v tabulce ji ale vidět je.
+- **`unassigned.bfd_sessions`** obsahuje session peeru, který není v žádném `bgp_neighbors` —
+  typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte.
+- `unassigned` se **do textového reportu nevypisuje** — sekce `NESPAROVANO` vypisuje
+  `unmatched`, což je něco jiného. Všechny tři seznamy jsou zatím jen ve strojovém výstupu
+  (`--format json`).
 - `message` je česky (bez diakritiky), konzistentně se zbytkem nástroje.
 
 ---
@@ -437,7 +517,16 @@ WARN sám o sobě návratový kód nemění — jinak by CI padalo pořád a př
 | `evpn_vpws` | `get_evpn_vpws_information` | totéž | — |
 | `evpn_esi` | `get_evpn_instance_information` | totéž | `extensive=True` |
 | `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
+| `routes` | `get_route_information` | totéž | `protocol="static"` |
+| `bfd` | `get_bfd_session_information` | totéž | `detail=True` |
 | ping (probe) | `ping` | totéž | `host`, `count`, `rapid=True`, volitelně `source`, `routing_instance`, `interface` (jen IPv6 link-local cíl) |
+
+Dva argumenty, které vypadají jako kosmetika a nejsou:
+
+- **`protocol="static"`** drží odpověď malou i na zařízení s plnou internetovou tabulkou.
+- **`detail=True`** je nutnost, ne pohodlí: stručný výpis BFD nemá ani `bfd-client`, ani
+  `remote-state`, takže by collector tiše sbíral data, ze kterých se nedá poznat, že session
+  drží BGP a že ji protějšek administrativně vypnul.
 
 `extensive` u `evpn_esi` není kosmetika: bez něj `show evpn instance` vrátí souhrn bez
 jediného ESI a collector by tiše vracel prázdno.

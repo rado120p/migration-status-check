@@ -3278,7 +3278,7 @@ má dvě IPv4 routy, ne jednu — ověřeno při Tasku 1.) Mgmt statiky mezi nim
 Expected: dvě položky, `mgmt_junos.inet.0 0.0.0.0/0` a `mgmt_junos.inet6.0 ::/0`,
 obě s `via: ["fxp0.0"]`.
 
-Pokud tyhle čtyři FAIL řádky nevyjdou, **nespoléhej na to, že je laborka jinak
+Pokud tyhle pět FAIL řádků nevyjdou, **nespoléhej na to, že je laborka jinak
 nakonfigurovaná** — zkontroluj nejdřív `_assign_static_routes` a selektor
 `static_routes` ve scope. Rozpor mezi konfigurací a tabulkou je jediný důvod,
 proč AR-15 vznikl, a je to jediné místo, kde ho jde ověřit proti živému

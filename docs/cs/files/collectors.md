@@ -1,7 +1,7 @@
 # `collectors/` — sběr operačního stavu
 
 Soubory: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
-`evpn.py` a prázdný `__init__.py`.
+`evpn.py`, `routes.py`, `bfd.py` a prázdný `__init__.py`.
 
 Dvě pravidla, na kterých celá vrstva stojí:
 
@@ -55,7 +55,8 @@ duplicitní jméno je `ValueError`. `all_collectors()` vrací seřazený seznam,
 
 ## `all.py` — naplnění registru
 
-Importuje `arp`, `bgp`, `evpn`, `interfaces`, `nd`, čímž se spustí jejich `@register`.
+Importuje `arp`, `bfd`, `bgp`, `evpn`, `interfaces`, `nd`, `routes`, čímž se spustí jejich
+`@register`.
 Existuje jako samostatný modul (ne `__init__.py`), aby nevznikl cyklický import.
 
 **Collector zapomenutý v tomhle souboru by tiše vypustil celou oblast** — checky nad ní by
@@ -207,3 +208,85 @@ XML, což drží testy jednoduché.
   prozradí tím, že VLAN hlásí jako `none`, EVO tím, že doméně říká `VL-NONE`
   (`_is_no_domain()` chytá obojí: prefix `__` i suffix `NONE`). VLAN id ale obě platformy
   uvedou, takže podle něj samotného by vlan-based instance nesedly.
+
+## `routes.py` — statické routy z routovací tabulky
+
+RPC: `get_route_information` s `rpc_kwargs` `{"protocol": "static"}` (obě platformy).
+
+Filtr na protokol drží odpověď malou i na zařízení s plnou internetovou tabulkou.
+`all=True` se **nepoužívá** — přidává jen `__juniper_private*` tabulky, což je šum.
+
+Výstup je dvouúrovňový slovník `{RIB: {prefix: {next_hop, via, active}}}`, tak jak ho
+vyrobí collector z nahrávky `tests/fixtures/rpc/junos-evo/routes.xml`:
+
+```json
+{
+  "inet.0": {
+    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true },
+    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true }
+  },
+  "inet6.0": {
+    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true }
+  },
+  "L3VPN-CPE13-NNI.inet.0": {
+    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true }
+  },
+  "L3VPN-CPE13-NNI.inet6.0": {
+    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true }
+  }
+}
+```
+
+Tři věci ověřené proti laborce:
+
+- **`table-name` nese jméno RIB včetně rodiny** (`L3VPN-CPE13-NNI.inet6.0`). Asymetrie,
+  kterou má mezi IPv4 a IPv6 konfigurace (`routing-options` vs. `rib inet6.0`), se v RPC
+  nevyskytuje — collector proto žádnou normalizaci názvu dělat nemusí.
+- **`via` nese výstupní rozhraní**, takže mapování routy na službu nepotřebuje aritmetiku
+  nad next-hopem. Toho využívá `engine.py` při plnění `unassigned.static_routes`.
+- **`to` a `via` sedí uvnitř `<nh>`, ne přímo pod `<rt-entry>`** — proto `_texts()` používá
+  `iter()`, ne `find()`.
+
+Dvě pojistky, které vypadají zbytečně a nejsou:
+
+- **Filtr na `protocol-name` v `parse()`** je druhá obrana za filtrem v RPC. Nasazení, které
+  by RPC zavolalo bez `protocol`, by jinak zapsalo BGP routy jako statické.
+- **Prázdné tabulky se zahazují.** RPC vrací přes dvacet tabulek, většinu prázdných;
+  ukládat je znamená nafouknout každý snímek o řádky, které nic neříkají.
+
+## `bfd.py` — stav BFD session
+
+RPC: `get_bfd_session_information` s `rpc_kwargs` `{"detail": True}` (obě platformy).
+
+**Bez `detail` by collector tiše sbíral neúplná data.** Stručný výpis nemá ani `bfd-client`,
+ani `remote-state` — bez klienta nejde odlišit session drženou BGP od jiné a bez
+`remote-state` nejde poznat, že protějšek session administrativně vypnul. Že se příznak
+na RPC opravdu dostane, hlídá až conformance test; nahrané fixtures to nesou v atributu
+`<bfd-session-information style="detail">`.
+
+Výstup je `{peer_ip: {state, interface, remote_state, local_diagnostic, clients,
+detection_time, transmission_interval, multiplier}}`, z nahrávky
+`tests/fixtures/rpc/junos-evo/bfd.xml`:
+
+```json
+{
+  "152.11.13.2": {
+    "state": "Up", "interface": "et-0/0/8.13", "remote_state": "Up",
+    "local_diagnostic": "None", "clients": ["BGP"],
+    "detection_time": "9.000", "transmission_interval": "3.000", "multiplier": 3
+  },
+  "198.11.13.2": {
+    "state": "Down", "interface": "et-0/0/8.113", "remote_state": "AdminDown",
+    "local_diagnostic": "None", "clients": ["BGP"],
+    "detection_time": "0.000", "transmission_interval": "3.000", "multiplier": 3
+  }
+}
+```
+
+**Klíčem je adresa souseda**, protože přesně pod ní check hledá záměr z inventory
+(`Selectors.bfd_peers`) i stav BGP (`facts["bgp"]`).
+
+**Prázdný výpis je platný stav, ne chyba.** Nahrávka z vMX
+(`tests/fixtures/rpc/junos/bfd.xml`) je `<sessions>0</sessions>` — BFD je tam
+nakonfigurované, ale session nevznikla. Rozhodnout, jestli je to problém, umí až check:
+závisí to na tom, jestli je BFD vůbec v konfiguraci a jestli běží BGP.
