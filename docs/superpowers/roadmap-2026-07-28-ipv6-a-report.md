@@ -3,7 +3,7 @@
 **Založeno:** 2026-07-28 · **Naposledy přepsáno:** 2026-07-29
 **Větev:** `ipv6-a-report`, odbočena z `main` na `a24efc8`, 41 commitů
 **Stav testů:** 424 prošlo, 1 přeskočen
-**Stav větve:** opravná vlna hotová, **zbývá ostré ověření proti laborce a merge**
+**Stav větve:** opravná vlna hotová, ostré ověření proti laborce prošlo, **zbývá merge**
 
 Závěrečná review z 2026-07-28 větev nepropustila a našla dvě rozhodnutí pro
 člověka a sedm věcí k opravě. Obojí je vyřízené (2026-07-29). Tenhle soubor
@@ -76,17 +76,32 @@ README a `files/reporting.md` jsou přehrané rendererem, ne dopsané ručně.
 
 ---
 
-## 3. Co zbývá
+## 3. Ostré ověření proti laborce (2026-07-29)
 
-1. **Ostré ověření proti laborce.** F-4 byl třetí výskyt tvaru, který ostré
-   ověření chytilo dvakrát; po opravách má smysl se podívat znovu. Konkrétně
-   stojí za to hledat: službu s víc než jedním rozsahem v rodině (F-4 vznikl
-   právě tam), reálné ND stavy kvůli předpokladu o `"incomplete"`, a potvrzení,
-   že `bez baseline` na spárovaných službách zmizelo.
-   Heslo: `eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"` — v Bash volání
-   je jinak `$MIG_LAB_PASSWORD` nenastavené.
-2. **Merge.**
-3. Follow-upy níže zvlášť, ne před mergem.
+Čerstvý capture obou zařízení (`172.20.20.4` pre, `172.20.20.5` post), pak
+`evaluate`. Heslo se načítá `eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"`
+— v Bash volání je `$MIG_LAB_PASSWORD` jinak nenastavené.
+
+| co se ověřovalo | výsledek |
+|---|---|
+| **F-4** — rámečky bloků | 131 změřených řádků, **0 přerůstajících** |
+| **F-9** — `bez baseline` na spárovaných službách | **0**. Zbylé 4 připadají na nespárované služby, kde je hláška správně |
+| **F-6** — porty v režimu bez baseline | `NOVY PORT` vyplněný u **každé** služby |
+| **F-5** — jména rozhraní v popiskách | nesou je všechny řádky, včetně `irb`, `lo0`, `ae0` |
+| **F-3** — rodina bez konfigurace | **0** řádků i sekcí |
+| **T8** — stav `unreachable` | v živých datech se **opravdu vyskytuje** (`2001:db8::1`), takže opravená fixture odpovídá realitě |
+| selhaný collector (`evpn_mac`, l2-learning na PTX neběží) | 3 řádky, všechny **SKIP**, žádný PASS — chybějící data nedají zelenou |
+
+Dvě věci, které ověření **nedokázalo**, a proč to nevadí:
+
+- **Služba s víc rozsahy v jedné rodině na téhle topologii není** (0 hlaviček
+  sekce s čárkou), takže se F-4 živě reprodukovat nedá. Pokrývá ho fixture
+  `_many_ranges_scope` — 105 znaků hlavičky proti 60znakovému rámečku.
+- **Stav `"incomplete"` se v živých datech nevyskytl ani teď** (jsou tam
+  `unreachable`, `delay`, `reachable`, `stale`). Předpoklad u `_usable_nd`
+  zůstává zaznamenaný jako předpoklad, viz níže.
+
+Zbývá **merge**; follow-upy níže zvlášť, ne před ním.
 
 ---
 
@@ -120,6 +135,7 @@ projde všemi testy" je uzavřená — `PREFIX_KEYS` je připnutý testem.*
 | F-11 | `probes/ping.py` a `checks/reachability.py` mají dvě kopie téže logiky pro link-local. Už jednou to způsobilo chybu | rozcházení je pořád na místě |
 | F-12 | `filter_result` nechává původní `summary`, takže `--filter` tiskne počty za nefiltrovaný běh | starší než tahle větev |
 | F-14 | Sloupec s typem služby v NESPAROVANO není odsazený, sloupec s důvodem je rozházený | kosmetika |
+| F-15 | `change_text` nekouká na stav, takže i **SKIP** řádek dostane do sloupce ZMENA `bez baseline` — a zpráva vedle už říká totéž (`peer neni v baseline snapshotu`). V ostrém běhu je to 14 z 18 výskytů té hlášky | našlo ostré ověření 2026-07-29; starší než tahle větev, patří k F-7/F-10 |
 
 *Poznámka k F-7 a F-10: po F-5 jsou obě v ostrém reportu vidět víc než dřív,
 protože sousední řádky se zkvalitnily. Řeší se dohromady, ne po jedné.*
