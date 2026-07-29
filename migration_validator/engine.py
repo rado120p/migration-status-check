@@ -63,9 +63,18 @@ def _aligned_baseline_data(
     kde se rozhrani prejmenovalo. Presmerovani je poziciove: kazda sluzba
     ma v selektoru prave jedno rozhrani (scoping/builder.py), takze zip
     dvou jednoprvkovych seznamu je jednoznacny.
+
+    Preslovnuji se obe skupiny selektoru. Scope nese vedle logickeho
+    rozhrani i to fyzicke a migrace prejmenovava obe (ge-0/0/2 -> et-0/0/8);
+    kdyz se preslovnovalo jen logicke, fyzicke svou baseline nenaslo a kazda
+    migrovana sluzba vypsala dva trvale radky 'bez baseline'.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
-    rename = dict(zip(baseline_scope.selectors.interfaces, scope.selectors.interfaces))
+    selectors = baseline_scope.selectors
+    rename = dict(zip(selectors.interfaces, scope.selectors.interfaces))
+    rename.update(
+        zip(selectors.physical_interfaces, scope.selectors.physical_interfaces)
+    )
     if rename:
         data["interfaces"] = {
             rename.get(name, name): iface_data

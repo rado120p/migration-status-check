@@ -9,16 +9,22 @@ from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapsho
 NOW = "2026-07-24T11:40:02Z"
 
 
-def _scope(scope_id, description, service_type, interface, peers=()):
+def _scope(scope_id, description, service_type, interface, peers=(), physical=()):
     return Scope(
         id=scope_id,
         kind="service",
         key=ScopeKey(description, service_type, None),
-        selectors=Selectors(interfaces=[interface], bgp_neighbors=list(peers)),
+        selectors=Selectors(
+            interfaces=[interface],
+            physical_interfaces=list(physical),
+            bgp_neighbors=list(peers),
+        ),
     )
 
 
-def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-migration"):
+def _snapshot(
+    address, interface, scopes, *, pps=400, peers=None, phase="pre-migration", physical=None
+):
     facts = {
         "interfaces": {
             interface: {
@@ -41,6 +47,15 @@ def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-mig
         ],
         "bgp": peers if peers is not None else {},
     }
+    if physical:
+        facts["interfaces"][physical] = {
+            "admin_status": "up",
+            "oper_status": "up",
+            "input_pps": pps,
+            "output_pps": pps,
+            "input_errors": 0,
+            "output_errors": 0,
+        }
     return Snapshot(
         device=DeviceMeta(address=address),
         capture=CaptureMeta(
@@ -121,6 +136,42 @@ def test_evaluate_with_baseline_matches_and_compares():
     assert scope.match.method == "description+service_type"
     assert scope.match.baseline_interfaces == ["ge-0/0/2.113"]
     assert scope.match.subject_interfaces == ["et-0/0/8.113"]
+
+
+def test_physical_interface_finds_its_baseline_after_rename():
+    """Migrace prejmenovava i fyzicke rozhrani, ne jen logicke.
+
+    _aligned_baseline_data preslovnovalo jen selectors.interfaces, takze
+    fyzicke rozhrani svou baseline nikdy nenaslo a kazda migrovana sluzba
+    vypsala dva trvale radky 'WARN 0 pps | bez baseline'. V ostrem behu to
+    bylo 16 z 36 varovani - presne ten trvaly oranzovy svit, kvuli kteremu
+    counter checky na internich rozhranich davaji SKIP misto WARN.
+    """
+    baseline = _snapshot(
+        "172.20.20.4",
+        "ge-0/0/2.113",
+        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "ge-0/0/2.113",
+                physical=["ge-0/0/2"])],
+        physical="ge-0/0/2",
+    )
+    subject = _snapshot(
+        "172.20.20.5",
+        "et-0/0/8.113",
+        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "et-0/0/8.113",
+                physical=["et-0/0/8"])],
+        phase="post-migration",
+        physical="et-0/0/8",
+    )
+
+    result = api.evaluate(subject, baseline=baseline, now=NOW)
+
+    physical = [
+        check
+        for check in result.scopes[0].checks
+        if check.id == "interface_traffic" and check.message.startswith("et-0/0/8:")
+    ]
+    assert len(physical) == 2, "fyzicke rozhrani ma mit radek pro oba smery provozu"
+    assert [check.baseline_value for check in physical] == ["400 pps", "400 pps"]
 
 
 def test_traffic_drop_surfaces_as_warn_in_summary():
