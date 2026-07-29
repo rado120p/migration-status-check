@@ -2116,7 +2116,7 @@ Create `migration_validator/collectors/bfd.py`:
 """Sber stavu BFD session.
 
 Collector nerozhoduje, jestli je chybejici session problem - to zavisi na
-tom, jestli je BFD vubec nakonfigurovane a jestli bezi BGP, a obojí vi az
+tom, jestli je BFD vubec nakonfigurovane a jestli bezi BGP, a oboji vi az
 check.
 
 Pouziva detail variantu: strucny vypis nema ani bfd-client, ani
