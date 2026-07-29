@@ -1790,11 +1790,22 @@ cp runs/bfd-static-2026-07-29/rpc/172.20.20.4.route_static.xml tests/fixtures/rp
 cp runs/bfd-static-2026-07-29/rpc/172.20.20.5.route_static.xml tests/fixtures/rpc/junos-evo/routes.xml
 ```
 
-Ověř obsah:
+Ověř obsah. **Nepoužívej `grep -c "<rt>"`** — element nese atribut
+(`<rt style="brief">`), takže by ten vzorec vrátil nulu a vypadalo by to, že
+jsou fixtures prázdné:
+
 ```bash
-grep -c "<rt>" tests/fixtures/rpc/junos/routes.xml tests/fixtures/rpc/junos-evo/routes.xml
+.venv/bin/python -c "
+from lxml import etree
+for name in ('junos', 'junos-evo'):
+    t = etree.parse(f'tests/fixtures/rpc/{name}/routes.xml')
+    print(name, 'rt:', len(list(t.getroot().iter('rt'))))
+"
 ```
-Expected: `junos/routes.xml` má 2 (obě mgmt), `junos-evo/routes.xml` má 5 (servisní).
+
+Expected: `junos` má **2** (obě mgmt — servisní statiky na vMX nakonfigurované
+jsou, ale nenainstalovaly se, protože jejich next-hop neexistuje),
+`junos-evo` má **5** ve čtyřech tabulkách.
 
 - [ ] **Step 2: Napsat padající testy**
 
