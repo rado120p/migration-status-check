@@ -124,6 +124,96 @@ def test_nd_area_is_a_list_when_missing():
     assert "nd" in FACT_AREAS
 
 
+ROUTE_FACTS = {
+    "inet.0": {
+        "198.62.1.0/29": {"next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": True},
+        "10.9.9.0/24": {"next_hop": ["10.9.9.1"], "via": ["et-0/0/9.0"], "active": True},
+    },
+    "L3VPN-A.inet.0": {
+        "172.26.1.0/29": {"next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": True},
+    },
+}
+
+BFD_FACTS = {
+    "152.11.13.2": {"state": "Up", "interface": "et-0/0/8.13"},
+    "198.11.14.2": {"state": "Down", "interface": "et-0/0/8.114"},
+}
+
+
+def _scope_with(**selector_kwargs) -> Scope:
+    return Scope(
+        id="svc:test:Internet",
+        kind="service",
+        key=ScopeKey(description="test", service_type="Internet"),
+        selectors=Selectors(**selector_kwargs),
+    )
+
+
+def test_routes_are_selected_by_rib_and_prefix():
+    """Identita je (RIB, prefix) - stejny prefix v jine RIB je jina routa."""
+    scope = _scope_with(
+        static_routes=[
+            {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]}
+        ]
+    )
+
+    selected = scope.select({"routes": ROUTE_FACTS})
+
+    assert selected["routes"] == {
+        "inet.0": {
+            "198.62.1.0/29": {
+                "next_hop": ["152.11.13.2"],
+                "via": ["et-0/0/8.13"],
+                "active": True,
+            }
+        }
+    }
+
+
+def test_table_without_matching_prefix_is_dropped_entirely():
+    """Prazdna tabulka by v reportu nic nerekla a check by ji musel preskakovat."""
+    scope = _scope_with(
+        static_routes=[
+            {"rib": "L3VPN-A.inet.0", "prefix": "172.26.1.0/29", "next_hop": []}
+        ]
+    )
+
+    selected = scope.select({"routes": ROUTE_FACTS})
+
+    assert set(selected["routes"]) == {"L3VPN-A.inet.0"}
+
+
+def test_bfd_sessions_are_selected_by_bgp_neighbors():
+    """Session patri scopu podle peeru, ne podle zameru - viz AR-14.
+
+    Kdyby se vybiralo podle bfd_peers, session peeru, ktereho parser do
+    zameru nedoplnil, by se do scope nedostala a chyba v pruchodu hierarchii
+    by se schovala pred vystupem nastroje.
+    """
+    scope = _scope_with(bgp_neighbors=["152.11.13.2"], bfd_peers=[])
+
+    selected = scope.select({"bfd": BFD_FACTS})
+
+    assert set(selected["bfd"]) == {"152.11.13.2"}
+
+
+def test_device_scope_sees_all_routes_and_sessions():
+    """Rezim bez inventory je podle AR-10 doporuceny zpusob prohlidky zarizeni."""
+    selected = device_scope().select({"routes": ROUTE_FACTS, "bfd": BFD_FACTS})
+
+    assert selected["routes"] == ROUTE_FACTS
+    assert selected["bfd"] == BFD_FACTS
+
+
+def test_missing_areas_come_back_as_empty_mappings():
+    scope = _scope_with()
+
+    selected = scope.select({})
+
+    assert selected["routes"] == {}
+    assert selected["bfd"] == {}
+
+
 def test_selectors_survive_roundtrip():
     selectors = Selectors(
         interfaces=["et-0/0/8.13"],
@@ -131,6 +221,8 @@ def test_selectors_survive_roundtrip():
         local_ipv6=["2001:abcd:11:13::a/127"],
         virtual_gw_v4=["152.11.13.254"],
         virtual_gw_v6=["2001:abcd:11:13::1"],
+        static_routes=[{"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": []}],
+        bfd_peers=[{"peer": "152.11.13.2", "minimum_interval": 300, "multiplier": 3}],
     )
 
     restored = Selectors.from_dict(selectors.to_dict())
@@ -139,3 +231,9 @@ def test_selectors_survive_roundtrip():
     assert restored.local_ipv6 == ["2001:abcd:11:13::a/127"]
     assert restored.virtual_gw_v4 == ["152.11.13.254"]
     assert restored.virtual_gw_v6 == ["2001:abcd:11:13::1"]
+    assert restored.static_routes == [
+        {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": []}
+    ]
+    assert restored.bfd_peers == [
+        {"peer": "152.11.13.2", "minimum_interval": 300, "multiplier": 3}
+    ]
