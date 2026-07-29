@@ -1996,7 +1996,7 @@ from migration_validator.collectors import (  # noqa: F401
 - [ ] **Step 5: Spustit testy a ověřit, že prochází**
 
 Run: `.venv/bin/pytest tests/collectors/test_routes.py -v`
-Expected: PASS (14 testů)
+Expected: PASS (**10 testů** — 4 parametrizované × 2 platformy + 2 jednotlivé)
 
 - [ ] **Step 6: Commit**
 
@@ -3363,4 +3363,4 @@ oba peery skupiny CPE14 SKIP kvuli BGP Idle."
 
 **F-2 (podřádky se jménem RIB) se v této vlně nedělá.** Jméno RIB jde do kvalifikátoru popisku. Pokud se při implementaci ukáže, že popisky jsou nepohodlně dlouhé, je to vstup pro vlnu 3, ne důvod měnit renderer teď.
 
-**`rpc_kwargs` je zapojené, ale `routes` a `bfd` jsou jeho první uživatelé.** `collectors/base.py:66` volá `rpc(**self.rpc_kwargs(platform))`, takže `{"protocol": "static"}` i `{"detail": True}` se na RPC dostanou — ověřeno při psaní plánu. Všechny stávající collectory vracejí `{}`, takže dosud ten hook nikdo nepoužil. Test `test_collector_passes_detail_flag` ověřuje jen kontrakt metody, ne zapojení; kdyby se `collect()` někdy přepsalo, tenhle test to nechytí a BFD by tiše sbíral stručný výpis bez `remote-state`. Zapojení hlídá až conformance test z Tasku 10.
+**`rpc_kwargs` je zapojené a v produkčním provozu.** `collectors/base.py:66` volá `rpc(**self.rpc_kwargs(platform))`, a hook už používají `ArpCollector` (`{"no_resolve": True}`) i `InterfacesCollector` (`{"extensive": True}`) — takže `{"protocol": "static"}` i `{"detail": True}` se na RPC dostanou po zaběhané cestě, ne po nevyzkoušené. (Dřívější znění tohohle odstavce tvrdilo opak; opraveno po Tasku 5.) Test `test_collector_passes_detail_flag` ověřuje jen kontrakt metody, ne zapojení; kdyby se `collect()` někdy přepsalo, tenhle test to nechytí a BFD by tiše sbíral stručný výpis bez `remote-state`. Zapojení hlídá až conformance test z Tasku 10.
