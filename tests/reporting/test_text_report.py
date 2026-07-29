@@ -456,9 +456,20 @@ def test_virtual_gateway_is_shown_in_the_section_header():
     assert "-- IPv4  152.11.14.2/29   VGW 152.11.14.1" in output
 
 
-def test_service_without_ipv6_has_no_ipv6_section():
+def test_renderer_omits_a_family_with_no_rows():
+    """Renderer sam o rodinach nerozhoduje - vykresli sekci prave tehdy,
+    kdyz do ni nejaky radek patri.
+
+    Drive se tenhle test jmenoval po sluzbe bez IPv6 a tvrdil, ze takova
+    sluzba IPv6 sekci nedostane. Prochazel ale jen proto, ze jeho fixture
+    zadny check s family=6 neobsahovala - o chovani cele retezec checky ->
+    view -> sazba nerikal nic. To, co slibovalo jeho jmeno, overuje
+    test_service_without_ipv6_has_no_ipv6_section v tests/test_end_to_end.py
+    na skutecnych datech.
+    """
     output = render(_result([_vgw_scope()]))
 
+    assert "-- IPv4  152.11.14.2/29" in output
     assert "-- IPv6" not in output
 
 

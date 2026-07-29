@@ -68,6 +68,21 @@ def owning_prefix(address: str, prefixes: list[str]) -> str | None:
     return None
 
 
+def _family_not_configured() -> list[Finding]:
+    """Rodina, kterou sluzba nema nakonfigurovanou, se nehlasi nijak.
+
+    Rozhodnuti R-1 (varianta c). Drive tu byl SKIP oznackovany svou
+    rodinou - a prave ta znacka si v bloku vynutila sekci rodiny, kterou
+    ma podle spec renderer vynechat. Sekci potlacit a radek nechat neslo:
+    sekce vznika prave z toho, ze do ni nejaky radek patri.
+
+    Cena: chybejici check je v reportu k nerozeznani od checku, ktery
+    prosel, a ve strojovem vystupu po nem taky nezustane stopa. Vedome
+    prijato - alternativou byla prazdna sekce u vetsiny sluzeb.
+    """
+    return []
+
+
 @register
 class ArpPresentCheck(Check):
     id = "arp_present"
@@ -81,14 +96,7 @@ class ArpPresentCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         prefixes = ctx.scope.selectors.local_ipv4
         if not prefixes:
-            return [
-                Finding(
-                    Outcome.SKIP,
-                    "sluzba nema nakonfigurovanou IPv4 adresu",
-                    label="ARP",
-                    family=4,
-                )
-            ]
+            return _family_not_configured()
 
         entries: list[dict[str, Any]] = ctx.subject.get("arp", [])
         entries = [entry for entry in entries if entry.get("ip")]
@@ -132,14 +140,7 @@ class NdPresentCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         prefixes = ctx.scope.selectors.local_ipv6
         if not prefixes:
-            return [
-                Finding(
-                    Outcome.SKIP,
-                    "sluzba nema nakonfigurovanou IPv6 adresu",
-                    label="ND",
-                    family=6,
-                )
-            ]
+            return _family_not_configured()
 
         keep_link_local = link_local_is_configured(ctx.scope)
         entries = [

@@ -50,11 +50,17 @@ def test_arp_skips_on_device_scope():
     assert "inventory" in result.message
 
 
-def test_arp_skips_when_no_ipv4_configured():
-    """Sluzba bez IPv4 adresy nema co s ARP overovat - SKIP, ne WARN.
+def test_arp_says_nothing_when_no_ipv4_configured():
+    """Sluzba bez IPv4 adresy nema co s ARP overovat - a nema o tom ani
+    mlcet nahlas.
 
-    Kdyby check misto toho vratil BROKEN, kazda ciste IPv6 sluzba by
-    trvale svitila oranzove za neco, co u ni vubec nedava smysl.
+    Rozhodnuti R-1 (varianta c): rodina, kterou sluzba nema
+    nakonfigurovanou, se v bloku neobjevi vubec - ani sekci, ani radkem.
+    Drive tu byl SKIP se znackou family=4, ktery si tu sekci vynutil, a
+    prazdna sekce rodiny byla presne to, co spec zakazuje.
+
+    Cena rozhodnuti: chybejici check je v reportu k nerozeznani od checku,
+    ktery prosel. Vedome prijato.
     """
     scope = Scope(
         id="svc:X:IPVPN",
@@ -64,10 +70,7 @@ def test_arp_skips_when_no_ipv4_configured():
     )
     ctx = _ctx({"arp": []}, scope=scope)
 
-    findings = ArpPresentCheck().run(ctx)
-
-    assert len(findings) == 1
-    assert findings[0].outcome is Outcome.SKIP
+    assert ArpPresentCheck().run(ctx) == []
 
 
 def test_arp_reports_broken_when_ipv4_configured_but_no_entries():
@@ -278,12 +281,12 @@ def test_nd_finding_shows_mac_and_family():
     assert findings[0].outcome is Outcome.OK
 
 
-def test_nd_skips_when_no_ipv6_configured():
-    """Sluzba bez IPv6 adresy nema co s ND overovat - SKIP, ne WARN.
+def test_nd_says_nothing_when_no_ipv6_configured():
+    """Zrcadli test_arp_says_nothing_when_no_ipv4_configured.
 
-    Zrcadli test_arp_skips_when_no_ipv4_configured: bez tohodle by kazda
-    ciste IPv4 sluzba (zatim vetsina) trvale svitila oranzove za IPv6
-    sousedy, ktere u ni nikdy nemuzou existovat.
+    Tenhle check byl mistem srazky, na ktere R-1 vzniklo: znackoval svou
+    rodinu i u sluzby, ktera tu rodinu nakonfigurovanou nema, a vynutil si
+    tak prazdnou IPv6 sekci u kazde ciste IPv4 sluzby - tedy u vetsiny.
     """
     scope = Scope(
         id="svc:X:IPVPN",
@@ -298,10 +301,7 @@ def test_nd_skips_when_no_ipv6_configured():
         config=default_config(),
     )
 
-    findings = NdPresentCheck().run(ctx)
-
-    assert len(findings) == 1
-    assert findings[0].outcome is Outcome.SKIP
+    assert NdPresentCheck().run(ctx) == []
 
 
 def test_nd_ignores_link_local_when_not_configured():

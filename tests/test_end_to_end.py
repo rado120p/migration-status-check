@@ -44,6 +44,38 @@ def test_evpn_checks_produce_real_verdicts_on_real_data(synthetic_snapshot):
         )
 
 
+def test_service_without_ipv6_has_no_ipv6_section(synthetic_snapshot):
+    """Rozhodnuti R-1 (varianta c) na skutecnych datech, ne na fixture.
+
+    Sluzba bez nakonfigurovane IPv6 nedostane v bloku ani sekci IPv6, ani
+    radek o ni. Drive si SKIP z `nd_present`, ktery svou rodinu znackoval
+    i u nenakonfigurovane rodiny, prazdnou sekci vynutil.
+
+    Chytit to jde jen tudy: renderer dostane sekci jen tehdy, kdyz nejaky
+    check nese family=6, takze rucne slozena fixture bez takoveho checku
+    projde vzdycky - at uz je chovani checku jakekoliv.
+    """
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+    result = api.evaluate(new, now=NOW)
+
+    ipv4_only = [
+        scope
+        for scope in result.scopes
+        if scope.identity.get("ipv4") and not scope.identity.get("ipv6")
+    ]
+    assert ipv4_only, "fixture nema zadnou sluzbu jen s IPv4 - test by nic neoveril"
+
+    for scope in ipv4_only:
+        assert not [check for check in scope.checks if check.family == 6], (
+            f"{scope.scope_id} nema IPv6, presto nese check s family=6"
+        )
+
+    rendered = render(result, detail=True)
+    for scope in ipv4_only:
+        block = rendered.split(scope.identity["description"])[-1]
+        assert not block.lstrip().startswith("-- IPv6")
+
+
 def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration", pps=400)
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration", pps=50)
