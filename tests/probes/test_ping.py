@@ -334,9 +334,15 @@ def test_ipv6_targets_come_from_nd():
 def test_unusable_nd_entries_are_not_targets():
     """Zaznam bez MAC nebo v nedokoncenem stavu neni cil - strilet na nej nema smysl.
 
-    Kazda podminka (mac, state) je overena samostatnym zaznamem, aby test
-    poznal, kdyby _usable_nd testovala jen jednu z nich. Treti, plne pouzitelny
-    zaznam dokazuje, ze filtr neodmita vsechno paplosne.
+    Kazdy prvek pravidla ma vlastni zaznam, aby test poznal, kdyby
+    _usable_nd testovala jen nektery z nich - tedy i `unreachable` zvlast
+    od `incomplete`. Oba nesou platnou MAC: v nahranem fixture z laborky
+    (rpc/junos/nd.xml) ma jediny `unreachable` zaznam zaroven mac "none",
+    takze ho odmitne uz prvni podminka a ta stavova zustane nedotcena.
+    Prave tahle polovina pravidla pritom na realnych datech sepne.
+
+    Posledni, plne pouzitelny zaznam dokazuje, ze filtr neodmita vsechno
+    paplosne.
     """
     scope = _scope(interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:db8::2/64",))
     nd = [
@@ -351,6 +357,12 @@ def test_unusable_nd_entries_are_not_targets():
             "mac": "0c:00:ef:5e:df:01",
             "interface": "et-0/0/8.13",
             "state": "incomplete",
+        },
+        {
+            "ip": "2001:db8::5",
+            "mac": "0c:00:ef:5e:df:03",
+            "interface": "et-0/0/8.13",
+            "state": "unreachable",
         },
         {
             "ip": "2001:db8::3",
