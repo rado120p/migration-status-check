@@ -54,6 +54,11 @@ záznamem zařízení.
 
 Každá položka má vlastní commit, každá začala padajícím testem.
 
+> `runs/ipv6/*.json` níže jsou **lokální snímky, ne obsah repa** — `runs/` je
+> v `.gitignore`. Kdo je nemá na disku, nasnímá si vlastní přes `capture`;
+> testy na nich nezávisí, opřený je o ně jen důkaz, že oprava sedí i na
+> reálných datech.
+
 | | co bylo špatně | doloženo |
 |---|---|---|
 | **F-1** + T11a | spadlá BGP relace hlásila `bez baseline`, protože se baseline dohledávala až za `continue` větve pro nefunkční stav | na `runs/ipv6`: peer `152.11.13.2` je `Established` v pre a `Connect` v post; report teď píše `bylo Established`. Mutace vracející pro režim BOTH `""` místo `bez baseline` prošla všemi 411 testy, teď padne |
