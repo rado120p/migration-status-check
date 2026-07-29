@@ -9,7 +9,7 @@ Ping je **jediný aktivní test** v nástroji — proto má vlastní kategorii m
 | povaha | pasivní čtení stavu | aktivní generování provozu |
 | rozsah | device-scoped (jedno RPC na celé zařízení) | per cíl |
 | závislost na inventory | žádná | **ano** — bez scope není znám cíl ani source adresa |
-| kdy běží | v první fázi `capture` | až po bulk sběru (cíle se odvozují z ARP) |
+| kdy běží | v první fázi `capture` | až po bulk sběru (cíle se odvozují z ARP/ND) |
 
 Ve fázi `evaluate` je výsledek pingu obyčejná data ve snapshotu. Díky tomu jsou checky
 navzájem nezávislé a dají se pouštět v libovolném pořadí.
@@ -21,50 +21,78 @@ navzájem nezávislé a dají se pouštět v libovolném pořadí.
 ### `PingTarget`
 
 Frozen dataclass: `scope_id`, `target`, `source`, `routing_instance`, `resolved_from`
-(`arp` | `subnet-fallback`). `to_dict()` z ní udělá základ záznamu ve snapshotu, do kterého
-se pak doplní naměřené hodnoty.
+(`arp` | `nd` | `subnet-fallback`), `family` (4 | 6), `interface` (jen pro IPv6 link-local
+cíle — viz níže). `to_dict()` z ní udělá základ záznamu ve snapshotu, do kterého se pak
+doplní naměřené hodnoty.
 
 `scope_id` je důležitý: podle něj `Scope.select()` později přiřadí probe zpátky ke službě.
 
-### `source_address(scope)`
+### `source_address(scope, family)`
 
-Adresa, ze které se pinguje:
+Adresa dané rodiny, ze které se pinguje — rodina zdroje musí odpovídat rodině cíle, jinak ji
+Junos ping odmítne:
 
-1. **`virtual_gw` má přednost** — u IRB rozhraní je správný zdroj virtual-gateway adresa,
-   ne fyzická adresa boxu,
-2. jinak první `local_addresses`,
+1. **`virtual_gw_v4`/`virtual_gw_v6` má přednost** — u IRB rozhraní je správný zdroj
+   virtual-gateway adresa, ne fyzická adresa boxu,
+2. jinak první `local_ipv4`/`local_ipv6`,
 3. jinak `None` (ping poběží bez `source`).
 
 Prefix se odřízne (`198.11.13.1/30` → `198.11.13.1`).
 
-### `subnet_fallback(scope)`
+### `subnet_fallback(addresses, family, owned=None)`
 
-Když je ARP tabulka pro rozhraní prázdná, zkusí se **první použitelná adresa ze subnetu**,
-která není naše vlastní. Přeskakuje se network a broadcast adresa — ale jen u sítí širších
-než /31, protože právě u p2p linek (/31, /127) jsou obě adresy legitimní hosty. Sítě
-s prefixem rovným maximu (/32, /128) se přeskočí úplně.
+Když je ARP/ND tabulka pro rozhraní prázdná, zkusí se **první použitelná adresa ze
+subnetu**, která není naše vlastní. `owned` jsou další adresy, které scope vlastní a které se
+nesmí vrátit jako cíl — typicky virtual-gateway adresa IRB rozhraní; bez toho by fallback
+vrátil VGW jako cíl, zatímco `source_address()` už VGW použila jako zdroj, a výsledkem by byl
+ping sám na sebe.
+
+Network a broadcast adresa se přeskakují jen u **IPv4** sítí širších než /31 — u p2p linek
+(/31) jsou obě adresy legitimní hosty a v IPv6 je adresa se samými nulami subnet-router
+anycast, ne broadcast, takže se nepřeskakuje vůbec. Sítě s prefixem rovným maximu (/32, /128)
+se přeskočí úplně.
+
+**U IPv6 navíc platí `IPV6_FALLBACK_MIN_PREFIX = 126`** — fallback se zkouší jen u sítí
+`/126` a delších (point-to-point rozsahy). Střílet náhodnou adresu do `/64` nemá smysl: je to
+zaručený neúspěch, který se v reportu čte jako nedostupné CPE.
 
 Typicky: PE má `.1`, zkusí se `.2`.
 
-### `resolve_targets(scopes, arp_entries)`
+### `resolve_targets(scopes, arp_entries, nd_entries=None)`
 
-Srdce fáze „ARP → ping". Pro každý scope:
+Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
 
 - **přeskočí device scope a všechny typy služeb kromě `Internet` a `IPVPN`.** `Core`,
   `E-Line` ani `E-LAN` ping nedostanou — `lo0.0` je díky kategorizaci `Core`, takže odpadá
   automaticky;
 - `routing_instance` se do pingu předá **jen u `IPVPN`** (`ping <ip> routing-instance <RI>`);
   `Internet` jede v default `inet.0`;
-- vezme **všechny** ARP adresy naučené na rozhraních scope — u ne-p2p subnetů jich může být
-  víc a pingují se všechny;
-- když ARP nic nedá, použije `subnet_fallback()` a označí `resolved_from: "subnet-fallback"`.
+- **IPv4**: vezme všechny ARP adresy naučené na rozhraních scope;
+- **IPv6**: vezme jen ND záznamy, které jsou **použitelné** (`_usable_nd()`: mají MAC a stav
+  není `unreachable`/`incomplete`) a nejsou link-local — **pokud služba nemá link-local
+  adresu nakonfigurovanou přímo pod rozhraním** (`_link_local_configured()`: kontroluje jen
+  přítomnost, ne výlučnost — stačí, aby mezi nakonfigurovanými adresami byla jedna
+  link-local, i vedle běžné routovatelné); pak se link-local sousedé ponechají jako legitimní
+  cíle;
+- **link-local cíl bez rozhraní Junos ping odmítne** — proto `PingTarget.interface` nese
+  název rozhraní ND záznamu, kdykoli je cíl link-local;
+- u obou rodin: neplatí typicky, ale kdyby ARP/ND vrátila naši vlastní adresu, cíl se
+  vynechá (ping sám na sebe je nesmyslný výsledek);
+- když ARP/ND nic nedá, použije `subnet_fallback()` a označí `resolved_from:
+  "subnet-fallback"`.
+
+V rámci jednoho scope přijdou cíle IPv4 před IPv6; napříč více scopy už pořadí neplatí — na
+pořadí nic nezávisí, checky rodinu čtou z pole `family`, ne z pozice v seznamu.
 
 Management rozhraní se sem nedostanou, protože se z nich vůbec nestane scope
 (`scoping/builder.py`). Bez toho pravidla by nástroj pingoval do management sítě.
 
 ### `run_ping(device, target, count)`
 
-Spustí `device.rpc.ping(host=..., count=..., [source=...], [routing_instance=...])`.
+Spustí `device.rpc.ping(host=..., count=..., rapid=True, [source=...],
+[routing_instance=...], [interface=...])`. `rapid=True` zkracuje běh z ~5 s na ~0,3 s na cíl
+(ověřeno proti laborce, že tvar odpovědi — `probe-results-summary` a jeho pole — zůstává
+stejný, takže `parse_ping_result()` se nemění). `interface` se předá jen u link-local cílů.
 
 **Neúspěch není chyba nástroje, ale výsledek měření.** Výjimka se proto odchytí a zapíše
 jako záznam se 100% ztrátou a klíčem `error`. Odchytává se záměrně cokoliv: kromě

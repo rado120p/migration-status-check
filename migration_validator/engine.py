@@ -63,15 +63,51 @@ def _aligned_baseline_data(
     kde se rozhrani prejmenovalo. Presmerovani je poziciove: kazda sluzba
     ma v selektoru prave jedno rozhrani (scoping/builder.py), takze zip
     dvou jednoprvkovych seznamu je jednoznacny.
+
+    Preslovnuji se obe skupiny selektoru. Scope nese vedle logickeho
+    rozhrani i to fyzicke a migrace prejmenovava obe (ge-0/0/2 -> et-0/0/8);
+    kdyz se preslovnovalo jen logicke, fyzicke svou baseline nenaslo a kazda
+    migrovana sluzba vypsala dva trvale radky 'bez baseline'.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
-    rename = dict(zip(baseline_scope.selectors.interfaces, scope.selectors.interfaces))
+    selectors = baseline_scope.selectors
+    rename = dict(zip(selectors.interfaces, scope.selectors.interfaces))
+    rename.update(
+        zip(selectors.physical_interfaces, scope.selectors.physical_interfaces)
+    )
     if rename:
         data["interfaces"] = {
             rename.get(name, name): iface_data
             for name, iface_data in data.get("interfaces", {}).items()
         }
     return data
+
+
+def _identity(scope: Scope) -> dict[str, Any]:
+    """Vse, co report o sluzbe vypisuje - jinak by to zustalo ve scope.
+
+    Renderer nema pristup ke scopum, jen k vysledku, takze bez tohoto by
+    sloupce s adresami, virtual gateway a routing-instanci nemel odkud vzit.
+    """
+    key = scope.key
+    selectors = scope.selectors
+    return {
+        "description": key.description if key else None,
+        "service_type": key.service_type if key else None,
+        "service_subtype": key.service_subtype if key else None,
+        "routing_instance": (
+            selectors.routing_instances[0] if selectors.routing_instances else None
+        ),
+        # Bez baseline neni MatchInfo, ze ktere renderer bere porty - a rezim
+        # `evaluate --snapshot X` bez --baseline je podle AR-10 doporuceny
+        # zpusob, jak si prohlednout stav jednoho zarizeni. Bez tohohle pole
+        # by v nem byl sloupec s portem prazdny u kazde sluzby.
+        "interfaces": list(selectors.interfaces),
+        "ipv4": list(selectors.local_ipv4),
+        "ipv6": list(selectors.local_ipv6),
+        "virtual_gw_v4": list(selectors.virtual_gw_v4),
+        "virtual_gw_v6": list(selectors.virtual_gw_v6),
+    }
 
 
 def _run_scope(
@@ -113,6 +149,7 @@ def _run_scope(
         status=status,
         match=match,
         checks=results,
+        identity=_identity(scope),
     )
 
 

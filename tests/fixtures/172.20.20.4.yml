@@ -1,11 +1,14 @@
+schema_version: 2
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
   description: null
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -19,10 +22,12 @@ interfaces:
   description: null
   service_type: Internet
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 10.0.0.15/24
+  ipv6_address:
   - 2001:db8::2/64
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:
@@ -38,8 +43,10 @@ interfaces:
   description: clab-pop-migration-P1;et-0/0/0
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -53,10 +60,12 @@ interfaces:
   description: clab-pop-migration-P1;et-0/0/0
   service_type: Core
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 10.1.2.1/31
+  ipv6_address:
   - 2001:db8:2::2/127
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:
@@ -74,8 +83,10 @@ interfaces:
   description: clab-pop-migration-PTX1-POP1;et-0/0/1
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -89,10 +100,12 @@ interfaces:
   description: clab-pop-migration-PTX1-POP1;et-0/0/1
   service_type: Core
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 10.1.0.4/31
+  ipv6_address:
   - 2001:db8:6::1/127
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:
@@ -110,8 +123,10 @@ interfaces:
   description: NNI1-TO-CPE1
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -125,10 +140,12 @@ interfaces:
   description: INTERNET-CPE13-NNI
   service_type: Internet
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 152.11.13.1/30
+  ipv6_address:
   - 2001:abcd:11:13::a/127
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:
@@ -149,10 +166,12 @@ interfaces:
   description: L3VPN-CPE13-NNI
   service_type: IPVPN
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 198.11.13.1/30
+  ipv6_address:
   - 2001:db8:11:13::a/127
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
   active: true
   protocol:
@@ -174,8 +193,10 @@ interfaces:
   description: EVPN-VPWS-CPE13-NNI
   service_type: E-Line
   service_subtype: vpws
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE13-NNI
   active: true
   protocol:
@@ -193,8 +214,10 @@ interfaces:
   description: EVPN-VLAN-AWARE-CPE13-NNI
   service_type: E-LAN
   service_subtype: vlan-aware
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
   active: true
   protocol:
@@ -213,8 +236,10 @@ interfaces:
   description: EVPN-VLAN-BASED-CPE13-NNI
   service_type: E-LAN
   service_subtype: vlan-based
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-BASED-CPE13-NNI
   active: true
   protocol:
@@ -231,8 +256,10 @@ interfaces:
   description: L3VPN-CPE14-UNI
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -246,10 +273,12 @@ interfaces:
   description: L3VPN-CPE14-UNI
   service_type: IPVPN
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 198.11.14.1/30
+  ipv6_address:
   - 2001:db8:11:14::a/127
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE14-UNI
   active: true
   protocol:
@@ -270,8 +299,10 @@ interfaces:
   description: EVPN-VLAN-AWARE-INTERNET
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -285,9 +316,11 @@ interfaces:
   description: EVPN-VLAN-AWARE-INTERNET
   service_type: Internet
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 152.11.14.1/29
-  virtual_gw_ip_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:
@@ -305,8 +338,10 @@ interfaces:
   description: null
   service_type: Layer1
   service_subtype: physical-port
-  ip_address: []
-  virtual_gw_ip_address: []
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol: []
@@ -320,10 +355,12 @@ interfaces:
   description: null
   service_type: Core
   service_subtype: null
-  ip_address:
+  ipv4_address:
   - 150.0.0.11/32
+  ipv6_address:
   - 2001:db8::11/128
-  virtual_gw_ip_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
   routing_instance: null
   active: true
   protocol:

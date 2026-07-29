@@ -25,7 +25,7 @@ from migration_validator.models.snapshot import CaptureMeta, Snapshot
 from migration_validator.probes.ping import DEFAULT_COUNT, resolve_targets, run_ping
 from migration_validator.scoping.builder import build_scopes
 
-LIST_AREAS = frozenset({"arp"})
+LIST_AREAS = frozenset({"arp", "nd"})
 
 
 def _empty_for(area: str) -> Any:
@@ -105,7 +105,7 @@ def capture_device(
 
     pings: list[dict[str, Any]] = []
     if scopes:
-        for target in resolve_targets(scopes, facts.get("arp", [])):
+        for target in resolve_targets(scopes, facts.get("arp", []), facts.get("nd", [])):
             pings.append(run_ping(device, target, count=ping_count))
 
     return Snapshot(

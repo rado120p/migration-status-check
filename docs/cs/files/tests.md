@@ -1,7 +1,7 @@
 # `tests/` — testy
 
 ```bash
-.venv/bin/pytest          # 305 prošlo, 1 přeskočen (~1,2 s)
+.venv/bin/pytest          # vše prošlo kromě jednoho přeskočeného (~1,2 s)
 ```
 
 **Žádný test nepotřebuje síť ani laborku.** Je to přímý zisk z toho, že checky jsou čisté

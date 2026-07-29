@@ -27,7 +27,9 @@ class PingTarget:
     target: str
     source: str | None
     routing_instance: str | None
-    resolved_from: str  # arp | subnet-fallback
+    resolved_from: str  # arp | nd | subnet-fallback
+    family: int
+    interface: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,21 +38,52 @@ class PingTarget:
             "source": self.source,
             "routing_instance": self.routing_instance,
             "resolved_from": self.resolved_from,
+            "family": self.family,
+            "interface": self.interface,
         }
 
 
-def source_address(scope: Scope) -> str | None:
-    """Adresa rozhrani. U IRB se pouziva virtual-gw."""
-    if scope.selectors.virtual_gw:
-        return scope.selectors.virtual_gw[0].split("/")[0]
-    if scope.selectors.local_addresses:
-        return scope.selectors.local_addresses[0].split("/")[0]
+def source_address(scope: Scope, family: int) -> str | None:
+    """Adresa rozhrani v dane rodine. U IRB se pouziva virtual-gw.
+
+    Rodina zdroje musi odpovidat rodine cile - jinak Junos ping odmitne.
+    """
+    if family == 6:
+        gateway, local = scope.selectors.virtual_gw_v6, scope.selectors.local_ipv6
+    else:
+        gateway, local = scope.selectors.virtual_gw_v4, scope.selectors.local_ipv4
+
+    if gateway:
+        return gateway[0].split("/")[0]
+    if local:
+        return local[0].split("/")[0]
     return None
 
 
-def subnet_fallback(scope: Scope) -> str | None:
-    """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni."""
-    for address in scope.selectors.local_addresses:
+# Kratsi prefix nez tohle uz neni point-to-point linka. V IPv6 nema smysl
+# strilet nahodnou adresu ze /64 - je to zaruceny neuspech, ktery se v
+# reportu cte jako nedostupne CPE.
+IPV6_FALLBACK_MIN_PREFIX = 126
+
+
+def subnet_fallback(
+    addresses: list[str], family: int, owned: list[str] | None = None
+) -> str | None:
+    """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni.
+
+    `owned` jsou dalsi adresy, ktere scope vlastni a ktere se nesmi vratit
+    jako cil - typicky virtual-gateway adresa IRB rozhrani. Bez tohohle
+    fallback vraci VGW jako cil, zatimco `source_address()` uz VGW pouzila
+    jako zdroj - vysledkem je ping sam na sebe (overeno proti laborce).
+    """
+    owned_ips: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+    for own in owned or ():
+        try:
+            owned_ips.add(ipaddress.ip_interface(own).ip)
+        except ValueError:
+            continue
+
+    for address in addresses:
         try:
             interface = ipaddress.ip_interface(address)
         except ValueError:
@@ -59,53 +92,121 @@ def subnet_fallback(scope: Scope) -> str | None:
         network = interface.network
         if network.prefixlen >= network.max_prefixlen:
             continue
+        if family == 6 and network.prefixlen < IPV6_FALLBACK_MIN_PREFIX:
+            continue
 
         for candidate in network:
             if candidate == interface.ip:
                 continue
-            if network.prefixlen < network.max_prefixlen - 1:
+            if candidate in owned_ips:
+                continue
+            # Vyloucit sit a broadcast je IPv4 uvaha - v IPv6 je adresa se
+            # samymi nulami subnet-router anycast, ne broadcast.
+            if family == 4 and network.prefixlen < network.max_prefixlen - 1:
                 if candidate in (network.network_address, network.broadcast_address):
                     continue
             return str(candidate)
     return None
 
 
+def _is_link_local(address: str) -> bool:
+    try:
+        return ipaddress.ip_address(address).is_link_local
+    except ValueError:
+        return False
+
+
+def _link_local_configured(scope: Scope) -> bool:
+    for address in scope.selectors.local_ipv6:
+        try:
+            if ipaddress.ip_interface(address).ip.is_link_local:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _usable_nd(entry: dict[str, Any]) -> bool:
+    """Zaznam bez MAC nebo v nedokoncenem stavu neni cil."""
+    mac = (entry.get("mac") or "").strip().lower()
+    state = (entry.get("state") or "").strip().lower()
+    return bool(mac) and mac != "none" and state not in ("unreachable", "incomplete")
+
+
 def resolve_targets(
-    scopes: list[Scope], arp_entries: list[dict[str, Any]]
+    scopes: list[Scope],
+    arp_entries: list[dict[str, Any]],
+    nd_entries: list[dict[str, Any]] | None = None,
 ) -> list[PingTarget]:
-    """Odvodi cile pingu ze scopu a ARP tabulky."""
+    """Odvodi cile pingu ze scopu, ARP tabulky (IPv4) a ND tabulky (IPv6).
+
+    V ramci jednoho scope prijdou cile IPv4 pred IPv6 - napric vice scopy uz
+    poradi neplati (je to scopeA-v4, scopeA-v6, scopeB-v4, ...). Na poradi
+    stejne nic nezavisi, checky rodinu ctou z pole `family`, ne z pozice
+    v seznamu.
+    """
+    nd_entries = nd_entries or []
     targets: list[PingTarget] = []
 
     for scope in scopes:
         if scope.is_device or scope.service_type not in PING_SERVICE_TYPES:
             continue
 
-        source = source_address(scope)
         instance = (
             scope.selectors.routing_instances[0]
             if scope.service_type == "IPVPN" and scope.selectors.routing_instances
             else None
         )
+        keep_link_local = _link_local_configured(scope)
 
-        addresses = [
-            str(entry["ip"])
-            for entry in arp_entries
-            if scope.selectors.matches_interface(str(entry.get("interface", "")))
-            and entry.get("ip")
-        ]
+        for family in (4, 6):
+            source = source_address(scope, family)
 
-        if addresses:
-            targets.extend(
-                PingTarget(scope.id, address, source, instance, "arp")
-                for address in addresses
-            )
-            continue
+            if family == 4:
+                addresses = [
+                    (str(entry["ip"]), None)
+                    for entry in arp_entries
+                    if scope.selectors.matches_interface(str(entry.get("interface", "")))
+                    and entry.get("ip")
+                ]
+                origin = "arp"
+                local = scope.selectors.local_ipv4
+                owned = scope.selectors.virtual_gw_v4
+            else:
+                addresses = [
+                    (
+                        str(entry["ip"]),
+                        # Link-local cil bez interface Junos odmitne (overeno).
+                        str(entry["interface"]) if _is_link_local(str(entry["ip"])) else None,
+                    )
+                    for entry in nd_entries
+                    if scope.selectors.matches_interface(str(entry.get("interface", "")))
+                    and entry.get("ip")
+                    and _usable_nd(entry)
+                    and (keep_link_local or not _is_link_local(str(entry["ip"])))
+                ]
+                origin = "nd"
+                local = scope.selectors.local_ipv6
+                owned = scope.selectors.virtual_gw_v6
 
-        fallback = subnet_fallback(scope)
-        if fallback:
-            targets.append(
-                PingTarget(scope.id, fallback, source, instance, "subnet-fallback")
-            )
+            if addresses:
+                targets.extend(
+                    PingTarget(scope.id, address, source, instance, origin, family, interface)
+                    for address, interface in addresses
+                    # Neplati typicky, ale kdyby ARP/ND vratila nasi vlastni
+                    # adresu, ping sam na sebe je nesmyslny vysledek - radsi
+                    # zadny cil nez lhavy.
+                    if address != source
+                )
+                continue
+
+            fallback = subnet_fallback(local, family, owned=owned)
+            if fallback and fallback != source:
+                targets.append(
+                    PingTarget(
+                        scope.id, fallback, source, instance, "subnet-fallback", family
+                    )
+                )
 
     return targets
 
@@ -171,11 +272,20 @@ def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dic
     Protoze je ping advisory, staci duvod zapsat a pokracovat; shodit celou
     capture kvuli jednomu probu by bylo horsi.
     """
-    kwargs: dict[str, Any] = {"host": target.target, "count": str(count)}
+    kwargs: dict[str, Any] = {
+        "host": target.target,
+        "count": str(count),
+        # Bez rapid trva 5 paketu ~5 s, s nim ~0,3 s. Overeno proti laborce,
+        # ze tvar odpovedi zustava stejny - probe-results-summary se stejnymi
+        # poli - takze parse_ping_result se nemeni.
+        "rapid": True,
+    }
     if target.source:
         kwargs["source"] = target.source
     if target.routing_instance:
         kwargs["routing_instance"] = target.routing_instance
+    if target.interface:
+        kwargs["interface"] = target.interface
 
     record = target.to_dict()
     try:

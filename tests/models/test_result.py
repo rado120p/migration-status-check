@@ -1,8 +1,10 @@
 import pytest
 
 from migration_validator.models.result import (
+    CheckResult,
     Finding,
     Outcome,
+    ScopeResult,
     Severity,
     Status,
     derive_status,
@@ -42,3 +44,79 @@ def test_finding_defaults():
     finding = Finding(outcome=Outcome.OK, message="vse ok")
     assert finding.label is None
     assert finding.details == {}
+
+
+def test_finding_carries_presentation_fields():
+    finding = Finding(
+        Outcome.OK,
+        "rozhrani je up/up",
+        label="Interface admin status",
+        family=4,
+        value="Up",
+        baseline_value="Up",
+        delta=None,
+    )
+
+    assert finding.family == 4
+    assert finding.value == "Up"
+    assert finding.baseline_value == "Up"
+    assert finding.delta is None
+
+
+def test_check_result_omits_empty_presentation_fields():
+    result = CheckResult(
+        id="interface_state",
+        mode="state",
+        status=Status.PASS,
+        severity=Severity.CRITICAL,
+        message="up/up",
+    )
+
+    payload = result.to_dict()
+
+    assert "family" not in payload
+    assert "value" not in payload
+    assert "baseline_value" not in payload
+    assert "delta" not in payload
+
+
+def test_check_result_serialises_presentation_fields():
+    result = CheckResult(
+        id="interface_traffic",
+        mode="both",
+        status=Status.PASS,
+        severity=Severity.ADVISORY,
+        message="v toleranci",
+        family=6,
+        value="460 pps",
+        baseline_value="520 pps",
+        delta="-12 %",
+    )
+
+    payload = result.to_dict()
+
+    assert payload["family"] == 6
+    assert payload["value"] == "460 pps"
+    assert payload["baseline_value"] == "520 pps"
+    assert payload["delta"] == "-12 %"
+
+
+def test_scope_result_serialises_identity():
+    scope = ScopeResult(
+        scope_id="svc:X:Internet",
+        key={"description": "X", "service_type": "Internet"},
+        status=Status.PASS,
+        match=None,
+        identity={
+            "description": "X",
+            "service_type": "Internet",
+            "service_subtype": None,
+            "routing_instance": None,
+            "ipv4": ["152.11.13.1/30"],
+            "ipv6": [],
+            "virtual_gw_v4": [],
+            "virtual_gw_v6": [],
+        },
+    )
+
+    assert scope.to_dict()["identity"]["ipv4"] == ["152.11.13.1/30"]

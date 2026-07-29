@@ -171,6 +171,21 @@ def test_failed_arp_collector_leaves_ping_empty():
     )
 
 
+def test_failed_nd_collector_leaves_facts_as_empty_list():
+    """LIST_AREAS rozhoduje o typu prazdne hodnoty pro selhany collector.
+
+    Kdyby 'nd' chybelo v LIST_AREAS, _empty_for() by vratilo {} - check by to
+    videl jako 'nic k prozkoumani' misto SKIP a sluzba s mrtvym IPv6 sberem
+    by tise prosla jako v poradku.
+    """
+    device = FakeDevice(failing=("get_ipv6_nd_information",))
+
+    snapshot = capture_device(device, "172.20.20.4", now=NOW)
+
+    assert snapshot.facts["nd"] == []
+    assert isinstance(snapshot.facts["nd"], list)
+
+
 def test_every_area_is_registered_for_both_platforms():
     """Collector zapomenuty v all.py by tise vypustil celou oblast.
 
@@ -180,7 +195,7 @@ def test_every_area_is_registered_for_both_platforms():
     import migration_validator.collectors.all  # noqa: F401
     from migration_validator.collectors.registry import collectors_for
 
-    expected = {"interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac"}
+    expected = {"interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac"}
     for platform in ("junos", "junos-evo"):
         registered = {collector.name for collector in collectors_for(platform)}
         # >= a ne ==, protoze tests/collectors/test_base.py registruje

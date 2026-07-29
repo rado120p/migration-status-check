@@ -50,6 +50,7 @@ package.
 | `migration_validator/collectors/all.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/interfaces.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/arp.py` | [files/collectors.md](files/collectors.md) |
+| `migration_validator/collectors/nd.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/bgp.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/collectors/evpn.py` | [files/collectors.md](files/collectors.md) |
 | `migration_validator/probes/ping.py` | [files/probes.md](files/probes.md) |
@@ -64,6 +65,7 @@ package.
 | `migration_validator/checks/evpn.py` | [files/checks.md](files/checks.md) |
 | `migration_validator/checks/reachability.py` | [files/checks.md](files/checks.md) |
 | `migration_validator/reporting/json_report.py` | [files/reporting.md](files/reporting.md) |
+| `migration_validator/reporting/view.py` | [files/reporting.md](files/reporting.md) |
 | `migration_validator/reporting/text_report.py` | [files/reporting.md](files/reporting.md) |
 | `mx_parser.py` | [files/parsers.md](files/parsers.md) |
 | `evo_parser.py` | [files/parsers.md](files/parsers.md) |
@@ -90,12 +92,12 @@ migration-status-check/
 │   │
 │   ├── models/                # Inventory, Scope, Snapshot, Result     → files/models.md
 │   ├── connection/            # PyEZ, the only layer touching the net  → files/connection.md
-│   ├── collectors/            # RPC XML → structured data              → files/collectors.md
+│   ├── collectors/            # RPC XML → structured data (incl. nd)   → files/collectors.md
 │   ├── probes/                # active ping                            → files/probes.md
 │   ├── scoping/               # inventory → scopes, pairing            → files/scoping.md
 │   ├── checks/                # pure functions (facts, scope) → verdict → files/checks.md
 │   └── reporting/             # result → text / JSON                   → files/reporting.md
 │
-├── tests/                     # 306 tests, none of them need a network → files/tests.md
+├── tests/                     # none of the tests need a network       → files/tests.md
 └── docs/                      # this documentation + spec and plans
 ```

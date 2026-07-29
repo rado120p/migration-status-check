@@ -1,7 +1,7 @@
 # `collectors/` — sběr operačního stavu
 
-Soubory: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `bgp.py`, `evpn.py`
-a prázdný `__init__.py`.
+Soubory: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
+`evpn.py` a prázdný `__init__.py`.
 
 Dvě pravidla, na kterých celá vrstva stojí:
 
@@ -55,8 +55,8 @@ duplicitní jméno je `ValueError`. `all_collectors()` vrací seřazený seznam,
 
 ## `all.py` — naplnění registru
 
-Importuje `arp`, `bgp`, `evpn`, `interfaces`, čímž se spustí jejich `@register`. Existuje
-jako samostatný modul (ne `__init__.py`), aby nevznikl cyklický import.
+Importuje `arp`, `bgp`, `evpn`, `interfaces`, `nd`, čímž se spustí jejich `@register`.
+Existuje jako samostatný modul (ne `__init__.py`), aby nevznikl cyklický import.
 
 **Collector zapomenutý v tomhle souboru by tiše vypustil celou oblast** — checky nad ní by
 vracely `SKIP` a nikde jinde by se to neprojevilo. Hlídá to
@@ -101,13 +101,26 @@ Poznámka ke `routing_instance`: ani MX, ani EVO ho v odpovědi neuvádějí
 schématu je záměrně — kontrakt ho předepisuje a scope filtruje ARP podle `interface`,
 ne podle instance.
 
+## `nd.py` — ND tabulka (IPv6 sousedé)
+
+RPC: `get_ipv6_nd_information`. Dvojče `arp.py` — z ND se stejně jako z ARP odvozují cíle
+pingu, jen pro rodinu IPv6.
+
+Výstup: `[{ip, mac, interface, state}]`. Záznamy bez IP nebo bez rozhraní se zahazují.
+Na rozdíl od `probes/ping.py` collector **záznamy nefiltruje** — link-local sousedé i
+záznamy bez MAC se vrátí všechny; rozhodnutí, co je použitelný cíl pingu, patří probe,
+protože závisí na konfiguraci služby, kterou collector nezná.
+
+Ověřeno proti laborce: RPC i jména elementů jsou shodná na vMX i na EVO. MX obaluje texty
+novými řádky, EVO ne — `_text()` (sdílené s `arp.py`/`interfaces.py`) to řeší stripováním.
+
 ## `bgp.py` — stav peerů a počty prefixů
 
 RPC: `get_bgp_neighbor_information`. Použití `neighbor` místo `summary` varianty je
 záměrné — summary neobsahuje počet **advertised** prefixů.
 
-Výstup: `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted,
-advertised}}}`.
+Výstup: `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted,
+advertised, active, suppressed}}}}`.
 
 Tři věci ověřené proti laborce:
 
@@ -115,7 +128,10 @@ Tři věci ověřené proti laborce:
   `strip_port()` ho odřízne — bez toho by se peer nikdy nepotkal s `bgp_neighbor`
   z inventory.
 - **Jeden peer může mít až 11 RIB** (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...) a počty
-  se **sčítají přes všechny**.
+  se ukládají **za každou RIB zvlášť, ne sečtené**. Součtem by se IPv4 a IPv6 slily do
+  jednoho čísla a pokles v `inet6.0` kompenzovaný nárůstem v `inet.0` by prošel bez
+  povšimnutí. `checks/bgp.py::peer_family()` pak rodinu řádku odvozuje z **adresy peeru**,
+  ne z názvu RIB (ten rodinu nemusí nést vůbec, např. `bgp.l3vpn.0`).
 - `peer-cfg-rti` s hodnotou `master` / `default` / prázdnou se normalizuje na `None`,
   aby default instance nevypadala jako pojmenovaná VRF.
 

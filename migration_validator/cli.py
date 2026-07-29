@@ -229,7 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument(
         "--detail",
         action="store_true",
-        help="vypise vsechny checky kazde sluzby, ne jen nejhorsi nalez",
+        help="rozbali plny blok i u sluzeb se stavem PASS (WARN/FAIL se rozbaluji vzdy)",
     )
     evaluate.add_argument("--warn-as-error", action="store_true")
     evaluate.set_defaults(func=_cmd_evaluate)

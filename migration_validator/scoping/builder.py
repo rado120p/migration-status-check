@@ -73,8 +73,10 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                         [entry.routing_instance] if entry.routing_instance else []
                     ),
                     bgp_neighbors=list(entry.bgp_neighbor),
-                    local_addresses=list(entry.ip_address),
-                    virtual_gw=list(entry.virtual_gw_ip_address),
+                    local_ipv4=list(entry.ipv4_address),
+                    local_ipv6=list(entry.ipv6_address),
+                    virtual_gw_v4=list(entry.virtual_gw_ipv4_address),
+                    virtual_gw_v6=list(entry.virtual_gw_ipv6_address),
                     vlans=list(entry.customer_vlan),
                     bridge_domains=list(entry.bridge_domain),
                 ),

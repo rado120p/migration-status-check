@@ -54,8 +54,10 @@ různé služby sdílely jedno id.
 | `physical_interfaces` | `physical_name`, jen když pro něj existuje `Layer1` záznam |
 | `routing_instances` | `routing_instance` |
 | `bgp_neighbors` | `bgp_neighbor` |
-| `local_addresses` | `ip_address` |
-| `virtual_gw` | `virtual_gw_ip_address` |
+| `local_ipv4` | `ipv4_address` |
+| `local_ipv6` | `ipv6_address` |
+| `virtual_gw_v4` | `virtual_gw_ipv4_address` |
+| `virtual_gw_v6` | `virtual_gw_ipv6_address` |
 | `vlans` | `customer_vlan` |
 | `bridge_domains` | `bridge_domain` |
 
@@ -79,7 +81,7 @@ různé služby sdílely jedno id.
 | 1 | `description+service_type+service_subtype` | high | trojice, jen když jsou description i subtype vyplněné |
 | 2 | `description+service_type` | high | dvojice |
 | 3 | `routing_instance+service_type` | medium | jeden klíč **na každou** routing-instance ve scope |
-| 4 | `subnet+service_type` | medium | síťová adresa každého `local_addresses` |
+| 4 | `subnet+service_type` | medium | síťová adresa každého záznamu z `local_ipv4` **i** `local_ipv6` |
 | 5 | `vlan+service_type` | low | každá VLAN ze scope |
 
 Klíč je vždy **složený**, ne samotná description — jedna description může nést víc záznamů

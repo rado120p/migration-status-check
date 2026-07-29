@@ -54,8 +54,10 @@ different services would share one id.
 | `physical_interfaces` | `physical_name`, but only when a `Layer1` entry exists for it |
 | `routing_instances` | `routing_instance` |
 | `bgp_neighbors` | `bgp_neighbor` |
-| `local_addresses` | `ip_address` |
-| `virtual_gw` | `virtual_gw_ip_address` |
+| `local_ipv4` | `ipv4_address` |
+| `local_ipv6` | `ipv6_address` |
+| `virtual_gw_v4` | `virtual_gw_ipv4_address` |
+| `virtual_gw_v6` | `virtual_gw_ipv6_address` |
 | `vlans` | `customer_vlan` |
 | `bridge_domains` | `bridge_domain` |
 
@@ -79,7 +81,7 @@ different services would share one id.
 | 1 | `description+service_type+service_subtype` | high | triple, only when both description and subtype are set |
 | 2 | `description+service_type` | high | pair |
 | 3 | `routing_instance+service_type` | medium | one key **per** routing instance in the scope |
-| 4 | `subnet+service_type` | medium | the network address of each `local_addresses` entry |
+| 4 | `subnet+service_type` | medium | the network address of every `local_ipv4` **and** `local_ipv6` entry |
 | 5 | `vlan+service_type` | low | every VLAN in the scope |
 
 The key is always **composite**, never the description alone — one description may carry

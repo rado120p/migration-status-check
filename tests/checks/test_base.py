@@ -117,3 +117,40 @@ def test_missing_data_never_passes():
     """Kdyz collector selhal, vysledek nesmi byt PASS."""
     results = run_check(DummyCheck(), _ctx(failed_collectors={"interfaces": "timeout"}))
     assert results[0].status is not Status.PASS
+
+
+class _PresentationCheck(Check):
+    # Neregistruje se @register - je jen pro tento test, registrace by ho
+    # pustila do vsech ostatnich behu.
+    id = "presentation_probe"
+    title = "Testovaci check"
+    mode = Mode.STATE
+
+    def run(self, ctx):
+        return [
+            Finding(
+                Outcome.OK,
+                "hotovo",
+                label="Neco",
+                family=6,
+                value="Up",
+                baseline_value="Down",
+                delta="zmena",
+            )
+        ]
+
+
+def test_run_check_propagates_presentation_fields():
+    ctx = CheckContext(
+        scope=device_scope(),
+        subject={},
+        baseline=None,
+        config=default_config(),
+    )
+
+    result = run_check(_PresentationCheck(), ctx)[0]
+
+    assert result.family == 6
+    assert result.value == "Up"
+    assert result.baseline_value == "Down"
+    assert result.delta == "zmena"

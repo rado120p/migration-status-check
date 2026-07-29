@@ -7,18 +7,19 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav ke commitu `d0d024a`):
+Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
-| `interface_state` | state | critical | všechny | `admin_status` i `oper_status` je `up` |
+| `interface_state` | state | critical | všechny | `admin_status` i `oper_status` je `up` — jeden nález na každé z obou zvlášť |
 | `interface_errors` | state | advisory | všechny | nulové `input/output/framing` chyby — **jen tranzitní rozhraní** |
-| `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní** |
+| `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní**, jeden nález na směr |
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |
-| `arp_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 ARP záznam |
-| `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů zjištěných při `capture` |
+| `arp_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu |
+| `nd_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
+| `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN | stav je `Established`; s baseline navíc hlásí změnu stavu |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised proti toleranci |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť** |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
 | `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
@@ -35,11 +36,22 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
 
 - **`traffic_ceased` má v `service_types` „vsechny", ne omezení na Core.** Spec ho popisuje
   jako volitelný check; v kódu opravdu není omezený typem služby, jen vypnutý defaultem.
-- **`bgp_session_state` s baseline nevrací FAIL při změně stavu na Established.** Změna
-  `Idle -> Established` je `degraded`, tedy WARN — je to zlepšení, ne rozbití, ale stojí za
-  zmínku, že se stav změnil.
+- **`bgp_session_state` s baseline nevrací FAIL ani WARN při změně stavu na Established.**
+  Změna `Idle -> Established` je PASS — je to zlepšení, ne rozbití, a oranžový řádek na zdravé
+  službě je falešný poplach (rozhodnutí R-2). Že se stav změnil, řekne zpráva a sloupec
+  `ZMENA`.
 - **`evpn_vpws_status` nevyžaduje shodu local a remote SID.** Každá strana inzeruje svoje
   service ID; rovnost není invariant. FAIL nastane, když remote SID vůbec nepřijde.
+- **`arp_present`/`nd_present` nevrátí vůbec nic, když služba nemá adresu dané rodiny.**
+  Bez toho by třeba čistě IPv6 služba dostala WARN za chybějící ARP záznam, který nikdy
+  nemohl vzniknout. Dřív se vracel `SKIP` označkovaný rodinou — jenže právě ta značka si
+  v bloku vynutila sekci rodiny, kterou má renderer vynechat, takže žádný `Finding` je
+  jediné, co obě pravidla splní naráz (rozhodnutí R-1). Cena: takový check je v reportu
+  k nerozeznání od checku, který prošel. Sousedé se navíc nikdy nesčítají do jedné věty,
+  každý záznam je vlastní `Finding` (`MAC -> IP`), takže report vypíše řádek na každého souseda.
+- **`bgp_prefix_counts` počty nesčítá napříč RIB.** Peer s víc RIB (`inet.0`, `bgp.l3vpn.0`,
+  ...) dostane samostatnou sadu řádků na každou — pokles jen v jedné RIB se jinak ztratí
+  v součtu s ostatními.
 
 ### Klasifikace rozhraní
 
@@ -186,12 +198,13 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 1`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
-inventory, ani síť. Jiná verze schématu vede k tvrdé chybě, ne k pokusu o migraci dat.
+`schema_version: 2` (dřív `1` — verze se zvýšila spolu s rozdělením adres na rodiny, viz
+níž). Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani inventory, ani síť.
+Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne k pokusu o migraci dat.
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -203,6 +216,7 @@ inventory, ani síť. Jiná verze schématu vede k tvrdé chybě, ne k pokusu o 
     "collectors": {
       "interfaces": {"status": "ok"},
       "bgp":        {"status": "ok"},
+      "nd":         {"status": "ok"},
       "evpn_esi":   {"status": "error", "message": "RpcError: syntax error"}
     }
   },
@@ -216,10 +230,17 @@ inventory, ani síť. Jiná verze schématu vede k tvrdé chybě, ne k pokusu o 
     },
     "arp": [{"ip": "198.11.13.2", "mac": "00:11:...", "interface": "ge-0/0/2.113",
              "routing_instance": null}],
+    "nd": [{"ip": "2001:db8:11:13::b", "mac": "00:11:...", "interface": "ge-0/0/2.113",
+            "state": "reachable"}],
     "bgp": {
-      "198.11.13.2": {"state": "Established", "peer_as": 65013,
-                      "routing_instance": "L3VPN-CPE13-NNI",
-                      "prefixes": {"received": 14, "accepted": 14, "advertised": 3}}
+      "198.11.13.2": {
+        "state": "Established", "peer_as": 65013,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ribs": {
+          "inet.0": {"received": 14, "accepted": 14, "advertised": 3,
+                     "active": 3, "suppressed": 0}
+        }
+      }
     },
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
@@ -230,8 +251,12 @@ inventory, ani síť. Jiná verze schématu vede k tvrdé chybě, ne k pokusu o 
     "ping": [
       {"scope_id": "svc:L3VPN-CPE13-NNI:IPVPN", "target": "198.11.13.2",
        "source": "198.11.13.1", "routing_instance": "L3VPN-CPE13-NNI",
-       "resolved_from": "arp",
-       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.24}
+       "resolved_from": "arp", "family": 4, "interface": null,
+       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.24},
+      {"scope_id": "svc:L3VPN-CPE13-NNI:IPVPN", "target": "2001:db8:11:13::b",
+       "source": "2001:db8:11:13::a", "routing_instance": "L3VPN-CPE13-NNI",
+       "resolved_from": "nd", "family": 6, "interface": null,
+       "sent": 5, "received": 5, "loss_percent": 0, "rtt_avg_ms": 1.31}
     ]
   }
 }
@@ -242,8 +267,13 @@ Vlastnosti:
 - `facts` jsou **syrová, device-scoped data** klíčovaná přirozeným klíčem. Žádné `service_id`
   uvnitř. Kdyby se párování ukázalo jako špatné, opraví se a staré snapshoty se přehodnotí
   znovu, bez sahání na zařízení.
+- `facts.nd` je IPv6 protějšek `facts.arp` — stejný tvar, navíc pole `state`.
+- `facts.bgp[peer].ribs` drží počty **za každou RIB zvlášť**, nikdy sečtené — jeden peer
+  může mít až 11 RIB (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...).
 - `capture.collectors` nese stav každého sběru zvlášť — selhání jednoho RPC nezruší capture.
 - `device.uptime_seconds` je v modelu, ale `device_meta()` ho zatím vždy plní `None`.
+- Ping záznam nese `family` (4/6) a `interface` — to druhé je vyplněné jen u IPv6 link-local
+  cíle, protože ten Junos ping bez odchozího rozhraní odmítne.
 - U pingu může přibýt klíč `error` s důvodem, když ICMP vůbec neodešlo (např. `bind: Can't
   assign requested address`) — bez něj by to vypadalo jako úspěšně změřených nula paketů.
 
@@ -259,8 +289,10 @@ Vlastnosti:
     "physical_interfaces": ["ge-0/0/2"],
     "routing_instances":   ["L3VPN-CPE13-NNI"],
     "bgp_neighbors":       ["198.11.13.2", "2001:db8:11:13::b"],
-    "local_addresses":     ["198.11.13.1/30"],
-    "virtual_gw":          [],
+    "local_ipv4":          ["198.11.13.1/30"],
+    "local_ipv6":          ["2001:db8:11:13::a/127"],
+    "virtual_gw_v4":       [],
+    "virtual_gw_v6":       [],
     "vlans":               ["113"],
     "bridge_domains":      []
   }
@@ -268,7 +300,9 @@ Vlastnosti:
 ```
 
 Scope je **čistě filtr**, neobsahuje naměřená data. Device scope má `kind: "device"`
-a prázdné selektory = „ber všechno".
+a prázdné selektory = „ber všechno". Adresy i virtual-gateway jsou rozdělené podle rodiny
+(`local_ipv4`/`local_ipv6`, `virtual_gw_v4`/`virtual_gw_v6`) — stejně jako v inventory YAML
+(viz [files/parsers.md](files/parsers.md#výstupní-formát)).
 
 `id` je `svc:<description nebo název rozhraní>:<service_type>`. Když by dvě služby vyšly na
 stejný klíč, přidá se za něj ještě název rozhraní (`svc:et-0/0/10.0:IPVPN`).
@@ -277,7 +311,8 @@ stejný klíč, přidá se za něj ještě název rozhraní (`svc:et-0/0/10.0:IP
 
 ## 5. Formát výsledku
 
-`schema_version: 1`.
+`schema_version: 1` — **nezměnilo se** rozdělením IPv4/IPv6 (na rozdíl od inventory
+a snapshotu výš); `models/result.py::RunResult.schema_version` zůstává `1`.
 
 ```jsonc
 {
@@ -300,15 +335,31 @@ stejný klíč, přidá se za něj ještě název rozhraní (`svc:et-0/0/10.0:IP
         "status": "matched", "method": "description+service_type", "confidence": "high",
         "baseline_interfaces": ["ge-0/0/2.113"], "subject_interfaces": ["et-0/0/8.113"]
       },
+      "identity": {
+        "description": "L3VPN-CPE13-NNI", "service_type": "IPVPN", "service_subtype": null,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ipv4": ["198.11.13.1/30"], "ipv6": ["2001:db8:11:13::a/127"],
+        "virtual_gw_v4": [], "virtual_gw_v6": []
+      },
       "checks": [
         {
           "id": "interface_traffic", "mode": "both",
           "status": "WARN", "severity": "advisory",
           "message": "et-0/0/8.113: output_pps kleslo o 72 % (410 -> 115), prah je -60 %",
-          "label": "et-0/0/8.113",
-          "baseline": {"input_pps": 412, "output_pps": 410},
-          "subject":  {"input_pps": 398, "output_pps": 115},
-          "details":  {"tolerance_percent": -60.0, "output_pps_change_percent": -72.0}
+          "label": "Interface traffic out (et-0/0/8.113)",
+          "value": "115 pps", "baseline_value": "410 pps", "delta": "-72 %",
+          "baseline": {"output_pps": 410},
+          "subject":  {"output_pps": 115},
+          "details":  {"tolerance_percent": -60.0}
+        },
+        {
+          "id": "bgp_prefix_counts", "mode": "compare",
+          "status": "WARN", "severity": "advisory", "family": 4,
+          "message": "198.11.13.2/inet.0: pokles advertised 14 -> 3, prah je -10 %",
+          "label": "BGP advertised-prefix-count",
+          "value": "3", "baseline_value": "14", "delta": "-11",
+          "baseline": {"advertised": 14}, "subject": {"advertised": 3},
+          "details": {"rib": "inet.0", "tolerance_percent": -10.0, "change_percent": -78.6}
         }
       ]
     }
@@ -329,11 +380,22 @@ stejný klíč, přidá se za něj ještě název rozhraní (`svc:et-0/0/10.0:IP
 
 Vlastnosti:
 
-- **Každý check nese `baseline` i `subject` bloky se surovými čísly**, ne jen verdikt.
+- **Každý check nese `baseline` i `subject` bloky se surovými čísly**, ne jen verdikt, a
+  navíc (od přepisu reportu) `label`, `value`, `baseline_value`, `delta` a volitelně
+  `family` — rozklad naměřené hodnoty na popisek a hodnotu ve sloupcích musí udělat check,
+  protože jen on ví, co je hodnota a co vysvětlení (`CheckResult.to_dict()` prázdné volitelné
+  klíče vynechá).
+- `interface_state` a `interface_traffic` teď vrací **jeden check-výsledek na fakt/směr**
+  (`Interface admin status (<jméno>)` / `Interface operational status (<jméno>)`;
+  `Interface traffic in (<jméno>)` / `Interface traffic out (<jméno>)`), ne jeden souhrnný
+  na rozhraní. `bgp_prefix_counts` vrací jeden na
+  **RIB × counter** (`BGP <counter>-prefix-count`), ne souhrn napříč RIB.
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
   `summary` = agregát přes všechny checky. Terminál ani GUI nic nepočítají.
 - `match` je `null` u běhu bez baseline; u nespárovaného subject scope má
   `status: "unmatched"` a `reason`.
+- `identity` nese vše, co report o službě potřebuje (adresy, VGW, RI, popisek) — bez toho by
+  to zůstalo jen ve `Scope`, ke kterému renderer nemá přístup.
 - **Nespárované baseline scopy nemají vlastní záznam v `scopes`** — nejsou v subjektu, není
   co měřit. Jsou jen v `unmatched.baseline`.
 - `unassigned.bgp_peers` hlásí zatím jen peery na **subjektu** (nové zařízení). V device
@@ -362,11 +424,12 @@ WARN sám o sobě návratový kód nemění — jinak by CI padalo pořád a př
 |---|---|---|---|
 | `interfaces` | `get_interface_information` | totéž | `extensive=True` |
 | `arp` | `get_arp_table_information` | totéž | `no_resolve=True` |
+| `nd` | `get_ipv6_nd_information` | totéž | — |
 | `bgp` | `get_bgp_neighbor_information` | totéž | — |
 | `evpn_vpws` | `get_evpn_vpws_information` | totéž | — |
 | `evpn_esi` | `get_evpn_instance_information` | totéž | `extensive=True` |
 | `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
-| ping (probe) | `ping` | totéž | `host`, `count`, volitelně `source`, `routing_instance` |
+| ping (probe) | `ping` | totéž | `host`, `count`, `rapid=True`, volitelně `source`, `routing_instance`, `interface` (jen IPv6 link-local cíl) |
 
 `extensive` u `evpn_esi` není kosmetika: bez něj `show evpn instance` vrátí souhrn bez
 jediného ESI a collector by tiše vracel prázdno.

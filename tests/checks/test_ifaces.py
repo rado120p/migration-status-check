@@ -52,14 +52,74 @@ def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None):
 def test_interface_state_up_passes():
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"admin_status": "up", "oper_status": "up"}}})
     results = run_check(InterfaceStateCheck(), ctx)
-    assert [r.status for r in results] == [Status.PASS]
+    assert [r.status for r in results] == [Status.PASS, Status.PASS]
+
+
+def test_interface_state_splits_admin_and_oper():
+    """Distinct hodnoty pro admin/oper - zamena poradi by tichem prosla,
+    kdyby oba stavy byly "up"."""
+    ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"admin_status": "up", "oper_status": "up"}}})
+    results = run_check(InterfaceStateCheck(), ctx)
+
+    assert [r.label for r in results] == [
+        "Interface admin status (ge-0/0/2.113)",
+        "Interface operational status (ge-0/0/2.113)",
+    ]
+    assert all(r.value == "Up" for r in results)
+    assert all(r.family is None for r in results)
+
+
+def test_interface_state_rows_name_their_interface():
+    """Kazdy scope drzi fyzicke i logicke rozhrani, takze kazdy blok ostreho
+    reportu mel dva radky se stejnym popiskem, jinymi hodnotami a
+    protichudnymi sloupci ZMENA - a nebylo poznat, ktere rozhrani je ktere.
+    """
+    ctx = _ctx(
+        {
+            "interfaces": {
+                "ge-0/0/2": {"admin_status": "up", "oper_status": "up"},
+                "ge-0/0/2.113": {"admin_status": "up", "oper_status": "down"},
+            }
+        }
+    )
+    labels = [r.label for r in run_check(InterfaceStateCheck(), ctx)]
+
+    assert labels == [
+        "Interface admin status (ge-0/0/2)",
+        "Interface operational status (ge-0/0/2)",
+        "Interface admin status (ge-0/0/2.113)",
+        "Interface operational status (ge-0/0/2.113)",
+    ]
+
+
+def test_traffic_rows_name_their_interface():
+    ctx = _ctx(
+        {
+            "interfaces": {
+                "ge-0/0/2": {"input_pps": 10, "output_pps": 10},
+                "ge-0/0/2.113": {"input_pps": 412, "output_pps": 388},
+            }
+        }
+    )
+    labels = [r.label for r in run_check(InterfaceTrafficCheck(), ctx)]
+
+    assert labels == [
+        "Interface traffic in (ge-0/0/2)",
+        "Interface traffic out (ge-0/0/2)",
+        "Interface traffic in (ge-0/0/2.113)",
+        "Interface traffic out (ge-0/0/2.113)",
+    ]
 
 
 def test_interface_state_down_fails():
+    # admin up, oper down - jinak by prohozeni poli neslo poznat.
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"admin_status": "up", "oper_status": "down"}}})
     results = run_check(InterfaceStateCheck(), ctx)
-    assert results[0].status is Status.FAIL
-    assert "down" in results[0].message
+
+    assert results[0].status is Status.PASS
+    assert results[1].status is Status.FAIL
+    assert "down" in results[1].message
+    assert results[1].value == "Down"
 
 
 def test_interface_state_without_data_skips():
@@ -84,6 +144,26 @@ def test_errors_present_warns_on_transit_interface():
     assert "3" in results[0].message
 
 
+def test_errors_rows_name_their_interface_the_same_way():
+    """Modul si nesmi odporovat: kdyz stavove a datove radky nesou jmeno
+    rozhrani v zavorce za popiskem, chybove countery to musi delat stejne.
+    Holy nazev rozhrani jako popisek byl presne to, co AR-4 odstranovalo."""
+    ctx = _ctx(
+        {
+            "interfaces": {
+                "ge-0/0/2": {"input_errors": 0, "output_errors": 0},
+                "ge-0/0/2.113": {"input_errors": 3, "output_errors": 0},
+            }
+        }
+    )
+    labels = [r.label for r in run_check(InterfaceErrorsCheck(), ctx)]
+
+    assert labels == [
+        "Interface errors (ge-0/0/2)",
+        "Interface errors (ge-0/0/2.113)",
+    ]
+
+
 def test_errors_zero_passes():
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_errors": 0, "output_errors": 0}}})
     assert run_check(InterfaceErrorsCheck(), ctx)[0].status is Status.PASS
@@ -100,13 +180,21 @@ def test_percent_change(old, new, expected):
 def test_traffic_state_mode_requires_nonzero():
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_pps": 0, "output_pps": 0}}})
     results = run_check(InterfaceTrafficCheck(), ctx)
-    assert results[0].status is Status.WARN
-    assert "netece" in results[0].message
+    assert [r.status for r in results] == [Status.WARN, Status.WARN]
+    assert [r.label for r in results] == [
+        "Interface traffic in (ge-0/0/2.113)",
+        "Interface traffic out (ge-0/0/2.113)",
+    ]
+    assert all("0 pps" in r.message for r in results)
 
 
 def test_traffic_state_mode_passes_when_flowing():
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_pps": 412, "output_pps": 388}}})
-    assert run_check(InterfaceTrafficCheck(), ctx)[0].status is Status.PASS
+    results = run_check(InterfaceTrafficCheck(), ctx)
+    assert [r.status for r in results] == [Status.PASS, Status.PASS]
+    by_label = {r.label: r for r in results}
+    assert by_label["Interface traffic in (ge-0/0/2.113)"].value == "412 pps"
+    assert by_label["Interface traffic out (ge-0/0/2.113)"].value == "388 pps"
 
 
 def test_traffic_compare_within_tolerance_passes():
@@ -114,20 +202,31 @@ def test_traffic_compare_within_tolerance_passes():
         subject={"interfaces": {"ge-0/0/2.113": {"input_pps": 398, "output_pps": 380}}},
         baseline={"interfaces": {"ge-0/0/2.113": {"input_pps": 412, "output_pps": 410}}},
     )
-    assert run_check(InterfaceTrafficCheck(), ctx)[0].status is Status.PASS
+    results = run_check(InterfaceTrafficCheck(), ctx)
+    assert [r.status for r in results] == [Status.PASS, Status.PASS]
 
 
 def test_traffic_compare_below_tolerance_warns_and_reports_numbers():
+    # in je v toleranci (-3 %), out ne (-72 %) - jinak by prohozeni smeru
+    # neslo poznat.
     ctx = _ctx(
         subject={"interfaces": {"ge-0/0/2.113": {"input_pps": 398, "output_pps": 115}}},
         baseline={"interfaces": {"ge-0/0/2.113": {"input_pps": 412, "output_pps": 410}}},
     )
-    result = run_check(InterfaceTrafficCheck(), ctx)[0]
-    assert result.status is Status.WARN
-    assert "410" in result.message and "115" in result.message
-    assert result.baseline == {"input_pps": 412, "output_pps": 410}
-    assert result.subject == {"input_pps": 398, "output_pps": 115}
-    assert result.details["tolerance_percent"] == -60
+    by_label = {r.label: r for r in run_check(InterfaceTrafficCheck(), ctx)}
+
+    incoming = by_label["Interface traffic in (ge-0/0/2.113)"]
+    outgoing = by_label["Interface traffic out (ge-0/0/2.113)"]
+
+    assert incoming.status is Status.PASS
+    assert outgoing.status is Status.WARN
+    assert "410" in outgoing.message and "115" in outgoing.message
+    assert outgoing.value == "115 pps"
+    assert outgoing.baseline_value == "410 pps"
+    assert outgoing.delta == "-72 %"
+    assert outgoing.baseline == {"output_pps": 410}
+    assert outgoing.subject == {"output_pps": 115}
+    assert outgoing.details["tolerance_percent"] == -60
 
 
 def test_traffic_tolerance_is_configurable():
@@ -137,7 +236,39 @@ def test_traffic_tolerance_is_configurable():
         baseline={"interfaces": {"ge-0/0/2.113": {"input_pps": 412, "output_pps": 410}}},
         config=config,
     )
-    assert run_check(InterfaceTrafficCheck(), ctx)[0].status is Status.PASS
+    results = run_check(InterfaceTrafficCheck(), ctx)
+    assert [r.status for r in results] == [Status.PASS, Status.PASS]
+
+
+def test_traffic_reports_distinct_value_baseline_and_delta_per_direction():
+    # in a out maji rozdilne subject i baseline hodnoty, aby zamena smeru
+    # nebo pole (value/baseline_value/delta) nemohla projit testem tise.
+    ctx = _ctx(
+        subject={"interfaces": {"ge-0/0/2.113": {"input_pps": 460, "output_pps": 300}}},
+        baseline={"interfaces": {"ge-0/0/2.113": {"input_pps": 520, "output_pps": 200}}},
+    )
+    by_label = {r.label: r for r in run_check(InterfaceTrafficCheck(), ctx)}
+
+    incoming = by_label["Interface traffic in (ge-0/0/2.113)"]
+    outgoing = by_label["Interface traffic out (ge-0/0/2.113)"]
+
+    assert incoming.value == "460 pps"
+    assert incoming.baseline_value == "520 pps"
+    assert incoming.delta == "-12 %"
+
+    assert outgoing.value == "300 pps"
+    assert outgoing.baseline_value == "200 pps"
+    assert outgoing.delta == "+50 %"
+
+
+def test_traffic_without_baseline_has_no_delta():
+    ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_pps": 460, "output_pps": 300}}})
+    by_label = {r.label: r for r in run_check(InterfaceTrafficCheck(), ctx)}
+
+    incoming = by_label["Interface traffic in (ge-0/0/2.113)"]
+    assert incoming.value == "460 pps"
+    assert incoming.baseline_value is None
+    assert incoming.delta is None
 
 
 def test_traffic_skipped_on_internal_interface():
@@ -181,6 +312,18 @@ def test_traffic_ceased_is_disabled_by_default():
 def test_traffic_ceased_passes_when_old_port_went_quiet():
     result = run_check(TrafficCeasedCheck(), _ceased_ctx(0, 400))[0]
     assert result.status is Status.PASS
+
+
+def test_traffic_ceased_rows_name_their_interface_the_same_way():
+    """Posledni check v modulu, ktery jeste pouzival holy nazev rozhrani
+    jako popisek. Vychozi je vypnuty, takze do ostreho reportu nikdy
+    neprosakoval - o to snadneji by v nem zustal nesourody."""
+    labels = [
+        run_check(TrafficCeasedCheck(), ctx)[0].label
+        for ctx in (_ceased_ctx(0, 400), _ceased_ctx(400, 400), _ceased_ctx(0, 0))
+    ]
+
+    assert labels == ["Interface traffic ceased (ge-0/0/2.113)"] * 3
 
 
 def test_traffic_ceased_warns_when_old_port_still_carries_traffic():

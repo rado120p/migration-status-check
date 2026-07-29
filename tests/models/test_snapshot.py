@@ -4,6 +4,7 @@ import pytest
 
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import (
+    SCHEMA_VERSION,
     CaptureMeta,
     DeviceMeta,
     Snapshot,
@@ -48,7 +49,7 @@ def test_save_and_load(tmp_path):
     save_snapshot(_snapshot(), path)
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["schema_version"] == 1
+    assert written["schema_version"] == 2
     assert written["device"]["platform"] == "junos"
 
     assert load_snapshot(path) == _snapshot()
@@ -78,3 +79,12 @@ def test_snapshot_without_inventory_has_empty_ping():
     )
     assert snapshot.inventory is None
     assert snapshot.probes["ping"] == []
+
+
+def test_snapshot_version_is_two():
+    assert SCHEMA_VERSION == 2
+
+
+def test_old_snapshot_fails_loudly():
+    with pytest.raises(SnapshotVersionError, match="schema_version"):
+        Snapshot.from_dict({"schema_version": 1, "device": {"address": "x"}})

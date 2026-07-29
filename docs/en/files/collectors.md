@@ -1,7 +1,7 @@
 # `collectors/` — collecting operational state
 
-Files: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `bgp.py`, `evpn.py` and
-an empty `__init__.py`.
+Files: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
+`evpn.py` and an empty `__init__.py`.
 
 Two rules the entire layer rests on:
 
@@ -56,8 +56,8 @@ The `@register` decorator stores an **instance** of the class in a module-level 
 
 ## `all.py` — populating the registry
 
-Imports `arp`, `bgp`, `evpn`, `interfaces`, which triggers their `@register`. It exists as a
-separate module (not `__init__.py`) to avoid a circular import.
+Imports `arp`, `bgp`, `evpn`, `interfaces`, `nd`, which triggers their `@register`. It exists
+as a separate module (not `__init__.py`) to avoid a circular import.
 
 **A collector forgotten in this file would silently drop an entire area** — checks over it
 would return `SKIP` and nothing else would show it. Guarded by
@@ -105,13 +105,28 @@ A note on `routing_instance`: neither MX nor EVO reports it in the response
 schema on purpose — the contract prescribes it, and the scope filters ARP by `interface`, not
 by instance.
 
+## `nd.py` — the ND table (IPv6 neighbours)
+
+RPC: `get_ipv6_nd_information`. The twin of `arp.py` — ping targets are derived from ND the
+same way they are from ARP, just for the IPv6 family.
+
+Output: `[{ip, mac, interface, state}]`. Entries without an IP or an interface are dropped.
+Unlike `probes/ping.py`, the collector **does not filter entries** — link-local neighbours
+and entries with no MAC all come back; deciding what counts as a usable ping target belongs
+to the probe, because it depends on the service's configuration, which the collector does
+not know.
+
+Verified against the lab: both the RPC and the element names match on vMX and on EVO. MX
+wraps text in newlines, EVO does not — `_text()` (shared with `arp.py`/`interfaces.py`)
+handles that by stripping.
+
 ## `bgp.py` — peer state and prefix counts
 
 RPC: `get_bgp_neighbor_information`. Using the `neighbor` rather than the `summary` variant is
 deliberate — the summary does not contain the **advertised** prefix count.
 
-Output: `{peer_ip: {state, peer_as, routing_instance, prefixes: {received, accepted,
-advertised}}}`.
+Output: `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted,
+advertised, active, suppressed}}}}`.
 
 Three things verified against the lab:
 
@@ -119,7 +134,10 @@ Three things verified against the lab:
   EVO). `strip_port()` cuts it off — without that, a peer would never meet the `bgp_neighbor`
   entry from the inventory.
 - **One peer may have up to 11 RIBs** (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...) and the
-  counts are **summed across all of them**.
+  counts are stored **per RIB, never summed**. Summing them would blend IPv4 and IPv6 into
+  one number, and a drop in `inet6.0` offset by a rise in `inet.0` would pass unnoticed.
+  `checks/bgp.py::peer_family()` then derives a row's family from the **peer's address**, not
+  the RIB name (which need not carry a family at all, e.g. `bgp.l3vpn.0`).
 - `peer-cfg-rti` with the value `master` / `default` / empty is normalised to `None`, so the
   default instance does not look like a named VRF.
 

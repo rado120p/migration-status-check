@@ -6,8 +6,10 @@ pocet advertised prefixu.
 Collector nerozhoduje, jestli je stav v poradku - jen ho zapise.
 
 Overeno proti laborce: peer-address nese port ('150.0.0.1+179' na MX,
-efemerni port '150.0.0.1+57010' na EVO), jeden peer muze mit az 11 RIB
-(bgp.rtarget.0, inet.0, bgp.l3vpn.0, ...) a pocty se scitaji pres vsechny.
+efemerni port '150.0.0.1+57010' na EVO) a jeden peer muze mit az 11 RIB
+(bgp.rtarget.0, inet.0, bgp.l3vpn.0, ...). Countery se ukladaji za kazdou
+RIB zvlast - souctem by se IPv4 a IPv6 slily do jednoho cisla a pokles v
+inet6.0 kompenzovany narustem v inet.0 by prosel bez povsimnuti.
 """
 
 from __future__ import annotations
@@ -44,11 +46,18 @@ class BgpCollector(Collector):
                 continue
             address = strip_port(raw_address)
 
-            prefixes = {"received": 0, "accepted": 0, "advertised": 0}
+            ribs: dict[str, dict[str, int]] = {}
             for rib in node.iter("bgp-rib"):
-                prefixes["received"] += _int(rib, "received-prefix-count")
-                prefixes["accepted"] += _int(rib, "accepted-prefix-count")
-                prefixes["advertised"] += _int(rib, "advertised-prefix-count")
+                rib_name = _text(rib, "name")
+                if not rib_name:
+                    continue
+                ribs[rib_name] = {
+                    "received": _int(rib, "received-prefix-count"),
+                    "accepted": _int(rib, "accepted-prefix-count"),
+                    "advertised": _int(rib, "advertised-prefix-count"),
+                    "active": _int(rib, "active-prefix-count"),
+                    "suppressed": _int(rib, "suppressed-prefix-count"),
+                }
 
             instance = _text(node, "peer-cfg-rti")
             if instance is not None and instance.lower() in DEFAULT_INSTANCES:
@@ -60,7 +69,7 @@ class BgpCollector(Collector):
                 "state": _text(node, "peer-state") or "unknown",
                 "peer_as": int(peer_as) if peer_as and peer_as.isdigit() else None,
                 "routing_instance": instance,
-                "prefixes": prefixes,
+                "ribs": ribs,
             }
 
         return peers

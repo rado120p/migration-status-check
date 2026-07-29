@@ -106,16 +106,35 @@ pořád plnohodnotná Internet služba a ARP, ping i BGP checky na něm proběhn
 `admin_status` i `oper_status` musí být `up`. Běží na **všech** rozhraních scope, včetně
 interních — u nich má stav smysl, na rozdíl od counterů. Bez dat vrací `SKIP`.
 
+**Jeden Finding na fakt, ne na rozhraní**: `admin_status` a `oper_status` se hlásí jako dva
+samostatné řádky (label `Interface admin status (<jméno>)` / `Interface operational status
+(<jméno>)`), takže
+report umí ukázat, který z obou je rozbitý, ne jen že „rozhraní není v pořádku". Zpráva je
+`<jméno>: admin_status <stav>` resp. `<jméno>: oper_status <stav>`, hodnota ve sloupci je
+stav s velkým první písmenem (`Up`, `Down`).
+
 ### `interface_errors` (state, advisory)
 
 Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Jen tranzitní rozhraní.
+Jeden Finding na rozhraní (label `Interface errors (<jméno>)`) — countery se do zprávy sesypou
+dohromady (`input_errors=3`), na rozdíl od `interface_state`/`interface_traffic` se nerozpadají
+na samostatné řádky.
 
 ### `interface_traffic` (both, advisory)
 
 - **bez baseline** (nebo když rozhraní v baseline není): `require_nonzero` → `input_pps`
-  i `output_pps` musí být > 0, jinak `broken` → WARN (`provoz netece`);
+  i `output_pps` musí být > 0, jinak `broken` → WARN se zprávou `<jméno>: <input_pps|
+  output_pps> <hodnota> pps` (např. `et-0/0/8: input_pps 0 pps`);
 - **s baseline**: pokles v procentech proti `tolerance_percent` (default −60 %). Do `details`
   se zapíše změna per směr, do `baseline`/`subject` surová čísla.
+
+**Jeden Finding na směr, ne na rozhraní**: `input_pps` (label `Interface traffic in (<jméno>)`)
+a `output_pps` (label `Interface traffic out (<jméno>)`) jsou dva samostatné řádky, takže report
+ukáže pokles jen na tom směru, kde se opravdu stal.
+
+**Každý popisek nese jméno rozhraní v závorce.** Scope drží fyzické i logické rozhraní, takže
+bez něj by v bloku stály dvojice řádků se stejným popiskem, jinými hodnotami a protichůdnými
+sloupci `ZMENA` — a nešlo by poznat, které rozhraní je které.
 
 Baseline data má už přejmenovaná rozhraní — viz `engine._aligned_baseline_data()`.
 
@@ -136,15 +155,34 @@ Oba checky běží jen na `Internet` a `IPVPN` a bez peerů ve scope vrací `SKI
 
 ### `bgp_session_state` (both, critical)
 
-- stav ≠ `Established` → `broken` → **FAIL**,
-- stav `Established`, ale **v baseline byl jiný** → `degraded` → **WARN** se zprávou
-  `stav se zmenil X -> Established`. I zlepšení stojí za zmínku, ale není to porucha,
+- stav ≠ `Established` → `broken` → **FAIL**. Nese `baseline_value`, takže sloupec `ZMENA`
+  ukáže `bylo Established` — regrese je vidět přesně tam, kde na ní záleží,
+- stav `Established`, ale **v baseline byl jiný** → **PASS** se zprávou
+  `stav se zmenil X -> Established`. Tahle větev je dosažitelná jen se stavem `Established`
+  (horší stavy odejdou výš), takže pokrývá právě a jen případ, kdy se relace během migrace
+  **zlepšila** — a zlepšení není varování (rozhodnutí R-2). Změna nezmizí: pojmenuje ji
+  zpráva a sloupec `ZMENA` píše předchozí stav,
 - stav `Established` a shodný (nebo bez baseline) → PASS.
+
+Každý Finding nese `label="BGP status"` a `family` odvozenou `peer_family()` z adresy peeru —
+report tak řádek zařadí do sekce `IPv4`/`IPv6`.
 
 ### `bgp_prefix_counts` (compare, advisory)
 
-Porovnává `received` / `accepted` / `advertised` proti `tolerance_percent` (default −10 %).
-Peer, který v baseline není, dostane `SKIP` — ne PASS.
+Porovnává `received` / `accepted` / `advertised` / `active` proti
+`tolerance_percent` (default −10 %). Peer, který v baseline není, dostane `SKIP` — ne PASS
+(zpráva `<peer>: peer neni v baseline snapshotu, nelze porovnat`).
+
+**Počty se drží a porovnávají za každou RIB zvlášť** (`bgp.rtarget.0`, `inet.0`,
+`bgp.l3vpn.0`, ...) — collector je tak i uložil (viz [collectors.md](collectors.md#bgppy--stav-peerů-a-počty-prefixů)).
+Chybí-li konkrétní RIB v baseline u jinak spárovaného peeru, dostane ta dvojice vlastní `SKIP`
+(`<peer>/<rib>: RIB neni v baseline, nelze porovnat`), ne mlčky spočítanou nulu. Rodinu řádku
+odvozuje `peer_family()` z **adresy peeru**, ne z názvu RIB — název ji nemusí nést vůbec
+(`bgp.l3vpn.0`), a peer s IPv4 adresou nesoucí zároveň IPv6 RIB se celý zařadí do sekce IPv4
+(zdokumentované omezení).
+
+Label řádku je `BGP <klíč>-prefix-count` (např. `BGP active-prefix-count`), takže report má
+pět samostatných řádků na RIB, ne jeden souhrnný.
 
 Porovnává se **s tolerancí, ne 1:1**. Zkušenost z JSNAPy je, že přesná shoda generuje
 množství FAILů kvůli rozdílu několika rout, což není signifikantní. Růst počtu prefixů
@@ -186,26 +224,70 @@ Iteruje instance a v nich domény (klíčované VLAN id, u vlan-based `"-"`). La
 
 ## `reachability.py`
 
-Oba checky mají `requires_inventory = True` (na device scope tedy vrací `SKIP`) a běží jen
-na `Internet` a `IPVPN`. Oba jsou vědomě **best-effort** — CPE může být vypnuté nebo blokovat
-ICMP — proto default severity `advisory`.
+Tři checky, `arp_present`, `nd_present` a `ping_reachability` — ARP je IPv4 varianta, ND
+IPv6 protějšek. Všechny mají `requires_inventory = True` (na device scope tedy vrací `SKIP`)
+a běží jen na `Internet` a `IPVPN`. Všechny jsou vědomě **best-effort** — CPE může být
+vypnuté nebo blokovat ICMP — proto default severity `advisory`.
+
+**Každý check vrací jeden `Finding` na záznam** (ARP/ND) resp. **na cíl** (ping) — report
+tiskne řádky jednotlivě, ne jako souhrnnou větu.
+
+Sdílené pomocné funkce:
+
+- **`owning_prefix(address, prefixes)`** — který nakonfigurovaný rozsah danou adresu
+  obsahuje. Používá se v `details["address"]`, aby report u služby s víc rozsahy jedné
+  rodiny popsal, ke kterému rozsahu řádek patří; report ho vypíše v labelu, jen když má
+  rodina víc než jednu adresu (`view.py::_row`, `qualify=len(own) > 1`) — u jediné adresy je
+  zbytečný, protože už je v hlavičce sekce.
+- **`link_local_is_configured(scope)`** (v `nd_present`) / funkčně stejná
+  `_link_local_configured()` v `probes/ping.py` — má služba link-local adresu přímo
+  nakonfigurovanou pod rozhraním? Testuje se **přítomnost, ne výlučnost**: stačí, aby mezi
+  nakonfigurovanými adresami byla jedna link-local, klidně i vedle běžné routovatelné, a
+  vrací `True`. Link-local sousedé se objeví u každého IPv6 rozhraní a o zákaznické službě
+  sami o sobě neříkají nic — proto se jinak vyřazují. Existují ale nasazení, kde služba
+  link-local používá — pak jsou to přesně ti sousedé, se kterými služba mluví, a filtr je
+  musí nechat projít. Rozhoduje konfigurace, ne heuristika.
 
 ### `arp_present` (state, advisory)
 
-Na rozhraních služby musí být aspoň jeden ARP záznam. Do `subject` se uloží **celý seznam**
-naučených adres; u ne-p2p subnetů jich může být víc.
+- **žádná IPv4 adresa nakonfigurovaná** (`scope.selectors.local_ipv4` prázdné) → **žádný
+  Finding** — služba bez IPv4 nemá mít ARP nález vůbec, natož WARN za souseda, který nikdy
+  nemohl existovat. Dřív se vracel `SKIP` označkovaný `family=4`, jenže právě ta značka si
+  v bloku vynutila sekci rodiny, kterou má renderer vynechat (rozhodnutí R-1);
+- žádný ARP záznam na rozhraních služby → `broken` → FAIL/WARN, zpráva `na rozhranich
+  sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
+- jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,
+  `family=4`, `value` = `<mac> -> <ip>` (`?` když MAC chybí).
+
+### `nd_present` (state, advisory)
+
+Zrcadlí `arp_present` pro IPv6:
+
+- žádná IPv6 adresa nakonfigurovaná → **žádný Finding** (viz `arp_present` výše);
+- link-local sousedé se **vyřadí**, pokud služba sama nemá link-local jako nakonfigurovanou
+  adresu (`link_local_is_configured()`);
+- žádný **použitelný** ND záznam nezbyde → `broken`, zpráva `na rozhranich sluzby neni zadny
+  pouzitelny ND zaznam` (všimni si slova „pouzitelny" navíc oproti ARP — právě kvůli
+  odfiltrovaným link-local sousedům), `value` = `zadny zaznam`;
+- jinak **jeden `Finding` na ND záznam**: zpráva `ND zaznam <ip>`, `label="ND"`, `family=6`,
+  `value` = `<mac> -> <ip>`, `subject` navíc nese `state` (ND má na rozdíl od ARP stav
+  záznamu).
 
 ### `ping_reachability` (state, advisory)
 
-Čte hotové výsledky ze snapshotu — cíle se resolvovaly už při `capture` (ARP → ping).
+Čte hotové výsledky ze snapshotu — cíle se resolvovaly už při `capture` (ARP/ND → ping,
+`probes/ping.py`).
 
-| situace | outcome | status |
-|---|---|---|
-| odpověděly všechny cíle | `ok` | PASS |
-| odpověděla část | `degraded` | **WARN** (i kdyby byl check přepnutý na `critical`) |
-| neodpověděl nikdo | `broken` | WARN (advisory) / FAIL (critical) |
-| ve snapshotu nejsou žádné cíle | `skip` | SKIP |
+- ve snapshotu nejsou pro tenhle scope žádné cíle → `SKIP` (`pro tento scope nejsou ve
+  snapshotu zadne cile pingu`);
+- probe bez rozpoznané rodiny (`family` mimo `4`/`6`) → vlastní `SKIP` jmenující cíle
+  (`probe bez rodiny nelze vyhodnotit: ...`) — jinak by probe z výsledku tiše zmizel, místo
+  aby řekl, že se nevyhodnotil;
+- jinak **jeden `Finding` na cíl**, seskupené podle `family`:
+  - odpověděl aspoň jeden paket → `ok`, zpráva `<cil>: odpovedelo N z M`,
+  - neodpověděl žádný → `broken`, zpráva `<cil>: neodpovedel (M paketu)`.
 
-Do `details` jde rozpad **per adresu** (`sent`, `received`, `loss_percent`, `resolved_from`,
-`rtt_avg_ms`), takže je z výsledku vidět, která adresa neodpověděla a jestli byla zjištěná
-z ARP nebo dopočtená ze subnetu.
+`value` je `<received>/<sent>` a u úspěšné odpovědi ještě `  <rtt> ms`; u neúspěchu
+`  <cil> neodpovedel`. `details` nese `resolved_from` (`arp` | `nd` | `subnet-fallback`) a
+`address` (`owning_prefix()`), takže je z výsledku vidět, který nakonfigurovaný rozsah cíl
+zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.

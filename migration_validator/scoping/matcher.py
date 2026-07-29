@@ -69,7 +69,7 @@ def _keys_subnet(scope: Scope) -> list[Hashable]:
     if key is None:
         return []
     keys: list[Hashable] = []
-    for address in scope.selectors.local_addresses:
+    for address in scope.selectors.local_ipv4 + scope.selectors.local_ipv6:
         try:
             network = ipaddress.ip_interface(address).network
         except ValueError:

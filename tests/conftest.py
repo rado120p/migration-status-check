@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 import pytest
 
 from migration_validator.models.inventory import load_inventory
@@ -14,6 +16,7 @@ NOW = "2026-07-24T09:12:41Z"
 def _facts_for(scopes, pps: int) -> dict:
     interfaces = {}
     arp = []
+    nd = []
     bgp = {}
     evpn_vpws = {}
     evpn_esi = {}
@@ -30,7 +33,20 @@ def _facts_for(scopes, pps: int) -> dict:
                 "output_errors": 0,
             }
         for peer in scope.selectors.bgp_neighbors:
-            arp.append({"ip": peer, "interface": scope.selectors.interfaces[0]})
+            # bgp_neighbors mixa v4 a v6 sousedy - bez rozliseni rodiny by
+            # v6 peer skoncil v ARP tabulce jako falesny family-4 zaznam.
+            interface = scope.selectors.interfaces[0]
+            if ipaddress.ip_address(peer).version == 6:
+                nd.append(
+                    {
+                        "ip": peer,
+                        "mac": "0c:00:ef:5e:df:01",
+                        "interface": interface,
+                        "state": "reachable",
+                    }
+                )
+            else:
+                arp.append({"ip": peer, "interface": interface})
             bgp[peer] = {
                 "state": "Established",
                 "routing_instance": (
@@ -38,7 +54,15 @@ def _facts_for(scopes, pps: int) -> dict:
                     if scope.selectors.routing_instances
                     else None
                 ),
-                "prefixes": {"received": 14, "accepted": 14, "advertised": 3},
+                "ribs": {
+                    "inet.0": {
+                        "received": 14,
+                        "accepted": 14,
+                        "advertised": 3,
+                        "active": 14,
+                        "suppressed": 0,
+                    }
+                },
             }
         service_type = scope.key.service_type
         instance = (
@@ -60,6 +84,7 @@ def _facts_for(scopes, pps: int) -> dict:
     return {
         "interfaces": interfaces,
         "arp": arp,
+        "nd": nd,
         "bgp": bgp,
         "evpn_vpws": evpn_vpws,
         "evpn_esi": evpn_esi,
@@ -76,14 +101,15 @@ def synthetic_snapshot():
             {
                 "scope_id": scope.id,
                 "target": scope.selectors.bgp_neighbors[0],
-                "source": scope.selectors.local_addresses[0].split("/")[0],
+                "source": scope.selectors.local_ipv4[0].split("/")[0],
+                "family": 4,
                 "sent": 5,
                 "received": 5,
                 "loss_percent": 0,
                 "resolved_from": "arp",
             }
             for scope in scopes
-            if scope.selectors.bgp_neighbors and scope.selectors.local_addresses
+            if scope.selectors.bgp_neighbors and scope.selectors.local_ipv4
         ]
         return Snapshot(
             device=DeviceMeta(address=address),
@@ -93,7 +119,10 @@ def synthetic_snapshot():
                 phase=phase,
                 collectors={
                     name: {"status": "ok"}
-                    for name in ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+                    for name in (
+                        "interfaces", "arp", "nd", "bgp",
+                        "evpn_vpws", "evpn_esi", "evpn_mac",
+                    )
                 },
             ),
             facts=_facts_for(scopes, pps),

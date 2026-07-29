@@ -11,7 +11,7 @@ def test_from_dict_fills_defaults_for_missing_keys():
     assert entry.service_type == "Internet"
     assert entry.description is None
     assert entry.service_subtype is None
-    assert entry.ip_address == []
+    assert entry.ipv4_address == []
     assert entry.bgp_neighbor == []
     assert entry.active is True
 
@@ -47,15 +47,18 @@ def test_load_inventory(tmp_path):
     path.write_text(
         textwrap.dedent(
             """\
+            schema_version: 2
             device: 172.20.20.4
             interfaces:
             - interface: ge-0/0/2.113
               description: L3VPN-CPE13-NNI
               service_type: IPVPN
               service_subtype: null
-              ip_address:
+              ipv4_address:
               - 198.11.13.1/30
-              virtual_gw_ip_address: []
+              ipv6_address: []
+              virtual_gw_ipv4_address: []
+              virtual_gw_ipv6_address: []
               routing_instance: L3VPN-CPE13-NNI
               active: true
               protocol:
@@ -83,7 +86,74 @@ def test_load_inventory(tmp_path):
 
 def test_load_inventory_rejects_missing_interfaces_key(tmp_path):
     path = tmp_path / "bad.yml"
-    path.write_text("device: 1.2.3.4\n", encoding="utf-8")
+    path.write_text("schema_version: 2\ndevice: 1.2.3.4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="interfaces"):
         load_inventory(path)
+
+
+def test_entry_keeps_families_apart():
+    entry = ServiceEntry.from_dict(
+        {
+            "interface": "ge-0/0/2.13",
+            "service_type": "Internet",
+            "ipv4_address": ["152.11.13.1/30"],
+            "ipv6_address": ["2001:abcd:11:13::a/127"],
+            "virtual_gw_ipv4_address": ["152.11.13.254"],
+            "virtual_gw_ipv6_address": [],
+        }
+    )
+
+    assert entry.ipv4_address == ["152.11.13.1/30"]
+    assert entry.ipv6_address == ["2001:abcd:11:13::a/127"]
+    assert entry.virtual_gw_ipv4_address == ["152.11.13.254"]
+    assert entry.virtual_gw_ipv6_address == []
+
+
+def test_roundtrip_through_dict():
+    data = {
+        "interface": "ge-0/0/2.13",
+        "service_type": "Internet",
+        "ipv4_address": ["152.11.13.1/30"],
+        "ipv6_address": ["2001:abcd:11:13::a/127"],
+        "virtual_gw_ipv4_address": [],
+        "virtual_gw_ipv6_address": [],
+    }
+    entry = ServiceEntry.from_dict(data)
+
+    for key, value in data.items():
+        assert entry.to_dict()[key] == value
+
+
+def test_old_inventory_fails_loudly(tmp_path):
+    """Bez verze by stara inventory tise prisla o adresy a sluzby by svitily zelene."""
+    path = tmp_path / "old.yml"
+    path.write_text(
+        "device: 172.20.20.4\n"
+        "interfaces:\n"
+        "  - interface: ge-0/0/2.13\n"
+        "    service_type: Internet\n"
+        "    ip_address: ['152.11.13.1/30']\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="schema_version"):
+        load_inventory(path)
+
+
+def test_current_inventory_loads(tmp_path):
+    path = tmp_path / "new.yml"
+    path.write_text(
+        "schema_version: 2\n"
+        "device: 172.20.20.4\n"
+        "interfaces:\n"
+        "  - interface: ge-0/0/2.13\n"
+        "    service_type: Internet\n"
+        "    ipv4_address: ['152.11.13.1/30']\n",
+        encoding="utf-8",
+    )
+
+    inventory = load_inventory(path)
+
+    assert inventory.device == "172.20.20.4"
+    assert inventory.entries[0].ipv4_address == ["152.11.13.1/30"]

@@ -12,7 +12,7 @@ from typing import Any
 
 DEVICE_SCOPE_ID = "device"
 
-FACT_AREAS = ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+FACT_AREAS = ("interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
 
 
 @dataclass(frozen=True)
@@ -43,8 +43,10 @@ class Selectors:
     physical_interfaces: list[str] = field(default_factory=list)
     routing_instances: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
-    local_addresses: list[str] = field(default_factory=list)
-    virtual_gw: list[str] = field(default_factory=list)
+    local_ipv4: list[str] = field(default_factory=list)
+    local_ipv6: list[str] = field(default_factory=list)
+    virtual_gw_v4: list[str] = field(default_factory=list)
+    virtual_gw_v6: list[str] = field(default_factory=list)
     vlans: list[str] = field(default_factory=list)
     bridge_domains: list[str] = field(default_factory=list)
 
@@ -57,8 +59,10 @@ class Selectors:
             "physical_interfaces": list(self.physical_interfaces),
             "routing_instances": list(self.routing_instances),
             "bgp_neighbors": list(self.bgp_neighbors),
-            "local_addresses": list(self.local_addresses),
-            "virtual_gw": list(self.virtual_gw),
+            "local_ipv4": list(self.local_ipv4),
+            "local_ipv6": list(self.local_ipv6),
+            "virtual_gw_v4": list(self.virtual_gw_v4),
+            "virtual_gw_v6": list(self.virtual_gw_v6),
             "vlans": list(self.vlans),
             "bridge_domains": list(self.bridge_domains),
         }
@@ -105,6 +109,11 @@ class Scope:
             for entry in (facts.get("arp") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
+        nd = [
+            entry
+            for entry in (facts.get("nd") or [])
+            if self.selectors.matches_interface(str(entry.get("interface", "")))
+        ]
         bgp = {
             peer: data
             for peer, data in (facts.get("bgp") or {}).items()
@@ -130,6 +139,7 @@ class Scope:
         return {
             "interfaces": interfaces,
             "arp": arp,
+            "nd": nd,
             "bgp": bgp,
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
@@ -157,7 +167,7 @@ class Scope:
 
 
 def _empty(area: str) -> Any:
-    return [] if area == "arp" else {}
+    return [] if area in ("arp", "nd") else {}
 
 
 def device_scope() -> Scope:

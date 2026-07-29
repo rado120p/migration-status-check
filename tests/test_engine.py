@@ -1,23 +1,30 @@
 import pytest
 
 from migration_validator import api
+from migration_validator.engine import _identity
 from migration_validator.models.result import Status
-from migration_validator.models.scope import Scope, ScopeKey, Selectors
+from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 
 NOW = "2026-07-24T11:40:02Z"
 
 
-def _scope(scope_id, description, service_type, interface, peers=()):
+def _scope(scope_id, description, service_type, interface, peers=(), physical=()):
     return Scope(
         id=scope_id,
         kind="service",
         key=ScopeKey(description, service_type, None),
-        selectors=Selectors(interfaces=[interface], bgp_neighbors=list(peers)),
+        selectors=Selectors(
+            interfaces=[interface],
+            physical_interfaces=list(physical),
+            bgp_neighbors=list(peers),
+        ),
     )
 
 
-def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-migration"):
+def _snapshot(
+    address, interface, scopes, *, pps=400, peers=None, phase="pre-migration", physical=None
+):
     facts = {
         "interfaces": {
             interface: {
@@ -30,8 +37,25 @@ def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-mig
             }
         },
         "arp": [{"ip": "198.11.13.2", "interface": interface}],
+        "nd": [
+            {
+                "ip": "2001:db8:11:13::2",
+                "mac": "0c:00:ef:5e:df:01",
+                "interface": interface,
+                "state": "reachable",
+            }
+        ],
         "bgp": peers if peers is not None else {},
     }
+    if physical:
+        facts["interfaces"][physical] = {
+            "admin_status": "up",
+            "oper_status": "up",
+            "input_pps": pps,
+            "output_pps": pps,
+            "input_errors": 0,
+            "output_errors": 0,
+        }
     return Snapshot(
         device=DeviceMeta(address=address),
         capture=CaptureMeta(
@@ -42,7 +66,7 @@ def _snapshot(address, interface, scopes, *, pps=400, peers=None, phase="pre-mig
         ),
         facts=facts,
         probes={"ping": [{"scope_id": scopes[0].id, "target": "198.11.13.2",
-                          "sent": 5, "received": 5}]},
+                          "family": 4, "sent": 5, "received": 5}]},
         scopes=scopes,
         inventory=[],
     )
@@ -94,7 +118,7 @@ def test_scope_is_skip_only_when_everything_skipped():
     subject = _old()
     subject.capture.collectors = {
         name: {"status": "error", "message": "RpcError: timeout"}
-        for name in ("interfaces", "arp", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+        for name in ("interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
     }
     subject.probes = {"ping": []}  # bez cilu -> ping_reachability tez SKIP
 
@@ -112,6 +136,42 @@ def test_evaluate_with_baseline_matches_and_compares():
     assert scope.match.method == "description+service_type"
     assert scope.match.baseline_interfaces == ["ge-0/0/2.113"]
     assert scope.match.subject_interfaces == ["et-0/0/8.113"]
+
+
+def test_physical_interface_finds_its_baseline_after_rename():
+    """Migrace prejmenovava i fyzicke rozhrani, ne jen logicke.
+
+    _aligned_baseline_data preslovnovalo jen selectors.interfaces, takze
+    fyzicke rozhrani svou baseline nikdy nenaslo a kazda migrovana sluzba
+    vypsala dva trvale radky 'WARN 0 pps | bez baseline'. V ostrem behu to
+    bylo 16 z 36 varovani - presne ten trvaly oranzovy svit, kvuli kteremu
+    counter checky na internich rozhranich davaji SKIP misto WARN.
+    """
+    baseline = _snapshot(
+        "172.20.20.4",
+        "ge-0/0/2.113",
+        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "ge-0/0/2.113",
+                physical=["ge-0/0/2"])],
+        physical="ge-0/0/2",
+    )
+    subject = _snapshot(
+        "172.20.20.5",
+        "et-0/0/8.113",
+        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "et-0/0/8.113",
+                physical=["et-0/0/8"])],
+        phase="post-migration",
+        physical="et-0/0/8",
+    )
+
+    result = api.evaluate(subject, baseline=baseline, now=NOW)
+
+    physical = [
+        check
+        for check in result.scopes[0].checks
+        if check.id == "interface_traffic" and check.message.startswith("et-0/0/8:")
+    ]
+    assert len(physical) == 2, "fyzicke rozhrani ma mit radek pro oba smery provozu"
+    assert [check.baseline_value for check in physical] == ["400 pps", "400 pps"]
 
 
 def test_traffic_drop_surfaces_as_warn_in_summary():
@@ -200,3 +260,60 @@ def test_result_is_json_serialisable():
 
     payload = api.evaluate(_new(), baseline=_old(), now=NOW).to_dict()
     assert json.loads(json.dumps(payload, ensure_ascii=False))["schema_version"] == 1
+
+
+def test_identity_maps_each_address_field_to_its_own_key():
+    """Distinct hodnoty pro kazde pole - zamena v4/v6 by tichem prosla, kdyby
+    hodnoty byly stejne."""
+    scope = Scope(
+        id="svc:X:Internet",
+        kind="service",
+        key=ScopeKey("X", "Internet", "residential"),
+        selectors=Selectors(
+            interfaces=["et-0/0/8.13"],
+            routing_instances=["VRF-X"],
+            local_ipv4=["192.0.2.1/30"],
+            local_ipv6=["2001:db8::1/64"],
+            virtual_gw_v4=["192.0.2.2"],
+            virtual_gw_v6=["2001:db8::2"],
+        ),
+    )
+
+    identity = _identity(scope)
+
+    assert identity["description"] == "X"
+    assert identity["service_type"] == "Internet"
+    assert identity["service_subtype"] == "residential"
+    assert identity["routing_instance"] == "VRF-X"
+    assert identity["interfaces"] == ["et-0/0/8.13"]
+    assert identity["ipv4"] == ["192.0.2.1/30"]
+    assert identity["ipv6"] == ["2001:db8::1/64"]
+    assert identity["virtual_gw_v4"] == ["192.0.2.2"]
+    assert identity["virtual_gw_v6"] == ["2001:db8::2"]
+
+
+def test_identity_on_device_scope_is_empty_not_crashing():
+    identity = _identity(device_scope())
+
+    assert identity == {
+        "description": None,
+        "service_type": None,
+        "service_subtype": None,
+        "routing_instance": None,
+        "interfaces": [],
+        "ipv4": [],
+        "ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+    }
+
+
+def test_identity_without_routing_instance_is_none_not_indexerror():
+    scope = Scope(
+        id="svc:Y:Internet",
+        kind="service",
+        key=ScopeKey("Y", "Internet", None),
+        selectors=Selectors(),
+    )
+
+    assert _identity(scope)["routing_instance"] is None

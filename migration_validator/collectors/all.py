@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from migration_validator.collectors import arp, bgp, evpn, interfaces  # noqa: F401
+from migration_validator.collectors import arp, bgp, evpn, interfaces, nd  # noqa: F401
 
 
 def load_all() -> None:
