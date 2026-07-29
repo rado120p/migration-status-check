@@ -1117,6 +1117,15 @@ Za `_parse_bgp_neighbors` (a za metody ze Tasku 1) vložit:
 
         Musí běžet **až po** `_assign_bgp_neighbors` — dřív je seznam
         peerů prázdný a nebylo by co spárovat.
+
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type.
+        Služba bez routing-instance sahá do `self.default_bfd`, což je
+        záměr z globálního `protocols bgp` — a to i tehdy, jde-li o Core
+        nebo E-LAN. Nevadí to, protože `_assign_bgp_neighbors` plní
+        `bgp_neighbor` jen u Internet a IPVPN, takže ostatním službám
+        prázdný seznam ukončí iteraci hned na začátku. Je to podmínka,
+        na které tahle metoda stojí, ne shoda náhod — kdyby se filtr
+        v `_assign_bgp_neighbors` rozšířil, patří sem gate.
         """
 
         for service in services:
@@ -3210,8 +3219,38 @@ Zkontroluj proti tomu, co laborka skutečně měla 2026-07-29:
 | `PASS \| BFD (152.11.13.2) : Up` | jediná zdravá session |
 | `SKIP \| BFD (198.11.14.2) : BGP neni Established` | BFD ze skupiny CPE14, BGP Idle |
 | `SKIP \| BFD (2001:db8:11:14::b) : BGP neni Established` | IPv6 peer dědí BFD ze skupiny |
-| statické routy na `.5` jako PASS | všech 5 je v tabulce a byly i v pre? **ne** — na `.4` v tabulce nebyly, takže sloupec ZMENA bude prázdný a řádky PASS |
+| statické routy na `.5` jako **PASS s prázdným sloupcem ZMENA** | v tabulce jsou, ale v `pre` nebyly, takže `baseline_value` je `None` |
 | žádný řádek BFD u služeb bez BFD | R-1 |
+
+- [ ] **Step 6b: Ověřit AR-15 na straně `pre` — to je hlavní důkaz této vlny**
+
+Report ze subjectu ukazuje zdravý stav. Rozpor mezi konfigurací a tabulkou
+je vidět jen na `.4`, kde je konfigurace plná a tabulka prázdná:
+
+```bash
+.venv/bin/python -m migration_validator.cli evaluate \
+  --snapshot runs/bfd-static-2026-07-29/pre.json --detail | grep "Staticka routa"
+```
+
+Expected: **čtyři řádky `FAIL` s hodnotou `neni v tabulce`** — `198.62.1.0/29`
+a `2001:aaaa::/64` v `inet.0` / `inet6.0`, `172.26.1.0/29` a `2001:eeee::/64`
+v `L3VPN-CPE13-NNI.*`. Mgmt statiky mezi nimi **nejsou** (nemapují se na
+službu), zato musí být v `unassigned.static_routes`:
+
+```bash
+.venv/bin/python -m migration_validator.cli evaluate \
+  --snapshot runs/bfd-static-2026-07-29/pre.json --format json \
+  | .venv/bin/python -c "import json,sys; print(json.dumps(json.load(sys.stdin)['unassigned']['static_routes'], indent=2))"
+```
+
+Expected: dvě položky, `mgmt_junos.inet.0 0.0.0.0/0` a `mgmt_junos.inet6.0 ::/0`,
+obě s `via: ["fxp0.0"]`.
+
+Pokud tyhle čtyři FAIL řádky nevyjdou, **nespoléhej na to, že je laborka jinak
+nakonfigurovaná** — zkontroluj nejdřív `_assign_static_routes` a selektor
+`static_routes` ve scope. Rozpor mezi konfigurací a tabulkou je jediný důvod,
+proč AR-15 vznikl, a je to jediné místo, kde ho jde ověřit proti živému
+zařízení.
 
 Zkontroluj i strojový výstup:
 
@@ -3242,7 +3281,7 @@ Ve **stejném commitu** jako kód (pravidlo z vlny 1). Projít a doplnit:
 - `docs/cs/files/checks.md` — `static_route_status` a `bfd_session_state` včetně tabulek stavů
 - `docs/cs/files/parsers.md` — `static_route` a `bfd` v inventory, dědění BFD hierarchií, normalizace jména RIB, `routing-options` ve filtru
 - `docs/cs/files/models.md` — `Selectors.static_routes` / `.bfd_peers`, `FACT_AREAS`
-- `docs/cs/reference.md` — `schema_version` 3 u inventory i snímku, nové klíče `unassigned`
+- `docs/cs/reference.md` — **obě** zvýšené verze, ne jen jedna: `schema_version` inventory 2 → 3 **a** `schema_version` snímku 2 → 3. Druhá je ta, kvůli které přestanou jít přehrát `runs/ipv6/` a `runs/ipv6-live-2026-07-29/`, a ten důsledek patří do uživatelské dokumentace. Dále nové klíče `unassigned` (`static_routes`, `bfd_sessions`) a nová pole `static_route` / `bfd` v inventory
 - `docs/cs/README.md` — pokud vyjmenovává, co nástroj kontroluje
 - Totéž v `docs/en/`
 
@@ -3290,3 +3329,5 @@ oba peery skupiny CPE14 SKIP kvuli BGP Idle."
 **Když `evaluate` po Tasku 4 spadne na verzi snímku**, je to očekávané až do Tasku 10, Step 5. Do té doby ověřuj proti fixtures, ne proti `runs/`.
 
 **F-2 (podřádky se jménem RIB) se v této vlně nedělá.** Jméno RIB jde do kvalifikátoru popisku. Pokud se při implementaci ukáže, že popisky jsou nepohodlně dlouhé, je to vstup pro vlnu 3, ne důvod měnit renderer teď.
+
+**`rpc_kwargs` je zapojené, ale `routes` a `bfd` jsou jeho první uživatelé.** `collectors/base.py:66` volá `rpc(**self.rpc_kwargs(platform))`, takže `{"protocol": "static"}` i `{"detail": True}` se na RPC dostanou — ověřeno při psaní plánu. Všechny stávající collectory vracejí `{}`, takže dosud ten hook nikdo nepoužil. Test `test_collector_passes_detail_flag` ověřuje jen kontrakt metody, ne zapojení; kdyby se `collect()` někdy přepsalo, tenhle test to nechytí a BFD by tiše sbíral stručný výpis bez `remote-state`. Zapojení hlídá až conformance test z Tasku 10.
