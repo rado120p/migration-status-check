@@ -55,6 +55,16 @@ class BgpSessionStateCheck(Check):
             state = str(peers[peer].get("state", "unknown"))
             subject = {"state": state}
 
+            # Dohledava se pred vetvenim, ne uvnitr vetve pro Established:
+            # spadla relace je prave ten pripad, kvuli kteremu sloupec ZMENA
+            # vznikl, a kdyz se baseline hledal az za jejim continue, report
+            # u ni psal 'bez baseline', prestoze check predchozi stav znal.
+            baseline_state = (
+                str(baseline_peers[peer].get("state", "unknown"))
+                if peer in baseline_peers
+                else None
+            )
+
             if state != ESTABLISHED:
                 findings.append(
                     Finding(
@@ -63,16 +73,13 @@ class BgpSessionStateCheck(Check):
                         label="BGP status",
                         family=peer_family(peer),
                         value=state,
+                        baseline_value=baseline_state,
+                        baseline={"state": baseline_state} if baseline_state else None,
                         subject=subject,
                     )
                 )
                 continue
 
-            baseline_state = (
-                str(baseline_peers[peer].get("state", "unknown"))
-                if peer in baseline_peers
-                else None
-            )
             if baseline_state is not None and baseline_state != state:
                 findings.append(
                     Finding(

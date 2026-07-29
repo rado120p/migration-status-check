@@ -140,6 +140,19 @@ def test_compare_check_without_baseline_says_so():
     assert change_text(row, has_baseline=True) == "bez baseline"
 
 
+def test_both_check_without_baseline_says_so():
+    """Rezim BOTH, ne COMPARE - a prave on to hlasi na spadle BGP relaci.
+
+    Bez tehle fixture je pravidlo pokryte jen pro COMPARE: mutace vracejici
+    pro BOTH prazdny retezec misto 'bez baseline' projde celou sadou.
+    """
+    row = build_view(
+        _scope([_check("bgp_session_state", family=4, mode="both", value="Connect")])
+    ).sections[0].rows[0]
+
+    assert change_text(row, has_baseline=True) == "bez baseline"
+
+
 def test_identical_values_print_nothing():
     row = build_view(
         _scope([_check("interface_traffic", mode="both", value="460 pps",

@@ -131,6 +131,25 @@ def test_changed_session_carries_baseline_value():
     assert result.baseline_value == "Connect"
 
 
+def test_broken_session_carries_baseline_value():
+    """Druha polovina te same regrese, kterou resi test vyse - a ta horsi.
+
+    Vetev pro spadlou relaci vytvarela Finding drive, nez se baseline stav
+    vubec dohledal, takze report u nej psal 'bez baseline'. Sloupec ZMENA
+    vznikl proto, aby byla regrese videt; zamlcoval ji presne u peeru, ktery
+    spadl. Doloženo na runs/ipv6: peer 152.11.13.2 je Established v pre a
+    Connect v post snapshotu.
+    """
+    ctx = _ctx(
+        subject={"bgp": {"198.11.13.2": _peer(state="Connect")}},
+        baseline={"bgp": {"198.11.13.2": _peer(state="Established")}},
+    )
+    result = run_check(BgpSessionStateCheck(), ctx)[0]
+
+    assert result.status is Status.FAIL
+    assert result.baseline_value == "Established"
+
+
 def test_peer_missing_in_baseline_is_evaluated_as_state_only():
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer()}},
