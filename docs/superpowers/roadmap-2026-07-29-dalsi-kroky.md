@@ -11,6 +11,11 @@ sem se opisovat nemají.
 **Doporučené pořadí:** vlna 1 (doladění reportu) → vlna 2 (druhý spec) → zbytek.
 Důvod je v každé sekci.
 
+> **Vlna 1 je hotová** (2026-07-29, větev `vlna1-doladeni-reportu`) — co se
+> rozhodlo a co z toho vzniklo, je v
+> [`roadmap-2026-07-29-vlna1-hotovo.md`](roadmap-2026-07-29-vlna1-hotovo.md).
+> Sekce „Vlna 1" níž zůstává jako zadání, proti kterému se to dělalo.
+
 ---
 
 ## Než se začne — jak si vyrobit důkazy

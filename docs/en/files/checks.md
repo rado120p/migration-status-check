@@ -41,6 +41,7 @@ layer's responsibility and is tested separately.
 class Check(ABC):
     id: str                       # "bgp_session_state"
     title: str                    # "Stav BGP session"
+    label: str                    # "BGP status" — the CHECK column label
     mode: Mode                    # state | compare | both
     requires: tuple[str, ...]     # areas from facts/probes, e.g. ("bgp",)
     requires_inventory: bool
@@ -52,6 +53,13 @@ class Check(ABC):
 
 `applies_to(scope)` returns `True` for the **device scope always** (there is nothing to filter
 by) and otherwise compares `service_type`.
+
+`label` is **required** and is not `title`: `title` is a sentence about the check ("Stav BGP
+session"), `label` is the report's `CHECK` column label ("BGP status"). It is used for rows
+that did not originate inside the check (framework skips) and fills in for a finding that
+carries no label of its own. Without it a row fell back to the check `id` and
+`SKIP | evpn_esi_status` sat among readable labels — which is why `run_check()` fills it in,
+not the renderer, which would have nothing better to reach for.
 
 `describe()` is what `mig-validate checks` and a future GUI see.
 
@@ -70,6 +78,12 @@ The gates a check passes through, in order:
 6. `check.run()` raises → `SKIP` (`check selhal: ...`) — one broken check must not kill the
    whole run,
 7. otherwise every `Finding` becomes a `CheckResult` via `derive_status(outcome, severity)`.
+
+A `SKIP` from steps 3–6 is a **full report row**: it takes the check's `label` and a short
+reason as its `value` (`bez inventory`, `bez baseline`, `collector selhal`, `check selhal`).
+The full sentence stays in `message` for the `NALEZ` column and the machine output — while
+those rows had no value the renderer reached for that sentence instead, and a failed
+collector's 190-character RPC error stretched the block to 270 characters wide.
 
 The difference between steps 1–2 (empty list) and 3–6 (`SKIP`) is deliberate: *"does not apply
 here"* should not count towards the summary, *"not measured"* should.

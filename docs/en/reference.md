@@ -337,6 +337,9 @@ snapshot above); `models/result.py::RunResult.schema_version` stays `1`.
     "scopes_matched": 8, "unmatched_baseline": 2, "unmatched_subject": 3
   },
 
+  // only on a result that went through a filter (--filter / --status); absent otherwise
+  "filtered": {"scopes_shown": 2, "scopes_total": 11, "statuses": ["FAIL"]},
+
   "scopes": [
     {
       "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -402,8 +405,12 @@ Properties:
   per interface. `bgp_prefix_counts` returns
   one per **RIB × counter** (`BGP <counter>-prefix-count`), not one summary across RIBs.
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
-  better to report); `summary` aggregates across all checks. Neither the terminal nor a GUI
-  computes anything.
+  better to report); `summary` aggregates across **checks**. The terminal derives the service
+  counts from `scopes` itself — the same computation holds for the whole run and for a
+  filtered selection, so they need not live in `summary`.
+- **After a filter (`--filter`, `--status`), `pass`/`warn`/`fail`/`skip` in `summary` describe
+  the selection shown, not the whole run**, and `filtered` says so. `scopes_matched` and both
+  `unmatched_*` are not recomputed — filtering does not apply to `NESPAROVANO`.
 - `match` is `null` for a run without a baseline; for an unpaired subject scope it carries
   `status: "unmatched"` and a `reason`.
 - `identity` carries everything the report needs about the service (addresses, VGW, RI,

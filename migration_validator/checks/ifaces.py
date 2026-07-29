@@ -53,11 +53,14 @@ def _transit_interfaces(ctx: CheckContext) -> list[str]:
 
 
 def _no_transit_finding(ctx: CheckContext) -> Finding:
+    """Popisek si radek vezme od checku - stejny duvod hlasi tri ruzne
+    countery a kazdy ma vlastni jmeno sloupce."""
     names = sorted(ctx.subject.get("interfaces", {}))
     listed = ", ".join(names) if names else "zadne rozhrani"
     return Finding(
         outcome=Outcome.SKIP,
         message=f"neni tranzitni rozhrani ({listed}), counter check se preskakuje",
+        value="netranzitni rozhrani",
     )
 
 
@@ -65,6 +68,7 @@ def _no_transit_finding(ctx: CheckContext) -> Finding:
 class InterfaceStateCheck(Check):
     id = "interface_state"
     title = "Stav rozhrani"
+    label = "Interface status"
     mode = Mode.STATE
     requires = ("interfaces",)
     default_severity = Severity.CRITICAL
@@ -72,7 +76,13 @@ class InterfaceStateCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         interfaces: dict[str, Any] = ctx.subject.get("interfaces", {})
         if not interfaces:
-            return [Finding(Outcome.SKIP, "pro tento scope nejsou data o rozhranich")]
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "pro tento scope nejsou data o rozhranich",
+                    value="bez dat",
+                )
+            ]
 
         findings = []
         for name in sorted(interfaces):
@@ -99,6 +109,7 @@ class InterfaceStateCheck(Check):
 class InterfaceErrorsCheck(Check):
     id = "interface_errors"
     title = "Chybove countery rozhrani"
+    label = "Interface errors"
     mode = Mode.STATE
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
@@ -120,7 +131,13 @@ class InterfaceErrorsCheck(Check):
             total = sum(counters.values())
             if total == 0:
                 findings.append(
-                    Finding(Outcome.OK, f"{name}: bez chyb", label=label, subject=counters)
+                    Finding(
+                        Outcome.OK,
+                        f"{name}: bez chyb",
+                        label=label,
+                        value="bez chyb",
+                        subject=counters,
+                    )
                 )
             else:
                 detail = ", ".join(f"{key}={value}" for key, value in counters.items() if value)
@@ -129,6 +146,7 @@ class InterfaceErrorsCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: chybove countery nenulove ({detail})",
                         label=label,
+                        value=detail,
                         subject=counters,
                     )
                 )
@@ -139,6 +157,7 @@ class InterfaceErrorsCheck(Check):
 class InterfaceTrafficCheck(Check):
     id = "interface_traffic"
     title = "Datovost rozhrani"
+    label = "Interface traffic"
     mode = Mode.BOTH
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
@@ -238,6 +257,7 @@ class TrafficCeasedCheck(Check):
 
     id = "traffic_ceased"
     title = "Utichnuti stareho rozhrani"
+    label = "Interface traffic ceased"
     mode = Mode.COMPARE
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
@@ -260,17 +280,23 @@ class TrafficCeasedCheck(Check):
                         Outcome.SKIP,
                         f"{name}: rozhrani neni v baseline snapshotu",
                         label=label,
+                        value="bez baseline",
                     )
                 )
                 continue
 
             baseline = _rates(baseline_data)
+            # Compare check bez baseline_value hlasi ve sloupci ZMENA 'bez
+            # baseline' - a tenhle check bez baseline vubec nebezi, takze by
+            # to byla hlaska, ktera nemuze byt pravda.
+            previous = f"{max(baseline['input_pps'], baseline['output_pps'])} pps"
             if baseline["input_pps"] == 0 and baseline["output_pps"] == 0:
                 findings.append(
                     Finding(
                         Outcome.SKIP,
                         f"{name}: v baseline zadny provoz, utichnuti nelze overit",
                         label=label,
+                        value="bez provozu v baseline",
                         baseline=baseline,
                         subject=subject,
                     )
@@ -287,6 +313,8 @@ class TrafficCeasedCheck(Check):
                         f"{name}: stare rozhrani stale nese provoz "
                         f"({residual} pps, prah {threshold} pps)",
                         label=label,
+                        value=f"{residual} pps",
+                        baseline_value=previous,
                         baseline=baseline,
                         subject=subject,
                         details=details,
@@ -298,6 +326,8 @@ class TrafficCeasedCheck(Check):
                         Outcome.OK,
                         f"{name}: provoz utichl ({residual} pps)",
                         label=label,
+                        value=f"{residual} pps",
+                        baseline_value=previous,
                         baseline=baseline,
                         subject=subject,
                         details=details,

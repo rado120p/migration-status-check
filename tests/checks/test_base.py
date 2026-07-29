@@ -9,12 +9,13 @@ from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_
 class DummyCheck(Check):
     id = "dummy"
     title = "Dummy"
+    label = "Dummy radek"
     mode = Mode.STATE
     requires = ("interfaces",)
     default_severity = Severity.CRITICAL
 
     def run(self, ctx):
-        return [Finding(outcome=Outcome.BROKEN, message="rozbito")]
+        return [Finding(outcome=Outcome.BROKEN, message="rozbito", value="rozbito")]
 
 
 class CompareCheck(DummyCheck):
@@ -138,6 +139,85 @@ class _PresentationCheck(Check):
                 delta="zmena",
             )
         ]
+
+
+class _UnlabelledCheck(Check):
+    id = "unlabelled_probe"
+    title = "Testovaci check bez popisku ve findingu"
+    label = "Popisek checku"
+    mode = Mode.STATE
+
+    def run(self, ctx):
+        return [Finding(Outcome.OK, "hotovo", value="Up")]
+
+
+def test_finding_without_label_borrows_the_one_from_the_check():
+    """F-10: popisek radku nesmi spadnout na id checku.
+
+    Doplnuje se v run_check, ne v rendereru: renderer vidi jen CheckResult,
+    takze by nemel odkud vzit nic lepsiho nez to id - a `SKIP |
+    evpn_esi_status` mezi hezkymi popisky je presne to, co se v ostrem behu
+    tisklo.
+    """
+    ctx = CheckContext(
+        scope=device_scope(), subject={}, baseline=None, config=default_config()
+    )
+
+    result = run_check(_UnlabelledCheck(), ctx)[0]
+
+    assert result.label == "Popisek checku"
+
+
+def test_failed_collector_skip_is_a_row_not_a_veta():
+    """F-7/F-10: radky, ktere vyrobi framework mimo check, mely prazdny
+    popisek i hodnotu, takze do reportu spadlo id checku a cela veta.
+
+    U selhaneho collectoru to byla veta o RPC chybe dlouha 190 znaku, ktera
+    v ostrem behu roztahla cely blok na 270 znaku sirky. Duvod nemizi -
+    zustava v message, kterou tiskne sloupec NALEZ a strojovy vystup.
+    """
+    result = run_check(
+        DummyCheck(), _ctx(failed_collectors={"interfaces": "RpcError: syntax error"})
+    )[0]
+
+    assert result.status is Status.SKIP
+    assert result.label == "Dummy radek"
+    assert result.value == "collector selhal"
+    assert "RpcError: syntax error" in result.message
+
+
+def test_missing_inventory_skip_is_a_row_not_a_veta():
+    result = run_check(InventoryCheck(), _ctx(scope=device_scope()))[0]
+
+    assert result.label == "Dummy radek"
+    assert result.value == "bez inventory"
+
+
+def test_compare_check_without_baseline_skips_with_a_short_value():
+    result = run_check(CompareCheck(), _ctx())[0]
+
+    assert result.label == "Dummy radek"
+    assert result.value == "bez baseline"
+
+
+def test_exploded_check_skips_with_a_short_value():
+    result = run_check(ExplodingCheck(), _ctx())[0]
+
+    assert result.value == "check selhal"
+    assert "neco se pokazilo" in result.message
+
+
+def test_every_registered_check_has_a_row_label():
+    """Bez popisku by check tise vypisoval radky pod svym id - a prave to
+    je F-10. Kdyz ho zavede uz trida, nemuze na nej novy check zapomenout
+    jen v nekterych vetvich."""
+    from migration_validator.checks import all as _all  # noqa: F401  (registrace)
+    from migration_validator.checks.registry import all_checks
+
+    checks = all_checks()
+    assert checks
+    for check in checks:
+        assert getattr(check, "label", None), f"{check.id} nema label"
 
 
 def test_run_check_propagates_presentation_fields():

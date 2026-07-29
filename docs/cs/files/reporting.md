@@ -86,8 +86,18 @@ Vrátí **kopii** výsledku (`dataclasses.replace`) s profiltrovaným seznamem s
 - `text` — case-insensitive podřetězec ve `scope_id` **nebo** v `key["description"]`,
 - `statuses` — množina požadovaných stavů.
 
-**Sekce `NESPAROVANO` zůstává celá.** Je to hlavní pojistka proti přehlédnutí nezmigrované
-služby a filtr ji nesmí schovat.
+Bez obou argumentů vrací původní objekt beze změny — nefiltrovaný běh má zůstat přesně tím
+tvarem, který čte okolí.
+
+**Počty PASS/WARN/FAIL/SKIP se přepočítají za vybranou množinu**, jinak hlavička tvrdí něco
+jiného než tabulka hned pod ní. `scopes_matched` a obojí `unmatched_*` se ale
+**nepřepočítávají**: sekce `NESPAROVANO` je pojistka proti přehlédnutí nezmigrované služby,
+filtr se na ni nevztahuje a přepočet jejích čísel by tiše smazal přesně to, co má ukázat.
+
+Že už nejde o celý běh, nese pole `RunResult.filtered`
+(`{"scopes_shown", "scopes_total", "text", "statuses"}`). Bez něj by přepočtená čísla byla
+jen druhá podoba téže chyby — a `evaluate --format json --status fail` zapisuje právě ten
+profiltrovaný výsledek, takže by o filtru nevěděl ani strojový výstup.
 
 ### `SYMBOL`
 
@@ -102,7 +112,11 @@ Skládá pět částí:
 
 1. **Hlavička** — s baselinem `Migrace: <adresa> (<fáze>) -> <adresa> (<fáze>)`, bez něj
    `Validace: <adresa> (<fáze>)`.
-2. **Souhrn** — počty PASS/WARN/FAIL/SKIP a počty spárovaných a nespárovaných služeb.
+2. **Souhrn** — dva pojmenované řádky (`Sluzby:` a `Checky:`) a pod nimi počty spárovaných
+   a nespárovaných služeb. Dva řádky proto, že jde o dvě různé jednotky: `Sluzby:` sedí na
+   počet řádků tabulky pod ním, `Checky:` je součet přes všechna měření. Šířky sloupců se
+   počítají z obou řádků najednou, aby čísla stála pod sebou. Když běžel filtr, je nad
+   souhrnem ještě řádek `filtr: ... -- N z M sluzeb` a věta o tom, co se nepřepočítalo.
 3. **Souhrnná tabulka** — jeden řádek na službu, sloupce `STAV`, `SLUZBA` (description, jinak
    scope id), `TYP`, `STARY PORT`, `NOVY PORT`, `RI`, `NALEZ` (nejhorší nález,
    `_worst_message()`; u zeleného řádku prázdný). Šířky všech sloupců **se počítají z dat**,
@@ -143,25 +157,26 @@ Vygenerováno přímo z `render()` nad daty ve tvaru `tests/reporting/test_text_
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  1 PASS   1 WARN   0 FAIL   0 SKIP
+  Sluzby: 0 PASS  1 WARN  0 FAIL  0 SKIP
+  Checky: 1 PASS  1 WARN  0 FAIL  0 SKIP
   Sparovano 1 sluzeb, 0 nesparovana v baseline, 0 nesparovane v subject
 
 STAV  SLUZBA             TYP      STARY PORT  NOVY PORT   RI NALEZ
 WARN  INTERNET-CPE13-NNI Internet ge-0/0/2.13 et-0/0/8.13 -  pokles
 
-================================================================================================================
+==================================================================================================
  WARN  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
-================================================================================================================
- STAV | CHECK                                : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
- -----+--------------------------------------+-----------------------------------------+------------------------
- PASS | Interface admin status (et-0/0/8.13) : Up                                      |
- WARN | Interface traffic in (et-0/0/8.13)   : 460 pps                                 | bylo 520 pps   -12 %
+==================================================================================================
+ STAV | CHECK                  : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+------------------------+-----------------------------------------+------------------------
+ PASS | Interface admin status : Up                                      |
+ WARN | Interface traffic in   : 460 pps                                 | bylo 520 pps   -12 %
 
- -- IPv4  152.11.13.1/30 ---------------------------------------------------------------------------------------
- PASS | ARP                                  : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------
+ PASS | ARP                    : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
 
- -- IPv6  2001:abcd:11:13::a/127 -------------------------------------------------------------------------------
- PASS | ND                                   : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------
+ PASS | ND                     : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
 
 NESPAROVANO
   (nic)

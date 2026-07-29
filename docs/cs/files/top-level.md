@@ -140,7 +140,8 @@ Průběh:
      (nová služba se pořád zkontroluje, jen se nemá s čím porovnat),
    - nespárované baseline scopy jdou **jen** do `unmatched.baseline` — v subjektu nejsou,
      není co měřit.
-4. Sečte se `summary` přes všechny checky všech scopů.
+4. Sečte se `summary` přes všechny checky všech scopů (`count_statuses()` z `models/result.py`,
+   táž funkce, kterou používá filtr při přepočtu i renderer na počty služeb).
 5. `_unassigned_bgp_peers()` dohledá peery ze subjektu, které nespadly do žádného scope.
    V device režimu vrací prázdný seznam (device scope „vlastní" všechno).
 

@@ -17,6 +17,7 @@ from migration_validator.models.result import (
     RunResult,
     ScopeResult,
     Status,
+    count_statuses,
 )
 from migration_validator.models.scope import Scope, device_scope
 from migration_validator.models.snapshot import Snapshot
@@ -228,17 +229,13 @@ def evaluate_snapshots(
             unmatched["baseline"].append(_unmatched_entry(item.scope, item.reason))
 
     summary = {
-        "pass": 0,
-        "warn": 0,
-        "fail": 0,
-        "skip": 0,
+        **count_statuses(
+            check.status for scope_result in scope_results for check in scope_result.checks
+        ),
         "scopes_matched": matched_count,
         "unmatched_baseline": len(unmatched["baseline"]),
         "unmatched_subject": len(unmatched["subject"]),
     }
-    for scope_result in scope_results:
-        for check in scope_result.checks:
-            summary[check.status.value.lower()] += 1
 
     return RunResult(
         evaluated_at=now or _now(),

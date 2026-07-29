@@ -27,10 +27,32 @@ def _is_up(status: str) -> bool:
     return status.split("/", 1)[0].strip() == UP
 
 
+def _vpws_value(data: dict[str, Any] | None) -> str | None:
+    """Stav a SID do jednoho sloupce.
+
+    Tataz funkce pro subjekt i baseline: sloupec ZMENA ma porovnavat dva
+    retezce tehoz tvaru. Bez rozlozeni baseline na hodnotu hlasil sloupec
+    'bez baseline' u kazdeho EVPN radku, prestoze check baseline mel -
+    dohledaval si ji a vozil v poli `baseline`.
+    """
+    if data is None:
+        return None
+    status = str(data.get("status", "unknown"))
+    return f"{status}  SID {data.get('local_sid')} -> {data.get('remote_sid') or '-'}"
+
+
+def _esi_value(data: dict[str, Any] | None) -> str | None:
+    if data is None:
+        return None
+    status = str(data.get("status", "unknown"))
+    return f"{status}  DF {data.get('df_role') or '-'}"
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     id = "evpn_vpws_status"
     title = "Stav EVPN-VPWS"
+    label = "EVPN VPWS status"
     mode = Mode.BOTH
     requires = ("evpn_vpws",)
     service_types = frozenset({"E-Line"})
@@ -39,7 +61,9 @@ class EvpnVpwsStatusCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         instances: dict[str, Any] = ctx.subject.get("evpn_vpws", {})
         if not instances:
-            return [Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-vpws")]
+            return [
+                Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-vpws", value="bez dat")
+            ]
 
         baseline_instances = (ctx.baseline or {}).get("evpn_vpws", {})
 
@@ -58,6 +82,8 @@ class EvpnVpwsStatusCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: stav rozhrani {status}, ocekavano {UP}",
                         label=name,
+                        value=_vpws_value(subject),
+                        baseline_value=_vpws_value(baseline),
                         baseline=baseline,
                         subject=subject,
                     )
@@ -73,6 +99,8 @@ class EvpnVpwsStatusCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: chybi remote SID (local {local})",
                         label=name,
+                        value=_vpws_value(subject),
+                        baseline_value=_vpws_value(baseline),
                         baseline=baseline,
                         subject=subject,
                     )
@@ -84,6 +112,8 @@ class EvpnVpwsStatusCheck(Check):
                     Outcome.OK,
                     f"{name}: {UP}, SID {local} -> {remote}",
                     label=name,
+                    value=_vpws_value(subject),
+                    baseline_value=_vpws_value(baseline),
                     baseline=baseline,
                     subject=subject,
                 )
@@ -95,6 +125,7 @@ class EvpnVpwsStatusCheck(Check):
 class EvpnEsiStatusCheck(Check):
     id = "evpn_esi_status"
     title = "Stav EVPN ESI"
+    label = "EVPN ESI status"
     mode = Mode.BOTH
     requires = ("evpn_esi",)
     service_types = frozenset({"E-LAN"})
@@ -103,7 +134,9 @@ class EvpnEsiStatusCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         entries: dict[str, Any] = ctx.subject.get("evpn_esi", {})
         if not entries:
-            return [Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-esi")]
+            return [
+                Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-esi", value="bez dat")
+            ]
 
         baseline_entries = (ctx.baseline or {}).get("evpn_esi", {})
 
@@ -124,7 +157,15 @@ class EvpnEsiStatusCheck(Check):
                 else f"{esi}: stav rozhrani {status}, ocekavano {UP}"
             )
             findings.append(
-                Finding(outcome, message, label=esi, baseline=baseline, subject=subject)
+                Finding(
+                    outcome,
+                    message,
+                    label=esi,
+                    value=_esi_value(subject),
+                    baseline_value=_esi_value(baseline),
+                    baseline=baseline,
+                    subject=subject,
+                )
             )
         return findings
 
@@ -133,6 +174,7 @@ class EvpnEsiStatusCheck(Check):
 class EvpnMacCountCheck(Check):
     id = "evpn_mac_count"
     title = "Pocet MAC adres"
+    label = "EVPN MAC count"
     mode = Mode.BOTH
     requires = ("evpn_mac",)
     service_types = frozenset({"E-LAN"})
@@ -141,7 +183,11 @@ class EvpnMacCountCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         instances: dict[str, Any] = ctx.subject.get("evpn_mac", {})
         if not instances:
-            return [Finding(Outcome.SKIP, "pro tento scope nejsou data o MAC adresach")]
+            return [
+                Finding(
+                    Outcome.SKIP, "pro tento scope nejsou data o MAC adresach", value="bez dat"
+                )
+            ]
 
         baseline_instances = (ctx.baseline or {}).get("evpn_mac", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
@@ -174,12 +220,14 @@ def _mac_state_finding(label: str, count: int) -> Finding:
             Outcome.BROKEN,
             f"{label}: 0 naucenych MAC adres",
             label=label,
+            value="0",
             subject={"mac_count": 0},
         )
     return Finding(
         Outcome.OK,
         f"{label}: {count} naucenych MAC adres",
         label=label,
+        value=str(count),
         subject={"mac_count": count},
     )
 
@@ -192,6 +240,15 @@ def _mac_compare_finding(
     if change is not None:
         details["change_percent"] = round(change, 1)
 
+    # Stejna trojice poli jako u BGP counteru (AR-4): hodnota, drivejsi
+    # hodnota a hotovy rozdil. Bez baseline_value zustal sloupec ZMENA
+    # u MAC prazdny, prestoze check obe cisla znal.
+    presentation = {
+        "value": str(subject),
+        "baseline_value": str(baseline),
+        "delta": f"{subject - baseline:+d}" if subject != baseline else None,
+    }
+
     if change is not None and change < tolerance:
         return Finding(
             Outcome.BROKEN,
@@ -201,6 +258,7 @@ def _mac_compare_finding(
             baseline={"mac_count": baseline},
             subject={"mac_count": subject},
             details=details,
+            **presentation,
         )
     if subject == 0:
         return Finding(
@@ -210,6 +268,7 @@ def _mac_compare_finding(
             baseline={"mac_count": baseline},
             subject={"mac_count": 0},
             details=details,
+            **presentation,
         )
     return Finding(
         Outcome.OK,
@@ -218,4 +277,5 @@ def _mac_compare_finding(
         baseline={"mac_count": baseline},
         subject={"mac_count": subject},
         details=details,
+        **presentation,
     )

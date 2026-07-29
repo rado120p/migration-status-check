@@ -192,5 +192,14 @@ odkud vzít data.
 `baseline_interfaces`, `subject_interfaces`, `reason`.
 
 `RunResult`: `evaluated_at`, `subject`, `baseline`, `summary`, `scopes`, `unmatched`,
-`unassigned`, `schema_version`. Je to jediná věc, kterou reporting dostane — **spočítané
-je všechno předem**, takže se textový výstup a GUI nemohou rozejít.
+`unassigned`, `filtered`, `schema_version`. Je to jediná věc, kterou reporting dostane —
+**spočítané je všechno předem**, takže se textový výstup a GUI nemohou rozejít.
+
+`filtered` je `None` u celého běhu a slovník
+(`scopes_shown`, `scopes_total`, volitelně `text` a `statuses`) u výsledku, který prošel
+`filter_result()`. `to_dict()` ho v prvním případě do JSON vůbec nedá, takže nefiltrovaný
+výstup má přesně ten tvar, jaký měl dřív.
+
+`count_statuses(statuses)` rozpadá libovolné stavy na čtyři countery. Bere stavy, ne checky,
+právě proto, aby ji mohl použít souhrn za checky (engine, filtr) i souhrn za služby
+(renderer) — a rozdíl mezi těmi dvěma jednotkami byl v reportu neoznačený.

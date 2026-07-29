@@ -39,6 +39,7 @@ vrstvy a testuje se zvlášť.
 class Check(ABC):
     id: str                       # "bgp_session_state"
     title: str                    # "Stav BGP session"
+    label: str                    # "BGP status" — popisek sloupce CHECK
     mode: Mode                    # state | compare | both
     requires: tuple[str, ...]     # oblasti z facts/probes, např. ("bgp",)
     requires_inventory: bool
@@ -50,6 +51,13 @@ class Check(ABC):
 
 `applies_to(scope)` vrací `True` pro **device scope vždy** (nemá podle čeho filtrovat)
 a jinak porovnává `service_type`.
+
+`label` je **povinný** a není to `title`: `title` je věta o checku („Stav BGP session"),
+`label` je popisek sloupce `CHECK` v reportu („BGP status"). Použije se pro řádky, které
+nevznikly uvnitř checku (skipy od frameworku), a doplní se i findingu, který si vlastní
+popisek nenese. Bez toho spadl řádek na `id` checku a mezi hezkými popisky seděl
+`SKIP | evpn_esi_status` — doplňuje ho proto `run_check()`, ne renderer, který by neměl
+odkud vzít nic lepšího.
 
 `describe()` je to, co vidí `mig-validate checks` a budoucí GUI.
 
@@ -69,6 +77,12 @@ Pořadí bran, kterými check projde:
 
 Rozdíl mezi bodem 1–2 (prázdný seznam) a 3–6 (`SKIP`) je záměrný: *„sem to nepatří"* se
 nemá počítat do souhrnu, *„nezměřeno"* ano.
+
+`SKIP` z bodů 3–6 je **plnohodnotný řádek reportu**: dostane `label` z checku a krátký důvod
+do `value` (`bez inventory`, `bez baseline`, `collector selhal`, `check selhal`). Celá věta
+zůstává v `message` pro sloupec `NALEZ` a pro strojový výstup — dokud řádek hodnotu neměl,
+sahal renderer právě po té větě a u selhaného collectoru (věta o RPC chybě, 190 znaků)
+roztáhla blok na 270 znaků šířky.
 
 ## `registry.py`
 

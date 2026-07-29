@@ -51,6 +51,12 @@ class CheckContext:
 class Check(ABC):
     id: ClassVar[str]
     title: ClassVar[str]
+    # Popisek do sloupce CHECK pro radky, ktere nevznikly uvnitr checku
+    # (skip od frameworku) nebo ktere si vlastni popisek nenesou. Bez nej
+    # spadl radek na id checku a mezi hezkymi popisky sedelo
+    # `SKIP | evpn_esi_status`. `title` se na to nehodi - je to veta
+    # o checku ("Stav EVPN ESI"), ne popisek sloupce.
+    label: ClassVar[str]
     mode: ClassVar[Mode] = Mode.STATE
     requires: ClassVar[tuple[str, ...]] = ()
     requires_inventory: ClassVar[bool] = False
@@ -83,7 +89,14 @@ class Check(ABC):
         }
 
 
-def _skip(check: Check, severity: Severity, message: str) -> list[CheckResult]:
+def _skip(check: Check, severity: Severity, message: str, value: str) -> list[CheckResult]:
+    """Skip, ktery vznikl mimo check - a presto je to plnohodnotny radek.
+
+    `value` je kratky duvod do sloupce hodnot, `message` zustava celou
+    vetou pro sloupec NALEZ a strojovy vystup. Drive tu obe pole chybela,
+    takze renderer sahl po id checku a po cele vete; u selhaneho collectoru
+    to byla veta o RPC chybe, ktera roztahla blok na 270 znaku sirky.
+    """
     return [
         CheckResult(
             id=check.id,
@@ -91,6 +104,8 @@ def _skip(check: Check, severity: Severity, message: str) -> list[CheckResult]:
             status=derive_status(Outcome.SKIP, severity),
             severity=severity,
             message=message,
+            label=check.label,
+            value=value,
         )
     ]
 
@@ -105,10 +120,17 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
     severity = ctx.config.severity(check.id, check.default_severity)
 
     if check.requires_inventory and ctx.scope.is_device:
-        return _skip(check, severity, "check vyzaduje inventory, snapshot ji neobsahuje")
+        return _skip(
+            check,
+            severity,
+            "check vyzaduje inventory, snapshot ji neobsahuje",
+            "bez inventory",
+        )
 
     if check.mode is Mode.COMPARE and not ctx.has_baseline:
-        return _skip(check, severity, "porovnavaci check bez baseline snapshotu")
+        return _skip(
+            check, severity, "porovnavaci check bez baseline snapshotu", "bez baseline"
+        )
 
     for area in check.requires:
         if area in ctx.failed_collectors:
@@ -116,12 +138,13 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
                 check,
                 severity,
                 f"chybi data z collectoru '{area}': {ctx.failed_collectors[area]}",
+                "collector selhal",
             )
 
     try:
         findings = check.run(ctx)
     except Exception as error:  # noqa: BLE001 - jeden rozbity check nesmi zabit cely beh
-        return _skip(check, severity, f"check selhal: {error}")
+        return _skip(check, severity, f"check selhal: {error}", "check selhal")
 
     return [
         CheckResult(
@@ -130,7 +153,11 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
             status=derive_status(finding.outcome, severity),
             severity=severity,
             message=finding.message,
-            label=finding.label,
+            # Popisek doplnuje framework, ne renderer: renderer vidi jen
+            # CheckResult, takze by nemel odkud vzit nic lepsiho nez id
+            # checku - a to je presne ten radek, ktery se do reportu nemel
+            # nikdy dostat.
+            label=finding.label or check.label,
             family=finding.family,
             value=finding.value,
             baseline_value=finding.baseline_value,

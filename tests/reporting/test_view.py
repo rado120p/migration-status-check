@@ -146,6 +146,23 @@ def test_single_address_stays_unqualified_even_when_check_has_an_address():
     assert section.rows[0].label == "ARP"
 
 
+def test_missing_value_does_not_pull_the_whole_message_into_the_column():
+    """F-7: sloupec hodnot je podle AR-4 hodnota, ne veta.
+
+    Kdyz `value` chybelo, renderer sahl po `check.message` - do sloupce pak
+    padaly cele vety a nejdelsi z nich (RPC chyba od collectoru) roztahla
+    blok na 270 znaku. Vetu ma nest sloupec NALEZ a strojovy vystup.
+
+    Vlastni radky uz hodnotu dodavaji checky; tenhle fallback je posledni
+    pojistka pro pripad, ze na ni nekdo zapomene.
+    """
+    row = build_view(
+        _scope([_check("evpn_mac_count", value=None, message="chybi data z collectoru")])
+    ).sections[0].rows[0]
+
+    assert row.value == "-"
+
+
 def test_state_check_never_says_missing_baseline():
     """STATE check nema baseline z definice - 'bez baseline' by bylo na vsem."""
     row = build_view(_scope([_check("arp_present", family=4, mode="state")])).sections[0].rows[0]
@@ -172,6 +189,27 @@ def test_both_check_without_baseline_says_so():
     ).sections[0].rows[0]
 
     assert change_text(row, has_baseline=True) == "bez baseline"
+
+
+def test_skip_row_does_not_repeat_missing_baseline():
+    """SKIP uz duvod nese ve vlastni hlasce ('peer neni v baseline
+    snapshotu'), takze 'bez baseline' ve sloupci ZMENA je druha kopie teze
+    vety vedle sebe. V ostrem behu to bylo 14 z 18 vyskytu te hlasky.
+
+    Testy nad timhle drzi opacnou stranu: PASS a BOTH radek bez baseline ji
+    hlasit musi, jinak by zmizela i tam, kde je jedina.
+    """
+    row = build_view(
+        _scope(
+            [
+                _check("bgp_prefix_counts", family=4, mode="compare",
+                       status=Status.SKIP, value="bez baseline",
+                       message="10.0.0.1: peer neni v baseline snapshotu, nelze porovnat"),
+            ]
+        )
+    ).sections[0].rows[0]
+
+    assert change_text(row, has_baseline=True) == ""
 
 
 def test_identical_values_print_nothing():
