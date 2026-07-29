@@ -36,6 +36,18 @@ def percent_change(old: float, new: float) -> float | None:
     return (new - old) / old * 100.0
 
 
+def qualified(label: str, interface: str) -> str:
+    """Popisek radku nesouci jmeno rozhrani.
+
+    Kazdy scope drzi fyzicke i logicke rozhrani, takze bez jmena ma kazdy
+    blok dvojice radku se stejnym popiskem, jinymi hodnotami a
+    protichudnymi sloupci ZMENA - a neni poznat, ktere rozhrani je ktere.
+    Zavorka je stejny tvar, jakym AR-5b kvalifikuje adresu v ramci rodiny;
+    tam resil vzacny pripad dvou rozsahu, tady ten univerzalni.
+    """
+    return f"{label} ({interface})"
+
+
 def _transit_interfaces(ctx: CheckContext) -> list[str]:
     return sorted(name for name in ctx.subject.get("interfaces", {}) if is_transit(name))
 
@@ -75,7 +87,7 @@ class InterfaceStateCheck(Check):
                     Finding(
                         Outcome.OK if ok else Outcome.BROKEN,
                         f"{name}: {key} {state}",
-                        label=label,
+                        label=qualified(label, name),
                         value=state.capitalize(),
                         subject={key: state},
                     )
@@ -104,10 +116,11 @@ class InterfaceErrorsCheck(Check):
                 for key in ("input_errors", "output_errors", "framing_errors")
                 if key in data
             }
+            label = qualified("Interface errors", name)
             total = sum(counters.values())
             if total == 0:
                 findings.append(
-                    Finding(Outcome.OK, f"{name}: bez chyb", label=name, subject=counters)
+                    Finding(Outcome.OK, f"{name}: bez chyb", label=label, subject=counters)
                 )
             else:
                 detail = ", ".join(f"{key}={value}" for key, value in counters.items() if value)
@@ -115,7 +128,7 @@ class InterfaceErrorsCheck(Check):
                     Finding(
                         Outcome.BROKEN,
                         f"{name}: chybove countery nenulove ({detail})",
-                        label=name,
+                        label=label,
                         subject=counters,
                     )
                 )
@@ -180,6 +193,7 @@ def _traffic_finding(
     Bez baseline se hodnoti jen absolutni hodnota; delta zustava None a
     report ve sloupci ZMENA nevypise nic.
     """
+    label = qualified(label, name)
     value = f"{subject} pps"
 
     if baseline is None:
@@ -237,6 +251,7 @@ class TrafficCeasedCheck(Check):
 
         findings = []
         for name in names:
+            label = qualified("Utichnuti", name)
             subject = _rates(ctx.subject["interfaces"][name])
             baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
             if baseline_data is None:
@@ -244,7 +259,7 @@ class TrafficCeasedCheck(Check):
                     Finding(
                         Outcome.SKIP,
                         f"{name}: rozhrani neni v baseline snapshotu",
-                        label=name,
+                        label=label,
                     )
                 )
                 continue
@@ -255,7 +270,7 @@ class TrafficCeasedCheck(Check):
                     Finding(
                         Outcome.SKIP,
                         f"{name}: v baseline zadny provoz, utichnuti nelze overit",
-                        label=name,
+                        label=label,
                         baseline=baseline,
                         subject=subject,
                     )
@@ -271,7 +286,7 @@ class TrafficCeasedCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: stare rozhrani stale nese provoz "
                         f"({residual} pps, prah {threshold} pps)",
-                        label=name,
+                        label=label,
                         baseline=baseline,
                         subject=subject,
                         details=details,
@@ -282,7 +297,7 @@ class TrafficCeasedCheck(Check):
                     Finding(
                         Outcome.OK,
                         f"{name}: provoz utichl ({residual} pps)",
-                        label=name,
+                        label=label,
                         baseline=baseline,
                         subject=subject,
                         details=details,
