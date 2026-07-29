@@ -112,6 +112,7 @@ class RoutingInstance:
     evpn_service_type: str | None = None
     instance_vlan_ids: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    bfd: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -155,6 +156,7 @@ class InterfaceService:
     active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
+    bfd: list[dict[str, Any]] = field(default_factory=list)
 
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
@@ -254,6 +256,48 @@ def rib_instance(rib: str) -> str | None:
     return head or None
 
 
+def _bfd_node(node: etree._Element | None) -> etree._Element | None:
+    """Element bfd-liveness-detection přímo pod daným uzlem, bez sestupu."""
+    if node is None:
+        return None
+
+    found = node.xpath("./*[local-name()='bfd-liveness-detection']")
+
+    return found[0] if found else None
+
+
+def _bfd_values(
+    node: etree._Element | None,
+    source: str,
+) -> dict[str, Any] | None:
+    """Hodnoty jedné úrovně BFD. None znamená, že na této úrovni nic není."""
+    if node is None:
+        return None
+
+    return {
+        "minimum_interval": _optional_int(
+            first_text(
+                node,
+                "./*[local-name()='minimum-interval']/text()",
+            )
+        ),
+        "multiplier": _optional_int(
+            first_text(
+                node,
+                "./*[local-name()='multiplier']/text()",
+            )
+        ),
+        "source": source,
+    }
+
+
+def _optional_int(value: str | None) -> int | None:
+    if value is None or not value.isdigit():
+        return None
+
+    return int(value)
+
+
 def xpath_exists(
     node: etree._Element | None,
     xpath: str,
@@ -323,6 +367,7 @@ class JunosEvoAcxServiceParser:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
+        self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
 
     def parse(self) -> list[InterfaceService]:
@@ -358,6 +403,8 @@ class JunosEvoAcxServiceParser:
             services,
             interface_configs_by_name,
         )
+
+        self._assign_bfd(services)
 
         return sorted(
             services,
@@ -445,6 +492,11 @@ class JunosEvoAcxServiceParser:
                     )
                 ),
                 bgp_neighbors=self._parse_bgp_neighbors(
+                    node,
+                    "./*[local-name()='protocols']"
+                    "/*[local-name()='bgp']",
+                ),
+                bfd=self._parse_bfd(
                     node,
                     "./*[local-name()='protocols']"
                     "/*[local-name()='bgp']",
@@ -664,6 +716,80 @@ class JunosEvoAcxServiceParser:
 
         return routes
 
+    def _parse_bfd(
+        self,
+        node: etree._Element,
+        bgp_xpath: str,
+    ) -> dict[str, dict[str, Any]]:
+        """BFD podle peeru, s děděním neighbor > group > protocols bgp.
+
+        Specifičtější úroveň přepisuje obecnější, a to **celou hodnotou**,
+        ne položku po položce: soused s vlastním minimum-interval si
+        nedědí multiplier ze skupiny.
+
+        Junosí `inherit` tuhle hierarchii nerozbaluje — rozbaluje
+        apply-groups, ne hierarchii protokolu. Ověřeno proti laborce
+        2026-07-29, kdy skupina CPE14 nesla BFD a její sousedé ho neměli
+        ani v konfiguraci stažené s `inherit`.
+        """
+
+        intents: dict[str, dict[str, Any]] = {}
+
+        for bgp_node in node.xpath(bgp_xpath):
+            protocol_level = _bfd_values(
+                _bfd_node(bgp_node),
+                "bgp",
+            )
+
+            # Soused může viset přímo pod bgp i pod skupinou. Kontejnery
+            # se procházejí zvlášť a jen o úroveň níž, aby se soused
+            # ve skupině nezapočítal dvakrát.
+            containers: list[
+                tuple[etree._Element, dict[str, Any] | None]
+            ] = [(bgp_node, protocol_level)]
+
+            for group_node in bgp_node.xpath(
+                "./*[local-name()='group']"
+            ):
+                if self._is_inactive(group_node):
+                    continue
+
+                containers.append(
+                    (
+                        group_node,
+                        _bfd_values(
+                            _bfd_node(group_node),
+                            "group",
+                        )
+                        or protocol_level,
+                    )
+                )
+
+            for container, inherited in containers:
+                for neighbor_node in container.xpath(
+                    "./*[local-name()='neighbor']"
+                ):
+                    if self._is_inactive(neighbor_node):
+                        continue
+
+                    peer = first_text(
+                        neighbor_node,
+                        "./*[local-name()='name']/text()",
+                    ) or first_text(neighbor_node, "./text()")
+
+                    if not peer:
+                        continue
+
+                    values = _bfd_values(
+                        _bfd_node(neighbor_node),
+                        "neighbor",
+                    ) or inherited
+
+                    if values is not None:
+                        intents[peer] = {"peer": peer, **values}
+
+        return intents
+
     def _parse_bridge_domains(
         self,
         instance_node: etree._Element,
@@ -769,6 +895,11 @@ class JunosEvoAcxServiceParser:
         """
 
         self.default_bgp_neighbors = self._parse_bgp_neighbors(
+            self.config_xml,
+            "./*[local-name()='protocols']"
+            "/*[local-name()='bgp']",
+        )
+        self.default_bfd = self._parse_bfd(
             self.config_xml,
             "./*[local-name()='protocols']"
             "/*[local-name()='bgp']",
@@ -1333,6 +1464,43 @@ class JunosEvoAcxServiceParser:
                 "Statická routa odpovídá subnetu rozhraní: "
                 + ", ".join(route.prefix for route in matched)
             )
+
+    def _assign_bfd(
+        self,
+        services: list[InterfaceService],
+    ) -> None:
+        """BFD se připíná jen k peerům, které služba už má v bgp_neighbor.
+
+        Musí běžet **až po** `_assign_bgp_neighbors` — dřív je seznam
+        peerů prázdný a nebylo by co spárovat.
+
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type.
+        Služba bez routing-instance sahá do `self.default_bfd`, což je
+        záměr z globálního `protocols bgp` — a to i tehdy, jde-li o Core
+        nebo E-LAN. Nevadí to, protože `_assign_bgp_neighbors` plní
+        `bgp_neighbor` jen u Internet a IPVPN, takže ostatním službám
+        prázdný seznam ukončí iteraci hned na začátku. Je to podmínka,
+        na které tahle metoda stojí, ne shoda náhod — kdyby se filtr
+        v `_assign_bgp_neighbors` rozšířil, patří sem gate.
+        """
+
+        for service in services:
+            if not service.bgp_neighbor:
+                continue
+
+            if service.routing_instance:
+                instance = self.routing_instances.get(
+                    service.routing_instance
+                )
+                intents = instance.bfd if instance else {}
+            else:
+                intents = self.default_bfd
+
+            service.bfd = [
+                intents[peer]
+                for peer in service.bgp_neighbor
+                if peer in intents
+            ]
 
     def _find_interface_bridge_domains(
         self,
