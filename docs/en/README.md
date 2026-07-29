@@ -165,7 +165,8 @@ into a full block — only one is shown, the other nine are omitted):
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  83 PASS   32 WARN   8 FAIL   9 SKIP
+  Sluzby:  1 PASS   6 WARN  4 FAIL  0 SKIP
+  Checky: 83 PASS  32 WARN  8 FAIL  9 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
 STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
@@ -236,9 +237,15 @@ What matters here:
 - Every column's width **is computed from its content** — a long service name, routing
   instance, or IPv6 address is never truncated. That holds for the `NESPAROVANO` section's
   label too.
-- **Filters (`--filter`, `--status`) narrow the service table only.** The summary counts at the
-  top still describe the whole run — with `--status fail` you may see one row while the summary
-  still reports all 83 PASS. That is intentional: a filter is a view, not a recomputation.
+- **The summary has two named lines because it counts two different units.** `Sluzby:`
+  (services) matches the row count of the table below it; `Checky:` (checks) is the total
+  across every measurement. The gap is large — 11 services, 132 checks — and while it went
+  unlabelled the operator walked away with the number they were not looking at.
+- **Filters (`--filter`, `--status`) recompute the summary for the selection shown.** A line
+  above the counts names the filter and how many of how many services survived it
+  (`filtr: status=FAIL -- 2 z 11 sluzeb`). The `Sparovano` line and the `NESPAROVANO` section
+  are **not** recomputed — and the output says so right below the filter line. The machine
+  output carries the same record under the `filtered` key.
 - **The `NESPAROVANO` section is always printed**, even when everything else is green, and
   **filters do not apply to it.** It is the main safeguard against an overlooked service:
   - `baseline` = the service existed on the old box and is missing on the new one → suspect a

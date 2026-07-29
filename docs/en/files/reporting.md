@@ -92,8 +92,19 @@ Returns a **copy** of the result (`dataclasses.replace`) with a filtered list of
 - `text` — a case-insensitive substring of `scope_id` **or** `key["description"]`,
 - `statuses` — a set of desired statuses.
 
-**The `NESPAROVANO` section stays whole.** It is the main safeguard against overlooking an
-unmigrated service, and a filter must not hide it.
+With neither argument it returns the original object untouched — an unfiltered run must stay
+exactly the shape its consumers already read.
+
+**The PASS/WARN/FAIL/SKIP counts are recomputed for the selection**, otherwise the header
+claims something different from the table right below it. `scopes_matched` and both
+`unmatched_*` are **not** recomputed: the `NESPAROVANO` section is the safeguard against
+overlooking an unmigrated service, filters do not apply to it, and recomputing its numbers
+would silently erase the very thing it exists to show.
+
+That this is no longer the whole run is recorded in `RunResult.filtered`
+(`{"scopes_shown", "scopes_total", "text", "statuses"}`). Without it the recomputed numbers
+would be a second form of the same bug — and `evaluate --format json --status fail` writes
+that filtered result, so the machine output would not know about the filter either.
 
 ### `SYMBOL`
 
@@ -108,7 +119,11 @@ Assembles five parts:
 
 1. **Header** — with a baseline, `Migrace: <address> (<phase>) -> <address> (<phase>)`;
    without one, `Validace: <address> (<phase>)`.
-2. **Summary** — PASS/WARN/FAIL/SKIP counts and the paired / unpaired service counts.
+2. **Summary** — two named lines (`Sluzby:` and `Checky:`) followed by the paired / unpaired
+   service counts. Two lines because these are two different units: `Sluzby:` matches the row
+   count of the table below it, `Checky:` totals every measurement. Column widths are computed
+   across both lines so the numbers stack. When a filter ran, a `filtr: ... -- N z M sluzeb`
+   line and a sentence about what was *not* recomputed sit above the summary.
 3. **Summary table** — one row per service, columns `STAV`, `SLUZBA` (description, else scope
    id), `TYP`, `STARY PORT`, `NOVY PORT`, `RI`, `NALEZ` (the worst finding,
    `_worst_message()`; empty on a green row). Every column's width **is computed from the
@@ -150,25 +165,26 @@ Generated directly from `render()` over data shaped like
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  1 PASS   1 WARN   0 FAIL   0 SKIP
+  Sluzby: 0 PASS  1 WARN  0 FAIL  0 SKIP
+  Checky: 1 PASS  1 WARN  0 FAIL  0 SKIP
   Sparovano 1 sluzeb, 0 nesparovana v baseline, 0 nesparovane v subject
 
 STAV  SLUZBA             TYP      STARY PORT  NOVY PORT   RI NALEZ
 WARN  INTERNET-CPE13-NNI Internet ge-0/0/2.13 et-0/0/8.13 -  pokles
 
-================================================================================================================
+==================================================================================================
  WARN  INTERNET-CPE13-NNI   Internet   ge-0/0/2.13 -> et-0/0/8.13   RI: -
-================================================================================================================
- STAV | CHECK                                : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
- -----+--------------------------------------+-----------------------------------------+------------------------
- PASS | Interface admin status (et-0/0/8.13) : Up                                      |
- WARN | Interface traffic in (et-0/0/8.13)   : 460 pps                                 | bylo 520 pps   -12 %
+==================================================================================================
+ STAV | CHECK                  : POST (et-0/0/8.13)                      | ZMENA PROTI ge-0/0/2.13
+ -----+------------------------+-----------------------------------------+------------------------
+ PASS | Interface admin status : Up                                      |
+ WARN | Interface traffic in   : 460 pps                                 | bylo 520 pps   -12 %
 
- -- IPv4  152.11.13.1/30 ---------------------------------------------------------------------------------------
- PASS | ARP                                  : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
+ -- IPv4  152.11.13.1/30 -------------------------------------------------------------------------
+ PASS | ARP                    : 0c:00:ef:5e:df:01 -> 152.11.13.2        |
 
- -- IPv6  2001:abcd:11:13::a/127 -------------------------------------------------------------------------------
- PASS | ND                                   : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
+ -- IPv6  2001:abcd:11:13::a/127 -----------------------------------------------------------------
+ PASS | ND                     : 0c:00:ef:5e:df:01 -> 2001:abcd:11:13::b |
 
 NESPAROVANO
   (nic)

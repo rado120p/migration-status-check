@@ -1,4 +1,5 @@
 import json
+import re
 
 from migration_validator.models.result import (
     CheckResult,
@@ -124,6 +125,43 @@ def test_render_lists_services_with_worst_check_message():
     assert fail_row.endswith("vpws-sid-pe-status: Down")
 
 
+def _counts_of(line: str) -> dict[str, int]:
+    return {name: int(count) for count, name in re.findall(r"(\d+) (PASS|WARN|FAIL|SKIP)", line)}
+
+
+def _line_starting(output: str, prefix: str) -> str:
+    return next(line for line in output.splitlines() if line.strip().startswith(prefix))
+
+
+def test_summary_names_its_two_units():
+    """F-8: souhrn scital checky, tabulka hned pod nim ma radek na sluzbu.
+
+    Dve ruzne jednotky nad sebou bez oznaceni znamenaji, ze si operator
+    odnese cislo, na ktere se nedival - '83 PASS' nad tabulkou o 11 radcich.
+    """
+    output = render(_legacy_result())
+
+    assert _counts_of(_line_starting(output, "Checky:")) == {
+        "PASS": 3, "WARN": 1, "FAIL": 1, "SKIP": 0
+    }
+    assert _counts_of(_line_starting(output, "Sluzby:")) == {
+        "PASS": 1, "WARN": 1, "FAIL": 1, "SKIP": 0
+    }
+
+
+def test_service_counts_agree_with_the_rows_of_the_table_below():
+    """Bez tohohle by oznaceni jednotek bylo jen slovo navic: cislo na radku
+    Sluzby musi sedet na pocet radku tabulky s tymz stavem."""
+    output = render(_legacy_result())
+    counts = _counts_of(_line_starting(output, "Sluzby:"))
+
+    for name, count in counts.items():
+        rows = [
+            line for line in output.splitlines() if line.startswith(f"{name}  ")
+        ]
+        assert len(rows) == count, f"{name}: hlavicka rika {count}, tabulka ma {len(rows)}"
+
+
 def test_filter_by_text_matches_description():
     filtered = filter_result(_legacy_result(), text="L3VPN")
     assert [scope.scope_id for scope in filtered.scopes] == ["svc:L3VPN-CPE13-NNI:IPVPN"]
@@ -139,6 +177,67 @@ def test_filter_does_not_touch_unmatched():
     assert filtered.scopes == []
     assert len(filtered.unmatched["baseline"]) == 1
     assert len(filtered.unmatched["subject"]) == 1
+
+
+def test_filter_recomputes_the_counts_for_the_selection():
+    """F-12: filtr menil tabulku, ale ne cisla nad ni - hlavicka pak rikala
+    neco jineho nez telo. Rozhodnuto: cisla se prepocitaji za vyber."""
+    filtered = filter_result(_legacy_result(), text="L3VPN")
+
+    assert [scope.scope_id for scope in filtered.scopes] == ["svc:L3VPN-CPE13-NNI:IPVPN"]
+    assert filtered.summary["pass"] == 1  # cely beh jich hlasi 3
+    assert filtered.summary["warn"] == 1
+    assert filtered.summary["fail"] == 0
+
+
+def test_filter_leaves_the_unmatched_counts_alone():
+    """NESPAROVANO je pojistka proti prehlednuti nezmigrovane sluzby a
+    filtrovani se na nej nevztahuje - takze ani jeho cisla se neprepocitavaji.
+    Prepocet obou by tise smazal presne to, co ma sekce ukazat."""
+    filtered = filter_result(_legacy_result(), text="NEEXISTUJE")
+
+    assert filtered.scopes == []
+    assert filtered.summary["scopes_matched"] == 2
+    assert filtered.summary["unmatched_baseline"] == 1
+    assert filtered.summary["unmatched_subject"] == 1
+
+
+def test_filter_records_what_it_hid():
+    filtered = filter_result(_legacy_result(), statuses={Status.FAIL})
+
+    assert filtered.filtered["statuses"] == ["FAIL"]
+    assert filtered.filtered["scopes_shown"] == 1
+    assert filtered.filtered["scopes_total"] == 3
+
+
+def test_result_without_a_filter_carries_no_record():
+    result = _legacy_result()
+
+    assert filter_result(result).filtered is None
+
+
+def test_render_says_which_filter_ran_and_kolik_z_kolika():
+    """Prepoctena cisla bez teto vety by byla druha podoba teze chyby:
+    hlavicka by rikala 1 PASS, zatimco beh jich mel 3, a nic by to nepriznalo.
+    """
+    output = render(filter_result(_legacy_result(), statuses={Status.FAIL}))
+
+    assert "filtr: status=FAIL -- 1 z 3 sluzeb" in output
+    # Radek Sparovano a sekce NESPAROVANO se neprepocitavaji, takze se to
+    # musi rict - jinak vedle sebe stoji dve cisla za jinou mnozinu.
+    assert "NESPAROVANO" in _line_starting(output, "(pocty")
+
+
+def test_filter_record_is_in_the_machine_output_too():
+    """`evaluate --format json --status fail` zapisuje profiltrovany vysledek,
+    takze bez zaznamu o filtru by JSON hlasil prepoctena cisla a nic by
+    neprozradilo, ze nejde o cely beh."""
+    filtered = json.loads(to_json(filter_result(_legacy_result(), text="L3VPN")))
+    assert filtered["filtered"]["text"] == "L3VPN"
+    assert filtered["summary"]["pass"] == 1
+
+    whole = json.loads(to_json(_legacy_result()))
+    assert "filtered" not in whole
 
 
 def test_to_json_is_valid_and_keeps_czech_characters():

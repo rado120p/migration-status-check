@@ -157,7 +157,8 @@ plného bloku — ukázaný je jen jeden, zbylých devět je vynecháno):
 ```
 Migrace: 172.20.20.4 (pre-migration) -> 172.20.20.5 (post-migration)
 
-  83 PASS   32 WARN   8 FAIL   9 SKIP
+  Sluzby:  1 PASS   6 WARN  4 FAIL  0 SKIP
+  Checky: 83 PASS  32 WARN  8 FAIL  9 SKIP
   Sparovano 8 sluzeb, 2 nesparovana v baseline, 3 nesparovane v subject
 
 STAV  SLUZBA                               TYP      STARY PORT   NOVY PORT    RI                        NALEZ
@@ -220,9 +221,15 @@ Co je na tom podstatné:
   **Bez načtené baseline se sloupec `ZMENA` nevypisuje vůbec** (viz `--detail` bez `--baseline`).
 - Šířky všech sloupců **se počítají z obsahu** — dlouhý název služby, routing instance nebo
   IPv6 adresa se nikdy neořízne. Platí to i pro popisek v sekci `NESPAROVANO`.
-- **Filtry (`--filter`, `--status`) zúží jen tabulku služeb.** Souhrnné počty nahoře zůstávají
-  za celý běh — u `--status fail` tedy uvidíte jeden řádek, ale souhrn pořád hlásí všech
-  83 PASS. Je to záměr: filtr je pohled, ne nový výpočet.
+- **Souhrn má dva pojmenované řádky, protože počítá dvě různé jednotky.** `Sluzby:` sedí na
+  počet řádků tabulky pod ním, `Checky:` je součet přes všechna měření. Rozdíl je velký
+  (11 služeb, 132 checků) a dokud nebyl označený, odnesl si operátor číslo, na které se
+  nedíval.
+- **Filtry (`--filter`, `--status`) přepočítají souhrn za zobrazenou množinu.** Výpis nad
+  počty řekne, který filtr běžel a kolik z kolika služeb je vidět
+  (`filtr: status=FAIL -- 2 z 11 sluzeb`). Řádek `Sparovano` a sekce `NESPAROVANO` se
+  **nepřepočítávají** — a výpis to říká hned pod tím řádkem s filtrem. Ve strojovém výstupu
+  je totéž pod klíčem `filtered`.
 - **Sekce `NESPAROVANO` se vypisuje vždy**, i když je všechno ostatní zelené, a **filtry se
   na ni nevztahují.** Je to hlavní pojistka proti přehlédnuté službě:
   - `baseline` = služba byla na starém boxu a na novém není → podezření na zapomenutou migraci,

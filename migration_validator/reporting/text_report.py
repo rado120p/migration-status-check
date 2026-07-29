@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from migration_validator.models.result import RunResult, Status
+from migration_validator.models.result import RunResult, Status, count_statuses
 from migration_validator.reporting.view import Section, ServiceView, build_view, change_text
 
 SYMBOL = {
@@ -31,7 +31,20 @@ def filter_result(
     text: str | None = None,
     statuses: set[Status] | None = None,
 ) -> RunResult:
-    """Vrati kopii vysledku s profiltrovanymi scopy. Unmatched zustava cely."""
+    """Vrati kopii vysledku s profiltrovanymi scopy.
+
+    Souhrnne pocty se prepocitaji za vybranou mnozinu - jinak hlavicka
+    tvrdi neco jineho nez tabulka hned pod ni. Unmatched se ale
+    NEprepocitava: sekce NESPAROVANO je pojistka proti prehlednuti
+    nezmigrovane sluzby a filtrovani se na ni nevztahuje, takze prepocet
+    jejich cisel by tise smazal presne to, co ma sekce ukazat.
+
+    Ze uz to neni cely beh, nese `filtered` - kdyby to vysledek nerekl,
+    prepoctena cisla by byla jen druha podoba teze chyby.
+    """
+    if not text and not statuses:
+        return result
+
     scopes = list(result.scopes)
 
     if text:
@@ -46,7 +59,20 @@ def filter_result(
     if statuses:
         scopes = [scope for scope in scopes if scope.status in statuses]
 
-    return replace(result, scopes=scopes)
+    summary = {
+        **result.summary,
+        **count_statuses(check.status for scope in scopes for check in scope.checks),
+    }
+    applied: dict[str, object] = {
+        "scopes_shown": len(scopes),
+        "scopes_total": len(result.scopes),
+    }
+    if text:
+        applied["text"] = text
+    if statuses:
+        applied["statuses"] = sorted(status.value for status in statuses)
+
+    return replace(result, scopes=scopes, summary=summary, filtered=applied)
 
 
 def _section_header(section: Section) -> str:
@@ -142,6 +168,54 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     return lines
 
 
+COUNT_NAMES = (("pass", "PASS"), ("warn", "WARN"), ("fail", "FAIL"), ("skip", "SKIP"))
+
+
+def _counts_lines(services: dict[str, int], checks: dict[str, int]) -> list[str]:
+    """Dva pojmenovane radky souhrnu misto jednoho neoznaceneho.
+
+    Souhrn scital checky, ale tabulka hned pod nim ma radek na sluzbu -
+    dve ruzne jednotky nad sebou a nikde neni receno ktera je ktera.
+    Rozdelení podle AR-4 (jeden finding na fakt) ten rozdil jeste
+    znasobilo: 83 PASS nad tabulkou o 11 radcich.
+
+    Sirky se pocitaji z obou radku najednou, aby cisla stala pod sebou -
+    jinak se dvojciferny pocet checku rozjede proti jednocifernemu poctu
+    sluzeb a porovnat je oci nedokazou.
+    """
+    widths = {
+        key: max(len(str(services[key])), len(str(checks[key]))) for key, _ in COUNT_NAMES
+    }
+
+    def line(title: str, counts: dict[str, int]) -> str:
+        return f"  {title:<7} " + "  ".join(
+            f"{counts[key]:>{widths[key]}} {name}" for key, name in COUNT_NAMES
+        )
+
+    return [line("Sluzby:", services), line("Checky:", checks)]
+
+
+def _filter_note(result: RunResult) -> list[str]:
+    """Rekne nahlas, ze cisla pod tim uz nejsou za cely beh."""
+    applied = result.filtered
+    if not applied:
+        return []
+
+    criteria = []
+    if applied.get("text"):
+        criteria.append(f"text={applied['text']}")
+    if applied.get("statuses"):
+        criteria.append(f"status={','.join(applied['statuses'])}")
+
+    return [
+        f"  filtr: {'  '.join(criteria)} -- "
+        f"{applied['scopes_shown']} z {applied['scopes_total']} sluzeb",
+        "  (pocty sluzeb a checku plati za vyber; radek Sparovano ani sekce"
+        " NESPAROVANO se neprepocitavaji)",
+        "",
+    ]
+
+
 def render(result: RunResult, *, detail: bool = False) -> str:
     lines: list[str] = []
 
@@ -157,11 +231,15 @@ def render(result: RunResult, *, detail: bool = False) -> str:
         lines.append(f"Validace: {subject['address']} ({subject['phase']})")
     lines.append("")
 
+    lines.extend(_filter_note(result))
+
     summary = result.summary
-    lines.append(
-        f"  {summary['pass']} PASS   {summary['warn']} WARN   "
-        f"{summary['fail']} FAIL   {summary['skip']} SKIP"
-    )
+    # Sluzby se pocitaji tady, ne v engine: filtr uz scopy profiltroval,
+    # takze stejny vypocet da spravne cislo v obou rezimech - za cely beh
+    # i za vyber. Souhrn za checky prepocitava filtr sam, ten se ze scopu
+    # odvodit neda bez toho, aby renderer zacal scitat checky.
+    services = count_statuses(scope.status for scope in result.scopes)
+    lines.extend(_counts_lines(services, summary))
     lines.append(
         f"  Sparovano {summary['scopes_matched']} sluzeb, "
         f"{summary['unmatched_baseline']} nesparovana v baseline, "

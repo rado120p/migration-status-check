@@ -28,6 +28,19 @@ class Status(str, Enum):
         return max(collected, key=lambda status: status.rank)
 
 
+def count_statuses(statuses: Iterable[Status]) -> dict[str, int]:
+    """Rozpad stavu na ctyri countery.
+
+    Bere libovolne stavy, aby stejnou funkci mohl pouzit souhrn za checky
+    i souhrn za sluzby - prave rozdil mezi temi dvema jednotkami byl v
+    reportu neoznaceny a operator si odnasel cislo, na ktere se nedival.
+    """
+    counts = {"pass": 0, "warn": 0, "fail": 0, "skip": 0}
+    for status in statuses:
+        counts[status.value.lower()] += 1
+    return counts
+
+
 _STATUS_RANK: dict[Status, int] = {
     Status.PASS: 0,
     Status.SKIP: 1,
@@ -179,10 +192,15 @@ class RunResult:
     unassigned: dict[str, list[dict[str, Any]]] = field(
         default_factory=lambda: {"bgp_peers": []}
     )
+    # Zaznam o tom, ze tohle uz neni cely beh. Vyplneny je jen u vysledku,
+    # ktery prosel filtrem - a protoze `evaluate --format json --status fail`
+    # zapisuje prave ten profiltrovany, bez nej by strojovy vystup hlasil
+    # prepoctena cisla a nic by neprozradilo, ze nejde o cely beh.
+    filtered: dict[str, Any] | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "schema_version": self.schema_version,
             "evaluated_at": self.evaluated_at,
             "subject": self.subject,
@@ -192,3 +210,8 @@ class RunResult:
             "unmatched": self.unmatched,
             "unassigned": self.unassigned,
         }
+        # Klic se nepridava prazdny: nefiltrovany beh ma zustat presne tim
+        # tvarem, ktery uz cte okoli.
+        if self.filtered is not None:
+            payload["filtered"] = self.filtered
+        return payload

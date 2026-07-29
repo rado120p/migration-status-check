@@ -326,6 +326,9 @@ a snapshotu výš); `models/result.py::RunResult.schema_version` zůstává `1`.
     "scopes_matched": 8, "unmatched_baseline": 2, "unmatched_subject": 3
   },
 
+  // jen u vysledku, ktery prosel filtrem (--filter / --status); jinak klic chybi
+  "filtered": {"scopes_shown": 2, "scopes_total": 11, "statuses": ["FAIL"]},
+
   "scopes": [
     {
       "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -391,7 +394,12 @@ Vlastnosti:
   na rozhraní. `bgp_prefix_counts` vrací jeden na
   **RIB × counter** (`BGP <counter>-prefix-count`), ne souhrn napříč RIB.
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
-  `summary` = agregát přes všechny checky. Terminál ani GUI nic nepočítají.
+  `summary` = agregát přes **checky**. Počty služeb si terminál dopočítá ze `scopes` — je to
+  týž výpočet za celý běh i za filtrovaný výběr, takže v `summary` být nemusí.
+- **Po filtru (`--filter`, `--status`) jsou `pass`/`warn`/`fail`/`skip` v `summary` za
+  zobrazenou množinu, ne za celý běh**, a `filtered` říká, že se to stalo.
+  `scopes_matched` a obojí `unmatched_*` se nepřepočítávají — filtrování se na `NESPAROVANO`
+  nevztahuje.
 - `match` je `null` u běhu bez baseline; u nespárovaného subject scope má
   `status: "unmatched"` a `reason`.
 - `identity` nese vše, co report o službě potřebuje (adresy, VGW, RI, popisek) — bez toho by

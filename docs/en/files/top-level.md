@@ -145,7 +145,9 @@ The flow:
      `unmatched.subject` (a new service is still checked, it just has nothing to compare to),
    - unpaired baseline scopes go **only** into `unmatched.baseline` — they are not on the
      subject, so there is nothing to measure.
-4. `summary` is totalled across every check of every scope.
+4. `summary` is totalled across every check of every scope (`count_statuses()` from
+   `models/result.py` — the same function the filter uses when recomputing and the renderer
+   uses for the service counts).
 5. `_unassigned_bgp_peers()` finds subject peers that fell into no scope. In device mode it
    returns an empty list (the device scope "owns" everything).
 
