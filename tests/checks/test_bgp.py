@@ -1,5 +1,6 @@
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bgp import (
+    PREFIX_KEYS,
     BgpPrefixCountsCheck,
     BgpSessionStateCheck,
     peer_family,
@@ -308,6 +309,41 @@ def test_prefix_finding_family_is_derived_from_peer_address_not_rib_name():
     results = run_check(BgpPrefixCountsCheck(), ctx)
     families = {result.family for result in results}
     assert families == {4, 6}
+
+
+def test_report_covers_exactly_these_prefix_counters():
+    """Pripina PREFIX_KEYS, protoze jejich zmena je jinak tichá.
+
+    Overeno mutaci: vyhozeni 'active' i 'suppressed' z PREFIX_KEYS proslo
+    celou sadou - oba countery byly zafixovane jen na urovni collectoru,
+    takze o tom, co se doopravdy dostane do reportu, netvrdil nic zadny
+    test. Ubrany counter znamena mlcky nesledovanou regresi, pridany zase
+    radek navic v kazdem bloku; obojí ma byt vedome rozhodnuti.
+
+    'suppressed' tu chybi zamerne (rozhodnuti 2026-07-29): v produkci se
+    damping v tomhle nasazeni nepouziva, takze radek nic nerika. Navic se
+    u nej porovnani cetlo obracene - pokles potlacenych rout je zlepseni,
+    ne regrese - a vynechanim odpada i potreba to resit.
+    """
+    assert PREFIX_KEYS == ("active", "received", "accepted", "advertised")
+
+
+def test_prefix_counts_produce_a_row_per_counter():
+    """Druha polovina te same pojistky: pripnuty seznam musi opravdu
+    ridit, kolik radku check vyrobi."""
+    ctx = _ctx(
+        subject={"bgp": {"198.11.13.2": _peer()}},
+        baseline={"bgp": {"198.11.13.2": _peer()}},
+    )
+    rows = [
+        result
+        for result in run_check(BgpPrefixCountsCheck(), ctx)
+        if result.label.startswith("BGP ")
+    ]
+
+    assert sorted(r.label for r in rows) == sorted(
+        f"BGP {key}-prefix-count" for key in PREFIX_KEYS
+    )
 
 
 def test_peer_family_derived_from_address():

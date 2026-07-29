@@ -19,7 +19,13 @@ from migration_validator.models.result import Finding, Outcome, Severity
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 ESTABLISHED = "Established"
-PREFIX_KEYS = ("active", "received", "accepted", "advertised", "suppressed")
+# Countery, ktere se dostanou do reportu - jeden radek na counter.
+# `suppressed` tu chybi zamerne (rozhodnuti 2026-07-29): damping se v
+# tomhle nasazeni nepouziva, takze radek by byl vzdy nulovy. Odpada s nim
+# i to, ze se u nej porovnani cetlo obracene - u potlacenych rout je
+# pokles zlepseni, ne regrese. Collector ho sbira dal, aby snapshot
+# zustal vernym zaznamem zarizeni.
+PREFIX_KEYS = ("active", "received", "accepted", "advertised")
 
 
 def peer_family(peer: str) -> int | None:
