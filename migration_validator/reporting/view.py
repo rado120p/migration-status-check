@@ -143,7 +143,11 @@ def build_view(scope: ScopeResult) -> ServiceView:
         service_type=identity.get("service_type") or "-",
         routing_instance=identity.get("routing_instance"),
         baseline_interfaces=list(match.baseline_interfaces) if match else [],
-        subject_interfaces=list(match.subject_interfaces) if match else [],
+        # Bez match (beh bez baseline, nesparovana sluzba) porty nese identity.
+        # Baseline strana zustava prazdna - zadna neexistuje.
+        subject_interfaces=(
+            list(match.subject_interfaces) if match else list(identity.get("interfaces", []))
+        ),
         worst_message=_worst_message(scope),
         sections=sections,
     )

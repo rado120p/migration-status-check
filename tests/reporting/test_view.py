@@ -19,15 +19,22 @@ def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
     )
 
 
-def _scope(checks) -> ScopeResult:
+_UNSET = object()
+
+
+def _scope(checks, match=_UNSET) -> ScopeResult:
     return ScopeResult(
         scope_id="svc:INTERNET-CPE13-NNI:Internet",
         key={"description": "INTERNET-CPE13-NNI", "service_type": "Internet"},
         status=Status.WARN,
-        match=MatchInfo(
-            status="matched",
-            baseline_interfaces=["ge-0/0/2.13"],
-            subject_interfaces=["et-0/0/8.13"],
+        match=(
+            MatchInfo(
+                status="matched",
+                baseline_interfaces=["ge-0/0/2.13"],
+                subject_interfaces=["et-0/0/8.13"],
+            )
+            if match is _UNSET
+            else match
         ),
         checks=checks,
         identity={
@@ -35,6 +42,7 @@ def _scope(checks) -> ScopeResult:
             "service_type": "Internet",
             "service_subtype": None,
             "routing_instance": None,
+            "interfaces": ["et-0/0/8.13"],
             "ipv4": ["152.11.13.1/30"],
             "ipv6": ["2001:abcd:11:13::a/127"],
             "virtual_gw_v4": [],
@@ -76,6 +84,19 @@ def test_ports_come_from_match_info():
 
     assert view.baseline_interfaces == ["ge-0/0/2.13"]
     assert view.subject_interfaces == ["et-0/0/8.13"]
+
+
+def test_port_falls_back_to_identity_when_there_is_no_match():
+    """`evaluate --snapshot X` bez --baseline je podle AR-10 doporuceny
+    zpusob, jak si prohlednout stav jednoho zarizeni. V nem je match None,
+    takze sloupec NOVY PORT byl prazdny u kazde sluzby - prave v rezimu,
+    ktery spec doporucuje. Rozhrani zna identity, ktera vznikla presne
+    proto, aby renderer nemusel do scope.
+    """
+    view = build_view(_scope([_check("arp_present", family=4, label="ARP")], match=None))
+
+    assert view.subject_interfaces == ["et-0/0/8.13"]
+    assert view.baseline_interfaces == []
 
 
 def test_single_address_stays_out_of_the_label():

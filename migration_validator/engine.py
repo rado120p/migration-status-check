@@ -98,6 +98,11 @@ def _identity(scope: Scope) -> dict[str, Any]:
         "routing_instance": (
             selectors.routing_instances[0] if selectors.routing_instances else None
         ),
+        # Bez baseline neni MatchInfo, ze ktere renderer bere porty - a rezim
+        # `evaluate --snapshot X` bez --baseline je podle AR-10 doporuceny
+        # zpusob, jak si prohlednout stav jednoho zarizeni. Bez tohohle pole
+        # by v nem byl sloupec s portem prazdny u kazde sluzby.
+        "interfaces": list(selectors.interfaces),
         "ipv4": list(selectors.local_ipv4),
         "ipv6": list(selectors.local_ipv6),
         "virtual_gw_v4": list(selectors.virtual_gw_v4),

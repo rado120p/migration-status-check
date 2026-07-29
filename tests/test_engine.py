@@ -270,6 +270,7 @@ def test_identity_maps_each_address_field_to_its_own_key():
         kind="service",
         key=ScopeKey("X", "Internet", "residential"),
         selectors=Selectors(
+            interfaces=["et-0/0/8.13"],
             routing_instances=["VRF-X"],
             local_ipv4=["192.0.2.1/30"],
             local_ipv6=["2001:db8::1/64"],
@@ -284,6 +285,7 @@ def test_identity_maps_each_address_field_to_its_own_key():
     assert identity["service_type"] == "Internet"
     assert identity["service_subtype"] == "residential"
     assert identity["routing_instance"] == "VRF-X"
+    assert identity["interfaces"] == ["et-0/0/8.13"]
     assert identity["ipv4"] == ["192.0.2.1/30"]
     assert identity["ipv6"] == ["2001:db8::1/64"]
     assert identity["virtual_gw_v4"] == ["192.0.2.2"]
@@ -298,6 +300,7 @@ def test_identity_on_device_scope_is_empty_not_crashing():
         "service_type": None,
         "service_subtype": None,
         "routing_instance": None,
+        "interfaces": [],
         "ipv4": [],
         "ipv6": [],
         "virtual_gw_v4": [],
