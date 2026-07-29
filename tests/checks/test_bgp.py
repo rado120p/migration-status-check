@@ -103,14 +103,26 @@ def test_no_bgp_peers_skips():
     assert "BGP" in result.message
 
 
-def test_state_change_from_active_to_established_is_warn_not_fail():
+def test_state_change_to_established_is_pass_not_warn():
+    """Rozhodnuti R-2: zlepseni neni varovani.
+
+    Tahle vetev je dosazitelna jen kdyz je stav Established (horsi stavy
+    odchazi drive), takze pokryva presne a pouze pripad, kdy se relace
+    behem migrace zlepsila. WARN na zdrave sluzbe je falesny poplach -
+    presne ten trvaly oranzovy svit, proti kteremu se rozhodovalo v Tasku 7.
+
+    Zmena nezmizi: hlaska ji pojmenuje a sloupec ZMENA pise 'bylo Active',
+    takze nezdrava baseline zustane videt.
+    """
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer(state="Established")}},
         baseline={"bgp": {"198.11.13.2": _peer(state="Active")}},
     )
     result = run_check(BgpSessionStateCheck(), ctx)[0]
-    assert result.status is Status.WARN
+
+    assert result.status is Status.PASS
     assert "Active" in result.message and "Established" in result.message
+    assert result.baseline_value == "Active"
 
 
 def test_changed_session_carries_baseline_value():
@@ -127,7 +139,7 @@ def test_changed_session_carries_baseline_value():
     )
     result = run_check(BgpSessionStateCheck(), ctx)[0]
 
-    assert result.status is Status.WARN
+    assert result.status is Status.PASS
     assert result.baseline_value == "Connect"
 
 

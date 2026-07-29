@@ -80,25 +80,21 @@ class BgpSessionStateCheck(Check):
                 )
                 continue
 
-            if baseline_state is not None and baseline_state != state:
-                findings.append(
-                    Finding(
-                        Outcome.DEGRADED,
-                        f"{peer}: stav se zmenil {baseline_state} -> {state}",
-                        label="BGP status",
-                        family=peer_family(peer),
-                        value=state,
-                        baseline_value=baseline_state,
-                        baseline={"state": baseline_state},
-                        subject=subject,
-                    )
-                )
-                continue
-
+            # Sem se dojde jen se stavem Established - horsi stavy odesly
+            # vetvi vyse. Zmena proti baseline tedy znamena, ze se relace
+            # behem migrace ZLEPSILA, a zlepseni neni varovani (R-2):
+            # oranzovy radek na zdrave sluzbe je falesny poplach a operator
+            # si zvykne vypis preskakovat. Zmena nezmizi - pojmenuje ji
+            # hlaska a sloupec ZMENA pise, jaky byl stav predtim.
+            changed = baseline_state is not None and baseline_state != state
             findings.append(
                 Finding(
                     Outcome.OK,
-                    f"{peer}: {ESTABLISHED}",
+                    (
+                        f"{peer}: stav se zmenil {baseline_state} -> {state}"
+                        if changed
+                        else f"{peer}: {ESTABLISHED}"
+                    ),
                     label="BGP status",
                     family=peer_family(peer),
                     value=state,
