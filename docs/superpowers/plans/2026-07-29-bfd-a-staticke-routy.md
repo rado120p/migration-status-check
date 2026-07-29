@@ -19,7 +19,7 @@
 - **Každý `Finding` musí nastavit `family`.** `reporting/view.py:18` má `FAMILY_ORDER = (None, 4, 6)`; finding bez rodiny spadne do bezhlavičkové sekce nad IPv4 a IPv6 sekcemi. U statické routy se rodina odvozuje **z prefixu**, u BFD **z adresy peeru** — nikdy ze jména RIB (AR-11, stejný důvod jako u `peer_family`).
 - **Nový obor faktů se zapisuje na tři místa:** `models/scope.py:FACT_AREAS`, explicitní výčet ve větvi pro service scope v `Scope.select()`, a `capture.py:LIST_AREAS` (jen pokud je obor seznam). `routes` i `bfd` jsou mappingy, takže do `LIST_AREAS` **nepatří** — `_empty()` i `_empty_for()` pro ně vrací `{}` správně už teď.
 - **Mutační disciplína.** U tří míst v tomto plánu je povinné: **nejdřív zavést mutanta, spustit test, ověřit že padne, mutanta vrátit, teprve pak psát implementaci.** Vlna 1 ukázala, že strážní test, který se takhle neověří, projde i s rozbitou větví (T13a/T13b). Označená místa: normalizace jména RIB (Task 1), dědění BFD hierarchií (Task 2), podmínka shody routing-instance při mapování routy (Task 1).
-- **Testy se spouští z kořene repozitáře:** `.venv/bin/pytest`.
+- **Testy se spouští z kořene repozitáře:** `.venv/bin/pytest`. Pokud se pracuje ve worktree, jehož `.venv` je symlink na sdílené venv, musí `pyproject.toml` nést `pythonpath = ["."]` v `[tool.pytest.ini_options]` — bez něj editable install nasměruje `migration_validator` do **rodičovského** repa a sada tiše testuje cizí kód. Totéž platí pro spouštění nástroje: `python -m migration_validator.cli` bere balíček z worktree správně, ale console script `mig-validate` **ne** (shebang má absolutní cestu do sdíleného venv). Proto plán všude používá `python -m`, nikdy `mig-validate`.
 - **Laboratoř:** `172.20.20.4` (vMX, platforma `junos`), `172.20.20.5` (PTX10002-36QDD, platforma `junos-evo`). Uživatel `admin`, autentizace **heslem**, ne klíčem. Heslo je v `~/.bashrc` pod non-interactive guardem, načíst explicitně:
   ```bash
   eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"
@@ -3302,6 +3302,7 @@ Ve **stejném commitu** jako kód (pravidlo z vlny 1). Projít a doplnit:
 - `docs/cs/files/checks.md` — `static_route_status` a `bfd_session_state` včetně tabulek stavů
 - `docs/cs/files/parsers.md` — `static_route` a `bfd` v inventory, dědění BFD hierarchií, normalizace jména RIB, `routing-options` ve filtru
 - `docs/cs/files/models.md` — `Selectors.static_routes` / `.bfd_peers`, `FACT_AREAS`
+- `docs/cs/files/models.md:48` a `docs/cs/files/parsers.md:134` a `:168` — konkrétní místa, kde je dnes napsáno `INVENTORY_SCHEMA_VERSION = 2` (nalezeno při review Tasku 3)
 - `docs/cs/reference.md` — **obě** zvýšené verze, ne jen jedna: `schema_version` inventory 2 → 3 **a** `schema_version` snímku 2 → 3. Druhá je ta, kvůli které přestanou jít přehrát `runs/ipv6/` a `runs/ipv6-live-2026-07-29/`, a ten důsledek patří do uživatelské dokumentace. Dále nové klíče `unassigned` (`static_routes`, `bfd_sessions`) a nová pole `static_route` / `bfd` v inventory
 - `docs/cs/README.md` — pokud vyjmenovává, co nástroj kontroluje
 - Totéž v `docs/en/`
