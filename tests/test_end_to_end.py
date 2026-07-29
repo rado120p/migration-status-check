@@ -112,6 +112,31 @@ def _block_of(rendered: str, description: str, service_type: str) -> str:
     return blocks[0]
 
 
+def test_every_row_has_a_label_and_a_value_on_real_data(synthetic_snapshot):
+    """F-7 + F-10 na skutecnych datech, ne na rucni fixture.
+
+    Radek reportu je podle AR-4 dvojice popisek + hodnota. Kdyz jedno z toho
+    chybelo, renderer sahl po id checku resp. po cele vete - a obojim se
+    ostry vypis skutecne rozjel. Fallbacky v rendereru zustaly jako
+    pojistka, takze bez tohohle testu by je nova nedbala vetev zase tise
+    zapnula.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    checks = [check for scope in result.scopes for check in scope.checks]
+    assert checks
+
+    for check in checks:
+        assert check.label, f"{check.id} vratil radek bez popisku"
+        assert check.value, f"{check.id} vratil radek bez hodnoty ({check.message})"
+        assert check.value != check.message, (
+            f"{check.id} ma ve sloupci hodnot celou vetu: {check.value!r}"
+        )
+
+
 def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration", pps=400)
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration", pps=50)

@@ -146,6 +146,23 @@ def test_single_address_stays_unqualified_even_when_check_has_an_address():
     assert section.rows[0].label == "ARP"
 
 
+def test_missing_value_does_not_pull_the_whole_message_into_the_column():
+    """F-7: sloupec hodnot je podle AR-4 hodnota, ne veta.
+
+    Kdyz `value` chybelo, renderer sahl po `check.message` - do sloupce pak
+    padaly cele vety a nejdelsi z nich (RPC chyba od collectoru) roztahla
+    blok na 270 znaku. Vetu ma nest sloupec NALEZ a strojovy vystup.
+
+    Vlastni radky uz hodnotu dodavaji checky; tenhle fallback je posledni
+    pojistka pro pripad, ze na ni nekdo zapomene.
+    """
+    row = build_view(
+        _scope([_check("evpn_mac_count", value=None, message="chybi data z collectoru")])
+    ).sections[0].rows[0]
+
+    assert row.value == "-"
+
+
 def test_state_check_never_says_missing_baseline():
     """STATE check nema baseline z definice - 'bez baseline' by bylo na vsem."""
     row = build_view(_scope([_check("arp_present", family=4, mode="state")])).sections[0].rows[0]

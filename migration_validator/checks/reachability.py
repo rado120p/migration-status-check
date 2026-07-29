@@ -87,6 +87,7 @@ def _family_not_configured() -> list[Finding]:
 class ArpPresentCheck(Check):
     id = "arp_present"
     title = "Existence ARP zaznamu"
+    label = "ARP"
     mode = Mode.STATE
     requires = ("arp",)
     requires_inventory = True
@@ -131,6 +132,7 @@ class ArpPresentCheck(Check):
 class NdPresentCheck(Check):
     id = "nd_present"
     title = "Existence ND zaznamu"
+    label = "ND"
     mode = Mode.STATE
     requires = ("nd",)
     requires_inventory = True
@@ -184,6 +186,7 @@ class NdPresentCheck(Check):
 class PingReachabilityCheck(Check):
     id = "ping_reachability"
     title = "Dosazitelnost CPE pingem"
+    label = "Ping"
     mode = Mode.STATE
     requires = ("ping",)
     requires_inventory = True
@@ -198,6 +201,7 @@ class PingReachabilityCheck(Check):
                     Outcome.SKIP,
                     "pro tento scope nejsou ve snapshotu zadne cile pingu",
                     label="Ping",
+                    value="bez cile",
                 )
             ]
 
@@ -223,6 +227,7 @@ class PingReachabilityCheck(Check):
                     Outcome.SKIP,
                     f"probe bez rodiny nelze vyhodnotit: {targets}",
                     label="Ping",
+                    value="bez rodiny",
                 )
             )
 

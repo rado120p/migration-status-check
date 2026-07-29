@@ -92,7 +92,12 @@ def _row(check: CheckResult, qualify: bool) -> Row:
     return Row(
         status=check.status,
         label=label,
-        value=check.value if check.value is not None else check.message,
+        # Pomlcka, ne `check.message`: sloupec je podle AR-4 hodnota, ne
+        # veta. Kdyz sem message padala, delsi hlaska (RPC chyba od
+        # collectoru) roztahla cely blok na 270 znaku sirky. Hodnotu dodava
+        # check, veta patri do sloupce NALEZ a do strojoveho vystupu;
+        # tenhle fallback uz jen kryje check, ktery na ni zapomene.
+        value=check.value if check.value is not None else "-",
         baseline_value=check.baseline_value,
         delta=check.delta,
         mode=check.mode,

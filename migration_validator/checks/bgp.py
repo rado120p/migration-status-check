@@ -44,6 +44,7 @@ def peer_family(peer: str) -> int | None:
 class BgpSessionStateCheck(Check):
     id = "bgp_session_state"
     title = "Stav BGP session"
+    label = "BGP status"
     mode = Mode.BOTH
     requires = ("bgp",)
     service_types = CUSTOMER_SERVICE_TYPES
@@ -52,7 +53,7 @@ class BgpSessionStateCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
         if not peers:
-            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery")]
+            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
 
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
 
@@ -116,6 +117,7 @@ class BgpSessionStateCheck(Check):
 class BgpPrefixCountsCheck(Check):
     id = "bgp_prefix_counts"
     title = "Pocty BGP prefixu"
+    label = "BGP prefixy"
     mode = Mode.COMPARE
     requires = ("bgp",)
     service_types = CUSTOMER_SERVICE_TYPES
@@ -124,7 +126,7 @@ class BgpPrefixCountsCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
         if not peers:
-            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery")]
+            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
 
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
@@ -139,6 +141,7 @@ class BgpPrefixCountsCheck(Check):
                         f"{peer}: peer neni v baseline snapshotu, nelze porovnat",
                         label="BGP prefixy",
                         family=family,
+                        value="bez baseline",
                     )
                 )
                 continue
@@ -156,6 +159,7 @@ class BgpPrefixCountsCheck(Check):
                             f"{peer}/{rib_name}: RIB neni v baseline, nelze porovnat",
                             label=f"BGP prefixy ({rib_name})",
                             family=family,
+                            value="bez baseline",
                         )
                     )
                     continue
