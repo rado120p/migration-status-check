@@ -132,6 +132,15 @@ class InterfaceConfig:
 
 
 @dataclass
+class StaticRoute:
+    """Jedna statická routa z konfigurace — záměr, ne stav routovací tabulky."""
+
+    rib: str
+    prefix: str
+    next_hop: list[str] = field(default_factory=list)
+
+
+@dataclass
 class InterfaceService:
     interface: str
     description: str | None
@@ -233,6 +242,17 @@ def unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
 
 
+def rib_instance(rib: str) -> str | None:
+    """Routing-instance ze jména RIB: 'L3VPN-A.inet6.0' -> 'L3VPN-A', 'inet.0' -> None.
+
+    Globální tabulky patří default instanci, kterou inventory zapisuje jako
+    None — stejně jako `routing_instance` služby. Díky tomu jde porovnávat
+    přímo, bez zvláštní větve pro globální tabulku.
+    """
+    head = rib.rsplit(".", 2)[0] if rib.count(".") >= 2 else ""
+    return head or None
+
+
 def xpath_exists(
     node: etree._Element | None,
     xpath: str,
@@ -302,9 +322,11 @@ class JunosEvoAcxServiceParser:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
+        self.static_routes: list[StaticRoute] = []
 
     def parse(self) -> list[InterfaceService]:
         self._parse_routing_instances()
+        self.static_routes = self._parse_static_routes()
         self._parse_default_bgp_neighbors()
         self._parse_global_l2circuits()
         self._parse_global_connections()
@@ -516,6 +538,125 @@ class JunosEvoAcxServiceParser:
                     neighbors.append(neighbor)
 
         return unique(neighbors)
+
+    def _parse_static_routes(self) -> list[StaticRoute]:
+        """Statiky z globálních routing-options i ze všech routing-instances.
+
+        Jméno RIB se normalizuje na tvar, jaký vrací `show route` v poli
+        table-name. Konfigurace není mezi rodinami symetrická — IPv4 leží
+        přímo pod routing-options/static, IPv6 pod
+        routing-options/rib <jméno>.inet6.0/static — ale RPC ten rozdíl nezná.
+        Parser ho proto zahladí tady a dál se nešíří.
+        """
+
+        routes: list[StaticRoute] = []
+
+        for options_node in self.config_xml.xpath(
+            "./*[local-name()='routing-options']"
+        ):
+            routes.extend(
+                self._static_routes_under(options_node, None)
+            )
+
+        for instance_node in self.config_xml.xpath(
+            "./*[local-name()='routing-instances']"
+            "/*[local-name()='instance']"
+        ):
+            if self._is_inactive(instance_node):
+                continue
+
+            instance_name = first_text(
+                instance_node,
+                "./*[local-name()='name']/text()",
+            )
+
+            if not instance_name:
+                continue
+
+            for options_node in instance_node.xpath(
+                "./*[local-name()='routing-options']"
+            ):
+                routes.extend(
+                    self._static_routes_under(
+                        options_node,
+                        instance_name,
+                    )
+                )
+
+        return routes
+
+    def _static_routes_under(
+        self,
+        options_node: etree._Element,
+        instance_name: str | None,
+    ) -> list[StaticRoute]:
+        """Statiky pod jedním routing-options, s odvozeným jménem RIB."""
+
+        default_rib = (
+            f"{instance_name}.inet.0"
+            if instance_name
+            else "inet.0"
+        )
+
+        containers: list[tuple[str, etree._Element]] = [
+            (default_rib, static_node)
+            for static_node in options_node.xpath(
+                "./*[local-name()='static']"
+            )
+        ]
+
+        for rib_node in options_node.xpath(
+            "./*[local-name()='rib']"
+        ):
+            rib_name = first_text(
+                rib_node,
+                "./*[local-name()='name']/text()",
+            )
+
+            if not rib_name:
+                continue
+
+            containers.extend(
+                (rib_name, static_node)
+                for static_node in rib_node.xpath(
+                    "./*[local-name()='static']"
+                )
+            )
+
+        routes: list[StaticRoute] = []
+
+        for rib_name, static_node in containers:
+            for route_node in static_node.xpath(
+                "./*[local-name()='route']"
+            ):
+                if self._is_inactive(route_node):
+                    continue
+
+                prefix = first_text(
+                    route_node,
+                    "./*[local-name()='name']/text()",
+                )
+
+                if not prefix:
+                    continue
+
+                routes.append(
+                    StaticRoute(
+                        rib=rib_name,
+                        prefix=prefix,
+                        # Jen holý next-hop. discard, reject, next-table
+                        # a qualified-next-hop nemají adresu k porovnání
+                        # se subnetem rozhraní, takže se na službu
+                        # nenamapují a skončí v unassigned, pokud jsou
+                        # nainstalované. Rozhodnuto ve specu.
+                        next_hop=all_texts(
+                            route_node,
+                            "./*[local-name()='next-hop']/text()",
+                        ),
+                    )
+                )
+
+        return routes
 
     def _parse_bridge_domains(
         self,
