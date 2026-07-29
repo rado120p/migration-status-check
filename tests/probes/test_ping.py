@@ -223,55 +223,67 @@ def test_no_resolved_target_ever_equals_its_own_source():
     assert all(target.target != target.source for target in targets)
 
 
-def test_arp_guard_drops_own_address_reflected_back():
+@pytest.mark.parametrize("position", (0, 1, 2))
+def test_arp_guard_drops_own_address_at_any_position(position):
     """Gratuitous ARP / duplicitni adresa: vlastni zdrojova adresa se muze
     objevit primo v ARP tabulce, ne jen dojit z owned/VGW smeru. `owned` na
     tohle nema dosah - ARP vetev vubec nevola subnet_fallback. Jedine, co
     tu self-ping brani, je filtr `if address != source` v resolve_targets.
 
-    Vedle sebe je i legitimni soused (198.11.13.2), aby test nemohl projit
-    jen diky tomu, ze prazdny seznam adres po filtru spustil `if addresses:`
-    vetev jako celek - musi se overit, ze filtr vyradi presne jednu polozku
-    a druhou necha byt.
+    Vlastni adresa obchazi vsechny pozice v tabulce zamerne. Kdyz stala jen
+    na indexu 0, prosel mutant `if index > 0 or address != source`, ktery
+    pojistku plati jen na prvni prvek - test dokazoval, ze pojistka
+    existuje, ne ze plati na kazdy zaznam. Overeno spustenim proti temuz
+    mutantu: s parametrizaci pada na pozicich 1 a 2.
+
+    Sousedi po obou stranach jsou tam i proto, aby test nemohl projit diky
+    tomu, ze prazdny seznam po filtru spustil `if addresses:` vetev jako
+    celek - filtr musi vyradit presne jednu polozku a ostatni nechat byt.
     """
-    arp = [
-        {"ip": "198.11.13.1", "interface": "ge-0/0/2.113"},  # vlastni zdroj scope
-        {"ip": "198.11.13.2", "interface": "ge-0/0/2.113"},  # skutecny soused
-    ]
+    neighbours = ["198.11.13.2", "198.11.13.3"]
+    ips = list(neighbours)
+    ips.insert(position, "198.11.13.1")  # vlastni zdrojova adresa scope
+    arp = [{"ip": ip, "interface": "ge-0/0/2.113"} for ip in ips]
 
-    targets = resolve_targets([_scope()], arp)
+    targets = resolve_targets([_scope(addresses=("198.11.13.1/24",))], arp)
 
-    assert [t.target for t in targets] == ["198.11.13.2"]
+    assert [t.target for t in targets] == neighbours
     assert all(t.target != t.source for t in targets)
 
 
-def test_nd_guard_drops_own_address_reflected_back():
+@pytest.mark.parametrize("position", (0, 1, 2))
+def test_nd_guard_drops_own_address_at_any_position(position):
     """IPv6 obdoba: IRB muze odpovidat za svou vlastni adresu v ND (nebo jde
     o duplicate-address stav behem cutoveru) - vlastni adresa se objevi
     primo v ND tabulce. Zase mimo dosah `owned` (ND vetev take nevola
     subnet_fallback) - chrani jen `if address != source`.
+
+    Adresa scope je /64, ne /127: pri /127 vratil subnet_fallback presne
+    tehoz souseda, ktery se ocekaval z ND, takze i uplne smazana ND vetev
+    prosla pres fallback. Na /64 fallback mlci (IPV6_FALLBACK_MIN_PREFIX je
+    126), takze jediny mozny zdroj cile je ND - a `resolved_from` to rovnou
+    tvrdi, aby to nezaviselo jen na te konstante.
     """
     scope = _scope(
-        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/127",)
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/64",)
     )
+    neighbours = ["2001:abcd:11:13::b", "2001:abcd:11:13::c"]
+    ips = list(neighbours)
+    ips.insert(position, "2001:abcd:11:13::a")  # vlastni zdrojova adresa scope
     nd = [
         {
-            "ip": "2001:abcd:11:13::a",  # vlastni zdrojova adresa scope
-            "mac": "aa:bb:cc:dd:ee:ff",
-            "interface": "et-0/0/8.13",
-            "state": "reachable",
-        },
-        {
-            "ip": "2001:abcd:11:13::b",  # skutecny soused
+            "ip": ip,
             "mac": "0c:00:ef:5e:df:01",
             "interface": "et-0/0/8.13",
             "state": "reachable",
-        },
+        }
+        for ip in ips
     ]
 
     targets = resolve_targets([scope], [], nd)
 
-    assert [t.target for t in targets] == ["2001:abcd:11:13::b"]
+    assert [t.target for t in targets] == neighbours
+    assert all(t.resolved_from == "nd" for t in targets)
     assert all(t.target != t.source for t in targets)
 
 
