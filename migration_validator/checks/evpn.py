@@ -27,6 +27,27 @@ def _is_up(status: str) -> bool:
     return status.split("/", 1)[0].strip() == UP
 
 
+def _vpws_value(data: dict[str, Any] | None) -> str | None:
+    """Stav a SID do jednoho sloupce.
+
+    Tataz funkce pro subjekt i baseline: sloupec ZMENA ma porovnavat dva
+    retezce tehoz tvaru. Bez rozlozeni baseline na hodnotu hlasil sloupec
+    'bez baseline' u kazdeho EVPN radku, prestoze check baseline mel -
+    dohledaval si ji a vozil v poli `baseline`.
+    """
+    if data is None:
+        return None
+    status = str(data.get("status", "unknown"))
+    return f"{status}  SID {data.get('local_sid')} -> {data.get('remote_sid') or '-'}"
+
+
+def _esi_value(data: dict[str, Any] | None) -> str | None:
+    if data is None:
+        return None
+    status = str(data.get("status", "unknown"))
+    return f"{status}  DF {data.get('df_role') or '-'}"
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     id = "evpn_vpws_status"
@@ -61,7 +82,8 @@ class EvpnVpwsStatusCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: stav rozhrani {status}, ocekavano {UP}",
                         label=name,
-                        value=status,
+                        value=_vpws_value(subject),
+                        baseline_value=_vpws_value(baseline),
                         baseline=baseline,
                         subject=subject,
                     )
@@ -77,7 +99,8 @@ class EvpnVpwsStatusCheck(Check):
                         Outcome.BROKEN,
                         f"{name}: chybi remote SID (local {local})",
                         label=name,
-                        value=f"{status}  SID {local} -> -",
+                        value=_vpws_value(subject),
+                        baseline_value=_vpws_value(baseline),
                         baseline=baseline,
                         subject=subject,
                     )
@@ -89,7 +112,8 @@ class EvpnVpwsStatusCheck(Check):
                     Outcome.OK,
                     f"{name}: {UP}, SID {local} -> {remote}",
                     label=name,
-                    value=f"{status}  SID {local} -> {remote}",
+                    value=_vpws_value(subject),
+                    baseline_value=_vpws_value(baseline),
                     baseline=baseline,
                     subject=subject,
                 )
@@ -137,7 +161,8 @@ class EvpnEsiStatusCheck(Check):
                     outcome,
                     message,
                     label=esi,
-                    value=f"{status}  DF {subject['df_role'] or '-'}",
+                    value=_esi_value(subject),
+                    baseline_value=_esi_value(baseline),
                     baseline=baseline,
                     subject=subject,
                 )

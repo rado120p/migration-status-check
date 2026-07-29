@@ -326,6 +326,16 @@ def test_traffic_ceased_rows_name_their_interface_the_same_way():
     assert labels == ["Interface traffic ceased (ge-0/0/2.113)"] * 3
 
 
+def test_traffic_ceased_row_carries_the_previous_traffic():
+    """Compare check bez `baseline_value` znamena 'bez baseline' ve sloupci
+    ZMENA - a tenhle check bez baseline vubec nebezi, takze by to byla
+    hlaska, ktera nemuze byt pravda. Tataz trida chyby jako F-15."""
+    result = run_check(TrafficCeasedCheck(), _ceased_ctx(0, 400))[0]
+
+    assert result.value == "0 pps"
+    assert result.baseline_value == "400 pps"
+
+
 def test_traffic_ceased_warns_when_old_port_still_carries_traffic():
     result = run_check(TrafficCeasedCheck(), _ceased_ctx(380, 400))[0]
     assert result.status is Status.WARN

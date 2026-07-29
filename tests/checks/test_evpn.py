@@ -72,6 +72,44 @@ def test_vpws_missing_remote_sid_fails():
     assert "remote SID" in result.message
 
 
+def test_vpws_row_carries_the_previous_state_when_there_is_one():
+    """Sloupec ZMENA hlasil 'bez baseline' u kazdeho EVPN radku, i kdyz check
+    baseline mel - dohledava si ji a vozi v poli `baseline`, jen ji nikdy
+    nerozlozil na hodnotu pro sazbu. Stejna trida chyby jako F-15: sloupec
+    tvrdi neco, co neplati.
+    """
+    ctx = _vpws_ctx(
+        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}},
+        baseline={"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 0, "status": "Up"}}},
+    )
+
+    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
+
+    assert result.value == "Up  SID 1000 -> 2000"
+    assert result.baseline_value == "Up  SID 1000 -> -"
+
+
+def test_vpws_row_without_baseline_leaves_the_previous_state_empty():
+    """Druha strana teze veci: bez baseline se nic vymyslet nesmi."""
+    ctx = _vpws_ctx(
+        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}}
+    )
+
+    assert run_check(EvpnVpwsStatusCheck(), ctx)[0].baseline_value is None
+
+
+def test_esi_row_carries_the_previous_state_when_there_is_one():
+    ctx = _ctx(
+        {"evpn_esi": {"00:11": {"status": "Up", "df_role": "DF", "interface": "ae0"}}},
+        baseline={"evpn_esi": {"00:11": {"status": "Down", "df_role": "-", "interface": "ae0"}}},
+    )
+
+    result = run_check(EvpnEsiStatusCheck(), ctx)[0]
+
+    assert result.value == "Up  DF DF"
+    assert result.baseline_value == "Down  DF -"
+
+
 def test_vpws_missing_data_skips():
     result = run_check(EvpnVpwsStatusCheck(), _vpws_ctx({"evpn_vpws": {}}))[0]
     assert result.status is Status.SKIP

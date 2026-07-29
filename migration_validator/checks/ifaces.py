@@ -286,6 +286,10 @@ class TrafficCeasedCheck(Check):
                 continue
 
             baseline = _rates(baseline_data)
+            # Compare check bez baseline_value hlasi ve sloupci ZMENA 'bez
+            # baseline' - a tenhle check bez baseline vubec nebezi, takze by
+            # to byla hlaska, ktera nemuze byt pravda.
+            previous = f"{max(baseline['input_pps'], baseline['output_pps'])} pps"
             if baseline["input_pps"] == 0 and baseline["output_pps"] == 0:
                 findings.append(
                     Finding(
@@ -310,6 +314,7 @@ class TrafficCeasedCheck(Check):
                         f"({residual} pps, prah {threshold} pps)",
                         label=label,
                         value=f"{residual} pps",
+                        baseline_value=previous,
                         baseline=baseline,
                         subject=subject,
                         details=details,
@@ -322,6 +327,7 @@ class TrafficCeasedCheck(Check):
                         f"{name}: provoz utichl ({residual} pps)",
                         label=label,
                         value=f"{residual} pps",
+                        baseline_value=previous,
                         baseline=baseline,
                         subject=subject,
                         details=details,
