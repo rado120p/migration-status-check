@@ -100,6 +100,31 @@ def test_bfd_removed_since_baseline_is_broken():
     assert findings[0].family == 4
 
 
+def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():
+    """Poradi vetvi 'not configured' pred 'bgp_state != ESTABLISHED' je zamerne.
+
+    Peer zcela odstraneny z migrace - zamer pryc, session pryc, BGP taky
+    pryc. Kdyby se vetve prohodily, tenhle pripad by spadl do SKIP s
+    hlaskou 'BGP neni Established', coz je fakticky spatne (BFD pro
+    tohoto peera vubec nakonfigurovane neni) a schova to skutecnou
+    regresi (BFD ochrana zmizela od baseline) za neviditelny SKIP radek.
+    `test_bfd_removed_since_baseline_is_broken` tohle nezachyti, protoze
+    dedi vychozi bgp_state="Established" z _ctx - jedinou hodnotu, pri
+    ktere obe poradi vetvi davaji stejny vysledek.
+    """
+    findings = BfdSessionStateCheck().run(
+        _ctx(
+            {},
+            bgp_state="Idle",
+            baseline_sessions={"198.11.13.2": {"state": "Up"}},
+            scope=_scope(bfd_peers=[]),
+        )
+    )
+
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "BFD odstraneno"
+
+
 def test_session_without_intent_is_degraded():
     """Detektor diry v pruchodu hierarchii BFD.
 
