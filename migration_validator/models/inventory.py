@@ -23,6 +23,28 @@ def _as_optional_str(value: Any) -> str | None:
     return str(value)
 
 
+def _as_mapping_list(value: Any) -> list[dict[str, Any]]:
+    """Pole, jehoz prvky jsou mappingy - staticke routy a BFD zamer.
+
+    Na rozdil od _as_list se prvky neprevadeji na retezec: ztratila by se
+    struktura, ze ktere check bere identitu routy (rib, prefix) i hodnotu
+    (next_hop). Nevalidni tvar je chyba, ne tichy prevod.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"ocekavan seznam mappingu, nalezeno {type(value).__name__}")
+
+    items: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(
+                f"ocekavan mapping v seznamu, nalezeno {type(item).__name__}"
+            )
+        items.append(dict(item))
+    return items
+
+
 @dataclass
 class ServiceEntry:
     """Jeden zaznam z inventory - rozhrani a sluzba, ktera na nem bezi."""
@@ -41,6 +63,8 @@ class ServiceEntry:
     bgp_neighbor: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    static_route: list[dict[str, Any]] = field(default_factory=list)
+    bfd: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def physical_name(self) -> str:
@@ -70,6 +94,8 @@ class ServiceEntry:
             bgp_neighbor=_as_list(data.get("bgp_neighbor")),
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
+            static_route=_as_mapping_list(data.get("static_route")),
+            bfd=_as_mapping_list(data.get("bfd")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -88,6 +114,8 @@ class ServiceEntry:
             "bgp_neighbor": list(self.bgp_neighbor),
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
+            "static_route": [dict(route) for route in self.static_route],
+            "bfd": [dict(intent) for intent in self.bfd],
         }
 
 
@@ -97,7 +125,7 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 2
+INVENTORY_SCHEMA_VERSION = 3
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -106,6 +134,10 @@ def load_inventory(path: str | Path) -> Inventory:
     Stara inventory se odmita, ne dopocitava. Pole adres se prejmenovala na
     rodiny; tolerantni cteni by u starsiho souboru tise vratilo sluzby bez
     adres, takze by neprobehl ping a sluzba by presto svitila zelene.
+
+    Verze 3 pridala static_route a bfd. Tolerantni cteni ma tady stejnou
+    cenu: sluzba by prisla bez zameru, takze by check nemel co porovnat
+    s routovaci tabulkou a rozpor mezi konfiguraci a stavem by zmizel.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

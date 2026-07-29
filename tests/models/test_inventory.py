@@ -47,7 +47,7 @@ def test_load_inventory(tmp_path):
     path.write_text(
         textwrap.dedent(
             """\
-            schema_version: 2
+            schema_version: 3
             device: 172.20.20.4
             interfaces:
             - interface: ge-0/0/2.113
@@ -86,7 +86,7 @@ def test_load_inventory(tmp_path):
 
 def test_load_inventory_rejects_missing_interfaces_key(tmp_path):
     path = tmp_path / "bad.yml"
-    path.write_text("schema_version: 2\ndevice: 1.2.3.4\n", encoding="utf-8")
+    path.write_text("schema_version: 3\ndevice: 1.2.3.4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="interfaces"):
         load_inventory(path)
@@ -144,7 +144,7 @@ def test_old_inventory_fails_loudly(tmp_path):
 def test_current_inventory_loads(tmp_path):
     path = tmp_path / "new.yml"
     path.write_text(
-        "schema_version: 2\n"
+        "schema_version: 3\n"
         "device: 172.20.20.4\n"
         "interfaces:\n"
         "  - interface: ge-0/0/2.13\n"
@@ -157,3 +157,87 @@ def test_current_inventory_loads(tmp_path):
 
     assert inventory.device == "172.20.20.4"
     assert inventory.entries[0].ipv4_address == ["152.11.13.1/30"]
+
+
+def test_version_two_inventory_is_rejected(tmp_path):
+    """Stara inventory nema static_route ani bfd.
+
+    Tolerantni cteni by tise vratilo sluzby bez statik, takze by check
+    'nakonfigurovana routa neni v tabulce' nemel co hlasit a sluzba by
+    svitila zelene. Stejny duvod jako u rozdeleni rodin ve verzi 2.
+    """
+    path = tmp_path / "stara.yml"
+    path.write_text(
+        "schema_version: 2\ndevice: r1\ninterfaces: []\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="schema_version 2"):
+        load_inventory(path)
+
+
+def test_static_routes_and_bfd_survive_load(tmp_path):
+    path = tmp_path / "nova.yml"
+    path.write_text(
+        """
+schema_version: 3
+device: r1
+interfaces:
+  - interface: et-0/0/8.113
+    service_type: IPVPN
+    static_route:
+      - rib: L3VPN-A.inet.0
+        prefix: 172.26.1.0/29
+        next_hop: [198.11.13.2]
+    bfd:
+      - peer: 198.11.13.2
+        minimum_interval: 3000
+        multiplier: 3
+        source: group
+""",
+        encoding="utf-8",
+    )
+
+    entry = load_inventory(path).entries[0]
+
+    assert entry.static_route == [
+        {
+            "rib": "L3VPN-A.inet.0",
+            "prefix": "172.26.1.0/29",
+            "next_hop": ["198.11.13.2"],
+        }
+    ]
+    assert entry.bfd[0]["source"] == "group"
+    assert entry.bfd[0]["minimum_interval"] == 3000
+
+
+def test_missing_new_fields_default_to_empty(tmp_path):
+    path = tmp_path / "bez.yml"
+    path.write_text(
+        "schema_version: 3\ndevice: r1\n"
+        "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n",
+        encoding="utf-8",
+    )
+
+    entry = load_inventory(path).entries[0]
+
+    assert entry.static_route == []
+    assert entry.bfd == []
+
+
+def test_mapping_list_rejects_scalars(tmp_path):
+    """Prvek, ktery neni mapping, je chyba - ne tichy prevod na retezec.
+
+    _as_list by z {'rib': ...} udelal jeho str() a check by pak hledal
+    klice v retezci.
+    """
+    path = tmp_path / "spatna.yml"
+    path.write_text(
+        "schema_version: 3\ndevice: r1\n"
+        "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n"
+        "    static_route: [not-a-mapping]\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="mapping"):
+        load_inventory(path)

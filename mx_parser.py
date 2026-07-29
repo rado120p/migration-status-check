@@ -2143,7 +2143,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 2
+INVENTORY_SCHEMA_VERSION = 3
 
 
 def create_yaml_data(
@@ -2183,6 +2183,8 @@ def clean_service_dict(
         "bgp_neighbor",
         "bridge_domain",
         "customer_vlan",
+        "static_route",
+        "bfd",
         "detection_confidence",
         "detection_reason",
     )
