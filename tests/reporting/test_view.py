@@ -174,6 +174,27 @@ def test_both_check_without_baseline_says_so():
     assert change_text(row, has_baseline=True) == "bez baseline"
 
 
+def test_skip_row_does_not_repeat_missing_baseline():
+    """SKIP uz duvod nese ve vlastni hlasce ('peer neni v baseline
+    snapshotu'), takze 'bez baseline' ve sloupci ZMENA je druha kopie teze
+    vety vedle sebe. V ostrem behu to bylo 14 z 18 vyskytu te hlasky.
+
+    Testy nad timhle drzi opacnou stranu: PASS a BOTH radek bez baseline ji
+    hlasit musi, jinak by zmizela i tam, kde je jedina.
+    """
+    row = build_view(
+        _scope(
+            [
+                _check("bgp_prefix_counts", family=4, mode="compare",
+                       status=Status.SKIP, value="bez baseline",
+                       message="10.0.0.1: peer neni v baseline snapshotu, nelze porovnat"),
+            ]
+        )
+    ).sections[0].rows[0]
+
+    assert change_text(row, has_baseline=True) == ""
+
+
 def test_identical_values_print_nothing():
     row = build_view(
         _scope([_check("interface_traffic", mode="both", value="460 pps",

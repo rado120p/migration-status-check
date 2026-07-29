@@ -65,7 +65,11 @@ def change_text(row: Row, has_baseline: bool) -> str:
     if row.mode == "state":
         return ""
     if row.baseline_value is None:
-        return NO_BASELINE
+        # SKIP uz duvod nese ve vlastni hlasce ("peer neni v baseline
+        # snapshotu"), takze 'bez baseline' vedle ni je druha kopie teze
+        # vety - v ostrem behu 14 z 18 vyskytu te hlasky. Podminka je uzka
+        # zamerne: SKIP se znamou drivejsi hodnotou ji ma dal vypsat.
+        return "" if row.status is Status.SKIP else NO_BASELINE
     if row.baseline_value == row.value:
         return ""
     if row.delta:
