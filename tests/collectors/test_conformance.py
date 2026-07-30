@@ -76,14 +76,42 @@ def _fixture_paths(platform: str, collector) -> list[Path]:
     return paths
 
 
+@pytest.mark.parametrize("platform", ("junos", "junos-evo"))
+def test_every_collector_has_its_fixtures(platform):
+    """Jmena oblasti a jmena nahravek na disku se musi shodovat, oboustranne.
+
+    Zabiji mutanta: prejmenovani RoutesCollector.name na "routes_x". Bez teto
+    asertace by _facts_from_recorded_xml sahlo po neexistujici routes_x.xml,
+    zavolalo pytest.skip a cely modul by zmizel ze sady jako "19 skipped,
+    nula failu" - tedy presne opacny signal, nez jaky ma prejmenovany klic
+    vydat.
+
+    Osirela fixture je stejna chyba jako chybejici: znamena, ze se collector
+    prestal spoustet a nikdo si toho nevsiml.
+    """
+    expected = {
+        path.name
+        for collector in COLLECTORS
+        for path in _fixture_paths(platform, collector)
+    }
+    on_disk = {path.name for path in (RPC_ROOT / platform).glob("*.xml")}
+
+    assert expected == on_disk, (
+        f"{platform}: chybi {sorted(expected - on_disk)}, "
+        f"osirelo {sorted(on_disk - expected)}"
+    )
+
+
 def _facts_from_recorded_xml(platform: str) -> dict:
     """Fakta presne tak, jak by je vyrobil capture - bez rucniho dolepovani."""
     facts = {}
     for collector in COLLECTORS:
         merged: Any = None
         for path in _fixture_paths(platform, collector):
-            if not path.exists():
-                pytest.skip(f"chybi fixture {path}")
+            # Drive tu byl pytest.skip. Ten z prejmenovane oblasti udelal
+            # "19 skipped, nula failu" - tedy signal, ze je vsechno v poradku.
+            # Chybejici nahravka je chyba sady, ne duvod ji preskocit.
+            assert path.exists(), f"chybi fixture {path}"
             parsed = collector.parse(etree.parse(str(path)).getroot(), platform)
             merged = parsed if merged is None else _merge(merged, parsed)
         facts[collector.name] = merged
