@@ -67,13 +67,34 @@ JSON** — `reporting/text_report.py` vypisuje `result.unmatched`, ne
 parser nepřečetl, tiše nezmizí") tedy platí jen pro konzumenta JSONu.
 Preexistující — `bgp_peers` na tom byly stejně. Patří k **F‑14**.
 
-### 4. Přenahrát `tests/fixtures/rpc/junos-evo/interfaces.xml`
+### 4. Regenerovat inventory — laborka má novou službu, kterou schema 3 nezná
+
+Při mergi vlny 2 (2026‑07‑30) byly v pracovní kopii `main` necommitnuté
+`172.20.20.4.yml` a `172.20.20.5.yml` ze **schema 2**, vyrobené téhož dne
+v 13:55 proti laborce, která už měla novou službu **`EVPN-VPWS-CPE24-UNI`**
+(`ae0.224` na `.5`, `ge-0/0/3` na `.4`). Commitnutá schema‑3 inventory je
+z běhu z 2026‑07‑29 21:53, takže tu službu **neobsahuje**.
+
+Ty soubory jsou ve stashi:
+
+```bash
+git stash list   # "inventory schema 2 z 2026-07-30 13:55 - … EVPN-VPWS-CPE24-UNI …"
+git stash show -p stash@{0}
+```
+
+Udělat se má **regenerace proti současné laborce novým parserem**, ne
+oživení stashe — schema 2 je po vlně 2 zastaralý formát. Pozor, že se tím
+mění i `tests/fixtures/172.20.20.{4,5}.yml`, takže to může pohnout
+očekáváními v testech (počty služeb, conformance) — je to samostatný kus
+práce, ne dodatek.
+
+### 5. Přenahrát `tests/fixtures/rpc/junos-evo/interfaces.xml`
 
 Fixture předchází přestavbě laborky a nemá `irb.15` / `ae0.15`, takže
 conformance test službu CPE14 nevidí. Ta cesta **je** ověřená proti živému
 zařízení, ale ne v CI.
 
-### 5. Conformance test — dvě slabiny švu collector→check
+### 6. Conformance test — dvě slabiny švu collector→check
 
 Obě preexistující, obě odhalené až mutačním testováním ve vlně 2:
 
@@ -93,7 +114,7 @@ proti checku, který čte klíč, jaký žádný collector nevydává.** Hlídá
 výhradně `ctx.failed_collectors` (`checks/base.py:135`). `requires =
 ("route",)` místo `("routes",)` projde celou sadou.
 
-### 6. Tři stále nediskriminující testy
+### 7. Tři stále nediskriminující testy
 
 - `tests/models/…` `test_mapping_list_rejects_scalars` — `match="mapping"`
   sedí i na jméno `tmp_path` adresáře. (Dnes diskriminuje, ale z nesprávného
