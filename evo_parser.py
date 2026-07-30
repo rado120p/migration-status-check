@@ -130,6 +130,7 @@ class InterfaceConfig:
     ipv6_addresses: list[str] = field(default_factory=list)
     virtual_gw_ipv4_addresses: list[str] = field(default_factory=list)
     virtual_gw_ipv6_addresses: list[str] = field(default_factory=list)
+    active: bool = True
 
 
 @dataclass
@@ -1035,6 +1036,8 @@ class JunosEvoAcxServiceParser:
                 "./*[local-name()='encapsulation']/text()",
             )
 
+            physical_inactive = self._is_inactive(interface_node)
+
             # Fyzické rozhraní přidáme vždy.
             results.append(
                 self._build_interface_config(
@@ -1043,6 +1046,7 @@ class JunosEvoAcxServiceParser:
                     physical_description=physical_description,
                     physical_encapsulation=physical_encapsulation,
                     node=interface_node,
+                    active=not physical_inactive,
                 )
             )
 
@@ -1069,6 +1073,10 @@ class JunosEvoAcxServiceParser:
                         physical_description=physical_description,
                         physical_encapsulation=physical_encapsulation,
                         node=unit_node,
+                        # Jednotka pod deaktivovaným rodičem je deaktivovaná
+                        # taky, i když sama atribut nemá - Junos to tak i
+                        # vyhodnocuje.
+                        active=not (physical_inactive or self._is_inactive(unit_node)),
                     )
                 )
 
@@ -1081,6 +1089,7 @@ class JunosEvoAcxServiceParser:
         physical_description: str | None,
         physical_encapsulation: str | None,
         node: etree._Element,
+        active: bool = True,
     ) -> InterfaceConfig:
         unit_description = first_text(
             node,
@@ -1186,6 +1195,7 @@ class JunosEvoAcxServiceParser:
             ipv6_addresses=unique(ipv6_addresses),
             virtual_gw_ipv4_addresses=unique(virtual_gw_ipv4_addresses),
             virtual_gw_ipv6_addresses=unique(virtual_gw_ipv6_addresses),
+            active=active,
         )
 
     # ------------------------------------------------------------------
@@ -1244,8 +1254,7 @@ class JunosEvoAcxServiceParser:
             routing_instance=instance.name if instance else None,
             protocol=protocols,
             routing_instance_active=instance.active if instance else True,
-            # Zdroj se doplni v AR-18; do te doby je rozhrani vzdy zive.
-            interface_active=True,
+            interface_active=interface.active,
             bridge_domain=[
                 domain.name
                 for domain in bridge_domains
