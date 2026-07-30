@@ -146,8 +146,14 @@ Tím se sjednotí rozpor mezi úrovní kontejneru a položky, který je popsaný
 výš.
 
 Změna jde do **obou** parserů symetricky. `diff mx_parser.py evo_parser.py |
-wc -l` musí po celou dobu vracet **146**; jiná hodnota znamená, že se guard
-aplikoval jen na jednu stranu.
+wc -l` musí po celou dobu vracet **146**; jiná hodnota obvykle znamená, že se
+guard aplikoval jen na jednu stranu.
+
+Výjimka, kterou je nutné odlišit od chyby: kdyby se ukázalo, že se parsování
+rozhraní mezi rodinami legitimně liší — EVO je platforma, kde žijí `irb.15`
+a `ae0.15` — číslo se posune právem. V takovém případě se **nová hodnota
+odvodí, zdůvodní a zapíše do plánu**; symetrie se nedosahuje tím, že se do
+jednoho parseru dopíše mrtvý kód.
 
 ### AR-20 — inventory schema 4: dvě čestná pole místo `active`
 
@@ -187,7 +193,13 @@ s důvodem `RI deactivated`, resp. `interface deactivated`. Jsou-li
 deaktivované oba, důvod jmenuje oba.
 
 Jediná výjimka je check `deactivation_state` (AR‑23) — ten se musí spustit,
-jinak by nebylo co porovnat.
+jinak by nebylo co porovnat. Výjimka se pozná podle `check.id`.
+
+**Pořadí uvnitř `run_check()` je součást požadavku.** Nová zkratka se vkládá
+**až za** dnešní gaty `enabled` / `applies_to` / `requires_inventory` /
+`Mode.COMPARE`, ne před ně. Důsledek je záměrný: v device scope zkratkuje
+`requires_inventory` (`base.py:127`) dřív, takže i `deactivation_state`
+SKIPne — device scope inventory nemá a nemá tedy ani z čeho příznak vzít.
 
 **Přijatá cena:** `deactivate routing-instances X` nesloží rozhraní, takže
 u služby s deaktivovanou VRF přijdeme i o informaci, že port je nahozený.
@@ -208,6 +220,7 @@ zkratku z AR‑22.
 | aktivní | deaktivováno | `BROKEN` | **FAIL** | služba zákazníkovi běžela a teď neběží — migrace nedokončena |
 | bez baseline | deaktivováno | `SKIP` | **SKIP** | není s čím porovnat; důvod je v hlášce vidět |
 | aktivní | aktivní | *žádný finding* | — | zdravá služba nemá v bloku přibýt řádek |
+| *device scope* | jakýkoli | — | **SKIP** | check se vůbec nespustí, viz pořadí gatů v AR‑22 |
 
 Poslední řádek je záměrný: check vrátí prázdný seznam, ne `OK`. Jinak by
 každý zdravý blok narostl o řádek, který nic neříká.
@@ -234,7 +247,7 @@ ignoruje, takže routa, kterou přebil jiný zdroj, projde jako PASS.
 |---|---|---|
 | neaktivní | neaktivní | **PASS** — stav se nezměnil |
 | aktivní | neaktivní | **FAIL** |
-| bez baseline | neaktivní | **FAIL** — viz předpoklad níž |
+| bez baseline | neaktivní | **WARN** — viz odůvodnění níž |
 | neaktivní | aktivní | **PASS** — zlepšení, v souladu s R‑2 |
 
 Neaktivní routa se **nezaměňuje** s hláškou `neni v tabulce`. Ta má vlastní
@@ -310,12 +323,15 @@ příčiny pocházely z předepsaného testovacího kódu v plánu.
 
 ## Zapsané předpoklady
 
-### Bez baseline je neaktivní routa FAIL
+### Bez baseline je neaktivní routa WARN, ne FAIL
 
-AR‑25 nemá v režimu bez baseline z čeho poznat, že routa byla neaktivní
-i předtím. Volí přísnější výsledek. Alternativa (SKIP) by znamenala, že
-`evaluate --snapshot X` bez `--baseline` — podle AR‑10 doporučený způsob, jak
-si prohlédnout jedno zařízení — o neaktivní routě mlčí.
+AR‑25 nemá v režimu bez baseline z čeho poznat, jestli routa byla neaktivní
+i předtím. FAIL by tvrdil, že se něco zhoršilo, a to není doloženo —
+v souladu s R‑2 se nejednoznačnost na FAIL neeskaluje. SKIP by naopak
+znamenal, že `evaluate --snapshot X` bez `--baseline`, podle AR‑10 doporučený
+způsob prohlídky jednoho zařízení, o neaktivní routě mlčí úplně.
+
+Rozhodnutí uživatele z 2026‑07‑30.
 
 ### `requires` nechrání proti neexistujícímu klíči
 
