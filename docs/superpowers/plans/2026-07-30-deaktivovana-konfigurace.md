@@ -27,6 +27,13 @@ Platí pro **každou** úlohu, i když to u ní není zopakované.
 - **Každý mutant se grepem potvrdí, že dopadl.** Po aplikaci mutanta vždy
   `grep -n` na změněný řádek. Neaplikovaný mutant vypadá identicky jako
   nediskriminující test. Vlna 2 na to doplatila dvakrát.
+- **Commituj DŘÍV, než pustíš mutanty.** Každý mutantí blok končí
+  `git checkout <soubor>`, což zahodí **všechny** necommitnuté změny toho
+  souboru, ne jen mutanta. Když se mutant pustí před commitem, smaže si tím
+  vlastní implementaci. Pokud má úloha kroky s mutanty uvedené před krokem
+  „Commit", **prohoď je** — commit napřed, mutanti potom. Zjištěno při
+  provádění úlohy 5, kde to zasáhlo (implementer se zotavil, ale je to past
+  v plánu, ne jeho chyba).
 - **U parametrizovaného testu se mutant pouští na každou větev zvlášť.**
   Jeden mutant v `mx_parser.py` neříká nic o `evo_parser.py`.
 - **Testy:** `.venv/bin/python -m pytest`. Výchozí stav před úlohou 1 je
