@@ -98,10 +98,30 @@ class Scope:
     kind: str  # service | device
     key: ScopeKey | None
     selectors: Selectors
+    # Deaktivace neni selektor, je to vlastnost sluzby - proto tady, ne
+    # v Selectors. Sluzba se pri deaktivaci z inventory nevypousti (docasne
+    # deaktivovana sluzba se porad musi zmigrovat), takze priznak je jediny
+    # zpusob, jak se to da poznat.
+    routing_instance_active: bool = True
+    interface_active: bool = True
 
     @property
     def is_device(self) -> bool:
         return self.kind == "device"
+
+    @property
+    def is_deactivated(self) -> bool:
+        return not (self.routing_instance_active and self.interface_active)
+
+    @property
+    def deactivation_reason(self) -> str | None:
+        """Kratky duvod do sloupce hodnot. None, kdyz je sluzba ziva."""
+        reasons = []
+        if not self.routing_instance_active:
+            reasons.append("RI")
+        if not self.interface_active:
+            reasons.append("interface")
+        return f"{' + '.join(reasons)} deactivated" if reasons else None
 
     @property
     def service_type(self) -> str | None:
@@ -201,6 +221,8 @@ class Scope:
             "kind": self.kind,
             "key": self.key.to_dict() if self.key else None,
             "selectors": self.selectors.to_dict(),
+            "routing_instance_active": self.routing_instance_active,
+            "interface_active": self.interface_active,
         }
 
     @classmethod
@@ -211,6 +233,8 @@ class Scope:
             kind=data["kind"],
             key=ScopeKey.from_dict(key) if key else None,
             selectors=Selectors.from_dict(data.get("selectors", {})),
+            routing_instance_active=data.get("routing_instance_active", True),
+            interface_active=data.get("interface_active", True),
         )
 
 

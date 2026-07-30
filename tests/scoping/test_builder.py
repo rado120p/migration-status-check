@@ -159,6 +159,32 @@ def test_selectors_keep_families_apart():
     assert scope.selectors.virtual_gw_v6 == []
 
 
+def test_scope_inherits_deactivation_from_the_inventory_entry():
+    """Prevod je 1:1 - build_scopes dela jeden scope na jeden zaznam.
+
+    Zabiji mutanta: build_scopes, ktere priznaky neopise a necha default True.
+    """
+    inventory = Inventory(
+        device="r1",
+        entries=[
+            _entry(
+                interface="ge-0/0/4.0",
+                description="L3VPN-CPE14-UNI",
+                service_type="IPVPN",
+                routing_instance="L3VPN-CPE14-UNI",
+                routing_instance_active=True,
+                interface_active=False,
+            )
+        ],
+    )
+
+    scopes = build_scopes(inventory)
+
+    assert len(scopes) == 1
+    assert scopes[0].routing_instance_active is True
+    assert scopes[0].interface_active is False
+
+
 def test_real_inventory_files_produce_expected_scope_counts():
     from migration_validator.models.inventory import load_inventory
 

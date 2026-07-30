@@ -214,6 +214,48 @@ def test_missing_areas_come_back_as_empty_mappings():
     assert selected["bfd"] == {}
 
 
+def test_scope_reports_why_it_is_deactivated():
+    """Duvod jmenuje oba zdroje, aby operator vedel, co odaktivovat.
+
+    Zabiji mutanta: is_deactivated postavene jen na routing_instance_active.
+    """
+    live = Scope(id="s", kind="service", key=None, selectors=Selectors())
+    off_ri = Scope(
+        id="s", kind="service", key=None, selectors=Selectors(),
+        routing_instance_active=False,
+    )
+    off_if = Scope(
+        id="s", kind="service", key=None, selectors=Selectors(),
+        interface_active=False,
+    )
+    off_both = Scope(
+        id="s", kind="service", key=None, selectors=Selectors(),
+        routing_instance_active=False, interface_active=False,
+    )
+
+    assert live.is_deactivated is False
+    assert live.deactivation_reason is None
+    assert off_ri.deactivation_reason == "RI deactivated"
+    assert off_if.deactivation_reason == "interface deactivated"
+    assert off_both.deactivation_reason == "RI + interface deactivated"
+
+
+def test_scope_round_trips_deactivation_flags():
+    """Bez serializace by baseline svuj stav nenesla a AR-23 by nemel co porovnat.
+
+    Zabiji mutanta: vynechani obou klicu z to_dict.
+    """
+    scope = Scope(
+        id="svc:CPE14:IPVPN", kind="service", key=None, selectors=Selectors(),
+        routing_instance_active=True, interface_active=False,
+    )
+
+    restored = Scope.from_dict(scope.to_dict())
+
+    assert restored.routing_instance_active is True
+    assert restored.interface_active is False
+
+
 def test_selectors_survive_roundtrip():
     selectors = Selectors(
         interfaces=["et-0/0/8.13"],
