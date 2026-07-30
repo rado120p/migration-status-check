@@ -690,3 +690,52 @@ def test_frame_covers_a_header_line_longer_than_the_column_table():
     assert len(header) <= len(frame_line), (
         f"hlavicka bloku ({len(header)}) prerustla ramec ({len(frame_line)})"
     )
+
+
+def test_deactivated_service_shows_the_reason_in_the_report():
+    """Duvod deaktivace musi byt videt, ne jen ulozeny v CheckResult.
+
+    Bez toho by operator videl SKIP bez vysvetleni - tedy presne ten stav,
+    kvuli kteremu se cela vlna dela. deactivation_state ma family=None, takze
+    radek spada do bezhlavickove sekce; tenhle test hlida, ze tam opravdu
+    dojde a nese hodnotu.
+
+    Zabiji mutanta: vynechani `value` z Findingu v checks/deactivation.py.
+    """
+    result = RunResult(
+        evaluated_at="2026-07-30T12:00:00Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
+        baseline=None,
+        summary={
+            "pass": 0, "warn": 0, "fail": 0, "skip": 1,
+            "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0,
+        },
+        scopes=[
+            ScopeResult(
+                scope_id="svc:L3VPN-CPE14-UNI:IPVPN",
+                key={"description": "L3VPN-CPE14-UNI", "service_type": "IPVPN"},
+                status=Status.SKIP,
+                match=None,
+                checks=[
+                    CheckResult(
+                        id="deactivation_state",
+                        mode="both",
+                        status=Status.SKIP,
+                        severity=Severity.CRITICAL,
+                        message="sluzba je v konfiguraci deaktivovana "
+                        "(interface deactivated), baseline neni k porovnani",
+                        label="Deaktivace",
+                        value="interface deactivated",
+                    )
+                ],
+            )
+        ],
+    )
+
+    text = render(result)
+
+    assert "L3VPN-CPE14-UNI" in text
+    assert "interface deactivated" in text, (
+        "duvod deaktivace se do textoveho reportu nedostal - operator vidi "
+        "SKIP bez vysvetleni"
+    )

@@ -39,6 +39,9 @@ class CheckContext:
     baseline: dict[str, Any] | None
     config: CheckConfig
     failed_collectors: dict[str, str] = field(default_factory=dict)
+    # Priznak deaktivace lezi na scopu, ne ve faktech, takze bez baseline
+    # scopu nejde porovnat "deaktivovano i drive" proti "deaktivovano az ted".
+    baseline_scope: Scope | None = None
 
     @property
     def has_baseline(self) -> bool:
