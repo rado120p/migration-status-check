@@ -327,3 +327,12 @@ The copies the tests run against live in **`tests/fixtures/`** (commits `26d8461
 in the root). Both pairs are literal parser output — **do not edit them by hand**; after a
 parser change or a `schema_version` bump, regenerate both with a fresh parser run against the
 lab and copy them into `tests/fixtures/`.
+
+**They are not produced from the stored captures under `runs/`, but from a live run** — and on
+`.5` that is visible. `172.20.20.5.yml` was last regenerated in commit `977783f` against the
+lab **after** the CPE14 service was rebuilt onto `ae0.15` / `irb.15`, whereas
+`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` was taken at 11:43 the same day, i.e.
+**before** it. Re-parsing that capture offline therefore yields an inventory without `ae0.15`
+and with `irb.15` carrying no description — a difference in the lab, not in the parser. For
+`.4`, an offline reparse of the capture is byte-for-byte identical to the committed YAML, so
+parser changes can be verified against it directly.

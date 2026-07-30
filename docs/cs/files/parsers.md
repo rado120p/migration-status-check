@@ -312,3 +312,11 @@ tam přesunuly právě proto, aby testy nezávisely na tom, co je zrovna v koře
 doslovné výstupy parseru — **neupravujte je ručně**; po změně parseru nebo po zvýšení
 `schema_version` se oba páry regenerují novým během parseru proti laborce a zkopírují do
 `tests/fixtures/`.
+
+**Nejsou to výstupy z uložených captureů v `runs/`, ale z živého běhu** — a u `.5` se to dá
+poznat. `172.20.20.5.yml` bylo naposledy regenerováno v commitu `977783f` proti laborce **po**
+přestavbě služby CPE14 na `ae0.15` / `irb.15`, zatímco
+`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` je z 11:43 téhož dne, tedy **před** ní.
+Kdo ten capture přeparsuje offline, dostane inventory bez `ae0.15` a s `irb.15` bez
+description — a je to rozdíl v laborce, ne v parseru. Pro `.4` je offline reparse captureu
+s commitnutým YAML byte za bytem shodný, takže na něm jde změny parseru ověřovat přímo.
