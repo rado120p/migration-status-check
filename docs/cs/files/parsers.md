@@ -130,7 +130,10 @@ Dvě věci, na kterých to stojí:
 
 - **Přepisuje se celá hodnota, ne položka po položce.** Soused s vlastním `minimum-interval`
   si nedědí `multiplier` ze skupiny. Slévání po položkách by vyrobilo záměr, který v žádné
-  úrovni konfigurace takhle nestojí.
+  úrovni konfigurace takhle nestojí. Nese to jediný řádek — `_bfd_values(…) or inherited` —
+  a měří ho **jen** `test_partial_override_of_group_does_not_inherit_the_missing_field`
+  a jeho dvojče pro `protocols bgp`: soused, který nastavuje *oba* údaje, ten rozdíl
+  neuvidí, protože obě implementace u něj dají totéž.
 - **Junosí `inherit` tuhle hierarchii nerozbaluje.** Rozbaluje `apply-groups`, ne hierarchii
   protokolu. Ověřeno proti laborce 2026‑07‑29, kdy skupina `CPE14` nesla BFD a její sousedé ho
   neměli ani v konfiguraci stažené s `inherit` — kdyby se parser na `inherit` spolehl, oba

@@ -169,6 +169,56 @@ DEACTIVATED_GROUP_BFD = f"""
 </configuration>
 """
 
+# Soused nese JEN minimum-interval, skupina nese oboje. Prave tady se
+# prepis celou hodnotou lisi od slevani po polozkach: multiplier musi
+# zustat None, ne 3. NEIGHBOR_OVERRIDES_GROUP tenhle rozdil nevidi, protoze
+# jeho soused nastavuje oba udaje a obe implementace daji totez.
+NEIGHBOR_PARTIAL_OVERRIDE_OF_GROUP = f"""
+<configuration>
+{INTERFACES}
+  <protocols>
+    <bgp>
+      <group>
+        <name>CPE</name>
+        <bfd-liveness-detection>
+          <minimum-interval>3000</minimum-interval>
+          <multiplier>3</multiplier>
+        </bfd-liveness-detection>
+        <neighbor>
+          <name>152.11.13.2</name>
+          <bfd-liveness-detection>
+            <minimum-interval>300</minimum-interval>
+          </bfd-liveness-detection>
+        </neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
+# Tentyz castecny prepis, ale soused visi PRIMO pod protocols bgp, mimo
+# jakoukoli skupinu. Jiny tvar, jiny obsah `inherited` - proto vlastni
+# fixture, ne varianta te predchozi.
+NEIGHBOR_PARTIAL_OVERRIDE_OF_BGP = f"""
+<configuration>
+{INTERFACES}
+  <protocols>
+    <bgp>
+      <bfd-liveness-detection>
+        <minimum-interval>1000</minimum-interval>
+        <multiplier>3</multiplier>
+      </bfd-liveness-detection>
+      <neighbor>
+        <name>152.11.13.2</name>
+        <bfd-liveness-detection>
+          <minimum-interval>300</minimum-interval>
+        </bfd-liveness-detection>
+      </neighbor>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
 DEACTIVATED_NEIGHBOR_BFD = f"""
 <configuration>
 {INTERFACES}
@@ -226,6 +276,47 @@ def test_neighbor_level_overrides_group_level(module, parser_class):
 
     assert intents["2001:abcd:11:13::b"]["minimum_interval"] == 3000
     assert intents["2001:abcd:11:13::b"]["source"] == "group"
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_partial_override_of_group_does_not_inherit_the_missing_field(
+    module, parser_class
+):
+    """Tohle je ta veta AR-13: nese se CELA hodnota, ne polozka po polozce.
+
+    Soused nastavuje jen minimum-interval, takze multiplier zustava None -
+    nedoplni se ze skupiny. Slevani po polozkach by vyrobilo zamer
+    300/3, ktery v konfiguraci takhle nestoji na zadne urovni.
+
+    test_neighbor_level_overrides_group_level tenhle rozdil zmerit neumi:
+    jeho soused nese oba udaje, takze prepis celou hodnotou i slevani po
+    polozkach daji stejny vysledek.
+    """
+    intents = _bfd_by_peer(module, parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_GROUP)
+
+    assert set(intents) == {"152.11.13.2"}
+    assert intents["152.11.13.2"]["minimum_interval"] == 300
+    assert intents["152.11.13.2"]["multiplier"] is None
+    assert intents["152.11.13.2"]["source"] == "neighbor"
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_partial_override_of_bgp_level_does_not_inherit_the_missing_field(
+    module, parser_class
+):
+    """Tentyz castecny prepis u souseda viseciho primo pod protocols bgp.
+
+    Jiny tvar konfigurace nez predchozi test - soused neni v zadne skupine,
+    takze dedi z protokolove urovne. `assert set(intents)` je tady
+    podstatny: kdyby se peer na zadnou sluzbu nenamapoval, _bfd_by_peer by
+    vratil prazdny slovnik a test by prosel, aniz by cokoli overil.
+    """
+    intents = _bfd_by_peer(module, parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_BGP)
+
+    assert set(intents) == {"152.11.13.2"}
+    assert intents["152.11.13.2"]["minimum_interval"] == 300
+    assert intents["152.11.13.2"]["multiplier"] is None
+    assert intents["152.11.13.2"]["source"] == "neighbor"
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)

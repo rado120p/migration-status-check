@@ -136,7 +136,11 @@ Two things this rests on:
 
 - **The whole value is overridden, not merged item by item.** A neighbour with its own
   `minimum-interval` does not inherit `multiplier` from the group. Merging per item would
-  produce an intent that appears at no level of the configuration in that form.
+  produce an intent that appears at no level of the configuration in that form. A single line
+  carries this — `_bfd_values(…) or inherited` — and **only**
+  `test_partial_override_of_group_does_not_inherit_the_missing_field` and its twin for
+  `protocols bgp` measure it: a neighbour that sets *both* fields cannot see the difference,
+  because both implementations agree for it.
 - **Junos `inherit` does not expand this hierarchy.** It expands `apply-groups`, not the
   protocol hierarchy. Verified against the lab on 2026‑07‑29, when group `CPE14` carried BFD
   and its neighbours had none even in the configuration fetched with `inherit` — had the
