@@ -65,7 +65,7 @@ Platí pro **každou** úlohu, i když to u ní není zopakované.
 
 ---
 
-## Úloha 1: Conformance test nesmí schovat přejmenovanou oblast (AR‑26)
+## Task 1: Conformance test nesmí schovat přejmenovanou oblast (AR‑26)
 
 Dnes `_facts_from_recorded_xml` volá `pytest.skip`, když fixture chybí.
 Přejmenování `RoutesCollector.name` tak shodí celý modul do skipu a sada hlásí
@@ -184,7 +184,7 @@ git commit -m "test(conformance): chybejici fixture je fail, ne skip (AR-26)"
 
 ---
 
-## Úloha 2: Šev collector→check pro BFD (AR‑27)
+## Task 2: Šev collector→check pro BFD (AR‑27)
 
 Roadmapa chtěla doplnit parametr `("junos", "bfd_session_state")` do
 `test_specific_check_sees_data`. **Ověřeno 2026‑07‑30, že to nejde:**
@@ -310,7 +310,7 @@ git commit -m "test(bfd): pokryt sev collector->check jmenem oblasti (AR-27)"
 
 ---
 
-## Úloha 3: Dva nediskriminující testy (AR‑28)
+## Task 3: Dva nediskriminující testy (AR‑28)
 
 Mutační test z 2026‑07‑30 zúžil zadání roadmapy: verze
 `test_device_scope_reports_state_without_intent` v `tests/checks/test_bfd.py`
@@ -478,7 +478,7 @@ git commit -m "test: opravit dva nediskriminujici testy (AR-28)"
 
 ---
 
-## Úloha 4: Inventory schema 4 — dvě čestná pole místo `active` (AR‑20)
+## Task 4: Inventory schema 4 — dvě čestná pole místo `active` (AR‑20)
 
 `ServiceEntry.active` se plní výhradně ze stavu routing-instance
 (`mx_parser.py:1245`, `active=instance.active if instance else True`), takže
@@ -703,7 +703,7 @@ Expected: test **FAILED** s mutantem (obě pole by četla týž klíč), po
 
 ---
 
-## Úloha 5: Parser čte `inactive` na `interface` a `unit` (AR‑18)
+## Task 5: Parser čte `inactive` na `interface` a `unit` (AR‑18)
 
 **Files:**
 - Modify: `mx_parser.py:119` (`InterfaceConfig`), `:1010` (`_parse_interfaces`),
@@ -956,7 +956,7 @@ git commit -m "feat(parser): cist inactive na interface a unit (AR-18)"
 
 ---
 
-## Úloha 6: Příznak `inactive` se dědí z kontejnerů (AR‑19)
+## Task 6: Příznak `inactive` se dědí z kontejnerů (AR‑19)
 
 Dnes si úroveň kontejneru a úroveň položky odporují: deaktivovat jednu VRF
 statiky vypustí, deaktivovat **všechny** VRF (`<routing-instances inactive>`)
@@ -1172,7 +1172,7 @@ git commit -m "feat(parser): dedit inactive z kontejneru dolu (AR-19)"
 
 ---
 
-## Úloha 7: `Scope` nese příznaky, snapshot schema 4 (AR‑21)
+## Task 7: `Scope` nese příznaky, snapshot schema 4 (AR‑21)
 
 Příznaky musí do snímku, jinak baseline svůj stav nenese a úloha 9 nemá co
 porovnávat.
@@ -1368,7 +1368,7 @@ git commit -m "feat(scope): Scope nese priznaky deaktivace, snapshot schema 4 (A
 
 ---
 
-## Úloha 8: Deaktivovaná služba SKIPuje na všech checcích (AR‑22)
+## Task 8: Deaktivovaná služba SKIPuje na všech checcích (AR‑22)
 
 **Files:**
 - Modify: `migration_validator/checks/base.py:113-141` (`run_check`)
@@ -1544,7 +1544,7 @@ git commit -m "feat(checks): deaktivovana sluzba SKIPuje na vsech checcich (AR-2
 
 ---
 
-## Úloha 9: Check `deactivation_state` (AR‑23)
+## Task 9: Check `deactivation_state` (AR‑23)
 
 `CheckContext` dnes nese baseline **data**, ne baseline **scope** — a příznak
 deaktivace leží na scopu. Bez něj se matice porovnat nedá, takže úloha nejdřív
@@ -2028,7 +2028,7 @@ git commit -m "feat(checks): novy check deactivation_state (AR-23)"
 
 ---
 
-## Úloha 10: Párování se deaktivací neřídí (AR‑24)
+## Task 10: Párování se deaktivací neřídí (AR‑24)
 
 Dnes to platí náhodou — `scoping/matcher.py` příznaky nečte, protože žádné
 nebyly. Po úloze 7 existují, takže to musí platit záměrně a být pokryté.
@@ -2129,7 +2129,7 @@ git commit -m "test(matcher): parovani se deaktivaci neridi (AR-24)"
 
 ---
 
-## Úloha 11: `StaticRouteStatusCheck` čte aktivitu routy (AR‑25)
+## Task 11: `StaticRouteStatusCheck` čte aktivitu routy (AR‑25)
 
 Collector u každé statiky ukládá `active` = zda má routa v tabulce hvězdičku
 (`collectors/routes.py:84`). Check to pole ignoruje, takže routa, kterou
@@ -2338,7 +2338,7 @@ git commit -m "feat(checks): staticka routa bez hvezdicky uz neprojde jako PASS 
 
 ---
 
-## Úloha 12: Regenerace inventory a fixture (AR‑29)
+## Task 12: Regenerace inventory a fixture (AR‑29)
 
 Až teď, protože předchozí úlohy mění formát i obsah.
 
