@@ -153,7 +153,8 @@ class InterfaceService:
     virtual_gw_ipv6_address: list[str]
     routing_instance: str | None
     protocol: list[str]
-    active: bool = True
+    routing_instance_active: bool = True
+    interface_active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
@@ -1242,7 +1243,9 @@ class JunosServiceParser:
             virtual_gw_ipv6_address=interface.virtual_gw_ipv6_addresses,
             routing_instance=instance.name if instance else None,
             protocol=protocols,
-            active=instance.active if instance else True,
+            routing_instance_active=instance.active if instance else True,
+            # Zdroj se doplni v AR-18; do te doby je rozhrani vzdy zive.
+            interface_active=True,
             bridge_domain=[
                 domain.name
                 for domain in bridge_domains
@@ -2180,7 +2183,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 3
+INVENTORY_SCHEMA_VERSION = 4
 
 
 def create_yaml_data(
@@ -2215,7 +2218,8 @@ def clean_service_dict(
         "virtual_gw_ipv4_address",
         "virtual_gw_ipv6_address",
         "routing_instance",
-        "active",
+        "routing_instance_active",
+        "interface_active",
         "protocol",
         "bgp_neighbor",
         "bridge_domain",

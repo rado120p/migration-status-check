@@ -58,7 +58,8 @@ class ServiceEntry:
     virtual_gw_ipv4_address: list[str] = field(default_factory=list)
     virtual_gw_ipv6_address: list[str] = field(default_factory=list)
     routing_instance: str | None = None
-    active: bool = True
+    routing_instance_active: bool = True
+    interface_active: bool = True
     protocol: list[str] = field(default_factory=list)
     bgp_neighbor: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
@@ -89,7 +90,8 @@ class ServiceEntry:
             virtual_gw_ipv4_address=_as_list(data.get("virtual_gw_ipv4_address")),
             virtual_gw_ipv6_address=_as_list(data.get("virtual_gw_ipv6_address")),
             routing_instance=_as_optional_str(data.get("routing_instance")),
-            active=bool(data.get("active", True)),
+            routing_instance_active=bool(data.get("routing_instance_active", True)),
+            interface_active=bool(data.get("interface_active", True)),
             protocol=_as_list(data.get("protocol")),
             bgp_neighbor=_as_list(data.get("bgp_neighbor")),
             bridge_domain=_as_list(data.get("bridge_domain")),
@@ -109,7 +111,8 @@ class ServiceEntry:
             "virtual_gw_ipv4_address": list(self.virtual_gw_ipv4_address),
             "virtual_gw_ipv6_address": list(self.virtual_gw_ipv6_address),
             "routing_instance": self.routing_instance,
-            "active": self.active,
+            "routing_instance_active": self.routing_instance_active,
+            "interface_active": self.interface_active,
             "protocol": list(self.protocol),
             "bgp_neighbor": list(self.bgp_neighbor),
             "bridge_domain": list(self.bridge_domain),
@@ -125,7 +128,7 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 3
+INVENTORY_SCHEMA_VERSION = 4
 
 
 def load_inventory(path: str | Path) -> Inventory:
