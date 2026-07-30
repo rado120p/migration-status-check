@@ -407,6 +407,30 @@ class JunosServiceParser:
         self,
         node: etree._Element,
     ) -> bool:
+        """Deaktivace se dědí z kontejneru dolů.
+
+        Junos označí atributem `inactive` jen ten uzel, na kterém se příkaz
+        `deactivate` vykonal. `deactivate routing-instances` proto označí
+        kontejner a jednotlivé `instance` pod ním zůstanou bez atributu —
+        ale neplatí ani jedna z nich.
+
+        Bez chození po předcích si obě úrovně odporují: deaktivovat jednu VRF
+        statiky vypustí, deaktivovat všechny je nechá naživu. To je chyba za
+        jakékoli politiky.
+        """
+        current: etree._Element | None = node
+
+        while current is not None:
+            if self._node_is_inactive(current):
+                return True
+            current = current.getparent()
+
+        return False
+
+    def _node_is_inactive(
+        self,
+        node: etree._Element,
+    ) -> bool:
         # Klasický Junos XML formát:
         # <instance inactive="inactive">
         if (node.get("inactive") or "").lower() == "inactive":

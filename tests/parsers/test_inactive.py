@@ -109,3 +109,100 @@ def test_deactivated_interface_does_not_touch_routing_instance_flag(module, pars
     services = _services(module, parser_class, DEACTIVATED_INTERFACE)
 
     assert _by_name(services, "ge-0/0/4.0").routing_instance_active is True
+
+
+DEACTIVATED_CONTAINERS = """
+<configuration>
+  <interfaces inactive="inactive">
+    <interface>
+      <name>ge-0/0/2</name>
+      <unit>
+        <name>113</name>
+        <description>L3VPN-CPE13-NNI</description>
+        <family>
+          <inet>
+            <address><name>198.11.13.1/30</name></address>
+          </inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances inactive="inactive">
+    <instance>
+      <name>L3VPN-TEST</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>ge-0/0/2.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>10.9.9.0/24</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+      <protocols>
+        <bgp>
+          <group>
+            <name>CPE13</name>
+            <neighbor><name>198.11.13.2</name></neighbor>
+          </group>
+        </bgp>
+      </protocols>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_interfaces_container_flags_every_interface(module, parser_class):
+    """<interfaces inactive> označí všechna rozhraní pod sebou.
+
+    Zabíjí mutanta: _is_inactive, které se dívá jen na uzel a ne na předky.
+    Bez dědění vrátí interface_active=True, protože samo <interface>
+    atribut nemá.
+    """
+    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+
+    assert _by_name(services, "ge-0/0/2.113").interface_active is False
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_routing_instances_container_flags_the_service(module, parser_class):
+    """<routing-instances inactive> označí služby všech VRF pod sebou."""
+    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+
+    assert _by_name(services, "ge-0/0/2.113").routing_instance_active is False
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_routing_instances_container_drops_static_routes(module, parser_class):
+    """Statiky pod deaktivovaným kontejnerem se vypustí ze záměru.
+
+    Roadmapa to ověřila na `<routing-instances inactive="inactive">`: statika
+    ('L3VPN-TEST.inet.0', '10.9.9.0/24') se dnes vrací jako živá. Deaktivovaná
+    VRF žádnou routu do tabulky nedá, takže záměr z ní vzniknout nesmí -
+    jinak check hlásí FAIL za routu, kterou nikdo nechce.
+
+    Zabíjí mutanta: dědění zavedené jen pro rozhraní a ne pro statiky.
+    """
+    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+
+    routes = [route for service in services for route in service.static_route]
+
+    assert routes == [], f"deaktivovaný kontejner vyrobil záměr: {routes}"
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_bgp_container_drops_neighbors_and_bfd(module, parser_class):
+    """<protocols>/<bgp> pod deaktivovanou VRF nedá souseda ani BFD záměr.
+
+    Zabíjí mutanta: dědění zavedené jen pro statiky a ne pro BGP.
+    """
+    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+
+    peers = [peer for service in services for peer in service.bgp_neighbor]
+    bfd = [intent for service in services for intent in service.bfd]
+
+    assert peers == [], f"deaktivovaný kontejner vyrobil BGP záměr: {peers}"
+    assert bfd == [], f"deaktivovaný kontejner vyrobil BFD záměr: {bfd}"
