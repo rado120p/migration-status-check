@@ -76,6 +76,42 @@ def test_changed_next_hop_is_degraded_and_carries_the_old_value():
     assert findings[0].baseline_value == "152.11.13.2"
 
 
+def test_ecmp_next_hops_in_a_different_order_are_not_a_change():
+    """AR-12: pri ECMP je hodnotou mnozina next-hopu, ne jejich poradi v XML.
+
+    Junos poradi <nh> negarantuje ani mezi platformami, ani mezi verzemi -
+    a check prochazi presne tu hranici (junos -> junos-evo). Bez setrizeni by
+    tenhle par dal WARN 'next-hop se zmenil 152.11.13.9, 152.11.13.2 ->
+    152.11.13.2, 152.11.13.9', tedy hlaseni o zmene, ktera nenastala.
+
+    Fakta se skladaji rucne, protoze zadna nahravka multi-nh routu nema -
+    kazde rt-entry v obou captureech nese presne jedno <to>. Editovat kvuli
+    tomu fixture nelze, jsou to doslovne odposlechy z laborky.
+    """
+    def _ecmp(next_hops, vias):
+        return {
+            "inet.0": {
+                "198.62.1.0/29": {
+                    "next_hop": list(next_hops),
+                    "via": list(vias),
+                    "active": True,
+                }
+            }
+        }
+
+    findings = StaticRouteStatusCheck().run(
+        _ctx(
+            _ecmp(("152.11.13.9", "152.11.13.2"), ("et-0/0/8.14", "et-0/0/8.13")),
+            _ecmp(("152.11.13.2", "152.11.13.9"), ("et-0/0/8.13", "et-0/0/8.14")),
+        )
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "152.11.13.2, 152.11.13.9"
+    assert findings[0].baseline_value == "152.11.13.2, 152.11.13.9"
+
+
 def test_route_that_vanished_from_config_and_table_is_broken():
     """Routa vyrazena z konfigurace se do selektoru subjektu nedostane.
 

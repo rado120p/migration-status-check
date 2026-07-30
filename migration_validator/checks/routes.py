@@ -47,10 +47,19 @@ def prefix_family(prefix: str) -> int | None:
 
 
 def _next_hop_text(data: dict[str, Any] | None) -> str | None:
+    """Hodnotou je mnozina next-hopu, ne jejich poradi v XML (AR-12).
+
+    Pri ECMP nese rt-entry vic <nh> a Junos jejich poradi negarantuje ani
+    mezi platformami, ani mezi verzemi - a tenhle check prochazi presne tu
+    hranici (junos -> junos-evo). Bez sorted() by dva snimky s tymiz
+    next-hopy v jinem poradi daly falesny WARN 'next-hop se zmenil
+    A, B -> B, A', protoze vetev ZMENA porovnava `was != now` jako stringy.
+    Setrizeny vypis je navic deterministicky.
+    """
     if data is None:
         return None
     next_hops = data.get("next_hop") or []
-    return ", ".join(next_hops) if next_hops else "-"
+    return ", ".join(sorted(next_hops)) if next_hops else "-"
 
 
 def _flatten(routes: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:

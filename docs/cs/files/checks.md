@@ -328,9 +328,16 @@ měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zav�
 next-hopu čte jako *změněná* routa — jeden řádek se sloupcem `ZMENA` — ne jako „routa zmizela
 a jiná přibyla".
 
+**Při ECMP je hodnotou celá množina next-hopů, ne jejich pořadí v XML.** `_next_hop_text()`
+je proto `", ".join(sorted(...))`: Junos pořadí `<nh>` negarantuje ani mezi platformami, ani
+mezi verzemi — a tenhle check prochází právě tu hranici (`junos` → `junos-evo`). Bez setřídění
+by dva snímky s týmiž next-hopy v jiném pořadí daly falešný
+`WARN … next-hop se zmenil A, B -> B, A`, protože větev `ZMENA` porovnává hodnoty jako
+řetězce. Setříděný výpis je navíc deterministický.
+
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| v tabulce, next-hop shodný nebo bez baseline | `ok` | PASS | next-hopy oddělené čárkou (`-` když žádný) |
+| v tabulce, next-hop shodný nebo bez baseline | `ok` | PASS | next-hopy setříděné a oddělené čárkou (`-` když žádný) |
 | v tabulce, next-hop se proti baseline změnil | `degraded` | WARN | nový next-hop, `ZMENA` nese starý |
 | nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
 | v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |

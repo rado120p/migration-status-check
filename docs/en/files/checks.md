@@ -342,9 +342,16 @@ baseline's measurement. Each closes one gap:
 next-hop change reads as a *changed* route — one row with a `ZMENA` column — rather than
 "one route vanished and another appeared".
 
+**Under ECMP the value is the whole *set* of next hops, not their order in the XML.** That is
+why `_next_hop_text()` is `", ".join(sorted(...))`: Junos guarantees no `<nh>` ordering across
+platforms or releases — and this check spans exactly that boundary (`junos` → `junos-evo`).
+Without the sort, two snapshots reporting the same next hops in a different order would produce
+a spurious `WARN … next-hop se zmenil A, B -> B, A`, because the `ZMENA` branch compares the
+values as strings. A sorted rendering is deterministic on top of that.
+
 | situation | Outcome | status | `value` |
 |---|---|---|---|
-| in the table, next hop unchanged or no baseline | `ok` | PASS | next hops joined by commas (`-` when none) |
+| in the table, next hop unchanged or no baseline | `ok` | PASS | next hops sorted and joined by commas (`-` when none) |
 | in the table, next hop changed vs. baseline | `degraded` | WARN | new next hop; `ZMENA` carries the old one |
 | configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
 | present in baseline, absent from subject | `broken` | FAIL | `chybi` |
