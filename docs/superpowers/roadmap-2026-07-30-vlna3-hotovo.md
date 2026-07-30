@@ -130,12 +130,63 @@ bude.
 
 Vlastní spec, mimo rozsah téhle vlny.
 
-### 4. Dokumentační dluh mimo rozsah úlohy 12
+### 4. Nepokryté cesty deaktivace
 
-`docs/cs/files/models.md:56` a `docs/en/files/models.md:56` pořád píšou
-`INVENTORY_SCHEMA_VERSION = 3` a popisují jediné pole `active` — nebyly
-v seznamu souborů k opravě pro tuhle úlohu (ten byl `reference.md` a
-`files/parsers.md`, oba jazyky), a oprava by otevřela širší audit celého
-`models.md` (pole `active` → `routing_instance_active`/`interface_active`
-na víc místech, ne jen řádek 56). Zaznamenáno, ne opraveno — příští drobná
-úloha na dokumentaci.
+Dvě mezery, obě nalezené až závěrečným review celé větve:
+
+- **Top-level `<protocols inactive>` / `<bgp inactive>` nemá test.**
+  `tests/parsers/test_inactive.py` je procvičuje jen vnořené pod
+  deaktivovanou `routing-instances`. AR‑19 ale ty kontejnery jmenuje přímo
+  a vede k nim **samostatná cesta** — `_parse_default_bgp_neighbors()`
+  a `self.default_bfd` pro globální sousedy. Chce to fixture s top-level
+  `<protocols inactive="inactive">` a asertaci na prázdné `bfd`
+  a `bgp_neighbor` u služby bez routing-instance.
+- **Top-level `<routing-options inactive>` zahodí globální statiky beze
+  stopy.** Služby v default instanci si nechají
+  `routing_instance_active: true`, takže se deaktivace nikde neprojeví.
+  Preexistující, mimo rozsah téhle vlny (spec, „Mimo rozsah" — příznaky na
+  hlubších úrovních), ale patří sem, protože je to tatáž díra jako bod 1.
+
+### 5. Drobnosti, které nikdo neblokoval
+
+- `_parse_interfaces` má `physical_inactive or self._is_inactive(unit_node)`
+  — první disjunkt je po AR‑19 redundantní, protože chůze po předcích
+  z uzlu `unit` na fyzické rozhraní stejně dojde. Symetrické v obou
+  parserech, nulové riziko, jen šum.
+- `checks/routes.py` čte `subject.get("active", True)`, tedy default
+  **aktivní**. Dnes bezpečné (schema snímku je tvrdě hlídané, takže klíč
+  vždycky existuje), ale je to jediné místo, kde by se regrese collectoru
+  přečetla jako PASS místo jako chybějící kontrola.
+- Volání `_is_inactive` na uzlech `rib` a `group` mají jen nepřímé pokrytí
+  přes jednu sdílenou fixture. Důležité, kdyby budoucí úloha měnila
+  atributovou sémantiku `_node_is_inactive`.
+- Docstring testu `test_inactive_route_that_was_inactive_before_passes`
+  slibuje širšího mutanta, než jaký ten test doopravdy zabíjí. Oprava je
+  jednořádková, v docstringu.
+
+---
+
+## Pravidlo do plánu vlny 4
+
+Vlna 2 nechala do plánu vlny 3 zapsat pravidlo, že **každý předepsaný test
+musí říct, kterou špatnou implementaci zabíjí**. Plán vlny 3 to pravidlo
+obsahoval — a přesto dvakrát předepsal test, který v docstringu mutanta
+jmenoval a nezabíjel ho:
+
+| kde | co bylo špatně | kdo to našel |
+|---|---|---|
+| `test_scope_reports_why_it_is_deactivated` (AR‑21) | chyběly asertace na `is_deactivated`, takže mutant „postav `is_deactivated` jen na `routing_instance_active`" prošel | reviewer úlohy 7 |
+| `test_deactivated_service_shows_the_reason_in_the_report` (AR‑23) | fixture nesla důvod i ve `message`, takže mutant na `value` neměl co shodit | sám implementer úlohy 9 |
+
+Poučení není „napsat to pravidlo důrazněji". Zapsané pravidlo obojí případ
+nezachytilo, protože **autor plánu mutanta nikdy nespustil** — jen ho popsal.
+
+**Pravidlo: u každého testu, který plán předepisuje doslova, se mutant pustí
+už při psaní plánu, ne až při jeho provádění.** Když to nejde (test se
+opírá o kód, který ještě neexistuje), plán to musí říct nahlas a uložit
+mutanta jako povinný krok úlohy — což je přesně to, co u obou zmíněných
+testů zafungovalo jako záchranná síť.
+
+A jedna past, na kterou doplatila úloha 5: **mutantí bloky končí
+`git checkout <soubor>`, takže se pouští až po commitu.** Před commitem si
+tím implementace smaže vlastní práci.
