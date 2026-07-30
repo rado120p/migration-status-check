@@ -10,7 +10,7 @@ from migration_validator.checks.base import CheckContext
 from migration_validator.checks.routes import StaticRouteStatusCheck
 from migration_validator.config import default_config
 from migration_validator.models.result import Outcome
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 CONFIGURED = [
     {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]},
@@ -195,16 +195,48 @@ def test_service_without_static_routes_gets_no_row():
     assert findings == []
 
 
-def test_device_scope_reports_state_without_intent():
-    """Bez inventory neni zamer znam, takze se nehlasi 'nakonfigurovano a chybi'."""
+def test_device_scope_does_not_claim_a_route_is_missing_from_the_table():
+    """Device scope nezna zamer, takze 'neni v tabulce' rict nesmi (AR-17).
+
+    Zabiji mutanta: odebrani 'and not is_device' z checks/routes.py:130.
+    Aby ta vetev mela co rozhodovat, musi byt 'configured' pravda - proto se
+    tu stavi scope s kind="device" A NEPRAZDNYMI static_routes. Puvodni test
+    pouzival device_scope(), ktery ma vzdy prazdne selektory, takze
+    'configured' bylo vzdy False a cela podminka nepravda bez ohledu na
+    is_device.
+    """
+    scope = Scope(
+        id="dev:172.20.20.4",
+        kind="device",
+        key=None,
+        selectors=Selectors(static_routes=list(CONFIGURED)),
+    )
     ctx = CheckContext(
-        scope=device_scope(),
-        subject={"routes": _installed()},
-        baseline=None,
+        scope=scope,
+        subject={"routes": {}},
+        baseline={"routes": _installed()},
         config=default_config(),
     )
 
     findings = StaticRouteStatusCheck().run(ctx)
 
     assert len(findings) == 1
-    assert findings[0].outcome is Outcome.OK
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "chybi", (
+        "device scope ohlasil 'neni v tabulce' - to tvrdi, ze zna zamer, "
+        "a ten v nem znat neni"
+    )
+
+
+def test_service_scope_does_claim_a_route_is_missing_from_the_table():
+    """Protejsek predchoziho testu - bez nej by 'chybi' slo vratit vzdycky.
+
+    Zabiji mutanta: zamena cele podminky na 'False' v checks/routes.py:130.
+    """
+    ctx = _ctx({}, _installed())
+
+    findings = StaticRouteStatusCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "neni v tabulce"

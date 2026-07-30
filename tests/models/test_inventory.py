@@ -230,6 +230,10 @@ def test_mapping_list_rejects_scalars(tmp_path):
 
     _as_list by z {'rib': ...} udelal jeho str() a check by pak hledal
     klice v retezci.
+
+    Vzor je zamerne cela hlaska vcetne jmena typu: samotne "mapping" sedi
+    i na jmeno adresare z tmp_path, takze by test prosel i proti vyjimce,
+    ktera s tou kontrolou nema nic spolecneho.
     """
     path = tmp_path / "spatna.yml"
     path.write_text(
@@ -239,5 +243,5 @@ def test_mapping_list_rejects_scalars(tmp_path):
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="mapping"):
+    with pytest.raises(ValueError, match=r"ocekavan mapping v seznamu, nalezeno str"):
         load_inventory(path)
