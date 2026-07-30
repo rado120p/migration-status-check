@@ -280,3 +280,155 @@ def test_next_hop_in_foreign_vrf_does_not_match(module, parser_class):
     services = _parse(module, parser_class, WRONG_VRF)
 
     assert all(not service.static_route for service in services)
+
+
+# ----------------------------------------------------------------------
+# Deaktivovane kontejnery
+#
+# Tyhle tvary v laborce nejsou: ve vsech ctyrech captureech z 2026-07-29
+# nese inactive="inactive" jen <interface>, nikdy static, rib ani
+# routing-options. Skladaji se proto rucne - je to presne ten tvar, ktery
+# v konfiguraci nechá junosi `deactivate`, tedy standardni idiom pro
+# vyrazeni konfigurace pri migraci.
+# ----------------------------------------------------------------------
+
+INTERFACES = """
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet><address><name>152.11.13.1/29</name></address></inet>
+          <inet6><address><name>2001:abcd:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+"""
+
+# Deaktivovany je `static` i `rib`; routa v instanci zustava ziva a slouzi
+# jako kontrola, ze guard nevyradil vic, nez mel.
+DEACTIVATED_CONTAINERS = f"""
+<configuration>
+{INTERFACES}
+  <routing-options>
+    <static inactive="inactive">
+      <route>
+        <name>198.62.1.0/29</name>
+        <next-hop>152.11.13.2</next-hop>
+      </route>
+    </static>
+    <rib inactive="inactive">
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:aaaa::/64</name>
+          <next-hop>2001:abcd:11:13::b</next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+DEACTIVATED_ROUTING_OPTIONS = f"""
+<configuration>
+{INTERFACES}
+  <routing-options inactive="inactive">
+    <static>
+      <route>
+        <name>198.62.1.0/29</name>
+        <next-hop>152.11.13.2</next-hop>
+      </route>
+    </static>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options inactive="inactive">
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+def _configured(parser_class, xml: str) -> set[tuple[str, str]]:
+    parser = parser_class(etree.XML(xml.encode()))
+    parser.parse()
+    return {(route.rib, route.prefix) for route in parser.static_routes}
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_static_stanza_yields_no_route(module, parser_class):
+    """Deaktivovany `static` nema vyrobit zivy zamer.
+
+    Jinak check hlasi 'FAIL ... neni v tabulce' za routu, kterou operator
+    vedome vyradil - falesny rozpor je jediny vystup, ktery podryva celou
+    pointu porovnavani konfigurace se skutecnosti.
+    """
+    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
+
+    assert ("inet.0", "198.62.1.0/29") not in found
+    # Kontrola, ze guard nesebral i to, co ma zustat.
+    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_rib_yields_no_route(module, parser_class):
+    """Deaktivovany `rib` bere s sebou i `static` pod sebou."""
+    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
+
+    assert ("inet6.0", "2001:aaaa::/64") not in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_global_routing_options_yields_no_route(module, parser_class):
+    """Deaktivovane globalni `routing-options` vyradi statiky default instance."""
+    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+
+    assert ("inet.0", "198.62.1.0/29") not in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_instance_routing_options_yields_no_route(module, parser_class):
+    """Deaktivovane `routing-options` uvnitr instance - druhy, samostatny guard.
+
+    Jsou to dve ruzne smycky v `_parse_static_routes`, takze jeden test na
+    obe by nechal jeden z guardu nepokryty.
+    """
+    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+
+    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") not in found

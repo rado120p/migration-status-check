@@ -121,6 +121,7 @@ orchestration and pairing, not parsing.
 | `test_end_to_end.py::test_evpn_checks_produce_real_verdicts_on_real_data` | the EVPN fact schema must not silently slide into all-`SKIP` |
 | `scoping/test_matcher.py::test_ambiguity_never_guesses` | unpaired beats a silently wrong match |
 | `scoping/test_matcher.py::test_ambiguous_under_one_key_is_not_paired_under_a_sibling_key` | a scope must not end up in both `pairs` and `unmatched` |
+| `parsers/test_static_routes.py::test_deactivated_*` and `parsers/test_bfd_config.py::test_deactivated_*` | `deactivate` must not produce a live intent — a false `FAIL` is worse than none |
 | `checks/test_base.py::test_missing_data_never_passes` | the overriding rule of the whole tool |
 | `models/test_result.py::test_degraded_is_warn_even_when_critical` | "partial success = WARN" holds even at `critical` |
 | the `cli` tests around codes 0/1/2 | *the tool failed* ≠ *a test failed* |

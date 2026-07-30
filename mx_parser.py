@@ -256,16 +256,6 @@ def rib_instance(rib: str) -> str | None:
     return head or None
 
 
-def _bfd_node(node: etree._Element | None) -> etree._Element | None:
-    """Element bfd-liveness-detection přímo pod daným uzlem, bez sestupu."""
-    if node is None:
-        return None
-
-    found = node.xpath("./*[local-name()='bfd-liveness-detection']")
-
-    return found[0] if found else None
-
-
 def _bfd_values(
     node: etree._Element | None,
     source: str,
@@ -605,6 +595,12 @@ class JunosServiceParser:
         přímo pod routing-options/static, IPv6 pod
         routing-options/rib <jméno>.inet6.0/static — ale RPC ten rozdíl nezná.
         Parser ho proto zahladí tady a dál se nešíří.
+
+        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) se
+        přeskočí celý, stejně jako se už přeskakuje jednotlivá `route`
+        a `instance`. Bez toho by `deactivate` — standardní idiom pro
+        vyřazení konfigurace při migraci — vyrobil živý záměr a check by
+        hlásil `FAIL … neni v tabulce` za routu, kterou nikdo nechce.
         """
 
         routes: list[StaticRoute] = []
@@ -612,6 +608,9 @@ class JunosServiceParser:
         for options_node in self.config_xml.xpath(
             "./*[local-name()='routing-options']"
         ):
+            if self._is_inactive(options_node):
+                continue
+
             routes.extend(
                 self._static_routes_under(options_node, None)
             )
@@ -634,6 +633,9 @@ class JunosServiceParser:
             for options_node in instance_node.xpath(
                 "./*[local-name()='routing-options']"
             ):
+                if self._is_inactive(options_node):
+                    continue
+
                 routes.extend(
                     self._static_routes_under(
                         options_node,
@@ -666,6 +668,9 @@ class JunosServiceParser:
         for rib_node in options_node.xpath(
             "./*[local-name()='rib']"
         ):
+            if self._is_inactive(rib_node):
+                continue
+
             rib_name = first_text(
                 rib_node,
                 "./*[local-name()='name']/text()",
@@ -684,6 +689,11 @@ class JunosServiceParser:
         routes: list[StaticRoute] = []
 
         for rib_name, static_node in containers:
+            # Jediné místo pro oba tvary: `static` přímo pod
+            # routing-options i `static` uvnitř `rib`.
+            if self._is_inactive(static_node):
+                continue
+
             for route_node in static_node.xpath(
                 "./*[local-name()='route']"
             ):
@@ -716,6 +726,33 @@ class JunosServiceParser:
 
         return routes
 
+    def _bfd_node(
+        self,
+        node: etree._Element | None,
+    ) -> etree._Element | None:
+        """Element bfd-liveness-detection přímo pod daným uzlem, bez sestupu.
+
+        Deaktivovaná stanza se chová, jako by tam nebyla. `deactivate` je
+        standardní junosí idiom pro vyřazení konfigurace při migraci, takže
+        záměr z ní vzniknout nesmí — jinak by nástroj hlásil `FAIL … bez
+        session` za ochranu, kterou operátor vědomě vypnul, a to je právě
+        ten jeden výstup, který podrývá celou pointu porovnávání
+        konfigurace se skutečností.
+
+        Návrat None navíc pustí dědění o úroveň výš: soused
+        s deaktivovaným BFD zdědí pravidlo skupiny, což je právě to, co
+        udělá i Junos.
+        """
+        if node is None:
+            return None
+
+        found = node.xpath("./*[local-name()='bfd-liveness-detection']")
+
+        if not found or self._is_inactive(found[0]):
+            return None
+
+        return found[0]
+
     def _parse_bfd(
         self,
         node: etree._Element,
@@ -737,7 +774,7 @@ class JunosServiceParser:
 
         for bgp_node in node.xpath(bgp_xpath):
             protocol_level = _bfd_values(
-                _bfd_node(bgp_node),
+                self._bfd_node(bgp_node),
                 "bgp",
             )
 
@@ -758,7 +795,7 @@ class JunosServiceParser:
                     (
                         group_node,
                         _bfd_values(
-                            _bfd_node(group_node),
+                            self._bfd_node(group_node),
                             "group",
                         )
                         or protocol_level,
@@ -781,7 +818,7 @@ class JunosServiceParser:
                         continue
 
                     values = _bfd_values(
-                        _bfd_node(neighbor_node),
+                        self._bfd_node(neighbor_node),
                         "neighbor",
                     ) or inherited
 

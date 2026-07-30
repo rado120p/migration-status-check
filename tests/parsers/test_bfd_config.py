@@ -147,6 +147,52 @@ NO_BFD = f"""
 </configuration>
 """
 
+# Deaktivovane stanzy v laborce nejsou - ve vsech ctyrech captureech
+# z 2026-07-29 nese inactive="inactive" jen <interface>, nikdy
+# bfd-liveness-detection. Tvar se proto sklada rucne; je to presne to, co
+# v konfiguraci nechá junosi `deactivate`.
+DEACTIVATED_GROUP_BFD = f"""
+<configuration>
+{INTERFACES}
+  <protocols>
+    <bgp>
+      <group>
+        <name>CPE</name>
+        <bfd-liveness-detection inactive="inactive">
+          <minimum-interval>3000</minimum-interval>
+          <multiplier>3</multiplier>
+        </bfd-liveness-detection>
+        <neighbor><name>152.11.13.2</name></neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
+DEACTIVATED_NEIGHBOR_BFD = f"""
+<configuration>
+{INTERFACES}
+  <protocols>
+    <bgp>
+      <group>
+        <name>CPE</name>
+        <bfd-liveness-detection>
+          <minimum-interval>3000</minimum-interval>
+          <multiplier>3</multiplier>
+        </bfd-liveness-detection>
+        <neighbor>
+          <name>152.11.13.2</name>
+          <bfd-liveness-detection inactive="inactive">
+            <minimum-interval>300</minimum-interval>
+            <multiplier>5</multiplier>
+          </bfd-liveness-detection>
+        </neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
 
 def _bfd_by_peer(module, parser_class, xml: str) -> dict[str, dict]:
     services = parser_class(etree.XML(xml.encode())).parse()
@@ -196,3 +242,31 @@ def test_no_bfd_means_no_intent(module, parser_class):
     intents = _bfd_by_peer(module, parser_class, NO_BFD)
 
     assert intents == {}
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_bfd_stanza_yields_no_intent(module, parser_class):
+    """Deaktivovana stanza je totez, jako kdyby tam nebyla.
+
+    `deactivate` je standardni idiom pro vyrazeni konfigurace pri migraci.
+    Kdyby z nej vznikl zivy zamer, check by hlasil 'FAIL ... bez session'
+    za ochranu, kterou operator vedome vypnul.
+    """
+    intents = _bfd_by_peer(module, parser_class, DEACTIVATED_GROUP_BFD)
+
+    assert intents == {}
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_neighbor_bfd_falls_back_to_group(module, parser_class):
+    """Deaktivovana uroven neprepisuje, jen zmizi - dedeni pokracuje vys.
+
+    Presne to udela i Junos: soused, kterym je bfd-liveness-detection
+    vyrazene, spada pod pravidlo skupiny.
+    """
+    intents = _bfd_by_peer(module, parser_class, DEACTIVATED_NEIGHBOR_BFD)
+
+    assert set(intents) == {"152.11.13.2"}
+    assert intents["152.11.13.2"]["minimum_interval"] == 3000
+    assert intents["152.11.13.2"]["multiplier"] == 3
+    assert intents["152.11.13.2"]["source"] == "group"

@@ -151,6 +151,47 @@ A service without a routing instance reaches into `self.default_bfd` (top-level
 
 ---
 
+## Deactivated configuration produces no intent
+
+`deactivate` is the standard Junos idiom for retiring configuration during a migration — the
+stanza stays in the file, but the device does not use it and the XML carries
+`inactive="inactive"`. The parser must therefore skip it **at every level** that intent is
+derived from; otherwise the validator would report `FAIL … neni v tabulce` or
+`FAIL … bez session` for something the operator deliberately turned off — and a *false*
+divergence is the one output that undermines the whole point of comparing configuration
+against reality.
+
+`_is_inactive()` recognises three forms: `inactive="inactive"`, `active="false"` and the
+namespaced YANG `active` attribute. It is checked on these nodes:
+
+| node | where | what would otherwise appear |
+|---|---|---|
+| `instance` | `_parse_static_routes()` skips it; `_parse_routing_instances()` records it with `active: false` | statics of a retired VRF |
+| `routing-options` | `_parse_static_routes()`, **both** loops (global and per instance) | every static at that level |
+| `rib` | `_static_routes_under()` | the statics of a whole table (typically IPv6) |
+| `static` | `_static_routes_under()`, one place covering `static` under `routing-options` and under `rib` alike | the statics of that container |
+| `route` | `_static_routes_under()` | a single static |
+| `group` | `_parse_bfd()` | the BFD intent of a whole group |
+| `neighbor` | `_parse_bfd()`, `_parse_bgp_neighbors()` | a BGP peer and its BFD |
+| `bfd-liveness-detection` | `_bfd_node()` | the BFD intent of that level |
+
+**On `bfd-liveness-detection` the skip has a second effect:** `_bfd_node()` returns `None`, so
+inheritance carries on one level up — a neighbour whose BFD is deactivated falls under the
+group's rule. That is exactly what Junos does too, so it is not a simplification but agreement
+with the device.
+
+**This is why `_bfd_node()` is a method rather than a module-level function.** It needs
+`self._is_inactive()`, and duplicating the attribute check inline would put the rule for "what
+counts as inactive" in two places.
+
+**The scope is deliberately narrow.** The `protocols` and `bgp` containers themselves are not
+checked — deactivating a whole `protocols bgp` is an operation the lab never exhibited, and
+adding an uncovered guard would only widen the surface without evidence. In all four captures
+from 2026‑07‑29 only `<interface>` carries `inactive="inactive"`, so none of the guards above
+discards anything on real data yet — which is why the tests use hand-built XML.
+
+---
+
 ## Where the two files differ
 
 The difference is concentrated in the detection of EVPN E-LAN and EVPN/VPLS instances:

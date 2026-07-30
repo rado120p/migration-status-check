@@ -144,6 +144,45 @@ v instanci do `instance.bfd`.
 
 ---
 
+## Deaktivovaná konfigurace nevyrábí záměr
+
+`deactivate` je standardní junosí idiom pro vyřazení konfigurace při migraci — stanza
+v souboru zůstane, ale zařízení ji nepoužívá a v XML nese `inactive="inactive"`. Parser ji
+proto musí přeskočit **na každé úrovni**, ze které se dělá záměr; jinak by validator hlásil
+`FAIL … neni v tabulce` nebo `FAIL … bez session` za něco, co operátor vypnul úmyslně —
+a falešný rozpor je jediný výstup, který podrývá celý smysl porovnávání konfigurace se
+skutečností.
+
+`_is_inactive()` rozpozná tři podoby: `inactive="inactive"`, `active="false"` i namespacovaný
+YANG atribut `active`. Kontroluje se na těchto uzlech:
+
+| uzel | kde | co by jinak vzniklo |
+|---|---|---|
+| `instance` | `_parse_static_routes()` přeskočí; `_parse_routing_instances()` ji zapíše s `active: false` | statiky vyřazené VRF |
+| `routing-options` | `_parse_static_routes()`, **obě** smyčky (globální i v instanci) | všechny statiky té úrovně |
+| `rib` | `_static_routes_under()` | statiky celé tabulky (typicky IPv6) |
+| `static` | `_static_routes_under()`, jedno místo pro `static` pod `routing-options` i pod `rib` | statiky toho kontejneru |
+| `route` | `_static_routes_under()` | jedna statika |
+| `group` | `_parse_bfd()` | BFD záměr celé skupiny |
+| `neighbor` | `_parse_bfd()`, `_parse_bgp_neighbors()` | BGP peer a jeho BFD |
+| `bfd-liveness-detection` | `_bfd_node()` | BFD záměr té úrovně |
+
+**U `bfd-liveness-detection` má přeskočení ještě druhý efekt:** `_bfd_node()` vrátí `None`,
+takže dědění pokračuje o úroveň výš — soused s deaktivovaným BFD spadne pod pravidlo skupiny.
+Přesně to udělá i Junos, takže to není zjednodušení, ale shoda se zařízením.
+
+**Kvůli tomuhle je `_bfd_node()` metoda, ne funkce modulu.** Potřebuje `self._is_inactive()`,
+a duplikovat kontrolu atributu inline by znamenalo mít pravidlo „co je neaktivní" na dvou
+místech.
+
+**Rozsah je záměrně omezený.** Kontejnery `protocols` a `bgp` samotné se nekontrolují —
+deaktivovat celý `protocols bgp` je operace, kterou laborka nikdy neukázala, a přidávat guard
+bez pokrytí by jen rozšířilo plochu bez důkazu. Ve všech čtyřech captureech z 2026‑07‑29 nese
+`inactive="inactive"` jen `<interface>`, takže žádný z guardů výše na reálných datech zatím
+nic nezahazuje — testy proto pracují s ručně složeným XML.
+
+---
+
 ## Kde se ty dva soubory liší
 
 Rozdíl je soustředěný do detekce EVPN E-LAN a EVPN/VPLS instancí:
