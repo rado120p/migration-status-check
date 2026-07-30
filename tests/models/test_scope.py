@@ -235,8 +235,11 @@ def test_scope_reports_why_it_is_deactivated():
 
     assert live.is_deactivated is False
     assert live.deactivation_reason is None
+    assert off_ri.is_deactivated is True
     assert off_ri.deactivation_reason == "RI deactivated"
+    assert off_if.is_deactivated is True
     assert off_if.deactivation_reason == "interface deactivated"
+    assert off_both.is_deactivated is True
     assert off_both.deactivation_reason == "RI + interface deactivated"
 
 
@@ -250,7 +253,11 @@ def test_scope_round_trips_deactivation_flags():
         routing_instance_active=True, interface_active=False,
     )
 
-    restored = Scope.from_dict(scope.to_dict())
+    serialized = scope.to_dict()
+    assert "routing_instance_active" in serialized
+    assert "interface_active" in serialized
+
+    restored = Scope.from_dict(serialized)
 
     assert restored.routing_instance_active is True
     assert restored.interface_active is False
