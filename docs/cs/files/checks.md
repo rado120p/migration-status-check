@@ -365,13 +365,22 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 | session existuje, stav `Up` | `ok` | PASS | `Up` |
 | session existuje, jiný stav | `broken` | FAIL | naměřený stav (`Down`, …) |
 | session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `bez konfigurace` |
-| session není a není ani záměr, ale v baseline byla | `broken` | FAIL | `BFD odstraneno` |
+| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `BFD odstraneno` |
+| session není, v baseline byla (device scope) | `broken` | FAIL | `session zmizela` |
 | záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
 
 **Vazba na stav BGP je záměrná, ne kosmetická.** BFD nemůže naběhnout, dokud neběží BGP,
 takže bez ní by služba se spadlým BGP dostala dva FAIL řádky za jednu příčinu. V ostrém běhu
 by se to opakovalo u každé nedojeté služby a operátor by si zvykl výpis přeskakovat.
+
+**`is_device` tady dělá práci** — na rozdíl od `routes.py`, kde je stejně vypadající podmínka
+nečinná. Do větve „není ani záměr" se v device scope chodí **vždycky**: bez inventory je
+`configured` nutně `False`. Bez rozlišení by tedy nástroj u každé zmizelé session tvrdil
+„v subjektu není nakonfigurované" o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17).
+Rozdíl je v **hodnotě**, ne jen v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku
+textový výpis nezobrazí. Je to týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY`
+v `routes.py`.
 
 **Na pořadí větví záleží:** `BFD odstraneno` se testuje **před** `BGP neni Established`.
 Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,

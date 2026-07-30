@@ -21,8 +21,17 @@ from migration_validator.models.result import Finding, Outcome, Severity
 
 NO_SESSION = "bez session"
 BGP_NOT_UP = "BGP neni Established"
-REMOVED = "BFD odstraneno"
 NO_INTENT = "bez konfigurace"
+
+# Dve konstanty na jeden stav "session byla v baseline, v subjektu neni",
+# stejne jako routes.py rozlisuje MISSING_FROM_TABLE a MISSING_ENTIRELY.
+# REMOVED je tvrzeni o zameru ("odstraneno z konfigurace") a to jde rict jen
+# v service scope. Device scope zadnou inventory nema, takze `configured` je
+# tam vzdy False a o konfiguraci nejde tvrdit nic (AR-17) - zbyva ciste stav
+# session. Rozdil musi byt v hodnote, ne jen v hlasce: do reportu jde sloupec
+# s hodnotou (F-7/AR-4), hlaska se v textovem vypisu neobjevi.
+REMOVED = "BFD odstraneno"
+SESSION_GONE = "session zmizela"
 
 
 @register
@@ -98,6 +107,19 @@ class BfdSessionStateCheck(Check):
             )
 
         if not configured:
+            if is_device:
+                # Bez inventory se netvrdi, ze konfigurace chybi (AR-17) -
+                # jen ze session, ktera v baseline byla, uz neexistuje.
+                return Finding(
+                    Outcome.BROKEN,
+                    f"{peer}: session byla v baseline ({was}), v subjektu neexistuje",
+                    label=label,
+                    family=family,
+                    value=SESSION_GONE,
+                    baseline_value=was,
+                    baseline=baseline,
+                )
+
             # Session byla v baseline, v subjektu neni ani zamer.
             # Migrace nema tise shodit ze stolu ochranu, ktera tam byla.
             return Finding(

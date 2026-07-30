@@ -379,7 +379,8 @@ The check requires **two areas**: `("bfd", "bgp")`.
 | session exists, state `Up` | `ok` | PASS | `Up` |
 | session exists, any other state | `broken` | FAIL | measured state (`Down`, …) |
 | session exists but is not in the service configuration (service scope) | `degraded` | WARN | `bez konfigurace` |
-| no session and no intent, but the baseline had one | `broken` | FAIL | `BFD odstraneno` |
+| no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `BFD odstraneno` |
+| no session, but the baseline had one (device scope) | `broken` | FAIL | `session zmizela` |
 | intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
 
@@ -387,6 +388,15 @@ The check requires **two areas**: `("bfd", "bgp")`.
 down, so without it a service with a dropped BGP session would collect two FAIL rows for one
 cause. In a live run that would repeat for every service that has not yet come up, and the
 operator would learn to skim past the listing.
+
+**`is_device` does real work here** — unlike in `routes.py`, where an identical-looking
+conjunct is inert. In a device scope the "no intent either" branch is **always** reached:
+without an inventory, `configured` is necessarily `False`. Without the distinction the tool
+would claim, for every vanished session, that it "is not configured in the subject" — about a
+configuration it cannot see in that mode at all (AR‑17). The difference is in the **value**,
+not merely in the message: the value column is what ships in the report (F‑7/AR‑4), while the
+message never appears in the text output. It is the same pattern as `MISSING_FROM_TABLE` vs
+`MISSING_ENTIRELY` in `routes.py`.
 
 **Branch order matters:** `BFD odstraneno` is tested **before** `BGP neni Established`. The
 reverse order would silently lose the case where the migration dropped protection that used

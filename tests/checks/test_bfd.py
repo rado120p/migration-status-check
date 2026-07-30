@@ -161,6 +161,35 @@ def test_family_comes_from_peer_address():
     assert findings[0].family == 6
 
 
+def test_device_scope_never_claims_anything_about_the_configuration():
+    """AR-17: bez inventory nejde tvrdit, ze BFD neni nakonfigurovane.
+
+    Device scope ma vzdy prazdne selektory, takze `configured` je False -
+    prave tudy se do vetve REMOVED chodi. `BFD odstraneno` i jeho hlaska
+    ale mluvi o konfiguraci, kterou nastroj v tomhle rezimu nevidi.
+    Sloupec s hodnotou je to, co jde do reportu (F-7/AR-4), takze stav-only
+    musi byt hodnota, ne jen hlaska.
+
+    Toto je test, jehoz absence tu vadu propustila: routes.py stejny rozdil
+    resi dvema konstantami, bfd.py mel jen jednu.
+    """
+    ctx = CheckContext(
+        scope=device_scope(),
+        subject={"bfd": {}, "bgp": {}},
+        baseline={"bfd": {"152.11.13.2": {"state": "Up"}}, "bgp": {}},
+        config=default_config(),
+    )
+
+    findings = BfdSessionStateCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "session zmizela"
+    assert findings[0].baseline_value == "Up"
+    assert "konfigurac" not in findings[0].message
+    assert "nakonfigurovan" not in findings[0].message
+
+
 def test_device_scope_reports_state_without_intent():
     """Bez inventory se nehlasi ani 'bez session', ani 'bez konfigurace'."""
     ctx = CheckContext(
