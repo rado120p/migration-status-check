@@ -275,10 +275,19 @@ neviditelný. Parametr se doplní; test musí ověřit, že check ten klíč
 
 - `test_mapping_list_rejects_scalars` — `match="mapping"` sedí i na jméno
   adresáře `tmp_path`. Dnes diskriminuje náhodou, ne návrhem. Zpřísnit vzor.
-- `test_device_scope_reports_state_without_intent` v testech routes **i** bfd
-  — `device_scope()` má vždy prázdné selektory, takže `configured` je `False`
-  bez ohledu na větvení. Test musí větvení skutečně procvičit, nebo být
-  nahrazený testem, který to umí.
+- `test_device_scope_reports_state_without_intent` — **jen ve verzi pro
+  routes.** Roadmapa tvrdila, že je nediskriminující v routes i bfd; mutační
+  test 2026‑07‑30 ukázal, že platí jen půlka:
+
+  | soubor | větev | mutant | výsledek |
+  |---|---|---|---|
+  | `checks/bfd.py:92` | `not configured and not is_device` | odebrat `and not is_device` | test **spadne** — diskriminuje, nechat být |
+  | `checks/routes.py:130` | `configured and not is_device` | odebrat `and not is_device` | **celý `tests/checks/test_routes.py` projde** — nepokryto |
+
+  Příčina rozdílu: verze pro routes vkládá routu, která v tabulce **je**,
+  takže se do větve `subject is None` vůbec nedostane. Nový test musí použít
+  scope s `kind="device"` a **neprázdnými** `static_routes`, aby bylo
+  `configured` pravda a `not is_device` mělo co rozhodovat.
 
 ### AR-29 — regenerace inventory a fixture
 
