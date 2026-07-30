@@ -76,14 +76,42 @@ def _fixture_paths(platform: str, collector) -> list[Path]:
     return paths
 
 
+@pytest.mark.parametrize("platform", ("junos", "junos-evo"))
+def test_every_collector_has_its_fixtures(platform):
+    """Jmena oblasti a jmena nahravek na disku se musi shodovat, oboustranne.
+
+    Zabiji mutanta: prejmenovani RoutesCollector.name na "routes_x". Bez teto
+    asertace by _facts_from_recorded_xml sahlo po neexistujici routes_x.xml,
+    zavolalo pytest.skip a cely modul by zmizel ze sady jako "19 skipped,
+    nula failu" - tedy presne opacny signal, nez jaky ma prejmenovany klic
+    vydat.
+
+    Osirela fixture je stejna chyba jako chybejici: znamena, ze se collector
+    prestal spoustet a nikdo si toho nevsiml.
+    """
+    expected = {
+        path.name
+        for collector in COLLECTORS
+        for path in _fixture_paths(platform, collector)
+    }
+    on_disk = {path.name for path in (RPC_ROOT / platform).glob("*.xml")}
+
+    assert expected == on_disk, (
+        f"{platform}: chybi {sorted(expected - on_disk)}, "
+        f"osirelo {sorted(on_disk - expected)}"
+    )
+
+
 def _facts_from_recorded_xml(platform: str) -> dict:
     """Fakta presne tak, jak by je vyrobil capture - bez rucniho dolepovani."""
     facts = {}
     for collector in COLLECTORS:
         merged: Any = None
         for path in _fixture_paths(platform, collector):
-            if not path.exists():
-                pytest.skip(f"chybi fixture {path}")
+            # Drive tu byl pytest.skip. Ten z prejmenovane oblasti udelal
+            # "19 skipped, nula failu" - tedy signal, ze je vsechno v poradku.
+            # Chybejici nahravka je chyba sady, ne duvod ji preskocit.
+            assert path.exists(), f"chybi fixture {path}"
             parsed = collector.parse(etree.parse(str(path)).getroot(), platform)
             merged = parsed if merged is None else _merge(merged, parsed)
         facts[collector.name] = merged
@@ -209,7 +237,14 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         ("junos-evo", "evpn_mac_count"),
         ("junos-evo", "evpn_esi_status"),
         ("junos-evo", "evpn_vpws_status"),
-        ("junos", "static_route_status"),
+        # ("junos", "static_route_status") schvalne chybi (AR-29). "Aspon
+        # jeden ne-SKIP" na junos statikach nedrzi seam - vyda ho i
+        # manufakturovany FAIL "neni v tabulce" ze ctenych intentu, kdyz
+        # oblast routes vubec neprecte. Po regeneraci se to jen prestehovalo:
+        # driv to byla deaktivovana L3VPN-CPE13-NNI, ted stejny efekt nese
+        # irb.4094/MGMT (routes.xml fixture pro junos MGMT.inet.0 nema).
+        # Skutecny seam drzi test_static_route_check_really_reads_the_routing_table
+        # na junos-evo, ktery vyzaduje PASS.
         ("junos-evo", "static_route_status"),
         # bfd_session_state schvalne jen pro junos-evo: fixture pro junos je
         # zamerne prazdny vypis (BGP je u obou peeru Idle), takze check tam

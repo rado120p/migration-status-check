@@ -472,3 +472,49 @@ def test_identity_without_routing_instance_is_none_not_indexerror():
     )
 
     assert _identity(scope)["routing_instance"] is None
+
+
+def _deactivated(snapshot):
+    """Oznaci vsechny service scopy snimku za deaktivovane."""
+    for scope in snapshot.scopes:
+        scope.interface_active = False
+    return snapshot
+
+
+def test_service_deactivated_on_both_sides_is_pass():
+    """Deaktivovano na obou stranach = PASS, ne SKIP - stav se nezmenil.
+
+    Ostatni checky SKIPnou (AR-22), projde jen OK z deactivation_state,
+    a Status.worst z jedine ne-SKIP hodnoty da PASS.
+
+    Zabiji mutanta: vyjmuti deactivation_state ze zkratky v run_check. Pak by
+    SKIPl i on, `reported` by byl prazdny a sluzba by spadla do SKIP - tedy
+    "nic se nezmerilo" misto "je to v poradku".
+    """
+    result = api.evaluate(
+        _deactivated(_new()), baseline=_deactivated(_old()), now=NOW
+    )
+
+    assert result.scopes
+    assert result.scopes[0].status is Status.PASS
+
+
+def test_service_deactivated_only_in_subject_is_fail():
+    """Bezela na starem zarizeni, na novem je deaktivovana - migrace nedokoncena.
+
+    Zabiji mutanta: zamena BROKEN za OK v teto vetvi deactivation.py. Bez
+    tohoto testu by "deaktivovano az ted" bylo k nerozeznani od
+    "deaktivovano i drive".
+    """
+    result = api.evaluate(_deactivated(_new()), baseline=_old(), now=NOW)
+
+    assert result.scopes
+    assert result.scopes[0].status is Status.FAIL
+
+
+def test_service_reactivated_after_migration_is_warn():
+    """V baseline deaktivovana, ted nahozena - zmena proti baseline."""
+    result = api.evaluate(_new(), baseline=_deactivated(_old()), now=NOW)
+
+    assert result.scopes
+    assert result.scopes[0].status is Status.WARN

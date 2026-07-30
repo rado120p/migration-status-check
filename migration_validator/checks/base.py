@@ -39,6 +39,9 @@ class CheckContext:
     baseline: dict[str, Any] | None
     config: CheckConfig
     failed_collectors: dict[str, str] = field(default_factory=dict)
+    # Priznak deaktivace lezi na scopu, ne ve faktech, takze bez baseline
+    # scopu nejde porovnat "deaktivovano i drive" proti "deaktivovano az ted".
+    baseline_scope: Scope | None = None
 
     @property
     def has_baseline(self) -> bool:
@@ -110,6 +113,11 @@ def _skip(check: Check, severity: Severity, message: str, value: str) -> list[Ch
     ]
 
 
+# Check, ktery deaktivaci hlasi, se sam preskocit nesmi - jinak by nebylo co
+# porovnat a sluzba by v reportu zmizela do SKIPu bez duvodu.
+DEACTIVATION_CHECK_ID = "deactivation_state"
+
+
 def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
     """Spusti check a prevede jeho Findings na CheckResults."""
     if not ctx.config.enabled(check.id):
@@ -130,6 +138,18 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
     if check.mode is Mode.COMPARE and not ctx.has_baseline:
         return _skip(
             check, severity, "porovnavaci check bez baseline snapshotu", "bez baseline"
+        )
+
+    # Poradi je soucast pozadavku: zkratka jde az za requires_inventory, takze
+    # v device scope preskoci uz ten - device scope inventory nema a nema tedy
+    # ani z ceho priznak vzit.
+    if check.id != DEACTIVATION_CHECK_ID and ctx.scope.is_deactivated:
+        reason = ctx.scope.deactivation_reason
+        return _skip(
+            check,
+            severity,
+            f"sluzba je v konfiguraci deaktivovana ({reason})",
+            reason,
         )
 
     for area in check.requires:

@@ -26,7 +26,8 @@ One entry = one interface and the service running on it.
 | `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address on IRB |
 | `virtual_gw_ipv6_address` | `list[str]` | IPv6 virtual-gateway-address on IRB |
 | `routing_instance` | `str \| None` | |
-| `active` | `bool` | |
+| `routing_instance_active` | `bool` | `False` when the routing instance is deactivated (`deactivate`) |
+| `interface_active` | `bool` | `False` when the interface is deactivated (`deactivate`) |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
 | `static_route` | `list[dict]` | intent from the configuration: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | intent from the configuration: `{peer, minimum_interval, multiplier, source}` |
@@ -53,10 +54,10 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
-The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 3`).
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 4`).
 `load_inventory()` **rejects any other value outright** rather than tolerating it.
 
-The reason is the same for both bumps: a missing field would not surface as an error but as
+The reason is the same for every bump: a missing field would not surface as an error but as
 a green service.
 
 - **1 → 2**: the address fields were renamed by family (`ip_address` →
@@ -67,6 +68,10 @@ a green service.
   neither, so `Selectors.static_routes` and `.bfd_peers` would stay empty, the checks would
   have nothing to compare against, and a configured route missing from the table would never
   be reported.
+- **3 → 4**: the single `active` field was split into `routing_instance_active` and
+  `interface_active` (AR‑20/AR‑21). A tolerant read of a stale file would default both to
+  `True`, so a deactivated service would look live and the checks would score FAIL/WARN
+  against it instead of SKIPping with the deactivation reason.
 
 After a version bump the inventory therefore has to be **regenerated with the parser**, not
 patched by hand.

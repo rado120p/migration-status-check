@@ -49,7 +49,7 @@ def test_save_and_load(tmp_path):
     save_snapshot(_snapshot(), path)
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["schema_version"] == 3
+    assert written["schema_version"] == 4
     assert written["device"]["platform"] == "junos"
 
     assert load_snapshot(path) == _snapshot()
@@ -81,8 +81,8 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_three():
-    assert SCHEMA_VERSION == 3
+def test_snapshot_version_is_four():
+    assert SCHEMA_VERSION == 4
 
 
 def test_old_snapshot_fails_loudly():

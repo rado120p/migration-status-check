@@ -6,7 +6,15 @@ checks.ifaces importuje checks.base, takze __init__ nesmi importovat ifaces.
 
 from __future__ import annotations
 
-from migration_validator.checks import bfd, bgp, evpn, ifaces, reachability, routes  # noqa: F401
+from migration_validator.checks import (  # noqa: F401
+    bfd,
+    bgp,
+    deactivation,
+    evpn,
+    ifaces,
+    reachability,
+    routes,
+)
 
 _LOADED = True
 

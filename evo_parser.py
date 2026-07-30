@@ -130,6 +130,7 @@ class InterfaceConfig:
     ipv6_addresses: list[str] = field(default_factory=list)
     virtual_gw_ipv4_addresses: list[str] = field(default_factory=list)
     virtual_gw_ipv6_addresses: list[str] = field(default_factory=list)
+    active: bool = True
 
 
 @dataclass
@@ -153,7 +154,8 @@ class InterfaceService:
     virtual_gw_ipv6_address: list[str]
     routing_instance: str | None
     protocol: list[str]
-    active: bool = True
+    routing_instance_active: bool = True
+    interface_active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
@@ -402,6 +404,30 @@ class JunosEvoAcxServiceParser:
         )
     
     def _is_inactive(
+        self,
+        node: etree._Element,
+    ) -> bool:
+        """Deaktivace se dědí z kontejneru dolů.
+
+        Junos označí atributem `inactive` jen ten uzel, na kterém se příkaz
+        `deactivate` vykonal. `deactivate routing-instances` proto označí
+        kontejner a jednotlivé `instance` pod ním zůstanou bez atributu —
+        ale neplatí ani jedna z nich.
+
+        Bez chození po předcích si obě úrovně odporují: deaktivovat jednu VRF
+        statiky vypustí, deaktivovat všechny je nechá naživu. To je chyba za
+        jakékoli politiky.
+        """
+        current: etree._Element | None = node
+
+        while current is not None:
+            if self._node_is_inactive(current):
+                return True
+            current = current.getparent()
+
+        return False
+
+    def _node_is_inactive(
         self,
         node: etree._Element,
     ) -> bool:
@@ -1034,6 +1060,8 @@ class JunosEvoAcxServiceParser:
                 "./*[local-name()='encapsulation']/text()",
             )
 
+            physical_inactive = self._is_inactive(interface_node)
+
             # Fyzické rozhraní přidáme vždy.
             results.append(
                 self._build_interface_config(
@@ -1042,6 +1070,7 @@ class JunosEvoAcxServiceParser:
                     physical_description=physical_description,
                     physical_encapsulation=physical_encapsulation,
                     node=interface_node,
+                    active=not physical_inactive,
                 )
             )
 
@@ -1068,6 +1097,10 @@ class JunosEvoAcxServiceParser:
                         physical_description=physical_description,
                         physical_encapsulation=physical_encapsulation,
                         node=unit_node,
+                        # Jednotka pod deaktivovaným rodičem je deaktivovaná
+                        # taky, i když sama atribut nemá - Junos to tak i
+                        # vyhodnocuje.
+                        active=not (physical_inactive or self._is_inactive(unit_node)),
                     )
                 )
 
@@ -1080,6 +1113,7 @@ class JunosEvoAcxServiceParser:
         physical_description: str | None,
         physical_encapsulation: str | None,
         node: etree._Element,
+        active: bool = True,
     ) -> InterfaceConfig:
         unit_description = first_text(
             node,
@@ -1185,6 +1219,7 @@ class JunosEvoAcxServiceParser:
             ipv6_addresses=unique(ipv6_addresses),
             virtual_gw_ipv4_addresses=unique(virtual_gw_ipv4_addresses),
             virtual_gw_ipv6_addresses=unique(virtual_gw_ipv6_addresses),
+            active=active,
         )
 
     # ------------------------------------------------------------------
@@ -1242,7 +1277,8 @@ class JunosEvoAcxServiceParser:
             virtual_gw_ipv6_address=interface.virtual_gw_ipv6_addresses,
             routing_instance=instance.name if instance else None,
             protocol=protocols,
-            active=instance.active if instance else True,
+            routing_instance_active=instance.active if instance else True,
+            interface_active=interface.active,
             bridge_domain=[
                 domain.name
                 for domain in bridge_domains
@@ -2181,7 +2217,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 3
+INVENTORY_SCHEMA_VERSION = 4
 
 
 def create_yaml_data(
@@ -2216,7 +2252,8 @@ def clean_service_dict(
         "virtual_gw_ipv4_address",
         "virtual_gw_ipv6_address",
         "routing_instance",
-        "active",
+        "routing_instance_active",
+        "interface_active",
         "protocol",
         "bgp_neighbor",
         "bridge_domain",

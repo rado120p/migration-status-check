@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
@@ -10,7 +10,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -31,7 +32,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -52,7 +54,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -73,7 +76,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - iso
@@ -96,7 +100,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -117,7 +122,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - iso
@@ -140,7 +146,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -161,7 +168,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - inet
   - inet6
@@ -206,7 +214,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - inet
   - inet6
@@ -246,7 +255,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - ccc
   - evpn
@@ -269,7 +279,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - bridge
   - evpn
@@ -293,7 +304,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-BASED-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - bridge
   - evpn
@@ -306,6 +318,49 @@ interfaces:
   detection_confidence: high
   detection_reason:
   - Routing instance má instance-type evpn.
+- interface: ge-0/0/3
+  description: EVPN-VPWS-CPE24-UNI
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: false
+  protocol: []
+  bgp_neighbor: []
+  bridge_domain: []
+  customer_vlan: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: ge-0/0/3.0
+  description: EVPN-VPWS-CPE24-UNI
+  service_type: E-Line
+  service_subtype: vpws
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VPWS-CPE24-UNI
+  routing_instance_active: false
+  interface_active: false
+  protocol:
+  - ccc
+  - evpn
+  - evpn-vpws
+  bgp_neighbor: []
+  bridge_domain: []
+  customer_vlan: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance používá instance-type evpn-vpws.
 - interface: ge-0/0/4
   description: L3VPN-CPE14-UNI
   service_type: Layer1
@@ -315,7 +370,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -336,7 +392,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE14-UNI
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - inet
   - inet6
@@ -362,7 +419,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -382,7 +440,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: false
   protocol:
   - inet
   - bgp
@@ -396,6 +455,101 @@ interfaces:
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
   - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.14.4'
+- interface: ge-0/0/6
+  description: MGMT-SWITCH;ge-0/0/0
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bridge_domain: []
+  customer_vlan: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: ge-0/0/6.4094
+  description: MGMT-VLAN
+  service_type: E-LAN
+  service_subtype: vlan-aware
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VLAN-AWARE-POP1
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - bridge
+  - evpn
+  - virtual-switch
+  bgp_neighbor: []
+  bridge_domain:
+  - BD-4094
+  customer_vlan:
+  - 0x8100.4094
+  - '4094'
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance má instance-type virtual-switch a obsahuje bridge domain.
+- interface: irb
+  description: null
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bridge_domain: []
+  customer_vlan: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: irb.4094
+  description: null
+  service_type: IPVPN
+  service_subtype: null
+  ipv4_address:
+  - 10.40.94.253/24
+  ipv6_address: []
+  virtual_gw_ipv4_address:
+  - 10.40.94.1
+  virtual_gw_ipv6_address: []
+  routing_instance: MGMT
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - vrf
+  bgp_neighbor: []
+  bridge_domain: []
+  customer_vlan: []
+  static_route:
+  - rib: MGMT.inet.0
+    prefix: 10.40.95.0/24
+    next_hop:
+    - 10.40.94.10
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'Statická routa odpovídá subnetu rozhraní: 10.40.95.0/24'
 - interface: lo0
   description: null
   service_type: Layer1
@@ -405,7 +559,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -426,7 +581,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - iso

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.bfd import BfdSessionStateCheck
+from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
 from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
@@ -200,6 +201,45 @@ def test_intent_entry_without_peer_gets_no_row():
     )
 
     assert findings == []
+
+
+def test_check_reads_the_area_named_by_its_collector():
+    """Sev collector -> check: oblast se jmenuje podle collectoru, ne literalem.
+
+    Conformance test to na MX pokryt neumi - fixture pro junos ma nula session
+    (overeno 2026-07-30 i na surovem capturu z laborky), takze "aspon jeden
+    ne-SKIP" by na nem selhalo z legitimniho duvodu. Klic ale na platforme
+    nezavisi, takze staci overit ho jednou - a proti jmenu collectoru, ne
+    proti retezci "bfd" napsanemu podruhe.
+
+    Druhou polovinu sevu drzi test_collector_keys_match_contract, ktery tvrdi,
+    ze klice faktu odpovidaji jmenum collectoru.
+
+    Zabiji mutanta: ctx.subject.get("bfd") -> ctx.subject.get("bfd_x")
+    v checks/bfd.py. S nim je session neviditelna, zamer zustava, a check
+    misto OK vrati SKIP 'BGP neni Established'.
+    """
+    area = BfdCollector().name
+    scope = Scope(
+        id="svc:CPE13:IPVPN",
+        kind="service",
+        key=ScopeKey("CPE13", "IPVPN", None),
+        selectors=Selectors(bfd_peers=[{"peer": "198.11.13.2"}]),
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={area: {"198.11.13.2": {"state": "Up"}}, "bgp": {}},
+        baseline=None,
+        config=default_config(),
+    )
+
+    findings = BfdSessionStateCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK, (
+        "check nevidi oblast, kterou BfdCollector vydava - klic se rozesel "
+        "mezi collectorem a checkem"
+    )
 
 
 def test_device_scope_reports_state_without_intent():

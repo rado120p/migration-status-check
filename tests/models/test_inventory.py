@@ -2,7 +2,11 @@ import textwrap
 
 import pytest
 
-from migration_validator.models.inventory import ServiceEntry, load_inventory
+from migration_validator.models.inventory import (
+    INVENTORY_SCHEMA_VERSION,
+    ServiceEntry,
+    load_inventory,
+)
 
 
 def test_from_dict_fills_defaults_for_missing_keys():
@@ -13,7 +17,8 @@ def test_from_dict_fills_defaults_for_missing_keys():
     assert entry.service_subtype is None
     assert entry.ipv4_address == []
     assert entry.bgp_neighbor == []
-    assert entry.active is True
+    assert entry.routing_instance_active is True
+    assert entry.interface_active is True
 
 
 def test_from_dict_ignores_unknown_keys():
@@ -47,7 +52,7 @@ def test_load_inventory(tmp_path):
     path.write_text(
         textwrap.dedent(
             """\
-            schema_version: 3
+            schema_version: 4
             device: 172.20.20.4
             interfaces:
             - interface: ge-0/0/2.113
@@ -60,7 +65,8 @@ def test_load_inventory(tmp_path):
               virtual_gw_ipv4_address: []
               virtual_gw_ipv6_address: []
               routing_instance: L3VPN-CPE13-NNI
-              active: true
+              routing_instance_active: true
+              interface_active: true
               protocol:
               - bgp
               bgp_neighbor:
@@ -86,7 +92,7 @@ def test_load_inventory(tmp_path):
 
 def test_load_inventory_rejects_missing_interfaces_key(tmp_path):
     path = tmp_path / "bad.yml"
-    path.write_text("schema_version: 3\ndevice: 1.2.3.4\n", encoding="utf-8")
+    path.write_text("schema_version: 4\ndevice: 1.2.3.4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="interfaces"):
         load_inventory(path)
@@ -144,7 +150,7 @@ def test_old_inventory_fails_loudly(tmp_path):
 def test_current_inventory_loads(tmp_path):
     path = tmp_path / "new.yml"
     path.write_text(
-        "schema_version: 3\n"
+        "schema_version: 4\n"
         "device: 172.20.20.4\n"
         "interfaces:\n"
         "  - interface: ge-0/0/2.13\n"
@@ -180,7 +186,7 @@ def test_static_routes_and_bfd_survive_load(tmp_path):
     path = tmp_path / "nova.yml"
     path.write_text(
         """
-schema_version: 3
+schema_version: 4
 device: r1
 interfaces:
   - interface: et-0/0/8.113
@@ -214,7 +220,7 @@ interfaces:
 def test_missing_new_fields_default_to_empty(tmp_path):
     path = tmp_path / "bez.yml"
     path.write_text(
-        "schema_version: 3\ndevice: r1\n"
+        "schema_version: 4\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n",
         encoding="utf-8",
     )
@@ -230,14 +236,53 @@ def test_mapping_list_rejects_scalars(tmp_path):
 
     _as_list by z {'rib': ...} udelal jeho str() a check by pak hledal
     klice v retezci.
+
+    Vzor je zamerne cela hlaska vcetne jmena typu: samotne "mapping" sedi
+    i na jmeno adresare z tmp_path, takze by test prosel i proti vyjimce,
+    ktera s tou kontrolou nema nic spolecneho.
     """
     path = tmp_path / "spatna.yml"
     path.write_text(
-        "schema_version: 3\ndevice: r1\n"
+        "schema_version: 4\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n"
         "    static_route: [not-a-mapping]\n",
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="mapping"):
+    with pytest.raises(ValueError, match=r"ocekavan mapping v seznamu, nalezeno str"):
         load_inventory(path)
+
+
+def test_service_entry_carries_both_deactivation_flags(tmp_path):
+    """Dve pole misto jednoho 'active' - zdroje deaktivace jsou dva.
+
+    Zabiji mutanta: ponechani jednoho pole 'active' a jeho namapovani na oba
+    stavy. Zaznam nize ma RI zivou a rozhrani deaktivovane, takze jedno
+    sdilene pole nemuze mit obe hodnoty spravne.
+    """
+    path = tmp_path / "inv.yml"
+    path.write_text(
+        "schema_version: 4\ndevice: r1\n"
+        "interfaces:\n"
+        "  - interface: ge-0/0/4.0\n"
+        "    service_type: IPVPN\n"
+        "    routing_instance: L3VPN-CPE14-UNI\n"
+        "    routing_instance_active: true\n"
+        "    interface_active: false\n",
+        encoding="utf-8",
+    )
+
+    inventory = load_inventory(str(path))
+    entry = inventory.entries[0]
+
+    assert entry.routing_instance_active is True
+    assert entry.interface_active is False
+    assert not hasattr(entry, "active"), (
+        "pole 'active' ma zaniknout - popisovalo stav routing-instance, "
+        "ne rozhrani, a se dvema zdroji deaktivace uz nestaci"
+    )
+
+
+def test_inventory_rejects_schema_three():
+    """Stara inventory se nemigruje, generuje se znovu."""
+    assert INVENTORY_SCHEMA_VERSION == 4

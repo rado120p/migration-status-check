@@ -13,17 +13,51 @@ DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 DEVICE_5 = str(FIXTURES / "172.20.20.5.yml")
 
 
-def test_full_migration_run_is_green(synthetic_snapshot):
+def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
+    """172.20.20.4/.5 uz nemodeluji cistou migraci beze zmen (AR-29).
+
+    Laborka po regeneraci nese realne, ruzne stavy deaktivace mezi MX (.4,
+    baseline) a PTX (.5, subject) - napr. CPE24 je na .4 deaktivovana a na
+    .5 aktivni, MGMT-VLAN naopak. deactivation_state to spravne hlasi jako
+    FAIL/WARN (AR-22/AR-23) a to je zdravy vysledek, ne regrese.
+
+    Co porad musi platit: zadny JINY check nesmi na teto dvojici vratit
+    FAIL nebo WARN. Kdyby to udelal, byl by to check, ktery je vzdy
+    FAIL/WARN na zdrave sluzbe a prosel by tichem.
+    """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
-    assert result.summary["fail"] == 0
-    # Ne jen "nic neselhalo" - "clean migration" znamena i zadne trvale
-    # varovani. Bez tohohle by check, ktery je vzdy WARN na zdrave sluzbe,
-    # prosel tichem stejne jako FAIL.
-    assert result.summary["warn"] == 0
+    unexpected = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id != "deactivation_state" and check.status in (Status.FAIL, Status.WARN)
+    ]
+    assert not unexpected, (
+        "check jiny nez deactivation_state vratil FAIL/WARN na zdrave migraci: "
+        f"{[(c.id, c.status, c.message) for c in unexpected]}"
+    )
+
+    # Smer musi odpovidat AR-22/AR-23: baseline aktivni -> subject
+    # deaktivovana je FAIL "migrace nedokoncena"; baseline deaktivovana ->
+    # subject aktivni je WARN "ted je aktivni". Prohozeny smer by tudy
+    # projel jako "nejaky FAIL/WARN existuje", ale byl by obraceny.
+    deactivation_checks = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "deactivation_state" and check.status is not Status.SKIP
+    ]
+    assert deactivation_checks, "fixture nema zadnou zmenu deaktivace k overeni"
+    for check in deactivation_checks:
+        if check.status is Status.FAIL:
+            assert "migrace nedokoncena" in check.message
+        elif check.status is Status.WARN:
+            assert "ted je aktivni" in check.message
+
     assert result.summary["scopes_matched"] >= 5
     assert json.loads(to_json(result))["schema_version"] == 1
 
@@ -72,9 +106,11 @@ def test_service_without_ipv6_has_no_ipv6_section(synthetic_snapshot):
 
     rendered = render(result, detail=True)
     for scope in ipv4_only:
-        block = _block_of(
-            rendered, scope.identity["description"], scope.identity["service_type"]
-        )
+        # Popis muze byt v inventory null (napr. irb.4094 bez configurovaneho
+        # description) - renderer pak pouzije scope_id jako zahlavi bloku,
+        # viz reporting/view.py:151. Vyrez musi hledat totez.
+        description = scope.identity.get("description") or scope.scope_id
+        block = _block_of(rendered, description, scope.identity["service_type"])
         assert "-- IPv6" not in block
 
 

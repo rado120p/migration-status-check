@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
+Výpis odpovídá `mig-validate checks` (stav ke commitu `2aa60c1`):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
@@ -25,6 +25,7 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
 | `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
 | `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |
+| `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
 
 Význam `mode`:
 
@@ -212,7 +213,7 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 3`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 4`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -222,6 +223,7 @@ Historie verzí:
 |---|---|
 | 1 → 2 | adresy rozdělené na rodiny, přibyla oblast `nd` |
 | 2 → 3 | přibyly oblasti `routes` a `bfd` a klíče `unassigned.static_routes` / `.bfd_sessions` |
+| 3 → 4 | `Scope` nese příznaky deaktivace (`routing_instance_active`, `interface_active`) — AR-21 |
 
 > **Starší snímky nejdou přehrát.** Zvýšení na 3 znamená, že `runs/ipv6/`
 > a `runs/ipv6-live-2026-07-29/` — pořízené se `schema_version: 2` — už `evaluate` odmítne.
@@ -232,7 +234,7 @@ Historie verzí:
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo

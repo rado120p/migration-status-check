@@ -131,6 +131,7 @@ def _run_scope(
         baseline=baseline_data,
         config=config,
         failed_collectors=subject.capture.failed_collectors(),
+        baseline_scope=baseline_scope,
     )
 
     results = []

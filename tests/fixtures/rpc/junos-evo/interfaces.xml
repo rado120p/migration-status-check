@@ -3,9 +3,9 @@
     <name>et-0/0/0</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1219</local-index>
-    <snmp-index>518</snmp-index>
-    <generation>609885357226</generation>
+    <local-index>1220</local-index>
+    <snmp-index>526</snmp-index>
+    <generation>609885357303</generation>
     <description>clab-pop-migration-P2;et-0/0/0</description>
     <link-level-type>Ethernet</link-level-type>
     <mtu>9216</mtu>
@@ -42,19 +42,19 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:28:ff:ff</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:28:ff:ff</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:00</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:00</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>132667</input-bytes>
-      <input-bps>912</input-bps>
-      <output-bytes>129332</output-bytes>
-      <output-bps>1120</output-bps>
-      <input-packets>1125</input-packets>
-      <input-pps>1</input-pps>
-      <output-packets>1157</output-packets>
-      <output-pps>1</output-pps>
+      <input-bytes>10043950</input-bytes>
+      <input-bps>1912</input-bps>
+      <output-bytes>10442559</output-bytes>
+      <output-bps>2456</output-bps>
+      <input-packets>102383</input-packets>
+      <input-pps>2</input-pps>
+      <output-packets>103651</output-packets>
+      <output-pps>2</output-pps>
     </traffic-statistics>
     <input-error-list>
       <input-errors>0</input-errors>
@@ -91,8 +91,8 @@
       <queue>
         <queue-number>0</queue-number>
         <forwarding-class-name>best-effort</forwarding-class-name>
-        <queue-counters-queued-packets>2</queue-counters-queued-packets>
-        <queue-counters-trans-packets>2</queue-counters-trans-packets>
+        <queue-counters-queued-packets>36254</queue-counters-queued-packets>
+        <queue-counters-trans-packets>36254</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
       <queue>
@@ -112,8 +112,8 @@
       <queue>
         <queue-number>3</queue-number>
         <forwarding-class-name>network-control</forwarding-class-name>
-        <queue-counters-queued-packets>1155</queue-counters-queued-packets>
-        <queue-counters-trans-packets>1155</queue-counters-trans-packets>
+        <queue-counters-queued-packets>67412</queue-counters-queued-packets>
+        <queue-counters-trans-packets>67412</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
     </queue-counters>
@@ -175,11 +175,11 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>1125</input-packets>
+      <input-packets>102383</input-packets>
       <input-reject-count>0</input-reject-count>
       <input-reject-destination-address-count>0</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
-      <output-packets>1157</output-packets>
+      <output-packets>103651</output-packets>
       <output-packet-pad-count>0</output-packet-pad-count>
       <output-packet-error-count>0</output-packet-error-count>
       <cam-destination-filter-count>0</cam-destination-filter-count>
@@ -229,8 +229,8 @@
     <logical-interface>
       <name>et-0/0/0.0</name>
       <local-index>1003</local-index>
-      <snmp-index>519</snmp-index>
-      <generation>609885357228</generation>
+      <snmp-index>527</snmp-index>
+      <generation>609885357305</generation>
       <description>clab-pop-migration-P2;et-0/0/0</description>
       <if-config-flags>
         <iff-snmp-traps/>
@@ -240,40 +240,41 @@
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>116917</input-bytes>
-        <output-bytes>121433</output-bytes>
-        <input-packets>1125</input-packets>
-        <output-packets>1174</output-packets>
+        <input-bytes>8611625</input-bytes>
+        <output-bytes>9480677</output-bytes>
+        <input-packets>102395</input-packets>
+        <output-packets>103676</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
-        <input-bytes>110615</input-bytes>
-        <output-bytes>112135</output-bytes>
-        <input-packets>1054</input-packets>
-        <output-packets>1092</output-packets>
+        <input-bytes>4749520</input-bytes>
+        <output-bytes>4997079</output-bytes>
+        <input-packets>51486</input-packets>
+        <output-packets>53564</output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
-        <input-bytes>6302</input-bytes>
-        <input-bps>760</input-bps>
-        <output-bytes>9298</output-bytes>
-        <output-bps>856</output-bps>
-        <input-packets>71</input-packets>
+        <input-bytes>3862105</input-bytes>
+        <input-bps>1376</input-bps>
+        <output-bytes>4483598</output-bytes>
+        <output-bps>2280</output-bps>
+        <input-packets>50909</input-packets>
         <input-pps>1</input-pps>
-        <output-packets>82</output-packets>
-        <output-pps>1</output-pps>
+        <output-packets>50112</output-packets>
+        <output-pps>2</output-pps>
       </transit-traffic-statistics>
       <filter-information>
             </filter-information>
       <address-family>
         <address-family-name>inet</address-family-name>
-        <max-local-cache>100000</max-local-cache>
-        <new-hold-limit>100000</new-hold-limit>
-        <intf-curr-cnt>1</intf-curr-cnt>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
         <intf-unresolved-cnt>0</intf-unresolved-cnt>
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>9202</mtu>
-        <generation>609885357229</generation>
+        <generation>609885357306</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-sendbcast-pkt-to-re/>
           <ifff-is-primary/>
@@ -290,14 +291,15 @@
           <ifa-destination>10.1.1.2/31</ifa-destination>
           <ifa-local>10.1.1.3</ifa-local>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357235</generation>
+          <generation>609885357312</generation>
         </interface-address>
       </address-family>
       <address-family>
         <address-family-name>iso</address-family-name>
         <mtu>9199</mtu>
-        <generation>609885357230</generation>
+        <generation>609885357307</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-is-primary/>
         </address-family-flags>
@@ -308,15 +310,16 @@
       </address-family>
       <address-family>
         <address-family-name>inet6</address-family-name>
-        <max-local-cache>100000</max-local-cache>
-        <new-hold-limit>100000</new-hold-limit>
-        <intf-curr-cnt>1</intf-curr-cnt>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
         <intf-unresolved-cnt>0</intf-unresolved-cnt>
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>9202</mtu>
-        <generation>609885357231</generation>
+        <generation>609885357308</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-is-primary/>
         </address-family-flags>
@@ -337,29 +340,30 @@
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357240</generation>
+          <generation>609885357317</generation>
         </interface-address>
         <interface-address>
           <ifa-flags>
             <ifaf-current-preferred/>
           </ifa-flags>
           <ifa-destination>fe80::/64</ifa-destination>
-          <ifa-local>fe80::c63a:cdff:fe28:ffff</ifa-local>
+          <ifa-local>fe80::4e42:41ff:fe0f:0</ifa-local>
           <interface-address>
             <in6-addr-flags>
               <ifaf-none/>
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357250</generation>
+          <generation>609885357327</generation>
         </interface-address>
       </address-family>
       <address-family>
         <address-family-name>mpls</address-family-name>
         <mtu>9190</mtu>
         <maximum-labels>3</maximum-labels>
-        <generation>609885357232</generation>
+        <generation>609885357309</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-is-primary/>
         </address-family-flags>
@@ -371,8 +375,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357234</generation>
+        <generation>609885357311</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-is-primary/>
         </address-family-flags>
@@ -385,9 +390,9 @@
     <name>pfh-0/0/0</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1216</local-index>
-    <snmp-index>514</snmp-index>
-    <generation>609885357219</generation>
+    <local-index>1217</local-index>
+    <snmp-index>522</snmp-index>
+    <generation>609885357296</generation>
     <if-type>Unspecified</if-type>
     <link-level-type>Unspecified</link-level-type>
     <mtu>Unlimited</mtu>
@@ -457,8 +462,8 @@
     <logical-interface>
       <name>pfh-0/0/0.16383</name>
       <local-index>1001</local-index>
-      <snmp-index>515</snmp-index>
-      <generation>609885357220</generation>
+      <snmp-index>523</snmp-index>
+      <generation>609885357297</generation>
       <if-config-flags>
         <iff-up/>
       </if-config-flags>
@@ -491,9 +496,16 @@
             </filter-information>
       <address-family>
         <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>Unlimited</mtu>
-        <generation>609885357221</generation>
+        <generation>609885357298</generation>
         <route-table>1</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-sendbcast-pkt-to-re/>
           <ifff-is-primary/>
@@ -510,9 +522,9 @@
     <name>et-0/0/1</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1221</local-index>
-    <snmp-index>521</snmp-index>
-    <generation>609885357260</generation>
+    <local-index>1222</local-index>
+    <snmp-index>529</snmp-index>
+    <generation>609885357337</generation>
     <description>clab-pop-migration-MX1-POP1 ge-0/0/1</description>
     <link-level-type>Ethernet</link-level-type>
     <mtu>9216</mtu>
@@ -549,18 +561,18 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:08</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:08</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:09</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:09</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>122077</input-bytes>
-      <input-bps>696</input-bps>
-      <output-bytes>121794</output-bytes>
-      <output-bps>1008</output-bps>
-      <input-packets>974</input-packets>
-      <input-pps>0</input-pps>
-      <output-packets>1026</output-packets>
+      <input-bytes>45655705</input-bytes>
+      <input-bps>712</input-bps>
+      <output-bytes>32531287</output-bytes>
+      <output-bps>1104</output-bps>
+      <input-packets>503747</input-packets>
+      <input-pps>1</input-pps>
+      <output-packets>360493</output-packets>
       <output-pps>1</output-pps>
     </traffic-statistics>
     <input-error-list>
@@ -598,8 +610,8 @@
       <queue>
         <queue-number>0</queue-number>
         <forwarding-class-name>best-effort</forwarding-class-name>
-        <queue-counters-queued-packets>2</queue-counters-queued-packets>
-        <queue-counters-trans-packets>2</queue-counters-trans-packets>
+        <queue-counters-queued-packets>313489</queue-counters-queued-packets>
+        <queue-counters-trans-packets>313489</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
       <queue>
@@ -619,8 +631,8 @@
       <queue>
         <queue-number>3</queue-number>
         <forwarding-class-name>network-control</forwarding-class-name>
-        <queue-counters-queued-packets>1024</queue-counters-queued-packets>
-        <queue-counters-trans-packets>1024</queue-counters-trans-packets>
+        <queue-counters-queued-packets>47007</queue-counters-queued-packets>
+        <queue-counters-trans-packets>47007</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
     </queue-counters>
@@ -682,11 +694,11 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>974</input-packets>
-      <input-reject-count>0</input-reject-count>
-      <input-reject-destination-address-count>0</input-reject-destination-address-count>
+      <input-packets>503747</input-packets>
+      <input-reject-count>39</input-reject-count>
+      <input-reject-destination-address-count>39</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
-      <output-packets>1026</output-packets>
+      <output-packets>360493</output-packets>
       <output-packet-pad-count>0</output-packet-pad-count>
       <output-packet-error-count>0</output-packet-error-count>
       <cam-destination-filter-count>0</cam-destination-filter-count>
@@ -736,8 +748,8 @@
     <logical-interface>
       <name>et-0/0/1.0</name>
       <local-index>1004</local-index>
-      <snmp-index>522</snmp-index>
-      <generation>609885357279</generation>
+      <snmp-index>542</snmp-index>
+      <generation>609885357353</generation>
       <description>clab-pop-migration-MX1-POP1 ge-0/0/1</description>
       <if-config-flags>
         <iff-snmp-traps/>
@@ -747,40 +759,41 @@
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>107343</input-bytes>
-        <output-bytes>115747</output-bytes>
-        <input-packets>956</input-packets>
-        <output-packets>1043</output-packets>
+        <input-bytes>38602591</input-bytes>
+        <output-bytes>27802458</output-bytes>
+        <input-packets>503735</input-packets>
+        <output-packets>360506</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
-        <input-bytes>102378</input-bytes>
-        <output-bytes>105582</output-bytes>
-        <input-packets>879</input-packets>
-        <output-packets>969</output-packets>
+        <input-bytes>4419469</input-bytes>
+        <output-bytes>4541957</output-bytes>
+        <input-packets>46203</input-packets>
+        <output-packets>46956</output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
-        <input-bytes>4965</input-bytes>
-        <input-bps>520</input-bps>
-        <output-bytes>10165</output-bytes>
-        <output-bps>760</output-bps>
-        <input-packets>77</input-packets>
-        <input-pps>0</input-pps>
-        <output-packets>74</output-packets>
+        <input-bytes>34183122</input-bytes>
+        <input-bps>504</input-bps>
+        <output-bytes>23260501</output-bytes>
+        <output-bps>480</output-bps>
+        <input-packets>457532</input-packets>
+        <input-pps>2</input-pps>
+        <output-packets>313550</output-packets>
         <output-pps>1</output-pps>
       </transit-traffic-statistics>
       <filter-information>
             </filter-information>
       <address-family>
         <address-family-name>inet</address-family-name>
-        <max-local-cache>100000</max-local-cache>
-        <new-hold-limit>100000</new-hold-limit>
-        <intf-curr-cnt>1</intf-curr-cnt>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
         <intf-unresolved-cnt>0</intf-unresolved-cnt>
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>9202</mtu>
-        <generation>609885357280</generation>
+        <generation>609885357364</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-sendbcast-pkt-to-re/>
         </address-family-flags>
@@ -796,14 +809,15 @@
           <ifa-destination>10.1.0.4/31</ifa-destination>
           <ifa-local>10.1.0.5</ifa-local>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357286</generation>
+          <generation>609885357381</generation>
         </interface-address>
       </address-family>
       <address-family>
         <address-family-name>iso</address-family-name>
         <mtu>9199</mtu>
-        <generation>609885357281</generation>
+        <generation>609885357365</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -814,15 +828,16 @@
       </address-family>
       <address-family>
         <address-family-name>inet6</address-family-name>
-        <max-local-cache>100000</max-local-cache>
-        <new-hold-limit>100000</new-hold-limit>
-        <intf-curr-cnt>2</intf-curr-cnt>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
         <intf-unresolved-cnt>0</intf-unresolved-cnt>
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>9202</mtu>
-        <generation>609885357282</generation>
+        <generation>609885357366</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -843,29 +858,30 @@
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357291</generation>
+          <generation>609885357386</generation>
         </interface-address>
         <interface-address>
           <ifa-flags>
             <ifaf-current-preferred/>
           </ifa-flags>
           <ifa-destination>fe80::/64</ifa-destination>
-          <ifa-local>fe80::c63a:cdff:fe29:8</ifa-local>
+          <ifa-local>fe80::4e42:41ff:fe0f:9</ifa-local>
           <interface-address>
             <in6-addr-flags>
               <ifaf-none/>
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357301</generation>
+          <generation>609885357436</generation>
         </interface-address>
       </address-family>
       <address-family>
         <address-family-name>mpls</address-family-name>
         <mtu>9190</mtu>
         <maximum-labels>3</maximum-labels>
-        <generation>609885357283</generation>
+        <generation>609885357367</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -877,8 +893,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357285</generation>
+        <generation>609885357380</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -891,9 +908,9 @@
     <name>et-0/0/2</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1223</local-index>
-    <snmp-index>524</snmp-index>
-    <generation>609885357262</generation>
+    <local-index>1224</local-index>
+    <snmp-index>531</snmp-index>
+    <generation>609885357339</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -929,9 +946,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:11</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:11</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:12</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:12</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -1115,9 +1132,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/2.16386</name>
-      <local-index>1007</local-index>
-      <snmp-index>557</snmp-index>
-      <generation>609885357337</generation>
+      <local-index>1019</local-index>
+      <snmp-index>572</snmp-index>
+      <generation>609885357494</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -1152,8 +1169,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357339</generation>
+        <generation>609885357496</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -1166,9 +1184,9 @@
     <name>et-0/0/3</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1225</local-index>
-    <snmp-index>526</snmp-index>
-    <generation>609885357264</generation>
+    <local-index>1226</local-index>
+    <snmp-index>533</snmp-index>
+    <generation>609885357341</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -1204,9 +1222,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:1a</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:1a</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:1b</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:1b</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -1390,9 +1408,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/3.16386</name>
-      <local-index>1009</local-index>
-      <snmp-index>559</snmp-index>
-      <generation>609885357347</generation>
+      <local-index>1024</local-index>
+      <snmp-index>577</snmp-index>
+      <generation>609885357519</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -1427,8 +1445,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357349</generation>
+        <generation>609885357521</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -1441,9 +1460,9 @@
     <name>et-0/0/4</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1227</local-index>
-    <snmp-index>528</snmp-index>
-    <generation>609885357266</generation>
+    <local-index>1228</local-index>
+    <snmp-index>535</snmp-index>
+    <generation>609885357343</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -1479,9 +1498,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:23</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:23</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:24</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:24</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -1665,9 +1684,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/4.16386</name>
-      <local-index>1013</local-index>
-      <snmp-index>563</snmp-index>
-      <generation>609885357367</generation>
+      <local-index>1022</local-index>
+      <snmp-index>575</snmp-index>
+      <generation>609885357509</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -1702,8 +1721,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357369</generation>
+        <generation>609885357511</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -1716,11 +1736,12 @@
     <name>et-0/0/5</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1229</local-index>
-    <snmp-index>530</snmp-index>
-    <generation>609885357268</generation>
-    <link-level-type>Ethernet</link-level-type>
-    <mtu>1514</mtu>
+    <local-index>1258</local-index>
+    <snmp-index>537</snmp-index>
+    <generation>609885357880</generation>
+    <description>EX1-POP1;ge-0/0/0</description>
+    <link-level-type>Flexible-Ethernet</link-level-type>
+    <mtu>1522</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
     <source-filtering>disabled</source-filtering>
     <speed>400Gbps</speed>
@@ -1754,19 +1775,19 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:2c</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:2c</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:05:d6</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:2d</hardware-physical-address>
+    <interface-flapped seconds="30406">2026-07-30 11:32:35 UTC (08:26:46 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>105626</input-bytes>
-      <input-bps>984</input-bps>
-      <output-bytes>0</output-bytes>
-      <output-bps>0</output-bps>
-      <input-packets>854</input-packets>
-      <input-pps>0</input-pps>
-      <output-packets>0</output-packets>
-      <output-pps>0</output-pps>
+      <input-bytes>30921514</input-bytes>
+      <input-bps>2432</input-bps>
+      <output-bytes>40835416</output-bytes>
+      <output-bps>1976</output-bps>
+      <input-packets>421055</input-packets>
+      <input-pps>3</input-pps>
+      <output-packets>565635</output-packets>
+      <output-pps>2</output-pps>
     </traffic-statistics>
     <input-error-list>
       <input-errors>0</input-errors>
@@ -1781,7 +1802,7 @@
       <input-resource-errors>0</input-resource-errors>
     </input-error-list>
     <output-error-list>
-      <carrier-transitions>1</carrier-transitions>
+      <carrier-transitions>2</carrier-transitions>
       <output-errors>0</output-errors>
       <output-drops>0</output-drops>
       <output-collisions>0</output-collisions>
@@ -1803,8 +1824,8 @@
       <queue>
         <queue-number>0</queue-number>
         <forwarding-class-name>best-effort</forwarding-class-name>
-        <queue-counters-queued-packets>0</queue-counters-queued-packets>
-        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-queued-packets>20276</queue-counters-queued-packets>
+        <queue-counters-trans-packets>20276</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
       <queue>
@@ -1824,8 +1845,8 @@
       <queue>
         <queue-number>3</queue-number>
         <forwarding-class-name>network-control</forwarding-class-name>
-        <queue-counters-queued-packets>0</queue-counters-queued-packets>
-        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-queued-packets>63647</queue-counters-queued-packets>
+        <queue-counters-trans-packets>63647</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
     </queue-counters>
@@ -1887,11 +1908,11 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>854</input-packets>
+      <input-packets>421055</input-packets>
       <input-reject-count>0</input-reject-count>
       <input-reject-destination-address-count>0</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
-      <output-packets>0</output-packets>
+      <output-packets>565635</output-packets>
       <output-packet-pad-count>0</output-packet-pad-count>
       <output-packet-error-count>0</output-packet-error-count>
       <cam-destination-filter-count>0</cam-destination-filter-count>
@@ -1938,14 +1959,36 @@
     <link-degrade-information>
       <lnk-degrd-mon>Disable</lnk-degrd-mon>
     </link-degrade-information>
+    <logical-interface>
+      <name>et-0/0/5.32767</name>
+      <local-index>1063</local-index>
+      <snmp-index>544</snmp-index>
+      <generation>609885357885</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x0000.0 ] ">[ 0x0000.0 ]</link-address>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>aenet</address-family-name>
+        <ae-bundle-name>ae0.32767</ae-bundle-name>
+        <generation>609885357886</generation>
+        <route-table>0</route-table>
+      </address-family>
+    </logical-interface>
   </physical-interface>
   <physical-interface>
     <name>et-0/0/6</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1231</local-index>
-    <snmp-index>532</snmp-index>
-    <generation>609885357270</generation>
+    <local-index>1232</local-index>
+    <snmp-index>539</snmp-index>
+    <generation>609885357347</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -1981,9 +2024,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:35</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:35</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:36</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:36</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -2030,8 +2073,8 @@
       <queue>
         <queue-number>0</queue-number>
         <forwarding-class-name>best-effort</forwarding-class-name>
-        <queue-counters-queued-packets>0</queue-counters-queued-packets>
-        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-queued-packets>457422</queue-counters-queued-packets>
+        <queue-counters-trans-packets>457422</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
       <queue>
@@ -2167,9 +2210,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/6.16386</name>
-      <local-index>1014</local-index>
-      <snmp-index>564</snmp-index>
-      <generation>609885357372</generation>
+      <local-index>1026</local-index>
+      <snmp-index>579</snmp-index>
+      <generation>609885357529</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -2204,8 +2247,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357374</generation>
+        <generation>609885357531</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -2218,9 +2262,9 @@
     <name>et-0/0/7</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1233</local-index>
-    <snmp-index>534</snmp-index>
-    <generation>609885357272</generation>
+    <local-index>1234</local-index>
+    <snmp-index>541</snmp-index>
+    <generation>609885357349</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -2256,9 +2300,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:3e</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:3e</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:3f</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:3f</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -2442,9 +2486,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/7.16386</name>
-      <local-index>1017</local-index>
-      <snmp-index>567</snmp-index>
-      <generation>609885357387</generation>
+      <local-index>1028</local-index>
+      <snmp-index>581</snmp-index>
+      <generation>609885357539</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -2479,8 +2523,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357389</generation>
+        <generation>609885357541</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -2493,11 +2538,12 @@
     <name>et-0/0/8</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1235</local-index>
-    <snmp-index>536</snmp-index>
-    <generation>609885357274</generation>
-    <link-level-type>Ethernet</link-level-type>
-    <mtu>1514</mtu>
+    <local-index>1236</local-index>
+    <snmp-index>545</snmp-index>
+    <generation>609885357829</generation>
+    <description>NNI1-TO-CPE1</description>
+    <link-level-type>Flexible-Ethernet</link-level-type>
+    <mtu>1522</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
     <source-filtering>disabled</source-filtering>
     <speed>400Gbps</speed>
@@ -2531,19 +2577,19 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:47</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:47</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:48</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:48</hardware-physical-address>
+    <interface-flapped seconds="30406">2026-07-30 11:32:35 UTC (08:26:46 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>64310</input-bytes>
-      <input-bps>512</input-bps>
-      <output-bytes>0</output-bytes>
-      <output-bps>0</output-bps>
-      <input-packets>673</input-packets>
-      <input-pps>0</input-pps>
-      <output-packets>0</output-packets>
-      <output-pps>0</output-pps>
+      <input-bytes>6897692</input-bytes>
+      <input-bps>1664</input-bps>
+      <output-bytes>7990514</output-bytes>
+      <output-bps>1752</output-bps>
+      <input-packets>90164</input-packets>
+      <input-pps>2</input-pps>
+      <output-packets>104552</output-packets>
+      <output-pps>2</output-pps>
     </traffic-statistics>
     <input-error-list>
       <input-errors>0</input-errors>
@@ -2558,7 +2604,7 @@
       <input-resource-errors>0</input-resource-errors>
     </input-error-list>
     <output-error-list>
-      <carrier-transitions>1</carrier-transitions>
+      <carrier-transitions>2</carrier-transitions>
       <output-errors>0</output-errors>
       <output-drops>0</output-drops>
       <output-collisions>0</output-collisions>
@@ -2580,8 +2626,8 @@
       <queue>
         <queue-number>0</queue-number>
         <forwarding-class-name>best-effort</forwarding-class-name>
-        <queue-counters-queued-packets>0</queue-counters-queued-packets>
-        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-queued-packets>43208</queue-counters-queued-packets>
+        <queue-counters-trans-packets>43208</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
       <queue>
@@ -2601,8 +2647,8 @@
       <queue>
         <queue-number>3</queue-number>
         <forwarding-class-name>network-control</forwarding-class-name>
-        <queue-counters-queued-packets>0</queue-counters-queued-packets>
-        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-queued-packets>35937</queue-counters-queued-packets>
+        <queue-counters-trans-packets>35937</queue-counters-trans-packets>
         <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
       </queue>
     </queue-counters>
@@ -2664,11 +2710,11 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>673</input-packets>
+      <input-packets>90164</input-packets>
       <input-reject-count>0</input-reject-count>
       <input-reject-destination-address-count>0</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
-      <output-packets>0</output-packets>
+      <output-packets>104552</output-packets>
       <output-packet-pad-count>0</output-packet-pad-count>
       <output-packet-error-count>0</output-packet-error-count>
       <cam-destination-filter-count>0</cam-destination-filter-count>
@@ -2716,22 +2762,338 @@
       <lnk-degrd-mon>Disable</lnk-degrd-mon>
     </link-degrade-information>
     <logical-interface>
-      <name>et-0/0/8.16386</name>
-      <local-index>1018</local-index>
-      <snmp-index>568</snmp-index>
-      <generation>609885357392</generation>
+      <name>et-0/0/8.13</name>
+      <local-index>1051</local-index>
+      <snmp-index>546</snmp-index>
+      <generation>609885357831</generation>
+      <description>INTERNET-CPE13-NNI</description>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
       </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.13 ] ">[ 0x8100.13 ]</link-address>
       <encapsulation>ENET2</encapsulation>
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>782</input-bytes>
-        <output-bytes>0</output-bytes>
-        <input-packets>10</input-packets>
-        <output-packets>0</output-packets>
+        <input-bytes>1747155</input-bytes>
+        <output-bytes>2297631</output-bytes>
+        <input-packets>29332</input-packets>
+        <output-packets>37776</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>1221333</input-bytes>
+        <output-bytes>1126189</output-bytes>
+        <input-packets>19210</input-packets>
+        <output-packets>19217</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>525822</input-bytes>
+        <input-bps>544</input-bps>
+        <output-bytes>1171442</output-bytes>
+        <output-bps>440</output-bps>
+        <input-packets>10122</input-packets>
+        <input-pps>1</input-pps>
+        <output-packets>18559</output-packets>
+        <output-pps>3</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357832</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>152.11.13.0/30</ifa-destination>
+          <ifa-local>152.11.13.1</ifa-local>
+          <ifa-broadcast>152.11.13.3</ifa-broadcast>
+          <generation>609885357834</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357833</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>2001:abcd:11:13::a/127</ifa-destination>
+          <ifa-local>2001:abcd:11:13::a</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357843</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+          </ifa-flags>
+          <ifa-destination>fe80::/64</ifa-destination>
+          <ifa-local>fe80::4e42:4100:d0f:48</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357866</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>multiservice</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>609885357861</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>et-0/0/8.113</name>
+      <local-index>1054</local-index>
+      <snmp-index>549</snmp-index>
+      <generation>609885357853</generation>
+      <description>L3VPN-CPE13-NNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.113 ] ">[ 0x8100.113 ]</link-address>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>627883</input-bytes>
+        <output-bytes>1273375</output-bytes>
+        <input-packets>11770</input-packets>
+        <output-packets>25983</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>628345</input-bytes>
+        <output-bytes>530115</output-bytes>
+        <input-packets>11769</input-packets>
+        <output-packets>11792</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <input-bps>176</input-bps>
+        <output-bytes>743260</output-bytes>
+        <output-bps>376</output-bps>
+        <input-packets>1</input-packets>
+        <input-pps>1</input-pps>
+        <output-packets>14191</output-packets>
+        <output-pps>3</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357891</generation>
+        <route-table>50</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>198.11.13.0/30</ifa-destination>
+          <ifa-local>198.11.13.1</ifa-local>
+          <ifa-broadcast>198.11.13.3</ifa-broadcast>
+          <generation>609885357892</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357901</generation>
+        <route-table>50</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>2001:db8:11:13::a/127</ifa-destination>
+          <ifa-local>2001:db8:11:13::a</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357902</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+          </ifa-flags>
+          <ifa-destination>fe80::/64</ifa-destination>
+          <ifa-local>fe80::4e42:4100:710f:48</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357911</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>multiservice</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>609885357864</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>et-0/0/8.213</name>
+      <local-index>1053</local-index>
+      <snmp-index>550</snmp-index>
+      <generation>609885357851</generation>
+      <description>EVPN-VPWS-CPE13-NNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.213 ] ">[ 0x8100.213 ]</link-address>
+      <encapsulation>VLAN-CCC</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>583734</input-bytes>
+        <output-bytes>724214</output-bytes>
+        <input-packets>10739</input-packets>
+        <output-packets>13346</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <output-bytes>140</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>2</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>583734</input-bytes>
+        <input-bps>160</input-bps>
+        <output-bytes>724074</output-bytes>
+        <output-bps>48</output-bps>
+        <input-packets>10739</input-packets>
+        <input-pps>1</input-pps>
+        <output-packets>13344</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ccc</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357852</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>et-0/0/8.313</name>
+      <local-index>1064</local-index>
+      <snmp-index>551</snmp-index>
+      <generation>609885357920</generation>
+      <description>EVPN-VLAN-AWARE-CPE13-NNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.313 ] ">[ 0x8100.313 ]</link-address>
+      <encapsulation>Ethernet-Bridge</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>584286</input-bytes>
+        <output-bytes>626926</output-bytes>
+        <input-packets>10744</input-packets>
+        <output-packets>10740</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>0</input-bytes>
@@ -2740,13 +3102,120 @@
         <output-packets>0</output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
-        <input-bytes>782</input-bytes>
-        <input-bps>0</input-bps>
+        <input-bytes>584286</input-bytes>
+        <input-bps>216</input-bps>
+        <output-bytes>626926</output-bytes>
+        <output-bps>216</output-bps>
+        <input-packets>10744</input-packets>
+        <input-pps>1</input-pps>
+        <output-packets>10740</output-packets>
+        <output-pps>1</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ethernet-switching</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357925</generation>
+        <route-table>55</route-table>
+        <iff-next-hop>11025</iff-next-hop>
+        <vpls-mesh-group>__all_ces__</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>et-0/0/8.413</name>
+      <local-index>1069</local-index>
+      <snmp-index>552</snmp-index>
+      <generation>609885357948</generation>
+      <description>EVPN-VLAN-BASED-CPE13-NNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.413 ] ">[ 0x8100.413 ]</link-address>
+      <encapsulation>Ethernet-Bridge</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>279788</input-bytes>
+        <output-bytes>293884</output-bytes>
+        <input-packets>3498</input-packets>
+        <output-packets>3499</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
         <output-bytes>0</output-bytes>
-        <output-bps>0</output-bps>
-        <input-packets>10</input-packets>
-        <input-pps>0</input-pps>
+        <input-packets>0</input-packets>
         <output-packets>0</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>279788</input-bytes>
+        <input-bps>104</input-bps>
+        <output-bytes>293884</output-bytes>
+        <output-bps>104</output-bps>
+        <input-packets>3498</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>3499</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ethernet-switching</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357954</generation>
+        <route-table>58</route-table>
+        <iff-next-hop>11028</iff-next-hop>
+        <vpls-mesh-group>__all_ces__</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>et-0/0/8.32767</name>
+      <local-index>1056</local-index>
+      <snmp-index>547</snmp-index>
+      <generation>609885357856</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x0000.0 ] ">[ 0x0000.0 ]</link-address>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>5282</input-bytes>
+        <output-bytes>620346</output-bytes>
+        <input-packets>51</input-packets>
+        <output-packets>7604</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>5282</input-bytes>
+        <input-bps>120</input-bps>
+        <output-bytes>620346</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>51</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>7604</output-packets>
         <output-pps>0</output-pps>
       </transit-traffic-statistics>
       <filter-information>
@@ -2754,8 +3223,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357394</generation>
+        <generation>609885357865</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -2768,9 +3238,9 @@
     <name>et-0/0/9</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1218</local-index>
-    <snmp-index>517</snmp-index>
-    <generation>609885357224</generation>
+    <local-index>1219</local-index>
+    <snmp-index>525</snmp-index>
+    <generation>609885357301</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -2806,16 +3276,16 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:50</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:50</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:51</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:51</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>2054</input-bytes>
+      <input-bytes>0</input-bytes>
       <input-bps>0</input-bps>
       <output-bytes>0</output-bytes>
       <output-bps>0</output-bps>
-      <input-packets>23</input-packets>
+      <input-packets>0</input-packets>
       <input-pps>0</input-pps>
       <output-packets>0</output-packets>
       <output-pps>0</output-pps>
@@ -2939,7 +3409,7 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>23</input-packets>
+      <input-packets>0</input-packets>
       <input-reject-count>0</input-reject-count>
       <input-reject-destination-address-count>0</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
@@ -2992,9 +3462,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/9.16386</name>
-      <local-index>1005</local-index>
-      <snmp-index>555</snmp-index>
-      <generation>609885357327</generation>
+      <local-index>1012</local-index>
+      <snmp-index>570</snmp-index>
+      <generation>609885357484</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -3003,9 +3473,9 @@
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>838</input-bytes>
+        <input-bytes>0</input-bytes>
         <output-bytes>0</output-bytes>
-        <input-packets>11</input-packets>
+        <input-packets>0</input-packets>
         <output-packets>0</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -3015,11 +3485,11 @@
         <output-packets>0</output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
-        <input-bytes>838</input-bytes>
+        <input-bytes>0</input-bytes>
         <input-bps>0</input-bps>
         <output-bytes>0</output-bytes>
         <output-bps>0</output-bps>
-        <input-packets>11</input-packets>
+        <input-packets>0</input-packets>
         <input-pps>0</input-pps>
         <output-packets>0</output-packets>
         <output-pps>0</output-pps>
@@ -3029,8 +3499,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357329</generation>
+        <generation>609885357486</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -3043,9 +3514,9 @@
     <name>et-0/0/10</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1220</local-index>
-    <snmp-index>520</snmp-index>
-    <generation>609885357227</generation>
+    <local-index>1221</local-index>
+    <snmp-index>528</snmp-index>
+    <generation>609885357304</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -3081,16 +3552,16 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:59</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:59</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:5a</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:5a</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>3550</input-bytes>
-      <input-bps>0</input-bps>
+      <input-bytes>30071</input-bytes>
+      <input-bps>136</input-bps>
       <output-bytes>0</output-bytes>
       <output-bps>0</output-bps>
-      <input-packets>42</input-packets>
+      <input-packets>310</input-packets>
       <input-pps>0</input-pps>
       <output-packets>0</output-packets>
       <output-pps>0</output-pps>
@@ -3214,7 +3685,7 @@
       <output-total-errors>0</output-total-errors>
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
-      <input-packets>42</input-packets>
+      <input-packets>310</input-packets>
       <input-reject-count>0</input-reject-count>
       <input-reject-destination-address-count>0</input-reject-destination-address-count>
       <input-reject-source-address-count>0</input-reject-source-address-count>
@@ -3267,9 +3738,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/10.16386</name>
-      <local-index>1006</local-index>
-      <snmp-index>556</snmp-index>
-      <generation>609885357332</generation>
+      <local-index>1018</local-index>
+      <snmp-index>571</snmp-index>
+      <generation>609885357489</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -3278,9 +3749,9 @@
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>910</input-bytes>
+        <input-bytes>24032</input-bytes>
         <output-bytes>0</output-bytes>
-        <input-packets>12</input-packets>
+        <input-packets>282</input-packets>
         <output-packets>0</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -3290,11 +3761,11 @@
         <output-packets>0</output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
-        <input-bytes>910</input-bytes>
-        <input-bps>0</input-bps>
+        <input-bytes>24032</input-bytes>
+        <input-bps>120</input-bps>
         <output-bytes>0</output-bytes>
         <output-bps>0</output-bps>
-        <input-packets>12</input-packets>
+        <input-packets>282</input-packets>
         <input-pps>0</input-pps>
         <output-packets>0</output-packets>
         <output-pps>0</output-pps>
@@ -3304,8 +3775,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357334</generation>
+        <generation>609885357491</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -3318,9 +3790,9 @@
     <name>et-0/0/11</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1222</local-index>
-    <snmp-index>523</snmp-index>
-    <generation>609885357261</generation>
+    <local-index>1223</local-index>
+    <snmp-index>530</snmp-index>
+    <generation>609885357338</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -3356,9 +3828,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:62</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:62</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:63</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:63</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -3542,9 +4014,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/11.16386</name>
-      <local-index>1008</local-index>
-      <snmp-index>558</snmp-index>
-      <generation>609885357342</generation>
+      <local-index>1021</local-index>
+      <snmp-index>574</snmp-index>
+      <generation>609885357504</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -3579,8 +4051,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357344</generation>
+        <generation>609885357506</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -3593,9 +4066,9 @@
     <name>et-0/0/12</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1224</local-index>
-    <snmp-index>525</snmp-index>
-    <generation>609885357263</generation>
+    <local-index>1225</local-index>
+    <snmp-index>532</snmp-index>
+    <generation>609885357340</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -3631,9 +4104,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:6b</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:6b</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:6c</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:6c</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -3817,9 +4290,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/12.16386</name>
-      <local-index>1010</local-index>
-      <snmp-index>560</snmp-index>
-      <generation>609885357352</generation>
+      <local-index>1020</local-index>
+      <snmp-index>573</snmp-index>
+      <generation>609885357499</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -3854,8 +4327,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357354</generation>
+        <generation>609885357501</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -3868,9 +4342,9 @@
     <name>et-0/0/13</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1226</local-index>
-    <snmp-index>527</snmp-index>
-    <generation>609885357265</generation>
+    <local-index>1227</local-index>
+    <snmp-index>534</snmp-index>
+    <generation>609885357342</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -3906,9 +4380,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:74</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:74</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:75</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:75</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -4092,9 +4566,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/13.16386</name>
-      <local-index>1011</local-index>
-      <snmp-index>561</snmp-index>
-      <generation>609885357357</generation>
+      <local-index>1023</local-index>
+      <snmp-index>576</snmp-index>
+      <generation>609885357514</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -4129,8 +4603,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357359</generation>
+        <generation>609885357516</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -4143,9 +4618,9 @@
     <name>et-0/0/14</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1228</local-index>
-    <snmp-index>529</snmp-index>
-    <generation>609885357267</generation>
+    <local-index>1229</local-index>
+    <snmp-index>536</snmp-index>
+    <generation>609885357344</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -4181,9 +4656,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:7d</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:7d</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:7e</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:7e</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -4367,9 +4842,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/14.16386</name>
-      <local-index>1012</local-index>
-      <snmp-index>562</snmp-index>
-      <generation>609885357362</generation>
+      <local-index>1025</local-index>
+      <snmp-index>578</snmp-index>
+      <generation>609885357524</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -4404,8 +4879,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357364</generation>
+        <generation>609885357526</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -4418,9 +4894,9 @@
     <name>et-0/0/15</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1230</local-index>
-    <snmp-index>531</snmp-index>
-    <generation>609885357269</generation>
+    <local-index>1231</local-index>
+    <snmp-index>538</snmp-index>
+    <generation>609885357346</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -4456,9 +4932,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:86</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:86</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:87</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:87</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -4642,9 +5118,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/15.16386</name>
-      <local-index>1015</local-index>
-      <snmp-index>565</snmp-index>
-      <generation>609885357377</generation>
+      <local-index>1027</local-index>
+      <snmp-index>580</snmp-index>
+      <generation>609885357534</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -4679,8 +5155,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357379</generation>
+        <generation>609885357536</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -4693,9 +5170,9 @@
     <name>et-0/0/16</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1232</local-index>
-    <snmp-index>533</snmp-index>
-    <generation>609885357271</generation>
+    <local-index>1233</local-index>
+    <snmp-index>540</snmp-index>
+    <generation>609885357348</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -4731,9 +5208,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:8f</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:8f</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:90</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:90</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -4917,9 +5394,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/16.16386</name>
-      <local-index>1016</local-index>
-      <snmp-index>566</snmp-index>
-      <generation>609885357382</generation>
+      <local-index>1029</local-index>
+      <snmp-index>582</snmp-index>
+      <generation>609885357544</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -4954,8 +5431,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357384</generation>
+        <generation>609885357546</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -4968,9 +5446,9 @@
     <name>et-0/0/17</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1234</local-index>
-    <snmp-index>535</snmp-index>
-    <generation>609885357273</generation>
+    <local-index>1235</local-index>
+    <snmp-index>543</snmp-index>
+    <generation>609885357350</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -5006,9 +5484,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:98</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:98</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:99</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:99</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -5192,9 +5670,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/17.16386</name>
-      <local-index>1019</local-index>
-      <snmp-index>569</snmp-index>
-      <generation>609885357397</generation>
+      <local-index>1030</local-index>
+      <snmp-index>583</snmp-index>
+      <generation>609885357549</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -5229,8 +5707,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357399</generation>
+        <generation>609885357551</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -5243,9 +5722,9 @@
     <name>et-0/0/18</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1236</local-index>
-    <snmp-index>537</snmp-index>
-    <generation>609885357275</generation>
+    <local-index>1237</local-index>
+    <snmp-index>548</snmp-index>
+    <generation>609885357352</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -5281,9 +5760,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:a1</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:a1</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:a2</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:a2</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -5467,9 +5946,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/18.16386</name>
-      <local-index>1020</local-index>
-      <snmp-index>570</snmp-index>
-      <generation>609885357402</generation>
+      <local-index>1031</local-index>
+      <snmp-index>584</snmp-index>
+      <generation>609885357554</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -5504,8 +5983,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357404</generation>
+        <generation>609885357556</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -5518,9 +5998,9 @@
     <name>et-0/0/19</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1238</local-index>
-    <snmp-index>539</snmp-index>
-    <generation>609885357277</generation>
+    <local-index>1239</local-index>
+    <snmp-index>554</snmp-index>
+    <generation>609885357466</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -5556,9 +6036,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:aa</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:aa</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:ab</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:ab</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -5742,9 +6222,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/19.16386</name>
-      <local-index>1023</local-index>
-      <snmp-index>573</snmp-index>
-      <generation>609885357417</generation>
+      <local-index>1033</local-index>
+      <snmp-index>586</snmp-index>
+      <generation>609885357564</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -5779,8 +6259,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357419</generation>
+        <generation>609885357566</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -5793,9 +6274,9 @@
     <name>et-0/0/20</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1240</local-index>
-    <snmp-index>541</snmp-index>
-    <generation>609885357311</generation>
+    <local-index>1241</local-index>
+    <snmp-index>556</snmp-index>
+    <generation>609885357468</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -5831,9 +6312,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:b3</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:b3</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:b4</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:b4</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -6017,9 +6498,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/20.16386</name>
-      <local-index>1025</local-index>
-      <snmp-index>575</snmp-index>
-      <generation>609885357427</generation>
+      <local-index>1036</local-index>
+      <snmp-index>589</snmp-index>
+      <generation>609885357579</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -6054,8 +6535,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357429</generation>
+        <generation>609885357581</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -6068,9 +6550,9 @@
     <name>et-0/0/21</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1242</local-index>
-    <snmp-index>543</snmp-index>
-    <generation>609885357313</generation>
+    <local-index>1243</local-index>
+    <snmp-index>558</snmp-index>
+    <generation>609885357470</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -6106,9 +6588,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:bc</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:bc</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:bd</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:bd</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -6292,9 +6774,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/21.16386</name>
-      <local-index>1027</local-index>
-      <snmp-index>577</snmp-index>
-      <generation>609885357437</generation>
+      <local-index>1037</local-index>
+      <snmp-index>590</snmp-index>
+      <generation>609885357584</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -6329,8 +6811,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357439</generation>
+        <generation>609885357586</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -6343,9 +6826,9 @@
     <name>et-0/0/22</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1244</local-index>
-    <snmp-index>545</snmp-index>
-    <generation>609885357315</generation>
+    <local-index>1245</local-index>
+    <snmp-index>560</snmp-index>
+    <generation>609885357472</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -6381,9 +6864,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:c5</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:c5</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:c6</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:c6</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -6567,9 +7050,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/22.16386</name>
-      <local-index>1026</local-index>
-      <snmp-index>576</snmp-index>
-      <generation>609885357432</generation>
+      <local-index>1038</local-index>
+      <snmp-index>591</snmp-index>
+      <generation>609885357589</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -6604,8 +7087,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357434</generation>
+        <generation>609885357591</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -6618,9 +7102,9 @@
     <name>et-0/0/23</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1246</local-index>
-    <snmp-index>547</snmp-index>
-    <generation>609885357317</generation>
+    <local-index>1247</local-index>
+    <snmp-index>562</snmp-index>
+    <generation>609885357474</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -6656,9 +7140,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:ce</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:ce</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:cf</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:cf</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -6842,9 +7326,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/23.16386</name>
-      <local-index>1029</local-index>
-      <snmp-index>579</snmp-index>
-      <generation>609885357447</generation>
+      <local-index>1040</local-index>
+      <snmp-index>593</snmp-index>
+      <generation>609885357599</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -6879,8 +7363,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357449</generation>
+        <generation>609885357601</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -6893,9 +7378,9 @@
     <name>et-0/0/24</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1248</local-index>
-    <snmp-index>549</snmp-index>
-    <generation>609885357319</generation>
+    <local-index>1249</local-index>
+    <snmp-index>564</snmp-index>
+    <generation>609885357476</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -6931,9 +7416,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:d7</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:d7</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:d8</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:d8</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -7117,9 +7602,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/24.16386</name>
-      <local-index>1032</local-index>
-      <snmp-index>582</snmp-index>
-      <generation>609885357462</generation>
+      <local-index>1043</local-index>
+      <snmp-index>596</snmp-index>
+      <generation>609885357614</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -7154,8 +7639,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357464</generation>
+        <generation>609885357616</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -7168,9 +7654,9 @@
     <name>et-0/0/25</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1250</local-index>
-    <snmp-index>551</snmp-index>
-    <generation>609885357321</generation>
+    <local-index>1251</local-index>
+    <snmp-index>566</snmp-index>
+    <generation>609885357478</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -7206,9 +7692,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:e0</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:e0</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:e1</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:e1</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -7392,9 +7878,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/25.16386</name>
-      <local-index>1034</local-index>
-      <snmp-index>584</snmp-index>
-      <generation>609885357472</generation>
+      <local-index>1044</local-index>
+      <snmp-index>597</snmp-index>
+      <generation>609885357619</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -7429,8 +7915,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357474</generation>
+        <generation>609885357621</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -7443,9 +7930,9 @@
     <name>et-0/0/26</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1252</local-index>
-    <snmp-index>553</snmp-index>
-    <generation>609885357323</generation>
+    <local-index>1253</local-index>
+    <snmp-index>568</snmp-index>
+    <generation>609885357480</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -7481,9 +7968,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:e9</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:e9</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:ea</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:ea</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -7667,9 +8154,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/26.16386</name>
-      <local-index>1033</local-index>
-      <snmp-index>583</snmp-index>
-      <generation>609885357467</generation>
+      <local-index>1048</local-index>
+      <snmp-index>601</snmp-index>
+      <generation>609885357639</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -7704,8 +8191,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357469</generation>
+        <generation>609885357641</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -7718,9 +8206,9 @@
     <name>et-0/0/27</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1237</local-index>
-    <snmp-index>538</snmp-index>
-    <generation>609885357276</generation>
+    <local-index>1238</local-index>
+    <snmp-index>553</snmp-index>
+    <generation>609885357465</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -7756,9 +8244,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:f2</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:f2</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:f3</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:f3</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -7942,9 +8430,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/27.16386</name>
-      <local-index>1022</local-index>
-      <snmp-index>572</snmp-index>
-      <generation>609885357412</generation>
+      <local-index>1032</local-index>
+      <snmp-index>585</snmp-index>
+      <generation>609885357559</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -7979,8 +8467,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357414</generation>
+        <generation>609885357561</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -7993,9 +8482,9 @@
     <name>et-0/0/28</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1239</local-index>
-    <snmp-index>540</snmp-index>
-    <generation>609885357278</generation>
+    <local-index>1240</local-index>
+    <snmp-index>555</snmp-index>
+    <generation>609885357467</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -8031,9 +8520,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:00:fb</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:00:fb</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:00:fc</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:00:fc</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -8217,9 +8706,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/28.16386</name>
-      <local-index>1021</local-index>
-      <snmp-index>571</snmp-index>
-      <generation>609885357407</generation>
+      <local-index>1034</local-index>
+      <snmp-index>587</snmp-index>
+      <generation>609885357569</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -8254,8 +8743,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357409</generation>
+        <generation>609885357571</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -8268,9 +8758,9 @@
     <name>et-0/0/29</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1241</local-index>
-    <snmp-index>542</snmp-index>
-    <generation>609885357312</generation>
+    <local-index>1242</local-index>
+    <snmp-index>557</snmp-index>
+    <generation>609885357469</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -8306,9 +8796,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:04</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:04</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:05</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:05</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -8492,9 +8982,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/29.16386</name>
-      <local-index>1024</local-index>
-      <snmp-index>574</snmp-index>
-      <generation>609885357422</generation>
+      <local-index>1035</local-index>
+      <snmp-index>588</snmp-index>
+      <generation>609885357574</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -8529,8 +9019,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357424</generation>
+        <generation>609885357576</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -8543,9 +9034,9 @@
     <name>et-0/0/30</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1243</local-index>
-    <snmp-index>544</snmp-index>
-    <generation>609885357314</generation>
+    <local-index>1244</local-index>
+    <snmp-index>559</snmp-index>
+    <generation>609885357471</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -8581,9 +9072,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:0d</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:0d</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:0e</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:0e</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -8767,9 +9258,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/30.16386</name>
-      <local-index>1028</local-index>
-      <snmp-index>578</snmp-index>
-      <generation>609885357442</generation>
+      <local-index>1039</local-index>
+      <snmp-index>592</snmp-index>
+      <generation>609885357594</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -8804,8 +9295,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357444</generation>
+        <generation>609885357596</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -8818,9 +9310,9 @@
     <name>et-0/0/31</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1245</local-index>
-    <snmp-index>546</snmp-index>
-    <generation>609885357316</generation>
+    <local-index>1246</local-index>
+    <snmp-index>561</snmp-index>
+    <generation>609885357473</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -8856,9 +9348,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:16</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:16</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:17</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:17</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -9042,9 +9534,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/31.16386</name>
-      <local-index>1030</local-index>
-      <snmp-index>580</snmp-index>
-      <generation>609885357452</generation>
+      <local-index>1042</local-index>
+      <snmp-index>595</snmp-index>
+      <generation>609885357609</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -9079,8 +9571,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357454</generation>
+        <generation>609885357611</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -9093,9 +9586,9 @@
     <name>et-0/0/32</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1247</local-index>
-    <snmp-index>548</snmp-index>
-    <generation>609885357318</generation>
+    <local-index>1248</local-index>
+    <snmp-index>563</snmp-index>
+    <generation>609885357475</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -9131,9 +9624,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:1f</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:1f</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:20</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:20</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -9317,9 +9810,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/32.16386</name>
-      <local-index>1031</local-index>
-      <snmp-index>581</snmp-index>
-      <generation>609885357457</generation>
+      <local-index>1041</local-index>
+      <snmp-index>594</snmp-index>
+      <generation>609885357604</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -9354,8 +9847,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357459</generation>
+        <generation>609885357606</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -9368,9 +9862,9 @@
     <name>et-0/0/33</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1249</local-index>
-    <snmp-index>550</snmp-index>
-    <generation>609885357320</generation>
+    <local-index>1250</local-index>
+    <snmp-index>565</snmp-index>
+    <generation>609885357477</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -9406,9 +9900,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:28</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:28</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:29</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:29</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -9592,9 +10086,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/33.16386</name>
-      <local-index>1035</local-index>
-      <snmp-index>585</snmp-index>
-      <generation>609885357477</generation>
+      <local-index>1045</local-index>
+      <snmp-index>598</snmp-index>
+      <generation>609885357624</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -9629,8 +10123,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357479</generation>
+        <generation>609885357626</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -9643,9 +10138,9 @@
     <name>et-0/0/34</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1251</local-index>
-    <snmp-index>552</snmp-index>
-    <generation>609885357322</generation>
+    <local-index>1252</local-index>
+    <snmp-index>567</snmp-index>
+    <generation>609885357479</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -9681,9 +10176,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:31</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:31</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:32</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:32</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -9867,9 +10362,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/34.16386</name>
-      <local-index>1036</local-index>
-      <snmp-index>586</snmp-index>
-      <generation>609885357482</generation>
+      <local-index>1046</local-index>
+      <snmp-index>599</snmp-index>
+      <generation>609885357629</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -9904,8 +10399,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357484</generation>
+        <generation>609885357631</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -9918,9 +10414,9 @@
     <name>et-0/0/35</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1253</local-index>
-    <snmp-index>554</snmp-index>
-    <generation>609885357324</generation>
+    <local-index>1254</local-index>
+    <snmp-index>569</snmp-index>
+    <generation>609885357481</generation>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
     <sonet-mode>LAN-PHY</sonet-mode>
@@ -9956,9 +10452,9 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address>c4:3a:cd:29:01:3a</current-physical-address>
-    <hardware-physical-address>c4:3a:cd:29:01:3a</hardware-physical-address>
-    <interface-flapped seconds="862">2026-07-27 07:58:30 UTC (00:14:22 ago)</interface-flapped>
+    <current-physical-address>4c:42:41:0f:01:3b</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:01:3b</hardware-physical-address>
+    <interface-flapped seconds="43461">2026-07-30 07:55:00 UTC (12:04:21 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>0</input-bytes>
@@ -10142,9 +10638,9 @@
     </link-degrade-information>
     <logical-interface>
       <name>et-0/0/35.16386</name>
-      <local-index>1037</local-index>
-      <snmp-index>587</snmp-index>
-      <generation>609885357487</generation>
+      <local-index>1047</local-index>
+      <snmp-index>600</snmp-index>
+      <generation>609885357634</generation>
       <if-config-flags>
         <iff-snmp-traps/>
         <iff-up/>
@@ -10179,8 +10675,9 @@
       <address-family>
         <address-family-name>multiservice</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357489</generation>
+        <generation>609885357636</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -10193,9 +10690,9 @@
     <name>re0:mgmt-0</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1201</local-index>
+    <local-index>1213</local-index>
     <snmp-index>193</snmp-index>
-    <generation>609885357187</generation>
+    <generation>609885357201</generation>
     <if-type>Ethernet</if-type>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1500</mtu>
@@ -10223,20 +10720,20 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address format="MAC 9e:f0:d1:0f:76:69">9e:f0:d1:0f:76:69</current-physical-address>
-    <hardware-physical-address format="MAC 9e:f0:d1:0f:76:69">9e:f0:d1:0f:76:69</hardware-physical-address>
+    <current-physical-address format="MAC 42:0a:73:59:f1:e0">42:0a:73:59:f1:e0</current-physical-address>
+    <hardware-physical-address format="MAC 42:0a:73:59:f1:e0">42:0a:73:59:f1:e0</hardware-physical-address>
     <alternate-physical-address>Unspecified</alternate-physical-address>
-    <interface-flapped seconds="963">2026-07-27 07:56:49 UTC (00:16:03 ago)</interface-flapped>
+    <interface-flapped seconds="43560">2026-07-30 07:53:21 UTC (12:06:00 ago)</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
     <traffic-statistics style="verbose">
-      <input-bytes>139810</input-bytes>
-      <output-bytes>735202</output-bytes>
-      <input-packets>3344</input-packets>
-      <output-packets>795</output-packets>
+      <input-bytes>5955817</input-bytes>
+      <output-bytes>5476416</output-bytes>
+      <input-packets>145663</input-packets>
+      <output-packets>33420</output-packets>
       <ipv6-traffic-statistics>
-        <input-bytes>4456</input-bytes>
+        <input-bytes>21748</input-bytes>
         <output-bytes>532</output-bytes>
-        <input-packets>65</input-packets>
+        <input-packets>267</input-packets>
         <output-packets>7</output-packets>
       </ipv6-traffic-statistics>
     </traffic-statistics>
@@ -10261,7 +10758,7 @@
       <name>re0:mgmt-0.0</name>
       <local-index>1002</local-index>
       <snmp-index>194</snmp-index>
-      <generation>609885357188</generation>
+      <generation>609885357202</generation>
       <if-config-flags>
         <iff-up/>
       </if-config-flags>
@@ -10269,20 +10766,20 @@
       <policer-overhead>
             </policer-overhead>
       <traffic-statistics style="verbose">
-        <input-bytes>139810</input-bytes>
-        <output-bytes>735202</output-bytes>
-        <input-packets>3344</input-packets>
-        <output-packets>795</output-packets>
+        <input-bytes>5955817</input-bytes>
+        <output-bytes>5476416</output-bytes>
+        <input-packets>145663</input-packets>
+        <output-packets>33420</output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
-        <input-bytes>139810</input-bytes>
-        <output-bytes>735202</output-bytes>
-        <input-packets>3344</input-packets>
-        <output-packets>795</output-packets>
+        <input-bytes>5955817</input-bytes>
+        <output-bytes>5476416</output-bytes>
+        <input-packets>145663</input-packets>
+        <output-packets>33420</output-packets>
         <ipv6-local-statistics>
-          <input-bytes>4456</input-bytes>
+          <input-bytes>21748</input-bytes>
           <output-bytes>532</output-bytes>
-          <input-packets>65</input-packets>
+          <input-packets>267</input-packets>
           <output-packets>7</output-packets>
         </ipv6-local-statistics>
       </local-traffic-statistics>
@@ -10290,9 +10787,16 @@
             </filter-information>
       <address-family>
         <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>1486</mtu>
-        <generation>609885357189</generation>
+        <generation>609885357203</generation>
         <route-table>36738</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-sendbcast-pkt-to-re/>
           <ifff-is-primary/>
@@ -10309,8 +10813,363 @@
           <ifa-destination>172.20.20.0/24</ifa-destination>
           <ifa-local>172.20.20.5</ifa-local>
           <ifa-broadcast>172.20.20.255</ifa-broadcast>
-          <generation>609885357190</generation>
+          <generation>609885357204</generation>
         </interface-address>
+      </address-family>
+    </logical-interface>
+  </physical-interface>
+  <physical-interface>
+    <name>ae0</name>
+    <admin-status format="Enabled">up</admin-status>
+    <oper-status>up</oper-status>
+    <local-index>1257</local-index>
+    <snmp-index>513</snmp-index>
+    <generation>609885357878</generation>
+    <description>EX1-POP1;ae0</description>
+    <link-level-type>Flexible-Ethernet</link-level-type>
+    <mtu>1522</mtu>
+    <source-filtering>disabled</source-filtering>
+    <speed>400Gbps</speed>
+    <bpdu-error>None</bpdu-error>
+    <l2pt-error>None</l2pt-error>
+    <eth-switch-error>None</eth-switch-error>
+    <loopback>disabled</loopback>
+    <if-flow-control>enabled</if-flow-control>
+    <minimum-links-in-aggregate>1</minimum-links-in-aggregate>
+    <minimum-bandwidth-in-aggregate>1bps</minimum-bandwidth-in-aggregate>
+    <if-device-flags>
+      <ifdf-present/>
+      <ifdf-running/>
+    </if-device-flags>
+    <ifd-specific-config-flags>
+        </ifd-specific-config-flags>
+    <if-config-flags>
+      <iff-snmp-traps/>
+    </if-config-flags>
+    <up-hold-time>0</up-hold-time>
+    <down-hold-time>0</down-hold-time>
+    <current-physical-address>4c:42:41:0f:05:d6</current-physical-address>
+    <hardware-physical-address>4c:42:41:0f:05:d6</hardware-physical-address>
+    <esi-value>00:11:12:13:14:00:00:00:00:00</esi-value>
+    <esi-mode>all-active</esi-mode>
+    <interface-flapped seconds="30403">2026-07-30 11:32:38 UTC (08:26:43 ago)</interface-flapped>
+    <statistics-cleared>Never</statistics-cleared>
+    <traffic-statistics style="verbose">
+      <input-bytes>30921514</input-bytes>
+      <input-bps>2432</input-bps>
+      <output-bytes>40835416</output-bytes>
+      <output-bps>1976</output-bps>
+      <input-packets>421055</input-packets>
+      <input-pps>3</input-pps>
+      <output-packets>565635</output-packets>
+      <output-pps>2</output-pps>
+    </traffic-statistics>
+    <input-error-list>
+      <input-errors>0</input-errors>
+      <input-drops>0</input-drops>
+      <framing-errors>0</framing-errors>
+      <input-runts>0</input-runts>
+      <input-giants>0</input-giants>
+      <input-discards>0</input-discards>
+      <input-resource-errors>0</input-resource-errors>
+    </input-error-list>
+    <output-error-list>
+      <carrier-transitions>2</carrier-transitions>
+      <output-errors>0</output-errors>
+      <output-drops>0</output-drops>
+      <mtu-errors>0</mtu-errors>
+      <output-resource-errors>0</output-resource-errors>
+      <ecn-marked-packets>0</ecn-marked-packets>
+    </output-error-list>
+    <ifd-lag-traffic-statistics>
+      <ifd-lag-members-list>
+        <name>et-0/0/5</name>
+        <input-packets>421055</input-packets>
+        <input-pps>3</input-pps>
+        <input-bytes>30921514</input-bytes>
+        <input-bps>2432</input-bps>
+        <output-packets>565635</output-packets>
+        <output-pps>2</output-pps>
+        <output-bytes>40835416</output-bytes>
+        <output-bps>1976</output-bps>
+      </ifd-lag-members-list>
+    </ifd-lag-traffic-statistics>
+    <ethernet-mac-statistics style="verbose">
+      <input-broadcasts>0</input-broadcasts>
+      <output-broadcasts>0</output-broadcasts>
+      <input-multicasts>0</input-multicasts>
+      <output-multicasts>0</output-multicasts>
+    </ethernet-mac-statistics>
+    <queue-counters style="brief">
+      <interface-cos-short-summary>
+        <intf-cos-forwarding-classes-supported>16</intf-cos-forwarding-classes-supported>
+        <intf-cos-forwarding-classes-in-use>4</intf-cos-forwarding-classes-in-use>
+        <intf-cos-queue-type>Egress queues</intf-cos-queue-type>
+        <intf-cos-num-queues-supported>8</intf-cos-num-queues-supported>
+        <intf-cos-num-queues-in-use>4</intf-cos-num-queues-in-use>
+      </interface-cos-short-summary>
+      <queue>
+        <queue-number>0</queue-number>
+        <forwarding-class-name>best-effort</forwarding-class-name>
+        <queue-counters-queued-packets>20276</queue-counters-queued-packets>
+        <queue-counters-trans-packets>20276</queue-counters-trans-packets>
+        <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
+      </queue>
+      <queue>
+        <queue-number>1</queue-number>
+        <forwarding-class-name>expedited-forwarding</forwarding-class-name>
+        <queue-counters-queued-packets>0</queue-counters-queued-packets>
+        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
+      </queue>
+      <queue>
+        <queue-number>2</queue-number>
+        <forwarding-class-name>assured-forwarding</forwarding-class-name>
+        <queue-counters-queued-packets>0</queue-counters-queued-packets>
+        <queue-counters-trans-packets>0</queue-counters-trans-packets>
+        <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
+      </queue>
+      <queue>
+        <queue-number>3</queue-number>
+        <forwarding-class-name>network-control</forwarding-class-name>
+        <queue-counters-queued-packets>63647</queue-counters-queued-packets>
+        <queue-counters-trans-packets>63647</queue-counters-trans-packets>
+        <queue-counters-total-drop-packets>0</queue-counters-total-drop-packets>
+      </queue>
+    </queue-counters>
+    <queue-num-forwarding-class-name-map>
+      <queue-number>0</queue-number>
+      <forwarding-class-name>best-effort</forwarding-class-name>
+    </queue-num-forwarding-class-name-map>
+    <queue-num-forwarding-class-name-map>
+      <queue-number>1</queue-number>
+      <forwarding-class-name>expedited-forwarding</forwarding-class-name>
+    </queue-num-forwarding-class-name-map>
+    <queue-num-forwarding-class-name-map>
+      <queue-number>2</queue-number>
+      <forwarding-class-name>assured-forwarding</forwarding-class-name>
+    </queue-num-forwarding-class-name-map>
+    <queue-num-forwarding-class-name-map>
+      <queue-number>3</queue-number>
+      <forwarding-class-name>network-control</forwarding-class-name>
+    </queue-num-forwarding-class-name-map>
+    <lag-traffic-statistics>
+      <lag-adaptive-statistics style="verbose">
+        <adaptive-adjusts>0</adaptive-adjusts>
+        <adaptive-scans>0</adaptive-scans>
+        <adaptive-updates>0</adaptive-updates>
+      </lag-adaptive-statistics>
+    </lag-traffic-statistics>
+    <logical-interface>
+      <name>ae0.14</name>
+      <local-index>1065</local-index>
+      <snmp-index>516</snmp-index>
+      <generation>609885357922</generation>
+      <description>EVPN-VLAN-AWARE-INTERNET</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.14 ] ">[ 0x8100.14 ]</link-address>
+      <encapsulation>Ethernet-Bridge</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <lag-traffic-statistics>
+        <lag-bundle>
+          <input-packets>9458</input-packets>
+          <input-pps>1</input-pps>
+          <input-bytes>443309</input-bytes>
+          <input-bps>176</input-bps>
+          <output-packets>9421</output-packets>
+          <output-pps>0</output-pps>
+          <output-bytes>375762</output-bytes>
+          <output-bps>32</output-bps>
+        </lag-bundle>
+      </lag-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ethernet-switching</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357926</generation>
+        <route-table>56</route-table>
+        <evpn-multihomed-status>Forwarding</evpn-multihomed-status>
+        <evpn-mh-esi-sh-label>87</evpn-mh-esi-sh-label>
+        <iff-next-hop>11026</iff-next-hop>
+        <vpls-mesh-group>__all_ces__</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>ae0.15</name>
+      <local-index>1068</local-index>
+      <snmp-index>518</snmp-index>
+      <generation>609885357946</generation>
+      <description>L3VPN-CPE14-UNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.15 ] ">[ 0x8100.15 ]</link-address>
+      <encapsulation>Ethernet-Bridge</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <lag-traffic-statistics>
+        <lag-bundle>
+          <input-packets>25026</input-packets>
+          <input-pps>3</input-pps>
+          <input-bytes>1596924</input-bytes>
+          <input-bps>544</input-bps>
+          <output-packets>27754</output-packets>
+          <output-pps>2</output-pps>
+          <output-bytes>1873107</output-bytes>
+          <output-bps>392</output-bps>
+        </lag-bundle>
+      </lag-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ethernet-switching</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357953</generation>
+        <route-table>56</route-table>
+        <evpn-multihomed-status>Forwarding</evpn-multihomed-status>
+        <evpn-mh-esi-sh-label>87</evpn-mh-esi-sh-label>
+        <iff-next-hop>11027</iff-next-hop>
+        <vpls-mesh-group>__all_ces__</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>ae0.224</name>
+      <local-index>1061</local-index>
+      <snmp-index>605</snmp-index>
+      <generation>609885357883</generation>
+      <description>EVPN-VPWS-CPE24-UNI</description>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x8100.224 ] ">[ 0x8100.224 ]</link-address>
+      <encapsulation>VLAN-CCC</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <lag-traffic-statistics>
+        <lag-bundle>
+          <input-packets>16405</input-packets>
+          <input-pps>2</input-pps>
+          <input-bytes>850792</input-bytes>
+          <input-bps>400</input-bps>
+          <output-packets>16344</output-packets>
+          <output-pps>2</output-pps>
+          <output-bytes>729126</output-bytes>
+          <output-bps>248</output-bps>
+        </lag-bundle>
+      </lag-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>ccc</address-family-name>
+        <mtu>1522</mtu>
+        <generation>609885357887</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>ae0.32767</name>
+      <local-index>1062</local-index>
+      <snmp-index>514</snmp-index>
+      <generation>609885357884</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-up/>
+      </if-config-flags>
+      <link-address format="VLAN-Tag[ 0x0000.0 ] ">[ 0x0000.0 ]</link-address>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <lag-traffic-statistics>
+        <lag-bundle>
+          <input-packets>30066</input-packets>
+          <input-pps>3</input-pps>
+          <input-bytes>3306828</input-bytes>
+          <input-bps>872</input-bps>
+          <output-packets>0</output-packets>
+          <output-pps>0</output-pps>
+          <output-bytes>0</output-bytes>
+          <output-bps>0</output-bps>
+        </lag-bundle>
+        <aggregate-member-info>
+          <aggregate-member-count>1</aggregate-member-count>
+        </aggregate-member-info>
+        <lag-lacp-info>
+          <name>et-0/0/5.32767</name>
+          <lacp-role>Actor</lacp-role>
+          <lacp-sys-priority>127</lacp-sys-priority>
+          <lacp-system-id>11:12:13:14:00:00</lacp-system-id>
+          <lacp-port-priority>127</lacp-port-priority>
+          <lacp-port-number>1</lacp-port-number>
+          <lacp-port-key>1</lacp-port-key>
+        </lag-lacp-info>
+        <lag-lacp-info>
+          <name>et-0/0/5.32767</name>
+          <lacp-role>Partner</lacp-role>
+          <lacp-sys-priority>127</lacp-sys-priority>
+          <lacp-system-id>2c:6b:f5:82:40:c0</lacp-system-id>
+          <lacp-port-priority>127</lacp-port-priority>
+          <lacp-port-number>1</lacp-port-number>
+          <lacp-port-key>1</lacp-port-key>
+        </lag-lacp-info>
+        <lag-lacp-statistics>
+          <name>et-0/0/5.32767</name>
+          <lacp-rx-packets>30053</lacp-rx-packets>
+          <lacp-tx-packets>30404</lacp-tx-packets>
+          <unknown-rx-packets>0</unknown-rx-packets>
+          <illegal-rx-packets>0</illegal-rx-packets>
+        </lag-lacp-statistics>
+        <lag-marker>
+          <name>et-0/0/5.32767</name>
+          <marker-rx-packets>0</marker-rx-packets>
+          <marker-response-tx-packets>0</marker-response-tx-packets>
+          <lacp-rx-packets>0</lacp-rx-packets>
+          <lacp-tx-packets>0</lacp-tx-packets>
+          <unknown-rx-packets>0</unknown-rx-packets>
+          <illegal-rx-packets>0</illegal-rx-packets>
+        </lag-marker>
+      </lag-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>multiservice</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>609885357890</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
       </address-family>
     </logical-interface>
   </physical-interface>
@@ -10318,9 +11177,9 @@
     <name>dsc</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1213</local-index>
+    <local-index>1212</local-index>
     <snmp-index>5</snmp-index>
-    <generation>609885357210</generation>
+    <generation>609885357169</generation>
     <if-type>Software-Pseudo</if-type>
     <link-level-type>Unspecified</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10393,9 +11252,9 @@
     <name>esi</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1204</local-index>
-    <snmp-index>502</snmp-index>
-    <generation>609885357201</generation>
+    <local-index>1203</local-index>
+    <snmp-index>501</snmp-index>
+    <generation>609885357160</generation>
     <if-type>Software-Pseudo</if-type>
     <link-level-type>VxLAN-Tunnel-Endpoint</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10467,9 +11326,9 @@
     <name>fti0</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1205</local-index>
-    <snmp-index>503</snmp-index>
-    <generation>609885357202</generation>
+    <local-index>1204</local-index>
+    <snmp-index>502</snmp-index>
+    <generation>609885357161</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10539,9 +11398,9 @@
     <name>fti1</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1206</local-index>
-    <snmp-index>504</snmp-index>
-    <generation>609885357203</generation>
+    <local-index>1205</local-index>
+    <snmp-index>503</snmp-index>
+    <generation>609885357162</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10611,9 +11470,9 @@
     <name>fti2</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1207</local-index>
-    <snmp-index>505</snmp-index>
-    <generation>609885357204</generation>
+    <local-index>1206</local-index>
+    <snmp-index>504</snmp-index>
+    <generation>609885357163</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10683,9 +11542,9 @@
     <name>fti3</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1208</local-index>
-    <snmp-index>506</snmp-index>
-    <generation>609885357205</generation>
+    <local-index>1207</local-index>
+    <snmp-index>505</snmp-index>
+    <generation>609885357164</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10755,9 +11614,9 @@
     <name>fti4</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1209</local-index>
-    <snmp-index>507</snmp-index>
-    <generation>609885357206</generation>
+    <local-index>1208</local-index>
+    <snmp-index>506</snmp-index>
+    <generation>609885357165</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10827,9 +11686,9 @@
     <name>fti5</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1210</local-index>
-    <snmp-index>508</snmp-index>
-    <generation>609885357207</generation>
+    <local-index>1209</local-index>
+    <snmp-index>507</snmp-index>
+    <generation>609885357166</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10899,9 +11758,9 @@
     <name>fti6</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1211</local-index>
-    <snmp-index>509</snmp-index>
-    <generation>609885357208</generation>
+    <local-index>1210</local-index>
+    <snmp-index>508</snmp-index>
+    <generation>609885357167</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -10971,9 +11830,9 @@
     <name>fti7</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1212</local-index>
-    <snmp-index>510</snmp-index>
-    <generation>609885357209</generation>
+    <local-index>1211</local-index>
+    <snmp-index>509</snmp-index>
+    <generation>609885357168</generation>
     <if-type>FTI</if-type>
     <link-level-type>Flexible-tunnel-Interface</link-level-type>
     <mtu>Unlimited</mtu>
@@ -11043,9 +11902,9 @@
     <name>irb</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1214</local-index>
+    <local-index>1215</local-index>
     <snmp-index>511</snmp-index>
-    <generation>609885357211</generation>
+    <generation>609885357216</generation>
     <if-type>Ethernet</if-type>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
@@ -11073,8 +11932,8 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address format="MAC c4:3a:cd:29:08:05">c4:3a:cd:29:08:05</current-physical-address>
-    <hardware-physical-address format="MAC c4:3a:cd:29:08:05">c4:3a:cd:29:08:05</hardware-physical-address>
+    <current-physical-address format="MAC 4c:42:41:0f:08:06">4c:42:41:0f:08:06</current-physical-address>
+    <hardware-physical-address format="MAC 4c:42:41:0f:08:06">4c:42:41:0f:08:06</hardware-physical-address>
     <alternate-physical-address>Unspecified</alternate-physical-address>
     <interface-flapped seconds="0">Never</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
@@ -11112,6 +11971,234 @@
       <output-resource-errors>0</output-resource-errors>
       <ecn-marked-packets>0</ecn-marked-packets>
     </output-error-list>
+    <logical-interface>
+      <name>irb.14</name>
+      <local-index>1066</local-index>
+      <snmp-index>515</snmp-index>
+      <generation>609885357924</generation>
+      <description>EVPN-VLAN-AWARE-INTERNET</description>
+      <if-config-flags>
+        <iff-up/>
+      </if-config-flags>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <logical-interface-vgw-v4-mac format="MAC 00:11:22:33:44:55">00:11:22:33:44:55</logical-interface-vgw-v4-mac>
+      <logical-interface-bandwidth emit="true">1Gbps</logical-interface-bandwidth>
+      <irb-domain>
+        <irb-routing-instance>EVPN-VLAN-AWARE-POP1</irb-routing-instance>
+        <irb-bridge>VL-14</irb-bridge>
+      </irb-domain>
+      <traffic-statistics style="verbose">
+        <input-bytes>644357</input-bytes>
+        <output-bytes>504388</output-bytes>
+        <input-packets>9399</input-packets>
+        <output-packets>9358</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>434891</input-bytes>
+        <output-bytes>504644</output-bytes>
+        <input-packets>9335</input-packets>
+        <output-packets>9363</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>209466</input-bytes>
+        <input-bps>0</input-bps>
+        <output-bytes>0</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>64</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>0</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357927</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+          </ifa-flags>
+          <ifa-destination>Unspecified</ifa-destination>
+          <ifa-local>152.11.14.1</ifa-local>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357930</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>152.11.14.0/29</ifa-destination>
+          <ifa-local>152.11.14.2</ifa-local>
+          <ifa-broadcast>152.11.14.7</ifa-broadcast>
+          <generation>609885357936</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>multiservice</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>609885357929</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>irb.15</name>
+      <local-index>1067</local-index>
+      <snmp-index>517</snmp-index>
+      <generation>609885357945</generation>
+      <description>L3VPN-CPE14-UNI</description>
+      <if-config-flags>
+        <iff-up/>
+      </if-config-flags>
+      <encapsulation>ENET2</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <logical-interface-bandwidth emit="true">1Gbps</logical-interface-bandwidth>
+      <irb-domain>
+        <irb-routing-instance>EVPN-VLAN-AWARE-POP1</irb-routing-instance>
+        <irb-bridge>VL-15</irb-bridge>
+      </irb-domain>
+      <traffic-statistics style="verbose">
+        <input-bytes>2140728</input-bytes>
+        <output-bytes>2245527</output-bytes>
+        <input-packets>24954</input-packets>
+        <output-packets>27540</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>1572699</input-bytes>
+        <output-bytes>2245803</output-bytes>
+        <input-packets>24683</input-packets>
+        <output-packets>27544</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>568029</input-bytes>
+        <input-bps>360</input-bps>
+        <output-bytes>0</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>271</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>0</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357950</generation>
+        <route-table>51</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>198.11.14.0/30</ifa-destination>
+          <ifa-local>198.11.14.1</ifa-local>
+          <ifa-broadcast>198.11.14.3</ifa-broadcast>
+          <generation>609885357956</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>0</max-local-cache>
+        <new-hold-limit>0</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>1500</mtu>
+        <generation>609885357951</generation>
+        <route-table>51</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>2001:db8:11:14::a/127</ifa-destination>
+          <ifa-local>2001:db8:11:14::a</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357965</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+          </ifa-flags>
+          <ifa-destination>fe80::/64</ifa-destination>
+          <ifa-local>fe80::4e42:4100:f0f:806</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>Unspecified</ifa-broadcast>
+          <generation>609885357975</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>multiservice</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>609885357955</generation>
+        <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+      </address-family>
+    </logical-interface>
   </physical-interface>
   <physical-interface>
     <name>lo0</name>
@@ -11119,7 +12206,7 @@
     <oper-status>up</oper-status>
     <local-index>6</local-index>
     <snmp-index>6</snmp-index>
-    <generation>609885357157</generation>
+    <generation>609885357155</generation>
     <if-type>Loopback</if-type>
     <link-level-type>Unspecified</link-level-type>
     <mtu>Unlimited</mtu>
@@ -11180,7 +12267,7 @@
       <name>lo0.0</name>
       <local-index>1000</local-index>
       <snmp-index>16</snmp-index>
-      <generation>609885357158</generation>
+      <generation>609885357171</generation>
       <if-config-flags>
         <iff-up/>
       </if-config-flags>
@@ -11210,8 +12297,9 @@
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>Unlimited</mtu>
-        <generation>609885357159</generation>
+        <generation>609885357172</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-sendbcast-pkt-to-re/>
         </address-family-flags>
@@ -11227,14 +12315,15 @@
           <ifa-destination>Unspecified</ifa-destination>
           <ifa-local>150.0.0.12</ifa-local>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357162</generation>
+          <generation>609885357175</generation>
         </interface-address>
       </address-family>
       <address-family>
         <address-family-name>iso</address-family-name>
         <mtu>Unlimited</mtu>
-        <generation>609885357160</generation>
+        <generation>609885357173</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -11249,7 +12338,7 @@
           <ifa-destination>Unspecified</ifa-destination>
           <ifa-local>49.0001.0150.0000.0000.0004.00</ifa-local>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357165</generation>
+          <generation>609885357178</generation>
         </interface-address>
       </address-family>
       <address-family>
@@ -11261,8 +12350,9 @@
         <intf-dropcnt>0</intf-dropcnt>
         <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
         <mtu>Unlimited</mtu>
-        <generation>609885357161</generation>
+        <generation>609885357174</generation>
         <route-table>0</route-table>
+        <iff-next-hop>0</iff-next-hop>
         <address-family-flags>
           <ifff-none/>
         </address-family-flags>
@@ -11282,21 +12372,21 @@
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357168</generation>
+          <generation>609885357181</generation>
         </interface-address>
         <interface-address>
           <ifa-flags>
             <ifaf-current-preferred/>
           </ifa-flags>
           <ifa-destination>Unspecified</ifa-destination>
-          <ifa-local>fe80::9ef0:d1f0:f:7669</ifa-local>
+          <ifa-local>fe80::420a:73f0:59:f1e0</ifa-local>
           <interface-address>
             <in6-addr-flags>
               <ifaf-none/>
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>Unspecified</ifa-broadcast>
-          <generation>609885357184</generation>
+          <generation>609885357198</generation>
         </interface-address>
       </address-family>
     </logical-interface>
@@ -11305,9 +12395,9 @@
     <name>lsi</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1202</local-index>
+    <local-index>1201</local-index>
     <snmp-index>4</snmp-index>
-    <generation>609885357199</generation>
+    <generation>609885357158</generation>
     <if-type>Software-Pseudo</if-type>
     <link-level-type>LSI</link-level-type>
     <mtu>Unlimited</mtu>
@@ -11374,14 +12464,290 @@
       <output-resource-errors>0</output-resource-errors>
       <ecn-marked-packets>0</ecn-marked-packets>
     </output-error-list>
+    <logical-interface>
+      <name>lsi.256</name>
+      <local-index>1205</local-index>
+      <snmp-index>608</snmp-index>
+      <generation>807453853098</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-point-to-point/>
+        <iff-up/>
+      </if-config-flags>
+      <encapsulation>lsi</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <input-bps>0</input-bps>
+        <output-bytes>0</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>0</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>0</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>300000</max-local-cache>
+        <new-hold-limit>300000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853125</generation>
+        <route-table>50</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>iso</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>807453853104</generation>
+        <route-table>50</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>100000</max-local-cache>
+        <new-hold-limit>100000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853101</generation>
+        <route-table>50</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>lsi.257</name>
+      <local-index>1206</local-index>
+      <snmp-index>609</snmp-index>
+      <generation>807453853107</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-point-to-point/>
+        <iff-up/>
+      </if-config-flags>
+      <encapsulation>lsi</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <input-bps>0</input-bps>
+        <output-bytes>0</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>0</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>0</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>100000</max-local-cache>
+        <new-hold-limit>100000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853128</generation>
+        <route-table>51</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>iso</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>807453853113</generation>
+        <route-table>51</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>300000</max-local-cache>
+        <new-hold-limit>300000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853110</generation>
+        <route-table>51</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>lsi.258</name>
+      <local-index>1207</local-index>
+      <snmp-index>610</snmp-index>
+      <generation>807453853116</generation>
+      <if-config-flags>
+        <iff-snmp-traps/>
+        <iff-point-to-point/>
+        <iff-up/>
+      </if-config-flags>
+      <encapsulation>lsi</encapsulation>
+      <policer-overhead>
+            </policer-overhead>
+      <traffic-statistics style="verbose">
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <output-bytes>0</output-bytes>
+        <input-packets>0</input-packets>
+        <output-packets>0</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>0</input-bytes>
+        <input-bps>0</input-bps>
+        <output-bytes>0</output-bytes>
+        <output-bps>0</output-bps>
+        <input-packets>0</input-packets>
+        <input-pps>0</input-pps>
+        <output-packets>0</output-packets>
+        <output-pps>0</output-pps>
+      </transit-traffic-statistics>
+      <filter-information>
+            </filter-information>
+      <address-family>
+        <address-family-name>inet</address-family-name>
+        <max-local-cache>300000</max-local-cache>
+        <new-hold-limit>300000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853131</generation>
+        <route-table>52</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>iso</address-family-name>
+        <mtu>Unlimited</mtu>
+        <generation>807453853122</generation>
+        <route-table>52</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+      <address-family>
+        <address-family-name>inet6</address-family-name>
+        <max-local-cache>100000</max-local-cache>
+        <new-hold-limit>100000</new-hold-limit>
+        <intf-curr-cnt>0</intf-curr-cnt>
+        <intf-unresolved-cnt>0</intf-unresolved-cnt>
+        <intf-dropcnt>0</intf-dropcnt>
+        <intf-hold-nh-dropcnt>0</intf-hold-nh-dropcnt>
+        <mtu>Unlimited</mtu>
+        <generation>807453853119</generation>
+        <route-table>52</route-table>
+        <iff-next-hop>0</iff-next-hop>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <filter-information>
+                </filter-information>
+        <policer-information>
+                </policer-information>
+      </address-family>
+    </logical-interface>
   </physical-interface>
   <physical-interface>
     <name>pip0</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1215</local-index>
+    <local-index>1216</local-index>
     <snmp-index>512</snmp-index>
-    <generation>609885357212</generation>
+    <generation>609885357217</generation>
     <if-type>Ethernet</if-type>
     <link-level-type>Ethernet</link-level-type>
     <mtu>1514</mtu>
@@ -11409,8 +12775,8 @@
     <damp-reuse-level>0</damp-reuse-level>
     <damp-suppress-level>0</damp-suppress-level>
     <damp-suppress-state>unsuppressed</damp-suppress-state>
-    <current-physical-address format="MAC c4:3a:cd:29:08:06">c4:3a:cd:29:08:06</current-physical-address>
-    <hardware-physical-address format="MAC c4:3a:cd:29:08:06">c4:3a:cd:29:08:06</hardware-physical-address>
+    <current-physical-address format="MAC 4c:42:41:0f:08:07">4c:42:41:0f:08:07</current-physical-address>
+    <hardware-physical-address format="MAC 4c:42:41:0f:08:07">4c:42:41:0f:08:07</hardware-physical-address>
     <alternate-physical-address>Unspecified</alternate-physical-address>
     <interface-flapped seconds="0">Never</interface-flapped>
     <statistics-cleared>Never</statistics-cleared>
@@ -11453,9 +12819,9 @@
     <name>vtep</name>
     <admin-status format="Enabled">up</admin-status>
     <oper-status>up</oper-status>
-    <local-index>1203</local-index>
-    <snmp-index>501</snmp-index>
-    <generation>609885357200</generation>
+    <local-index>1202</local-index>
+    <snmp-index>510</snmp-index>
+    <generation>609885357159</generation>
     <if-type>Software-Pseudo</if-type>
     <link-level-type>VxLAN-Tunnel-Endpoint</link-level-type>
     <mtu>Unlimited</mtu>

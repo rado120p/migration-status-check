@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `1584a43`):
+Matches the output of `mig-validate checks` (as of commit `2aa60c1`):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -25,6 +25,7 @@ Matches the output of `mig-validate checks` (as of commit `1584a43`):
 | `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |
+| `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
 
 `mode` semantics:
 
@@ -219,7 +220,7 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 3`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+`schema_version: 4`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
 nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
 attempt at data migration.
 
@@ -229,6 +230,7 @@ Version history:
 |---|---|
 | 1 → 2 | addresses split by family, the `nd` area was added |
 | 2 → 3 | the `routes` and `bfd` areas plus the `unassigned.static_routes` / `.bfd_sessions` keys were added |
+| 3 → 4 | `Scope` carries deactivation flags (`routing_instance_active`, `interface_active`) — AR-21 |
 
 > **Older snapshots cannot be replayed.** The bump to 3 means `runs/ipv6/` and
 > `runs/ipv6-live-2026-07-29/` — taken with `schema_version: 2` — are now rejected by
@@ -239,7 +241,7 @@ Version history:
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo

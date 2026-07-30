@@ -82,6 +82,8 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                     static_routes=[dict(route) for route in entry.static_route],
                     bfd_peers=[dict(intent) for intent in entry.bfd],
                 ),
+                routing_instance_active=entry.routing_instance_active,
+                interface_active=entry.interface_active,
             )
         )
     return scopes
