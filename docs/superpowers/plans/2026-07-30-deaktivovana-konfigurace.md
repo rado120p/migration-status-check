@@ -901,11 +901,12 @@ V `_classify_interface` (`:1245`) v obou parserech nahraď řádek
 `interface_active=True` z úlohy 4:
 
 ```python
-            interface_active=config.active,
+            interface_active=interface.active,
 ```
 
-Jméno lokální proměnné s `InterfaceConfig` ověř — v `_classify_interface` se
-může jmenovat jinak než `config`. Použij to, co tam je.
+Parametr se jmenuje `interface`, ne `config` — signatura je
+`_classify_interface(self, interface: InterfaceConfig)` (`mx_parser.py:1194`,
+ověřeno 2026‑07‑30).
 
 - [ ] **Step 7: Spusť test — musí projít**
 
@@ -926,7 +927,7 @@ MX:
 import pathlib
 p = pathlib.Path("mx_parser.py")
 s = p.read_text(encoding="utf-8")
-old = "interface_active=config.active,"
+old = "interface_active=interface.active,"
 assert s.count(old) == 1, f"ocekavan 1 vyskyt, nalezeno {s.count(old)}"
 p.write_text(s.replace(old, "interface_active=True,"), encoding="utf-8")
 EOF
@@ -941,7 +942,7 @@ důkaz, že parametrizace opravdu odděluje parsery.
 EVO — totéž se souborem `evo_parser.py`. Expected: FAIL jen u `[evo]`.
 
 Po obou: `grep -n "interface_active=" mx_parser.py evo_parser.py` musí
-ukázat `config.active` v obou.
+ukázat `interface.active` v obou.
 
 - [ ] **Step 10: Spusť celou sadu a commitni**
 
@@ -1869,7 +1870,96 @@ a běží mu i ostatní checky. `_new()` je postavené tak, aby byly zelené —
 vrátil FAIL, znamená to, že `_new()` má vlastní problém; podívej se, který
 check ho hlásí, dřív než sáhneš na `deactivation.py`.
 
-- [ ] **Step 9: Ověř mutanty**
+- [ ] **Step 9: Ověř, že se důvod dostane až do textového reportu**
+
+Celá vlna stojí na tom, že operátor místo holého FAILu uvidí, **proč** se
+služba nekontroluje. Úloha 8 asertuje `CheckResult.value` — to je datová
+struktura, ne vykreslený výstup. Renderer se dosud ověřuje jen v úloze 12
+kroku 8, který potřebuje živou laborku. Tenhle test to uzavře offline.
+
+Do `tests/reporting/test_text_report.py`:
+
+```python
+def test_deactivated_service_shows_the_reason_in_the_report():
+    """Duvod deaktivace musi byt videt, ne jen ulozeny v CheckResult.
+
+    Bez toho by operator videl SKIP bez vysvetleni - tedy presne ten stav,
+    kvuli kteremu se cela vlna dela. deactivation_state ma family=None, takze
+    radek spada do bezhlavickove sekce; tenhle test hlida, ze tam opravdu
+    dojde a nese hodnotu.
+
+    Zabiji mutanta: vynechani `value` z Findingu v checks/deactivation.py.
+    """
+    result = RunResult(
+        evaluated_at="2026-07-30T12:00:00Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
+        baseline=None,
+        summary={
+            "pass": 0, "warn": 0, "fail": 0, "skip": 1,
+            "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0,
+        },
+        scopes=[
+            ScopeResult(
+                scope_id="svc:L3VPN-CPE14-UNI:IPVPN",
+                key={"description": "L3VPN-CPE14-UNI", "service_type": "IPVPN"},
+                status=Status.SKIP,
+                match=None,
+                checks=[
+                    CheckResult(
+                        id="deactivation_state",
+                        mode="both",
+                        status=Status.SKIP,
+                        severity=Severity.CRITICAL,
+                        message="sluzba je v konfiguraci deaktivovana "
+                        "(interface deactivated), baseline neni k porovnani",
+                        label="Deaktivace",
+                        value="interface deactivated",
+                    )
+                ],
+            )
+        ],
+    )
+
+    text = render(result)
+
+    assert "L3VPN-CPE14-UNI" in text
+    assert "interface deactivated" in text, (
+        "duvod deaktivace se do textoveho reportu nedostal - operator vidi "
+        "SKIP bez vysvetleni"
+    )
+```
+
+Konstruktor `RunResult` a `ScopeResult` porovnej s `_legacy_result()` v témž
+souboru a doplň, co tam navíc je. Podpis `render()` ověř — v souboru se už
+volá.
+
+- [ ] **Step 10: Spusť a ověř mutantem**
+
+Run: `.venv/bin/python -m pytest tests/reporting/test_text_report.py -v -k deactivated`
+Expected: PASS
+
+```bash
+.venv/bin/python - <<'EOF'
+import pathlib
+p = pathlib.Path("tests/reporting/test_text_report.py")
+s = p.read_text()
+old = 'value="interface deactivated",'
+assert s.count(old) == 1, f"ocekavan 1 vyskyt, nalezeno {s.count(old)}"
+p.write_text(s.replace(old, "value=None,"))
+EOF
+grep -n "value=None," tests/reporting/test_text_report.py
+.venv/bin/python -m pytest tests/reporting/test_text_report.py -q -k deactivated
+git checkout tests/reporting/test_text_report.py
+```
+
+Expected: FAILED — hodnota se v reportu neobjeví. Tenhle mutant se aplikuje
+na **test**, ne na kód: ověřuje, že asertace visí na `value`, a ne na tom, že
+se řetězec náhodou objeví v `message`.
+
+Kdyby prošel, renderer bere řetězec odjinud — najdi odkud a asertaci uprav
+tak, aby visela na sloupci hodnot.
+
+- [ ] **Step 11: Ověř mutanty**
 
 Mutant A — `deactivation_state` není výjimka ze zkratky:
 
@@ -1927,7 +2017,7 @@ grep -n "baseline_scope=" migration_validator/engine.py
 Expected: `test_service_deactivated_on_both_sides_is_pass` FAILED, po
 checkoutu je řádek zpátky.
 
-- [ ] **Step 10: Spusť celou sadu a commitni**
+- [ ] **Step 12: Spusť celou sadu a commitni**
 
 Run: `.venv/bin/python -m pytest -q`
 
@@ -2357,12 +2447,25 @@ SKIPu podle AR‑22 a conformance testy pro `junos` to uvidí.
 
 Očekávaný dopad, ověř každou položku zvlášť:
 
+Na `junos-evo` je dopad menší, ale nenulový: `et-0/0/10` je v capturu taky
+deaktivované a `et-0/0/10.0` je scopovaná služba typu `Internet`
+(`172.20.20.5.yml:374`). Přibude naopak `EVPN-VPWS-CPE24-UNI` na `ae0.224`
+a přenahraná `interfaces.xml` přinese `irb.15` / `ae0.15`.
+
+Fixture `tests/fixtures/172.20.20.{4,5}.yml` čtou **čtyři** soubory —
+`tests/collectors/test_conformance.py`, `tests/test_capture.py`,
+`tests/test_end_to_end.py` a `tests/scoping/test_builder.py`. Projdi všechny,
+ne jen conformance.
+
 | test | co se stane | co s tím |
 |---|---|---|
-| počty služeb | vzrostou o `EVPN-VPWS-CPE24-UNI` | oprav čísla |
+| počty služeb (`test_builder`, `test_capture`) | vzrostou o `EVPN-VPWS-CPE24-UNI` na obou zařízeních | oprav čísla |
+| `test_end_to_end` | vykreslené bloky a countery se posunou — většina služeb `junos` je SKIP | oprav očekávání; když test asertuje konkrétní status služby, ověř, že nový status odpovídá matici z AR‑23 |
 | `test_checks_produce_real_verdicts_not_all_skip[junos]` | může spadnout — asertuje „aspoň jeden ne‑SKIP" napříč celým zařízením | živá zůstává nová služba na `ge-0/0/3` a jádrová rozhraní; když ani to nestačí, **zapiš proč** a přeformuluj test na „aspoň jeden ne‑SKIP mezi službami, které deaktivované nejsou" |
 | `test_specific_check_sees_data[junos-static_route_status]` | **spadne** — statiky visí na `L3VPN-CPE13-NNI`, tedy na `ge-0/0/2.113` | ten parametr už nemá živou službu; odstraň ho a **v commit message napiš, že důvodem je deaktivace v laborce, ne regrese** |
 | `test_specific_check_sees_data[junos-interface_state]` | pravděpodobně projde díky `ge-0/0/3` a jádru | ověř |
+| `test_specific_check_sees_data[junos-evo-*]` | evo přišlo o `et-0/0/10.0`, ale ostatní služby zůstávají | ověř každý parametr zvlášť |
+| `test_interfaces_reach_their_scopes[junos-evo]` | po přenahrání `interfaces.xml` musí vidět i `irb.15` / `ae0.15` | ověř — to je celý důvod kroku 6 |
 | `test_every_collector_has_its_fixtures` | musí dál platit i po přenahrání `interfaces.xml` | ověř |
 
 **Rozliš dvě věci a v commit message to napiš:** test, který padl kvůli

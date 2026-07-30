@@ -225,6 +225,14 @@ zkratku z AR‑22.
 Poslední řádek je záměrný: check vrátí prázdný seznam, ne `OK`. Jinak by
 každý zdravý blok narostl o řádek, který nic neříká.
 
+**Proč je „dřív deaktivováno, teď aktivní" WARN, když AR‑25 tutéž změnu
+u routy hlásí jako PASS.** Není to rozpor s R‑2 a nemá se to „opravovat".
+R‑2 mluví o veličině, která se zlepšila — BGP relace, která naskočila. Tady
+se ale nezlepšila veličina, změnila se **topologie**: služba, která na starém
+zařízení vědomě neběžela, na novém běží. To operátor musí potvrdit, ne
+přehlédnout. U statické routy jde naopak o stav jednoho záměru uvnitř služby,
+která existuje na obou stranách, a tam R‑2 platí beze zbytku.
+
 Kombinace se skládá z `run_check()` a `_run_scope()` bez zvláštní logiky:
 u řádku „deaktivováno / deaktivováno" SKIPnou všechny ostatní checky, projde
 jen `OK` z tohoto checku, a `Status.worst()` z jediného ne‑SKIP výsledku dá
