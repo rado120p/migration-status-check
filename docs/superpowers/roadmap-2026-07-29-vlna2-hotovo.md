@@ -155,14 +155,26 @@ cd /home/rado/Desktop/scripts/migration-status-check
 diff mx_parser.py evo_parser.py | wc -l # musí být 146
 ```
 
-Snímky a captureje pro ostré ověření jsou **na disku, ne v repu**
-(`runs/` je v `.gitignore`):
+Captureje pro ostré ověření jsou **na disku, ne v repu** (`runs/` je
+v `.gitignore`). Co ve `runs/bfd-static-2026-07-29/` **zbylo**:
 
 | cesta | co to je |
 |---|---|
-| `runs/bfd-static-2026-07-29/pre.json` | MX před migrací, 9 služeb |
-| `runs/bfd-static-2026-07-29/post.json` | PTX po migraci, s BFD na group i neighbor úrovni |
-| `runs/bfd-static-2026-07-29/cfg/172.20.20.{4,5}.{raw,inherit}.xml` | konfigurace, ze kterých se dá parser ověřit offline |
+| `cfg/172.20.20.{4,5}.{raw,inherit}.xml` | konfigurace, ze kterých se dá parser ověřit offline (u `.5` pozor na stáří, viz níž) |
+| `cfg-pre-group-bfd/` | tatáž konfigurace **před** tím, než se do skupiny `CPE14` přidalo BFD |
+| `rpc/172.20.20.{4,5}.{bfd,bfd_detail,route_static,route_static_all}.xml` | surové RPC odpovědi, ze kterých vznikly fixture pro testy |
+
+**Snímky `pre.json` a `post.json` už neexistují** — ležely ve worktree větve
+a zmizely s ním (`runs/` není trackované, takže je merge nezachoval). Nové se
+udělají proti laborce:
+
+```bash
+.venv/bin/python -m migration_validator.cli capture --help
+```
+
+Nikdy `.venv/bin/mig-validate` ve worktree — shebang dá `.venv/bin` na
+`sys.path[0]` a obejde `pythonpath`, takže se natáhne balík z nadřazeného
+repa. Vždy `python -m migration_validator.cli`.
 
 Pozor u `.5`: capture nese `commit-localtime="2026-07-29 11:43:50 UTC"`, tedy
 stav **před** přestavbou CPE14 na `ae0.15` / `irb.15`, kdežto commitnutá
