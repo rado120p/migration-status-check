@@ -2462,11 +2462,32 @@ ne jen conformance.
 | počty služeb (`test_builder`, `test_capture`) | vzrostou o `EVPN-VPWS-CPE24-UNI` na obou zařízeních | oprav čísla |
 | `test_end_to_end` | vykreslené bloky a countery se posunou — většina služeb `junos` je SKIP | oprav očekávání; když test asertuje konkrétní status služby, ověř, že nový status odpovídá matici z AR‑23 |
 | `test_checks_produce_real_verdicts_not_all_skip[junos]` | může spadnout — asertuje „aspoň jeden ne‑SKIP" napříč celým zařízením | živá zůstává nová služba na `ge-0/0/3` a jádrová rozhraní; když ani to nestačí, **zapiš proč** a přeformuluj test na „aspoň jeden ne‑SKIP mezi službami, které deaktivované nejsou" |
-| `test_specific_check_sees_data[junos-static_route_status]` | **spadne** — statiky visí na `L3VPN-CPE13-NNI`, tedy na `ge-0/0/2.113` | ten parametr už nemá živou službu; odstraň ho a **v commit message napiš, že důvodem je deaktivace v laborce, ne regrese** |
+| `test_specific_check_sees_data[junos-static_route_status]` | **spadne** — statiky visí na `L3VPN-CPE13-NNI`, tedy na `ge-0/0/2.113` | odstraň parametr; **není to ztráta pokrytí, viz níž** |
 | `test_specific_check_sees_data[junos-interface_state]` | pravděpodobně projde díky `ge-0/0/3` a jádru | ověř |
 | `test_specific_check_sees_data[junos-evo-*]` | evo přišlo o `et-0/0/10.0`, ale ostatní služby zůstávají | ověř každý parametr zvlášť |
 | `test_interfaces_reach_their_scopes[junos-evo]` | po přenahrání `interfaces.xml` musí vidět i `irb.15` / `ae0.15` | ověř — to je celý důvod kroku 6 |
 | `test_every_collector_has_its_fixtures` | musí dál platit i po přenahrání `interfaces.xml` | ověř |
+
+**Proč `static_route_status[junos]` není ztráta pokrytí.** Ověřeno
+2026‑07‑30: RPC nahrávky ten deaktivovaný stav **už odrážejí**.
+`tests/fixtures/rpc/junos/interfaces.xml` obsahuje `ge-0/0/2`
+a `ge-0/0/2.16386`, ale **ne** `ge-0/0/2.113` — nakonfigurované jednotky na
+deaktivovaném rozhraní na zařízení neexistují, zůstane fyzické rozhraní
+a interní `.16386`.
+
+Ten parametr tedy dnes prochází jedině tak, že si check vyrobí FAIL
+`neni v tabulce` ze samotného záměru — tedy přesně ten falešný FAIL, který
+tahle vlna odstraňuje. Asertaci „aspoň jeden ne‑SKIP" uspokojovalo hlášení
+o routě, která na zařízení legitimně není. Skutečný šev drží
+`test_static_route_check_really_reads_the_routing_table` na `junos-evo`,
+který vyžaduje PASS, ne jen ne‑SKIP; ten po regeneraci musí dál platit
+a **je to on, co se hlídá**.
+
+**Laborka se kvůli tomu nemá zapínat.** Ověřeno: šest ze sedmi adres na
+deaktivovaných rozhraních koliduje se živými (`ge-0/0/2` s `et-0/0/8` na `.5`,
+`ge-0/0/4` s `irb` na `.5`, `.5`/`et-0/0/10` s vlastním `irb`). Volné je
+jedině `ge-0/0/5` na `.4` (`152.11.14.1/29`) a to statiky nenese. Laborka
+modeluje stav **po migraci** a je to správný stav pro tuhle vlnu.
 
 **Rozliš dvě věci a v commit message to napiš:** test, který padl kvůli
 deaktivaci v laborce, je správné chování a jeho očekávání se opravuje. Test,
