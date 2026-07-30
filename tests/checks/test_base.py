@@ -2,6 +2,7 @@ import pytest
 
 from migration_validator.config import CheckConfig, default_config
 from migration_validator.checks.base import Check, CheckContext, Mode, run_check
+from migration_validator.checks.ifaces import InterfaceStateCheck
 from migration_validator.models.result import Finding, Outcome, Severity, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
@@ -234,3 +235,59 @@ def test_run_check_propagates_presentation_fields():
     assert result.value == "Up"
     assert result.baseline_value == "Down"
     assert result.delta == "zmena"
+
+
+def test_deactivated_scope_skips_every_check():
+    """Deaktivovana sluzba nevyrabi FAILy - jen rekne, ze je deaktivovana.
+
+    Zabiji mutanta: vynechani nove zkratky z run_check. Bez ni by sluzba na
+    deaktivovanem rozhrani hlasila FAIL na vsem (ping down, BGP down) bez
+    jakehokoli vysvetleni - presne to, co v laborce dnes dela ge-0/0/4.
+    """
+    scope = Scope(
+        id="svc:CPE14:IPVPN",
+        kind="service",
+        key=ScopeKey(description="CPE14", service_type="IPVPN"),
+        selectors=Selectors(interfaces=["ge-0/0/4.0"]),
+        interface_active=False,
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={"interfaces": {}},
+        baseline=None,
+        config=default_config(),
+    )
+
+    results = run_check(InterfaceStateCheck(), ctx)
+
+    assert results
+    assert all(result.status is Status.SKIP for result in results)
+    assert results[0].value == "interface deactivated"
+
+
+def test_live_scope_still_runs_its_checks():
+    """Protejsek - bez nej by slo zkratku napsat tak, ze SKIPuje vzdycky.
+
+    Zabiji mutanta: podminka zmenena na `if True`.
+    """
+    scope = Scope(
+        id="svc:CPE13:IPVPN",
+        kind="service",
+        key=ScopeKey("CPE13", "IPVPN", None),
+        selectors=Selectors(interfaces=["ge-0/0/2.113"]),
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={
+            "interfaces": {
+                "ge-0/0/2.113": {"admin_status": "up", "oper_status": "up"}
+            }
+        },
+        baseline=None,
+        config=default_config(),
+    )
+
+    results = run_check(InterfaceStateCheck(), ctx)
+
+    assert results
+    assert all(result.status is Status.PASS for result in results)
