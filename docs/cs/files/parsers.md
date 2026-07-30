@@ -152,19 +152,33 @@ v instanci do `instance.bfd`.
 ## Deaktivovaná konfigurace nevyrábí záměr
 
 `deactivate` je standardní junosí idiom pro vyřazení konfigurace při migraci — stanza
-v souboru zůstane, ale zařízení ji nepoužívá a v XML nese `inactive="inactive"`. Parser ji
-proto musí přeskočit na úrovních, ze kterých se dělá záměr statické routy a BFD (výčet
-neošetřených kontejnerů je na konci sekce); jinak by validator hlásil
-`FAIL … neni v tabulce` nebo `FAIL … bez session` za něco, co operátor vypnul úmyslně —
-a falešný rozpor je jediný výstup, který podrývá celý smysl porovnávání konfigurace se
-skutečností.
+v souboru zůstane, ale zařízení ji nepoužívá a v XML nese `inactive="inactive"`. Tady je
+potřeba rozlišit dvě různé věci, které se v inventory dějí při deaktivaci nezávisle na sobě:
+
+- **Služba se z inventory nikdy nevypouští.** Deaktivovaná služba se pořád musí zmigrovat,
+  takže zmizet z výstupu by byla chyba, ne oprava. Místo toho nese dva příznaky —
+  `routing_instance_active` a `interface_active` (schema 4, AR‑20/AR‑21) — které říkají, jestli
+  je deaktivovaná routing instance, rozhraní, nebo obojí. Validator ty příznaky čte a takovou
+  službu SKIPne s důvodem `interface deactivated` / `routing instance deactivated`, místo aby
+  nad ní počítal FAIL/WARN, jako by běžela.
+- **Záměr (statická routa, BFD relace, BGP soused) se z deaktivovaného kontejneru pořád
+  vypouští úplně** — bez příznaku, beze stopy. Kdyby validator záměr přečetl, hlásil by
+  `FAIL … neni v tabulce` nebo `FAIL … bez session` za něco, co operátor vypnul úmyslně, a
+  falešný rozpor je jediný výstup, který podrývá celý smysl porovnávání konfigurace se
+  skutečností.
 
 `_is_inactive()` rozpozná tři podoby: `inactive="inactive"`, `active="false"` i namespacovaný
-YANG atribut `active`. Kontroluje se na těchto uzlech:
+YANG atribut `active`. Deaktivace se navíc dědí z předků dolů (AR‑19) — `deactivate
+routing-instances` tedy zabírá na všechny `instance` pod sebou, `deactivate protocols` na
+`bgp`/`group`/`neighbor` pod sebou atd., i když sám vnořený uzel atribut `inactive` nenese.
+Bez dědění by si úroveň kontejneru a úroveň položky odporovaly: deaktivovat jednu VRF statiky
+vypustí, deaktivovat **všechny** VRF neudělá nic.
+
+Kontroluje se (s děděním z předků) na těchto uzlech:
 
 | uzel | kde | co by jinak vzniklo |
 |---|---|---|
-| `instance` | `_parse_static_routes()` přeskočí; `_parse_routing_instances()` ji zapíše s `active: false` | statiky vyřazené VRF |
+| `instance` | `_parse_static_routes()` přeskočí; `_parse_routing_instances()` ji zapíše s `routing_instance_active: false` | statiky vyřazené VRF |
 | `routing-options` | `_parse_static_routes()`, **obě** smyčky (globální i v instanci) | všechny statiky té úrovně |
 | `rib` | `_static_routes_under()` | statiky celé tabulky (typicky IPv6) |
 | `static` | `_static_routes_under()`, jedno místo pro `static` pod `routing-options` i pod `rib` | statiky toho kontejneru |
@@ -172,6 +186,11 @@ YANG atribut `active`. Kontroluje se na těchto uzlech:
 | `group` | `_parse_bfd()` | BFD záměr celé skupiny |
 | `neighbor` | `_parse_bfd()`, `_parse_bgp_neighbors()` | BGP peer a jeho BFD |
 | `bfd-liveness-detection` | `_bfd_node()` | BFD záměr té úrovně |
+
+Díky dědění z předků pokrývá řádek `neighbor` i deaktivovaný `protocols`/`bgp` o úroveň výš
+(ancestor walk z `neighbor` na ně narazí cestou nahoru) a řádek `instance` pokrývá i
+deaktivovaný kontejner `routing-instances` jako celek — samostatné řádky pro tyhle kontejnery
+proto nejsou potřeba.
 
 **U `bfd-liveness-detection` má přeskočení ještě druhý efekt:** `_bfd_node()` vrátí `None`,
 takže dědění pokračuje o úroveň výš — soused s deaktivovaným BFD spadne pod pravidlo skupiny.
@@ -181,19 +200,18 @@ Přesně to udělá i Junos, takže to není zjednodušení, ale shoda se zaří
 a duplikovat kontrolu atributu inline by znamenalo mít pravidlo „co je neaktivní" na dvou
 místech.
 
-**Rozsah je omezený a tady je celý výčet toho, co ošetřený není.** Deaktivace těchto
-kontejnerů dnes záměr vyrobí, tedy vede na falešný FAIL:
+**Deaktivace rozhraní (`interfaces`, `interface`, `unit`) do tohohle stromu nezasahuje.**
+`<interfaces>` a `<routing-instances>`/`<routing-options>` jsou v XML oddělené podstromy, takže
+ancestor walk z uzlu `neighbor` nebo `route` na deaktivované rozhraní nikdy nenarazí. Deaktivovat
+jen rozhraní tedy služba se statikami/BGP sousedy nadále nese v záměru — a je to správně:
+Junos taky nepřestane instalovat routu jen proto, že rozhraní, na kterém sedí navázaná služba,
+je vypnuté, dokud je vypnutá jen ta jednotka. Validator tenhle případ řeší jinak: přes
+`interface_active`, který službu SKIPne celou (viz výš), takže manufakturovaný FAIL na routě
+stejně nevznikne — jen z jiného mechanismu než dědění deaktivace do záměru.
 
-| neošetřený kontejner | co se stane | proč to tady nekončí |
-|---|---|---|
-| `protocols`, `bgp` | BFD i BGP záměr celé úrovně zůstane živý | tentýž XPath `protocols/bgp` čte i `_parse_bgp_neighbors()`. Ošetřit ho jen pro BFD by znamenalo, že se BFD a BGP na deaktivovaném `protocols bgp` neshodnou — je to průřezová změna napříč parsováním BGP, ne detail BFD. |
-| `routing-instances` (kontejner, ne jednotlivá `instance`) | statiky všech VRF zůstanou živé | totéž: kontejner čte i `_parse_routing_instances()` |
-| `interfaces`, `interface`, `unit` | služba i s jejími statikami zůstane živá | jediný uzel, který `inactive="inactive"` v reálných captureech skutečně nese — a zároveň už zapsaná mezera: `RoutingInstance.active` je stav **instance**, ne rozhraní, a žádný check ho nečte |
-
-Guardy výše tedy na reálných datech z 2026‑07‑29 nic nezahazují: ve všech čtyřech captureech
-nese `inactive="inactive"` jen `<interface>`. Testy proto pracují s ručně složeným XML. Doplnit
-zbývající guardy je práce na vlnu 3 — každý potřebuje vlastní pokrytí, protože nepokrytý guard
-je stejná chyba jako chybějící guard.
+Hlubší úrovně (deaktivovaná jednotlivá `route`, `bfd-liveness-detection` nebo `neighbor`) se
+záměru pořád vypouští beze stopy — bez vlastního příznaku jako `interface_active`. Rozšířit
+příznaky i na tuhle úroveň je vědomě odložené, mimo rozsah téhle vlny.
 
 ---
 
@@ -251,13 +269,16 @@ usage: mx_parser.py [-h] [--auth {key,password}] [-u USERNAME] [-k KEY_FILE]
 
 ## Výstupní formát
 
-Ukázka je vygenerovaná z `tests/fixtures/172.20.20.4.yml`, ne psaná ručně:
+Ukázka je vygenerovaná z `tests/fixtures/172.20.20.5.yml`, ne psaná ručně. (Stejná služba
+L3VPN-CPE13-NNI existuje i na `172.20.20.4.yml` na `ge-0/0/2.113`, ale po regeneraci proti
+laborce v AR-29 je tam `ge-0/0/2` deaktivované — pro ukázku běžného, aktivního tvaru záznamu je
+proto zdrojem `.5`, kde stejná služba běží na `et-0/0/8.113`.)
 
 ```yaml
-schema_version: 3
-device: 172.20.20.4
+schema_version: 4
+device: 172.20.20.5
 interfaces:
-- interface: ge-0/0/2.113
+- interface: et-0/0/8.113
   description: L3VPN-CPE13-NNI
   service_type: IPVPN
   service_subtype: null
@@ -268,7 +289,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -301,9 +323,13 @@ interfaces:
   - 'Statická routa odpovídá subnetu rozhraní: 172.26.1.0/29, 2001:eeee::/64'
 ```
 
+`routing_instance_active` a `interface_active` (schema 4) říkají, jestli je deaktivovaná
+routing instance nebo rozhraní té služby — viz sekci „Deaktivovaná konfigurace nevyrábí záměr"
+výš. Zdravá, plně aktivní služba jako tahle má oba `true`.
+
 Adresy jsou rozdělené podle rodiny — `ipv4_address`/`ipv6_address` a
 `virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — a nezávisle na obsahu se do YAML vždy
-zapíše top-level klíč `schema_version: 3`. Validator jinou hodnotu `schema_version` **tvrdě
+zapíše top-level klíč `schema_version: 4`. Validator jinou hodnotu `schema_version` **tvrdě
 odmítne** (`models/inventory.py::load_inventory()`), místo aby starou inventory tiše přečetl
 jako službu bez adres nebo bez záměru — viz [models.md](models.md#inventorypy--vstup-z-parserů).
 

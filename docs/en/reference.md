@@ -219,7 +219,7 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 3`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+`schema_version: 4`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
 nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
 attempt at data migration.
 
@@ -229,6 +229,7 @@ Version history:
 |---|---|
 | 1 → 2 | addresses split by family, the `nd` area was added |
 | 2 → 3 | the `routes` and `bfd` areas plus the `unassigned.static_routes` / `.bfd_sessions` keys were added |
+| 3 → 4 | `Scope` carries deactivation flags (`routing_instance_active`, `interface_active`) — AR-21 |
 
 > **Older snapshots cannot be replayed.** The bump to 3 means `runs/ipv6/` and
 > `runs/ipv6-live-2026-07-29/` — taken with `schema_version: 2` — are now rejected by
@@ -239,7 +240,7 @@ Version history:
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo

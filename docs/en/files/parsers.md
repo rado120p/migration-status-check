@@ -161,19 +161,34 @@ A service without a routing instance reaches into `self.default_bfd` (top-level
 
 `deactivate` is the standard Junos idiom for retiring configuration during a migration — the
 stanza stays in the file, but the device does not use it and the XML carries
-`inactive="inactive"`. The parser must therefore skip it at the levels that static-route and BFD
-intent is derived from (the unguarded containers are listed at the end of this section);
-otherwise the validator would report `FAIL … neni v tabulce` or
-`FAIL … bez session` for something the operator deliberately turned off — and a *false*
-divergence is the one output that undermines the whole point of comparing configuration
-against reality.
+`inactive="inactive"`. Two different things happen on deactivation, independently of each
+other, and it is worth separating them:
+
+- **The service is never dropped from the inventory.** A deactivated service still has to be
+  migrated, so disappearing from the output would be a defect, not a fix. Instead it carries two
+  flags — `routing_instance_active` and `interface_active` (schema 4, AR‑20/AR‑21) — that say
+  whether the deactivated part is the routing instance, the interface, or both. The validator
+  reads those flags and SKIPs such a service with the reason `interface deactivated` /
+  `routing instance deactivated`, instead of scoring FAIL/WARN as if it were running.
+- **Intent (a static route, a BFD session, a BGP neighbor) is still dropped completely** from a
+  deactivated container — no flag, no trace. If the validator read the intent anyway, it would
+  report `FAIL … neni v tabulce` or `FAIL … bez session` for something the operator deliberately
+  turned off, and a *false* divergence is the one output that undermines the whole point of
+  comparing configuration against reality.
 
 `_is_inactive()` recognises three forms: `inactive="inactive"`, `active="false"` and the
-namespaced YANG `active` attribute. It is checked on these nodes:
+namespaced YANG `active` attribute. Deactivation also inherits from ancestors downward (AR‑19)
+— `deactivate routing-instances` reaches every `instance` under it, `deactivate protocols`
+reaches `bgp`/`group`/`neighbor` under it, and so on, even when the nested node itself carries
+no `inactive` attribute. Without that inheritance, the container level and the item level would
+contradict each other: deactivating one VRF drops its statics, deactivating **all** VRFs would
+do nothing.
+
+It is checked (with ancestor inheritance) on these nodes:
 
 | node | where | what would otherwise appear |
 |---|---|---|
-| `instance` | `_parse_static_routes()` skips it; `_parse_routing_instances()` records it with `active: false` | statics of a retired VRF |
+| `instance` | `_parse_static_routes()` skips it; `_parse_routing_instances()` records it with `routing_instance_active: false` | statics of a retired VRF |
 | `routing-options` | `_parse_static_routes()`, **both** loops (global and per instance) | every static at that level |
 | `rib` | `_static_routes_under()` | the statics of a whole table (typically IPv6) |
 | `static` | `_static_routes_under()`, one place covering `static` under `routing-options` and under `rib` alike | the statics of that container |
@@ -181,6 +196,11 @@ namespaced YANG `active` attribute. It is checked on these nodes:
 | `group` | `_parse_bfd()` | the BFD intent of a whole group |
 | `neighbor` | `_parse_bfd()`, `_parse_bgp_neighbors()` | a BGP peer and its BFD |
 | `bfd-liveness-detection` | `_bfd_node()` | the BFD intent of that level |
+
+Thanks to ancestor inheritance, the `neighbor` row also covers a deactivated `protocols`/`bgp`
+one level up (the ancestor walk from `neighbor` reaches them on the way up), and the `instance`
+row also covers the `routing-instances` container as a whole — separate rows for those
+containers are not needed.
 
 **On `bfd-liveness-detection` the skip has a second effect:** `_bfd_node()` returns `None`, so
 inheritance carries on one level up — a neighbour whose BFD is deactivated falls under the
@@ -191,19 +211,19 @@ with the device.
 `self._is_inactive()`, and duplicating the attribute check inline would put the rule for "what
 counts as inactive" in two places.
 
-**The scope is narrow, and this is the complete list of what is not guarded.** Deactivating any
-of these containers still produces intent today, i.e. leads to a false FAIL:
+**Deactivating an interface (`interfaces`, `interface`, `unit`) does not reach into this tree.**
+`<interfaces>` and `<routing-instances>`/`<routing-options>` are separate subtrees in the XML, so
+an ancestor walk starting from a `neighbor` or `route` node never crosses into a deactivated
+interface. Deactivating only the interface therefore leaves the service's statics and BGP
+neighbors in the intent — and that is correct: Junos does not stop installing a route just
+because the interface a service sits on is disabled, as long as only that unit is disabled. The
+validator handles this case differently, through `interface_active`, which SKIPs the whole
+service (see above), so the manufactured FAIL on the route still never happens — just through a
+different mechanism than inheriting deactivation into the intent.
 
-| unguarded container | what happens | why it does not end here |
-|---|---|---|
-| `protocols`, `bgp` | the BFD *and* BGP intent of the whole level stays live | the same `protocols/bgp` XPath also feeds `_parse_bgp_neighbors()`. Guarding it for BFD alone would make BFD and BGP disagree about a deactivated `protocols bgp` — it is a cross-cutting change across BGP parsing, not a BFD detail. |
-| `routing-instances` (the container, not an individual `instance`) | the statics of every VRF stay live | same reason: the container is also read by `_parse_routing_instances()` |
-| `interfaces`, `interface`, `unit` | the service and its statics stay live | the only node that actually carries `inactive="inactive"` in the real captures — and already a recorded gap: `RoutingInstance.active` is the **instance's** state, not the interface's, and no check reads it |
-
-So the guards above discard nothing on the real data from 2026‑07‑29: in all four captures only
-`<interface>` carries `inactive="inactive"`. That is why the tests use hand-built XML. Adding the
-remaining guards is wave-3 work — each needs its own coverage, because an uncovered guard is the
-same defect as a missing one.
+Deeper levels (an individually deactivated `route`, `bfd-liveness-detection`, or `neighbor`) are
+still dropped from intent without a trace — without a flag of their own like `interface_active`.
+Extending the flags to that level is deliberately deferred, out of scope for this wave.
 
 ---
 
@@ -262,13 +282,16 @@ finely:
 
 ## Output format
 
-The sample is generated from `tests/fixtures/172.20.20.4.yml`, not written by hand:
+The sample is generated from `tests/fixtures/172.20.20.5.yml`, not written by hand. (The same
+L3VPN-CPE13-NNI service also exists in `172.20.20.4.yml` on `ge-0/0/2.113`, but after the AR‑29
+regeneration against the lab `ge-0/0/2` there is deactivated — so for a sample of the ordinary,
+active shape of a record the source is `.5`, where the same service runs on `et-0/0/8.113`.)
 
 ```yaml
-schema_version: 3
-device: 172.20.20.4
+schema_version: 4
+device: 172.20.20.5
 interfaces:
-- interface: ge-0/0/2.113
+- interface: et-0/0/8.113
   description: L3VPN-CPE13-NNI
   service_type: IPVPN
   service_subtype: null
@@ -279,7 +302,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
-  active: true
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -314,9 +338,13 @@ interfaces:
 
 (The `detection_reason` sentences are Czech because the parsers emit them that way.)
 
+`routing_instance_active` and `interface_active` (schema 4) say whether the routing instance or
+the interface of that service is deactivated — see "Deactivated configuration produces no
+intent" above. A healthy, fully active service like this one has both `true`.
+
 Addresses are now split by family — `ipv4_address`/`ipv6_address` and
 `virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — and the YAML always carries a
-top-level `schema_version: 3` key. The validator **rejects any other `schema_version`
+top-level `schema_version: 4` key. The validator **rejects any other `schema_version`
 outright** (`models/inventory.py::load_inventory()`) instead of silently reading a stale
 file as a service with no addresses or no intent — see
 [models.md](models.md#inventorypy--the-input-from-the-parsers).

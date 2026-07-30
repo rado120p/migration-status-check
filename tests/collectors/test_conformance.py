@@ -237,7 +237,14 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         ("junos-evo", "evpn_mac_count"),
         ("junos-evo", "evpn_esi_status"),
         ("junos-evo", "evpn_vpws_status"),
-        ("junos", "static_route_status"),
+        # ("junos", "static_route_status") schvalne chybi (AR-29). "Aspon
+        # jeden ne-SKIP" na junos statikach nedrzi seam - vyda ho i
+        # manufakturovany FAIL "neni v tabulce" ze ctenych intentu, kdyz
+        # oblast routes vubec neprecte. Po regeneraci se to jen prestehovalo:
+        # driv to byla deaktivovana L3VPN-CPE13-NNI, ted stejny efekt nese
+        # irb.4094/MGMT (routes.xml fixture pro junos MGMT.inet.0 nema).
+        # Skutecny seam drzi test_static_route_check_really_reads_the_routing_table
+        # na junos-evo, ktery vyzaduje PASS.
         ("junos-evo", "static_route_status"),
         # bfd_session_state schvalne jen pro junos-evo: fixture pro junos je
         # zamerne prazdny vypis (BGP je u obou peeru Idle), takze check tam

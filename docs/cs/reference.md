@@ -212,7 +212,7 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 3`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 4`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -222,6 +222,7 @@ Historie verzí:
 |---|---|
 | 1 → 2 | adresy rozdělené na rodiny, přibyla oblast `nd` |
 | 2 → 3 | přibyly oblasti `routes` a `bfd` a klíče `unassigned.static_routes` / `.bfd_sessions` |
+| 3 → 4 | `Scope` nese příznaky deaktivace (`routing_instance_active`, `interface_active`) — AR-21 |
 
 > **Starší snímky nejdou přehrát.** Zvýšení na 3 znamená, že `runs/ipv6/`
 > a `runs/ipv6-live-2026-07-29/` — pořízené se `schema_version: 2` — už `evaluate` odmítne.
@@ -232,7 +233,7 @@ Historie verzí:
 
 ```jsonc
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
