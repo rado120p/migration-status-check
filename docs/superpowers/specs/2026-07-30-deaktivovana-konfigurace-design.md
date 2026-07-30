@@ -265,11 +265,27 @@ i osiřelá fixture jsou fail, ne skip.
 
 ### AR-27 — MX šev pro `bfd_session_state`
 
-Parametr `("junos", "bfd_session_state")` v conformance testu chybí. Fixture
-je záměrně prázdný výpis (BGP `Idle` na obou peerech), takže check správně
-vrací všechno SKIP — ale důsledek je, že na MX by přejmenovaný klíč byl
-neviditelný. Parametr se doplní; test musí ověřit, že check ten klíč
-**přečetl**, ne jen že nespadl.
+Parametr `("junos", "bfd_session_state")` v conformance testu chybí, takže na
+MX by přejmenovaný klíč byl neviditelný.
+
+**Doplnit ten parametr ale nejde.** Ověřeno 2026‑07‑30: `bfd.xml` pro `junos`
+má **nula** session — a stejně tak surový capture z laborky
+`runs/bfd-static-2026-07-29/rpc/172.20.20.4.bfd.xml`. Není to stará fixture,
+MX žádnou BFD session nemá, takže přenahrání (AR‑29) na tom nic nezmění
+a asertace „aspoň jeden ne‑SKIP" by selhala z legitimního důvodu.
+
+Šev, o který jde, na platformě nezávisí — je to otázka, jestli check čte
+právě tu oblast, kterou collector vydává. Uzavře se dvěma půlkami:
+
+- `test_collector_keys_match_contract` (už existuje) tvrdí, že klíče faktů
+  odpovídají jménům collectorů, a to na obou platformách.
+- Nový test v `tests/checks/test_bfd.py` ověří, že `BfdSessionStateCheck` čte
+  oblast pojmenovanou `BfdCollector().name`, ne literál `"bfd"` napsaný
+  podruhé.
+
+**Co tím pokryté není:** MX‑specifické parsování BFD odpovědi. Zůstává
+neověřené, dokud v laborce nebude MX se session — zapsat do roadmapy vlny 3,
+ne zamaskovat testem, který projde vždycky.
 
 ### AR-28 — tři nediskriminující testy
 
@@ -302,6 +318,18 @@ Až **po** AR‑18 … AR‑25, protože ty mění formát i obsah.
   test službu CPE14 nevidí.
 - Mění se tím `tests/fixtures/172.20.20.{4,5}.yml`, takže se pohnou očekávání
   v testech (počty služeb, conformance). To je součást úlohy, ne překvapení.
+
+**Předpovězený dopad na conformance pro `junos`.** V konfiguraci, kterou
+parser konzumuje (`…/cfg/172.20.20.4.inherit.xml`), jsou deaktivovaná
+`ge-0/0/2`, `ge-0/0/4` i `ge-0/0/5`. Na `ge-0/0/2` visí skoro všechny
+zákaznické služby MX (`.13`, `.113`, `.213`, `.313`, `.413`), takže po
+regeneraci většina služeb `junos` spadne podle AR‑22 do SKIPu. Konkrétně
+`test_specific_check_sees_data[junos-static_route_status]` ztratí živou službu
+— statiky visí na `L3VPN-CPE13-NNI`, tedy na `ge-0/0/2.113`.
+
+Je to správné chování, ne regrese. Očekávání se opravují, kód ne — ale rozdíl
+mezi „padlo kvůli deaktivaci v laborce" a „padlo kvůli regresi" musí být
+u každého opraveného testu zapsaný.
 
 `stash@{0}` se **nedropuje** — je to jediný artefakt kromě prózy roadmapy,
 který nese záznam o `EVPN-VPWS-CPE24-UNI` před regenerací.
