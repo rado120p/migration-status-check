@@ -44,8 +44,14 @@ class BfdSessionStateCheck(Check):
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        # Zaznam bez `peer` se preskoci. str(item.get("peer")) by z nej udelal
+        # doslovny string "None", tedy radek "BFD (None)" s family=None, ktery
+        # spadne do bezhlavickove sekce reportu. Parser peer vzdy vyplni,
+        # takze je to dosazitelne jen rucne upravenou inventory.
         intent = {
-            str(item.get("peer")): item for item in ctx.scope.selectors.bfd_peers
+            str(item["peer"]): item
+            for item in ctx.scope.selectors.bfd_peers
+            if item.get("peer")
         }
         sessions: dict[str, Any] = ctx.subject.get("bfd", {})
         baseline_sessions: dict[str, Any] = (ctx.baseline or {}).get("bfd", {})

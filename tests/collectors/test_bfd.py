@@ -18,6 +18,10 @@ PLATFORMS = ("junos", "junos-evo")
 def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
     assert isinstance(result, dict)
+    # Jmeno testu slibuje klicovani adresou peeru, tak to i asertujme.
+    # Fixture pro junos je zamerne prazdna, tam neni co overit.
+    if platform == "junos-evo":
+        assert "152.11.13.2" in result
 
 
 def test_empty_output_is_a_valid_state(rpc_fixture):
@@ -59,6 +63,6 @@ def test_entries_have_expected_keys(rpc_fixture):
         }
 
 
-def test_collector_passes_detail_flag(rpc_fixture):
+def test_collector_passes_detail_flag():
     """Strucna varianta nema bfd-client ani remote-state."""
     assert BfdCollector().rpc_kwargs("junos") == {"detail": True}

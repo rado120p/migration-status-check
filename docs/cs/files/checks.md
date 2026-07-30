@@ -342,8 +342,13 @@ by dva snímky s týmiž next-hopy v jiném pořadí daly falešný
 | nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
 | v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
 
-Rozlišení posledních dvou řádků drží `is_device`: v device scope není záměr znám (AR‑17),
-takže se hlásí `chybi`, ne `neni v tabulce`.
+Poslední dva řádky rozlišuje `configured`, tedy „je routa v selektorech scopu": device scope
+inventory nemá, jeho selektory jsou vždy prázdné, takže se tam hlásí `chybi`, ne
+`neni v tabulce` — záměr není znám (AR‑17). Podmínka v kódu je
+`configured and not is_device`; **konjunkt `not is_device` je nečinný**, protože `configured`
+už ne‑device implikuje. Zůstává jako zapsaný záměr AR‑17, ne jako práce. V `bfd.py` vypadá
+stejná podmínka stejně, ale **je živá** — tam se do odpovídající větve chodí právě
+s `configured=False`. Nemají se harmonizovat.
 
 Label je `Staticka routa (<RIB> <prefix>)` — jméno RIB jde do kvalifikátoru popisku, ne do
 samostatného podřádku. `family` se odvozuje **z prefixu**, ne z názvu RIB, protože název

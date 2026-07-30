@@ -113,7 +113,7 @@ def _parse(module, parser_class, xml: str):
 def test_rib_names_match_what_show_route_returns(module, parser_class):
     """Obe konfiguracni podoby se normalizuji na jmeno tabulky z RPC.
 
-    Naivni //static/route by nasel obojí, ale ztratil by prislusnost k RIB -
+    Naivni //static/route by nasel oboji, ale ztratil by prislusnost k RIB -
     a prave ta odlisuje ::/0 v mgmt_junos.inet6.0 od ::/0 v inet6.0.
     """
     parser = parser_class(etree.XML(BOTH_FAMILIES.encode()))
@@ -288,7 +288,7 @@ def test_next_hop_in_foreign_vrf_does_not_match(module, parser_class):
 # Tyhle tvary v laborce nejsou: ve vsech ctyrech captureech z 2026-07-29
 # nese inactive="inactive" jen <interface>, nikdy static, rib ani
 # routing-options. Skladaji se proto rucne - je to presne ten tvar, ktery
-# v konfiguraci nechá junosi `deactivate`, tedy standardni idiom pro
+# v konfiguraci necha junosi `deactivate`, tedy standardni idiom pro
 # vyrazeni konfigurace pri migraci.
 # ----------------------------------------------------------------------
 

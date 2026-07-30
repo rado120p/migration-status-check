@@ -87,6 +87,7 @@ The specific assertions:
 | `test_interfaces_reach_their_scopes` | at least one scope sees at least one interface |
 | `test_checks_produce_real_verdicts_not_all_skip` | over real data, at least one non-`SKIP` verdict appears |
 | `test_specific_check_sees_data` | per area and platform — so a failure shows **which** seam came apart |
+| `test_static_route_check_really_reads_the_routing_table` | for statics, "not `SKIP`" is not enough: `static_route_status` emits FAIL from the intent alone (AR‑14), so only a `PASS` pins the seam |
 
 ---
 

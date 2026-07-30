@@ -6,8 +6,6 @@ Check na XML nesaha - fakta se skladaji rucne, protoze prave kombinace
 
 from __future__ import annotations
 
-import pytest
-
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.routes import StaticRouteStatusCheck
 from migration_validator.config import default_config

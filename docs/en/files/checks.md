@@ -356,8 +356,13 @@ values as strings. A sorted rendering is deterministic on top of that.
 | configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
 | present in baseline, absent from subject | `broken` | FAIL | `chybi` |
 
-`is_device` separates the last two rows: in a device scope the intent is unknown (AR‑17), so
-the tool reports `chybi`, not `neni v tabulce`.
+What separates the last two rows is `configured` — "is the route among the scope's selectors":
+a device scope has no inventory, its selectors are always empty, so it reports `chybi` rather
+than `neni v tabulce`, the intent being unknown (AR‑17). The condition in the code reads
+`configured and not is_device`; **the `not is_device` conjunct is inert**, because `configured`
+already implies not-device. It stays as a written record of the AR‑17 intent, not as work. In
+`bfd.py` the same-looking condition **does real work** — there the corresponding branch is
+reached precisely with `configured=False`. The two must not be harmonised.
 
 The label is `Staticka routa (<RIB> <prefix>)` — the RIB name goes into the label qualifier,
 not onto a sub-row of its own. `family` is derived **from the prefix**, not from the RIB

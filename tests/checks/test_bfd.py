@@ -7,8 +7,6 @@ ale bez session (BGP Idle), a par peeru bez BFD vubec.
 
 from __future__ import annotations
 
-import pytest
-
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.bfd import BfdSessionStateCheck
 from migration_validator.config import default_config
@@ -188,6 +186,20 @@ def test_device_scope_never_claims_anything_about_the_configuration():
     assert findings[0].baseline_value == "Up"
     assert "konfigurac" not in findings[0].message
     assert "nakonfigurovan" not in findings[0].message
+
+
+def test_intent_entry_without_peer_gets_no_row():
+    """Zaznam bez `peer` se preskoci, misto aby vyrobil radek 'BFD (None)'.
+
+    str(item.get("peer")) davalo doslovny string "None" - radek s family=None,
+    ktery spadne do bezhlavickove sekce reportu. Dosazitelne jen rucne
+    upravenou inventory, protoze parser peer vzdy vyplni.
+    """
+    findings = BfdSessionStateCheck().run(
+        _ctx({}, scope=_scope(bfd_peers=[{"minimum_interval": 3000, "source": "group"}]))
+    )
+
+    assert findings == []
 
 
 def test_device_scope_reports_state_without_intent():

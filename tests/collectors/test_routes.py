@@ -54,15 +54,3 @@ def test_empty_tables_are_dropped(rpc_fixture, platform):
     result = RoutesCollector().parse(rpc_fixture(platform, "routes"), platform)
 
     assert all(prefixes for prefixes in result.values())
-
-
-@pytest.mark.parametrize("platform", PLATFORMS)
-def test_values_are_stripped(rpc_fixture, platform):
-    """MX obaluje hodnoty novymi radky, EVO ne."""
-    result = RoutesCollector().parse(rpc_fixture(platform, "routes"), platform)
-
-    for prefixes in result.values():
-        for prefix, data in prefixes.items():
-            assert prefix == prefix.strip()
-            for value in data["next_hop"] + data["via"]:
-                assert value == value.strip(), f"nese bile znaky: {value!r}"

@@ -117,6 +117,12 @@ class StaticRouteStatusCheck(Check):
             # Bez inventory neni zamer znam, takze se rozpor nehlasi
             # (AR-17). Sem se v device scope dostane jen routa, ktera byla
             # v baseline a v subjektu neni.
+            #
+            # `not is_device` je tady necinny: device_scope() ma vzdy prazdne
+            # selektory, takze `configured` uz samo znamena ne-device. Drzi se
+            # jako zapsany zamer AR-17, ne jako prace. NEHARMONIZOVAT s bfd.py:
+            # tam se do obdobne vetve chodi s configured=False, takze tam
+            # rozliseni na is_device zive je.
             value = MISSING_FROM_TABLE if configured and not is_device else MISSING_ENTIRELY
             message = (
                 f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"

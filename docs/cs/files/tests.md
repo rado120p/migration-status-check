@@ -85,6 +85,7 @@ Konkrétní tvrzení:
 | `test_interfaces_reach_their_scopes` | aspoň jeden scope vidí aspoň jedno rozhraní |
 | `test_checks_produce_real_verdicts_not_all_skip` | nad reálnými daty padne aspoň jeden ne-`SKIP` verdikt |
 | `test_specific_check_sees_data` | per oblast a platformu — aby selhání ukázalo, **který** šev se rozpojil |
+| `test_static_route_check_really_reads_the_routing_table` | u statik „ne‑`SKIP`" nestačí: `static_route_status` vydá FAIL i ze samotného záměru (AR‑14), takže šev drží až `PASS` |
 
 ---
 

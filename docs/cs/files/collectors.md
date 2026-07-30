@@ -247,12 +247,18 @@ Tři věci ověřené proti laborce:
 - **`to` a `via` sedí uvnitř `<nh>`, ne přímo pod `<rt-entry>`** — proto `_texts()` používá
   `iter()`, ne `find()`.
 
-Dvě pojistky, které vypadají zbytečně a nejsou:
+Tři pojistky, které vypadají zbytečně a nejsou:
 
 - **Filtr na `protocol-name` v `parse()`** je druhá obrana za filtrem v RPC. Nasazení, které
   by RPC zavolalo bez `protocol`, by jinak zapsalo BGP routy jako statické.
 - **Prázdné tabulky se zahazují.** RPC vrací přes dvacet tabulek, většinu prázdných;
   ukládat je znamená nafouknout každý snímek o řádky, které nic neříkají.
+- **`.strip()` v `_texts()`** je parita se sousedními collectory (`interfaces.py:32`,
+  `bgp.py:30`), kde MX texty obalené novými řádky opravdu vrací. **Žádná současná nahrávka
+  rout ale bílé znaky nemá** — ani na `<to>`, `<via>`, `<rt-destination>`, ani na
+  `<table-name>` — takže tuhle větev nic netestuje. Drží se kvůli konzistenci, ne kvůli
+  pozorovanému vstupu. Test, který tvrdil, že ji měří (`test_values_are_stripped`), byl
+  smazán: neměřil nic a jeho popis o nahrávce navíc lhal.
 
 ## `bfd.py` — stav BFD session
 

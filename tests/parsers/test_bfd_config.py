@@ -150,7 +150,7 @@ NO_BFD = f"""
 # Deaktivovane stanzy v laborce nejsou - ve vsech ctyrech captureech
 # z 2026-07-29 nese inactive="inactive" jen <interface>, nikdy
 # bfd-liveness-detection. Tvar se proto sklada rucne; je to presne to, co
-# v konfiguraci nechá junosi `deactivate`.
+# v konfiguraci necha junosi `deactivate`.
 DEACTIVATED_GROUP_BFD = f"""
 <configuration>
 {INTERFACES}

@@ -27,6 +27,12 @@ def _texts(node: etree._Element, tag: str) -> list[str]:
     """Vsechny neprazdne texty daneho tagu pod uzlem.
 
     `to` i `via` sedi uvnitr <nh>, ne primo pod <rt-entry>, proto iter().
+
+    .strip() je parita se sousednimi collectory (collectors/interfaces.py:32,
+    collectors/bgp.py:30), kde Junos hodnoty obalene novymi radky opravdu
+    vraci. Zadna soucasna nahravka rout bile znaky na <to>, <via>,
+    <rt-destination> ani <table-name> nema, takze tuhle vetev nic netestuje -
+    drzi se kvuli konzistenci, ne kvuli pozorovanemu vstupu.
     """
     values = []
     for element in node.iter(tag):
