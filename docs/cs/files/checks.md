@@ -1,7 +1,7 @@
 # `checks/` — vyhodnocovací logika
 
 Soubory: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py`, `routes.py`, `bfd.py` a prázdný `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py`, `deactivation.py` a prázdný `__init__.py`.
 
 Dvě pravidla:
 
@@ -69,18 +69,24 @@ Pořadí bran, kterými check projde:
 2. `applies_to(scope)` je `False` → prázdný seznam,
 3. `requires_inventory` a scope je device → `SKIP` (`check vyzaduje inventory, snapshot ji neobsahuje`),
 4. `mode == COMPARE` a není baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
-5. některá oblast z `requires` je v `failed_collectors` → `SKIP` **s původní chybovou
+5. `check.id` není `deactivation_state` a `scope.is_deactivated` je `True` → `SKIP`
+   (`sluzba je v konfiguraci deaktivovana ({reason})`) — brána je záměrně až za bránou 3
+   (`requires_inventory`), protože device scope inventory nemá a nemá tedy ani z čeho
+   příznak vzít; `deactivation_state` samotný check touhle bránou neprojde, jinak by nebylo
+   co porovnat a služba by z reportu zmizela do `SKIP` bez důvodu,
+6. některá oblast z `requires` je v `failed_collectors` → `SKIP` **s původní chybovou
    hláškou z capture**,
-6. `check.run()` vyhodí výjimku → `SKIP` (`check selhal: ...`) — jeden rozbitý check nesmí
+7. `check.run()` vyhodí výjimku → `SKIP` (`check selhal: ...`) — jeden rozbitý check nesmí
    zabít celý běh,
-7. jinak se každý `Finding` převede na `CheckResult` přes `derive_status(outcome, severity)`.
+8. jinak se každý `Finding` převede na `CheckResult` přes `derive_status(outcome, severity)`.
 
-Rozdíl mezi bodem 1–2 (prázdný seznam) a 3–6 (`SKIP`) je záměrný: *„sem to nepatří"* se
+Rozdíl mezi bodem 1–2 (prázdný seznam) a 3–7 (`SKIP`) je záměrný: *„sem to nepatří"* se
 nemá počítat do souhrnu, *„nezměřeno"* ano.
 
-`SKIP` z bodů 3–6 je **plnohodnotný řádek reportu**: dostane `label` z checku a krátký důvod
-do `value` (`bez inventory`, `bez baseline`, `collector selhal`, `check selhal`). Celá věta
-zůstává v `message` pro sloupec `NALEZ` a pro strojový výstup — dokud řádek hodnotu neměl,
+`SKIP` z bodů 3–7 je **plnohodnotný řádek reportu**: dostane `label` z checku a krátký důvod
+do `value` (`bez inventory`, `bez baseline`, `RI deactivated`, `interface deactivated`,
+`RI + interface deactivated`, `collector selhal`, `check selhal`). Celá věta zůstává
+v `message` pro sloupec `NALEZ` a pro strojový výstup — dokud řádek hodnotu neměl,
 sahal renderer právě po té větě a u selhaného collectoru (věta o RPC chybě, 190 znaků)
 roztáhla blok na 270 znaků šířky.
 
@@ -93,9 +99,10 @@ až v `run_check`).
 
 ## `all.py`
 
-Importuje `bfd`, `bgp`, `evpn`, `ifaces`, `reachability`, `routes`. Je to samostatný modul **kvůli cyklickému
-importu**: `checks/ifaces.py` importuje `checks/base.py`, takže `checks/__init__.py` nesmí
-importovat `ifaces`. `load_all()` je idempotentní no-op — práci udělal import.
+Importuje `bfd`, `bgp`, `deactivation`, `evpn`, `ifaces`, `reachability`, `routes`. Je to
+samostatný modul **kvůli cyklickému importu**: `checks/ifaces.py` importuje `checks/base.py`,
+takže `checks/__init__.py` nesmí importovat `ifaces`. `load_all()` je idempotentní no-op —
+práci udělal import.
 
 ---
 
@@ -344,8 +351,17 @@ nekonzistence, ale dvě různé role.
 |---|---|---|---|
 | v tabulce, next-hop shodný nebo bez baseline | `ok` | PASS | next-hopy setříděné a oddělené čárkou (`-` když žádný) |
 | v tabulce, next-hop se proti baseline změnil | `degraded` | WARN | nový next-hop, `ZMENA` nese starý |
+| v tabulce, ale bez hvězdičky (`active: false`), baseline taky neaktivní | `ok` | PASS | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, v baseline byla aktivní | `broken` | FAIL | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, bez baseline | `degraded` | WARN | `neni aktivni` |
 | nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
 | v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
+
+Routa **v tabulce, ale bez hvězdičky** neforwarduje — Junos ji nevyhodí z výpisu, jen ji
+přebije jiný zdroj. Je to jiná situace než `neni v tabulce` (ta routu z výpisu úplně vyhodí):
+proto samostatná hodnota `neni aktivni`, ne stejná jako u chybějící routy. Bez baseline není
+z čeho poznat, že neaktivní byla i předtím, takže se nejednoznačnost podle R‑2 neeskaluje na
+FAIL, ale zůstává na WARN.
 
 Poslední dva řádky rozlišuje `configured`, tedy „je routa v selektorech scopu": device scope
 inventory nemá, jeho selektory jsou vždy prázdné, takže se tam hlásí `chybi`, ne
@@ -404,6 +420,37 @@ tohoto rozlišení u každé zmizelé session tvrdil „v subjektu není nakonfi
 o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17). Rozdíl je v **hodnotě**, ne jen
 v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku textový výpis nezobrazí. Je to
 týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
+
+---
+
+## `deactivation.py` — stav deaktivace
+
+### `deactivation_state` (both, critical)
+
+Deaktivovaná služba se z inventory nikdy nevypouští — pořád se musí zmigrovat, takže zmizet
+z výstupu by byla chyba, ne oprava (`models/scope.py`). Ostatní checky nad ní proto SKIPnou
+(brána 5 v `run_check()` výše), ale nějaký řádek musí říct, *co* se změnilo proti baseline —
+a to je práce tohohle checku. Je to **jediný check, který bránou 5 neprojde**: kdyby SKIPnul
+jako všechny ostatní, služba by z reportu zmizela do SKIPu bez důvodu.
+
+Nemá `requires` (nepotřebuje žádný collector) ani `service_types` (týká se všech typů služeb).
+Vyžaduje inventory (`requires_inventory = True`) — bez ní scope neví, jestli je deaktivovaná.
+
+**Zdravá služba (živá v subjektu i baseline) řádek nedostane vůbec** — ne SKIP, žádný nález.
+Je to stejné rozhodnutí R‑1 jako jinde: co se nekontroluje, se v bloku neobjeví, a řádek
+„služba je aktivní" by u každého zdravého bloku přibyl a neřekl nic.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| subjekt i baseline deaktivované | `ok` | PASS | důvod deaktivace subjektu |
+| subjekt deaktivovaný, baseline běžela | `broken` | FAIL | důvod deaktivace subjektu |
+| subjekt běží, baseline byla deaktivovaná | `degraded` | WARN | `aktivni` |
+| subjekt deaktivovaný, bez baseline k porovnání | `SKIP` | SKIP | důvod deaktivace subjektu |
+| subjekt i baseline běží | — | — (žádný nález) | — |
+
+Důvod deaktivace (`Scope.deactivation_reason`) je jedna ze tří hodnot: `RI deactivated`,
+`interface deactivated`, `RI + interface deactivated` — podle toho, jestli je deaktivovaná
+routing instance, rozhraní, nebo obojí.
 
 **Na pořadí větví záleží:** `BFD odstraneno` se testuje **před** `BGP neni Established`.
 Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,

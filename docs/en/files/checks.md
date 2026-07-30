@@ -1,7 +1,7 @@
 # `checks/` — the evaluation logic
 
 Files: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py`, `routes.py`, `bfd.py` and an empty `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py`, `deactivation.py` and an empty `__init__.py`.
 
 Two rules:
 
@@ -73,19 +73,26 @@ The gates a check passes through, in order:
 3. `requires_inventory` and the scope is a device scope → `SKIP`
    (`check vyzaduje inventory, snapshot ji neobsahuje`),
 4. `mode == COMPARE` and no baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
-5. an area in `requires` is in `failed_collectors` → `SKIP` **carrying the original error
+5. `check.id` is not `deactivation_state` and `scope.is_deactivated` is `True` → `SKIP`
+   (`sluzba je v konfiguraci deaktivovana ({reason})`) — this gate deliberately sits after
+   gate 3 (`requires_inventory`), because a device scope has no inventory and therefore has
+   nothing to read the flag from; `deactivation_state` itself is the one check that does not
+   pass through this gate — otherwise there would be nothing left to compare and the service
+   would vanish from the report into an unexplained `SKIP`,
+6. an area in `requires` is in `failed_collectors` → `SKIP` **carrying the original error
    message from the capture**,
-6. `check.run()` raises → `SKIP` (`check selhal: ...`) — one broken check must not kill the
+7. `check.run()` raises → `SKIP` (`check selhal: ...`) — one broken check must not kill the
    whole run,
-7. otherwise every `Finding` becomes a `CheckResult` via `derive_status(outcome, severity)`.
+8. otherwise every `Finding` becomes a `CheckResult` via `derive_status(outcome, severity)`.
 
-A `SKIP` from steps 3–6 is a **full report row**: it takes the check's `label` and a short
-reason as its `value` (`bez inventory`, `bez baseline`, `collector selhal`, `check selhal`).
+A `SKIP` from steps 3–7 is a **full report row**: it takes the check's `label` and a short
+reason as its `value` (`bez inventory`, `bez baseline`, `RI deactivated`,
+`interface deactivated`, `RI + interface deactivated`, `collector selhal`, `check selhal`).
 The full sentence stays in `message` for the `NALEZ` column and the machine output — while
 those rows had no value the renderer reached for that sentence instead, and a failed
 collector's 190-character RPC error stretched the block to 270 characters wide.
 
-The difference between steps 1–2 (empty list) and 3–6 (`SKIP`) is deliberate: *"does not apply
+The difference between steps 1–2 (empty list) and 3–7 (`SKIP`) is deliberate: *"does not apply
 here"* should not count towards the summary, *"not measured"* should.
 
 ## `registry.py`
@@ -97,9 +104,10 @@ returns an alphabetically sorted list — which is why check ordering in the out
 
 ## `all.py`
 
-Imports `bfd`, `bgp`, `evpn`, `ifaces`, `reachability`, `routes`. It is a separate module **because of a
-circular import**: `checks/ifaces.py` imports `checks/base.py`, so `checks/__init__.py` must
-not import `ifaces`. `load_all()` is an idempotent no-op — the import already did the work.
+Imports `bfd`, `bgp`, `deactivation`, `evpn`, `ifaces`, `reachability`, `routes`. It is a
+separate module **because of a circular import**: `checks/ifaces.py` imports
+`checks/base.py`, so `checks/__init__.py` must not import `ifaces`. `load_all()` is an
+idempotent no-op — the import already did the work.
 
 ---
 
@@ -358,8 +366,18 @@ that is not an inconsistency but two different roles.
 |---|---|---|---|
 | in the table, next hop unchanged or no baseline | `ok` | PASS | next hops sorted and joined by commas (`-` when none) |
 | in the table, next hop changed vs. baseline | `degraded` | WARN | new next hop; `ZMENA` carries the old one |
+| in the table but unstarred (`active: false`), baseline also inactive | `ok` | PASS | `neni aktivni` |
+| in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
+| in the table but unstarred, no baseline | `degraded` | WARN | `neni aktivni` |
 | configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
 | present in baseline, absent from subject | `broken` | FAIL | `chybi` |
+
+A route that is **in the table but unstarred** is not forwarding — Junos does not drop it
+from the listing, another source has just outranked it. That is a different situation from
+`neni v tabulce` (which drops the route from the listing entirely): hence the separate value
+`neni aktivni`, not the same one used for a missing route. Without a baseline there is no way
+to tell whether it was already inactive before, so per R‑2 the ambiguity is not escalated to
+FAIL — it stays at WARN.
 
 What separates the last two rows is `configured` — "is the route among the scope's selectors":
 a device scope has no inventory, its selectors are always empty, so it reports `chybi` rather
@@ -420,6 +438,39 @@ configured in the subject" — about a configuration it cannot see in that mode 
 The difference is in the **value**, not merely in the message: the value column is what ships in
 the report (F‑7/AR‑4), while the message never appears in the text output. It is the same
 pattern as `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` in `routes.py`.
+
+---
+
+## `deactivation.py` — deactivation state
+
+### `deactivation_state` (both, critical)
+
+A deactivated service is never dropped from the inventory — it still has to be migrated, so
+disappearing from the output would be a defect, not a fix (`models/scope.py`). Every other
+check therefore SKIPs it (gate 5 of `run_check()` above), but something still has to say
+*what* changed against the baseline — that is this check's job. It is the **one check that
+does not pass through gate 5**: if it SKIPped like every other check, the service would
+vanish from the report into an unexplained SKIP.
+
+It has no `requires` (needs no collector) and no `service_types` restriction (applies to
+every service type). It requires inventory (`requires_inventory = True`) — without it the
+scope has no way to know whether it is deactivated.
+
+**A healthy service (live in both subject and baseline) gets no row at all** — not SKIP, no
+finding. Same R‑1 decision as elsewhere: what is not being checked does not appear in the
+block, and a "service is active" row would be added to every healthy block and say nothing.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| subject and baseline both deactivated | `ok` | PASS | the subject's deactivation reason |
+| subject deactivated, baseline was running | `broken` | FAIL | the subject's deactivation reason |
+| subject running, baseline was deactivated | `degraded` | WARN | `aktivni` |
+| subject deactivated, no baseline to compare | `SKIP` | SKIP | the subject's deactivation reason |
+| subject and baseline both running | — | — (no finding) | — |
+
+The deactivation reason (`Scope.deactivation_reason`) is one of three values:
+`RI deactivated`, `interface deactivated`, `RI + interface deactivated` — depending on
+whether the deactivated part is the routing instance, the interface, or both.
 
 **Branch order matters:** `BFD odstraneno` is tested **before** `BGP neni Established`. The
 reverse order would silently lose the case where the migration dropped protection that used

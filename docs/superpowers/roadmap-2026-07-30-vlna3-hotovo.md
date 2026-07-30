@@ -22,8 +22,8 @@ konkrétně body 1, 2, 4 a 5 odtud. Hotovou práci popisuje dokumentace v
   `routing_instance_active` a `interface_active` místo jednoho pole `active`;
   `Scope` je nese dál (snapshot schema taky 4). Služba se při deaktivaci
   z inventory **nevypouští** — jen se označí. Validator ji SKIPne s důvodem
-  `interface deactivated` / `routing instance deactivated`, místo aby počítal
-  FAIL/WARN, jako by běžela.
+  `interface deactivated` / `RI deactivated` (obojí `RI + interface
+  deactivated`), místo aby počítal FAIL/WARN, jako by běžela.
 - **AR-29 (tahle úloha)** — regenerace `172.20.20.{4,5}.yml` a fixture proti
   laborce, přenahrání `tests/fixtures/rpc/junos-evo/interfaces.xml`.
 

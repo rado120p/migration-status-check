@@ -27,7 +27,8 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address u IRB |
 | `virtual_gw_ipv6_address` | `list[str]` | IPv6 virtual-gateway-address u IRB |
 | `routing_instance` | `str \| None` | |
-| `active` | `bool` | |
+| `routing_instance_active` | `bool` | `False`, když je routing instance deaktivovaná (`deactivate`) |
+| `interface_active` | `bool` | `False`, když je rozhraní deaktivované (`deactivate`) |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
 | `static_route` | `list[dict]` | záměr z konfigurace: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | záměr z konfigurace: `{peer, minimum_interval, multiplier, source}` |
@@ -53,10 +54,10 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 3`).
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 4`).
 `load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
 
-Důvod je u obou zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
+Důvod je u všech zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
 zelená služba.
 
 - **1 → 2**: adresy se přejmenovaly na rodiny (`ip_address` → `ipv4_address` /
@@ -65,6 +66,10 @@ zelená služba.
 - **2 → 3**: přibyla pole `static_route` a `bfd`. Inventory verze 2 je nemá, takže by
   `Selectors.static_routes` i `.bfd_peers` zůstaly prázdné, checky by neměly co porovnávat
   a nakonfigurovaná routa chybějící v tabulce by se nikdy neohlásila.
+- **3 → 4**: jedno pole `active` se rozdělilo na `routing_instance_active` a
+  `interface_active` (AR‑20/AR‑21). Tolerantní čtení starého souboru by obě pole dopočítalo
+  na `True`, takže by se deaktivovaná služba tvářila jako živá a checky by nad ní počítaly
+  FAIL/WARN, místo aby ji SKIPly s důvodem deaktivace.
 
 Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 

@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
+Výpis odpovídá `mig-validate checks` (stav ke commitu `2aa60c1`):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
@@ -25,6 +25,7 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `1584a43`):
 | `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
 | `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |
+| `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
 
 Význam `mode`:
 

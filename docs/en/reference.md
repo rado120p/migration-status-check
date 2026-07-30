@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `1584a43`):
+Matches the output of `mig-validate checks` (as of commit `2aa60c1`):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -25,6 +25,7 @@ Matches the output of `mig-validate checks` (as of commit `1584a43`):
 | `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |
+| `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
 
 `mode` semantics:
 

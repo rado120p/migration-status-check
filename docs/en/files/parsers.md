@@ -169,7 +169,8 @@ other, and it is worth separating them:
   flags — `routing_instance_active` and `interface_active` (schema 4, AR‑20/AR‑21) — that say
   whether the deactivated part is the routing instance, the interface, or both. The validator
   reads those flags and SKIPs such a service with the reason `interface deactivated` /
-  `routing instance deactivated`, instead of scoring FAIL/WARN as if it were running.
+  `RI deactivated` (both: `RI + interface deactivated`), instead of scoring FAIL/WARN as if it
+  were running.
 - **Intent (a static route, a BFD session, a BGP neighbor) is still dropped completely** from a
   deactivated container — no flag, no trace. If the validator read the intent anyway, it would
   report `FAIL … neni v tabulce` or `FAIL … bez session` for something the operator deliberately

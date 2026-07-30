@@ -159,8 +159,8 @@ potřeba rozlišit dvě různé věci, které se v inventory dějí při deaktiv
   takže zmizet z výstupu by byla chyba, ne oprava. Místo toho nese dva příznaky —
   `routing_instance_active` a `interface_active` (schema 4, AR‑20/AR‑21) — které říkají, jestli
   je deaktivovaná routing instance, rozhraní, nebo obojí. Validator ty příznaky čte a takovou
-  službu SKIPne s důvodem `interface deactivated` / `routing instance deactivated`, místo aby
-  nad ní počítal FAIL/WARN, jako by běžela.
+  službu SKIPne s důvodem `interface deactivated` / `RI deactivated` (obojí `RI + interface
+  deactivated`), místo aby nad ní počítal FAIL/WARN, jako by běžela.
 - **Záměr (statická routa, BFD relace, BGP soused) se z deaktivovaného kontejneru pořád
   vypouští úplně** — bez příznaku, beze stopy. Kdyby validator záměr přečetl, hlásil by
   `FAIL … neni v tabulce` nebo `FAIL … bez session` za něco, co operátor vypnul úmyslně, a
