@@ -130,10 +130,12 @@ Dvě věci, na kterých to stojí:
 
 - **Přepisuje se celá hodnota, ne položka po položce.** Soused s vlastním `minimum-interval`
   si nedědí `multiplier` ze skupiny. Slévání po položkách by vyrobilo záměr, který v žádné
-  úrovni konfigurace takhle nestojí. Nese to jediný řádek — `_bfd_values(…) or inherited` —
-  a měří ho **jen** `test_partial_override_of_group_does_not_inherit_the_missing_field`
-  a jeho dvojče pro `protocols bgp`: soused, který nastavuje *oba* údaje, ten rozdíl
-  neuvidí, protože obě implementace u něj dají totéž.
+  úrovni konfigurace takhle nestojí. Nesou to **dva** řádky tvaru `… or …` — jeden u souseda
+  (`_bfd_values(…) or inherited`) a jeden u skupiny (`_bfd_values(…) or protocol_level`) —
+  a každý potřebuje vlastní měřítko, protože slévání po položkách může přežít na jednom
+  z nich a na druhém ne. Měří je tři testy `test_partial_override_of_*`: soused nad skupinou,
+  soused nad `protocols bgp` a skupina nad `protocols bgp`. Soused (nebo skupina), který
+  nastavuje *oba* údaje, ten rozdíl neuvidí, protože obě implementace u něj dají totéž.
 - **Junosí `inherit` tuhle hierarchii nerozbaluje.** Rozbaluje `apply-groups`, ne hierarchii
   protokolu. Ověřeno proti laborce 2026‑07‑29, kdy skupina `CPE14` nesla BFD a její sousedé ho
   neměli ani v konfiguraci stažené s `inherit` — kdyby se parser na `inherit` spolehl, oba
@@ -151,7 +153,8 @@ v instanci do `instance.bfd`.
 
 `deactivate` je standardní junosí idiom pro vyřazení konfigurace při migraci — stanza
 v souboru zůstane, ale zařízení ji nepoužívá a v XML nese `inactive="inactive"`. Parser ji
-proto musí přeskočit **na každé úrovni**, ze které se dělá záměr; jinak by validator hlásil
+proto musí přeskočit na úrovních, ze kterých se dělá záměr statické routy a BFD (výčet
+neošetřených kontejnerů je na konci sekce); jinak by validator hlásil
 `FAIL … neni v tabulce` nebo `FAIL … bez session` za něco, co operátor vypnul úmyslně —
 a falešný rozpor je jediný výstup, který podrývá celý smysl porovnávání konfigurace se
 skutečností.
@@ -178,11 +181,19 @@ Přesně to udělá i Junos, takže to není zjednodušení, ale shoda se zaří
 a duplikovat kontrolu atributu inline by znamenalo mít pravidlo „co je neaktivní" na dvou
 místech.
 
-**Rozsah je záměrně omezený.** Kontejnery `protocols` a `bgp` samotné se nekontrolují —
-deaktivovat celý `protocols bgp` je operace, kterou laborka nikdy neukázala, a přidávat guard
-bez pokrytí by jen rozšířilo plochu bez důkazu. Ve všech čtyřech captureech z 2026‑07‑29 nese
-`inactive="inactive"` jen `<interface>`, takže žádný z guardů výše na reálných datech zatím
-nic nezahazuje — testy proto pracují s ručně složeným XML.
+**Rozsah je omezený a tady je celý výčet toho, co ošetřený není.** Deaktivace těchto
+kontejnerů dnes záměr vyrobí, tedy vede na falešný FAIL:
+
+| neošetřený kontejner | co se stane | proč to tady nekončí |
+|---|---|---|
+| `protocols`, `bgp` | BFD i BGP záměr celé úrovně zůstane živý | tentýž XPath `protocols/bgp` čte i `_parse_bgp_neighbors()`. Ošetřit ho jen pro BFD by znamenalo, že se BFD a BGP na deaktivovaném `protocols bgp` neshodnou — je to průřezová změna napříč parsováním BGP, ne detail BFD. |
+| `routing-instances` (kontejner, ne jednotlivá `instance`) | statiky všech VRF zůstanou živé | totéž: kontejner čte i `_parse_routing_instances()` |
+| `interfaces`, `interface`, `unit` | služba i s jejími statikami zůstane živá | jediný uzel, který `inactive="inactive"` v reálných captureech skutečně nese — a zároveň už zapsaná mezera: `RoutingInstance.active` je stav **instance**, ne rozhraní, a žádný check ho nečte |
+
+Guardy výše tedy na reálných datech z 2026‑07‑29 nic nezahazují: ve všech čtyřech captureech
+nese `inactive="inactive"` jen `<interface>`. Testy proto pracují s ručně složeným XML. Doplnit
+zbývající guardy je práce na vlnu 3 — každý potřebuje vlastní pokrytí, protože nepokrytý guard
+je stejná chyba jako chybějící guard.
 
 ---
 
@@ -316,7 +327,10 @@ doslovné výstupy parseru — **neupravujte je ručně**; po změně parseru ne
 **Nejsou to výstupy z uložených captureů v `runs/`, ale z živého běhu** — a u `.5` se to dá
 poznat. `172.20.20.5.yml` bylo naposledy regenerováno v commitu `977783f` proti laborce **po**
 přestavbě služby CPE14 na `ae0.15` / `irb.15`, zatímco
-`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` je z 11:43 téhož dne, tedy **před** ní.
+`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` nese
+`commit-localtime="2026-07-29 11:43:50 UTC"` — jeho obsah je tedy konfigurace k tomu commitu,
+**před** přestavbou. (`runs/` je gitignorované, takže ty captureje s branchí neputují; leží
+v pracovní kopii, ze které se běh dělal.)
 Kdo ten capture přeparsuje offline, dostane inventory bez `ae0.15` a s `irb.15` bez
 description — a je to rozdíl v laborce, ne v parseru. Pro `.4` je offline reparse captureu
 s commitnutým YAML byte za bytem shodný, takže na něm jde změny parseru ověřovat přímo.

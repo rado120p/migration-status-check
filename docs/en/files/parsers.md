@@ -136,10 +136,12 @@ Two things this rests on:
 
 - **The whole value is overridden, not merged item by item.** A neighbour with its own
   `minimum-interval` does not inherit `multiplier` from the group. Merging per item would
-  produce an intent that appears at no level of the configuration in that form. A single line
-  carries this — `_bfd_values(…) or inherited` — and **only**
-  `test_partial_override_of_group_does_not_inherit_the_missing_field` and its twin for
-  `protocols bgp` measure it: a neighbour that sets *both* fields cannot see the difference,
+  produce an intent that appears at no level of the configuration in that form. **Two** lines of
+  the form `… or …` carry this — one at the neighbour (`_bfd_values(…) or inherited`) and one at
+  the group (`_bfd_values(…) or protocol_level`) — and each needs its own measurement, because a
+  per-item merge can survive at one of them and not the other. Three `test_partial_override_of_*`
+  tests measure them: neighbour over group, neighbour over `protocols bgp`, and group over
+  `protocols bgp`. A neighbour (or group) that sets *both* fields cannot see the difference,
   because both implementations agree for it.
 - **Junos `inherit` does not expand this hierarchy.** It expands `apply-groups`, not the
   protocol hierarchy. Verified against the lab on 2026‑07‑29, when group `CPE14` carried BFD
@@ -159,8 +161,9 @@ A service without a routing instance reaches into `self.default_bfd` (top-level
 
 `deactivate` is the standard Junos idiom for retiring configuration during a migration — the
 stanza stays in the file, but the device does not use it and the XML carries
-`inactive="inactive"`. The parser must therefore skip it **at every level** that intent is
-derived from; otherwise the validator would report `FAIL … neni v tabulce` or
+`inactive="inactive"`. The parser must therefore skip it at the levels that static-route and BFD
+intent is derived from (the unguarded containers are listed at the end of this section);
+otherwise the validator would report `FAIL … neni v tabulce` or
 `FAIL … bez session` for something the operator deliberately turned off — and a *false*
 divergence is the one output that undermines the whole point of comparing configuration
 against reality.
@@ -188,11 +191,19 @@ with the device.
 `self._is_inactive()`, and duplicating the attribute check inline would put the rule for "what
 counts as inactive" in two places.
 
-**The scope is deliberately narrow.** The `protocols` and `bgp` containers themselves are not
-checked — deactivating a whole `protocols bgp` is an operation the lab never exhibited, and
-adding an uncovered guard would only widen the surface without evidence. In all four captures
-from 2026‑07‑29 only `<interface>` carries `inactive="inactive"`, so none of the guards above
-discards anything on real data yet — which is why the tests use hand-built XML.
+**The scope is narrow, and this is the complete list of what is not guarded.** Deactivating any
+of these containers still produces intent today, i.e. leads to a false FAIL:
+
+| unguarded container | what happens | why it does not end here |
+|---|---|---|
+| `protocols`, `bgp` | the BFD *and* BGP intent of the whole level stays live | the same `protocols/bgp` XPath also feeds `_parse_bgp_neighbors()`. Guarding it for BFD alone would make BFD and BGP disagree about a deactivated `protocols bgp` — it is a cross-cutting change across BGP parsing, not a BFD detail. |
+| `routing-instances` (the container, not an individual `instance`) | the statics of every VRF stay live | same reason: the container is also read by `_parse_routing_instances()` |
+| `interfaces`, `interface`, `unit` | the service and its statics stay live | the only node that actually carries `inactive="inactive"` in the real captures — and already a recorded gap: `RoutingInstance.active` is the **instance's** state, not the interface's, and no check reads it |
+
+So the guards above discard nothing on the real data from 2026‑07‑29: in all four captures only
+`<interface>` carries `inactive="inactive"`. That is why the tests use hand-built XML. Adding the
+remaining guards is wave-3 work — each needs its own coverage, because an uncovered guard is the
+same defect as a missing one.
 
 ---
 
@@ -331,8 +342,10 @@ lab and copy them into `tests/fixtures/`.
 **They are not produced from the stored captures under `runs/`, but from a live run** — and on
 `.5` that is visible. `172.20.20.5.yml` was last regenerated in commit `977783f` against the
 lab **after** the CPE14 service was rebuilt onto `ae0.15` / `irb.15`, whereas
-`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` was taken at 11:43 the same day, i.e.
-**before** it. Re-parsing that capture offline therefore yields an inventory without `ae0.15`
+`runs/bfd-static-2026-07-29/cfg/172.20.20.5.*.xml` carries
+`commit-localtime="2026-07-29 11:43:50 UTC"` — its content is therefore the configuration as of
+that commit, **before** the rebuild. (`runs/` is gitignored, so those captures do not travel with
+the branch; they live in the working copy the run was made from.) Re-parsing that capture offline therefore yields an inventory without `ae0.15`
 and with `irb.15` carrying no description — a difference in the lab, not in the parser. For
 `.4`, an offline reparse of the capture is byte-for-byte identical to the committed YAML, so
 parser changes can be verified against it directly.

@@ -219,6 +219,33 @@ NEIGHBOR_PARTIAL_OVERRIDE_OF_BGP = f"""
 </configuration>
 """
 
+# Tentyz castecny prepis, ale o uroven vys: skupina nese JEN
+# minimum-interval, protocols bgp nese oboje, soused nic. Prepis celou
+# hodnotou se nese na obou spojich hierarchie (neighbor > group i
+# group > protocols bgp) a kazdy z nich ma v parseru vlastni `or`. Bez teto
+# fixture zustava ten druhy nemereny: PROTOCOL_LEVEL ma skupinu bez BFD,
+# takze se do vetve se dvema neprazdnymi hodnotami vubec nedostane.
+GROUP_PARTIAL_OVERRIDE_OF_BGP = f"""
+<configuration>
+{INTERFACES}
+  <protocols>
+    <bgp>
+      <bfd-liveness-detection>
+        <minimum-interval>1000</minimum-interval>
+        <multiplier>3</multiplier>
+      </bfd-liveness-detection>
+      <group>
+        <name>CPE</name>
+        <bfd-liveness-detection>
+          <minimum-interval>3000</minimum-interval>
+        </bfd-liveness-detection>
+        <neighbor><name>152.11.13.2</name></neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
 DEACTIVATED_NEIGHBOR_BFD = f"""
 <configuration>
 {INTERFACES}
@@ -317,6 +344,30 @@ def test_partial_override_of_bgp_level_does_not_inherit_the_missing_field(
     assert intents["152.11.13.2"]["minimum_interval"] == 300
     assert intents["152.11.13.2"]["multiplier"] is None
     assert intents["152.11.13.2"]["source"] == "neighbor"
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_partial_override_of_bgp_level_by_the_group_does_not_inherit_the_missing_field(
+    module, parser_class
+):
+    """AR-13 na druhem spoji hierarchie: group > protocols bgp.
+
+    Skupina nastavuje jen minimum-interval, takze multiplier zustava None -
+    nedoplni se z protokolove urovne. Prepis celou hodnotou nesou v parseru
+    DVA `or` (jeden u skupiny, jeden u souseda) a kazdy potrebuje vlastni
+    meritko: slevani po polozkach u skupiny by vyrobilo zamer 3000/3, ktery
+    v konfiguraci takhle nestoji na zadne urovni, a zadny jiny test v teto
+    sade to nezachyti.
+
+    `source` musi byt "group", ne "bgp" - hodnota pochazi ze skupiny, i kdyz
+    je nekompletni.
+    """
+    intents = _bfd_by_peer(module, parser_class, GROUP_PARTIAL_OVERRIDE_OF_BGP)
+
+    assert set(intents) == {"152.11.13.2"}
+    assert intents["152.11.13.2"]["minimum_interval"] == 3000
+    assert intents["152.11.13.2"]["multiplier"] is None
+    assert intents["152.11.13.2"]["source"] == "group"
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
