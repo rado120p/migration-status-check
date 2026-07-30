@@ -32,6 +32,7 @@ from migration_validator.models.result import Finding, Outcome, Severity
 
 MISSING_FROM_TABLE = "neni v tabulce"
 MISSING_ENTIRELY = "chybi"
+NOT_ACTIVE = "neni aktivni"
 
 
 def prefix_family(prefix: str) -> int | None:
@@ -144,6 +145,43 @@ class StaticRouteStatusCheck(Check):
             )
 
         now = _next_hop_text(subject)
+
+        # Routa v tabulce bez hvezdicky forwarding nedela. Neni to totez co
+        # "neni v tabulce": nedosazitelny next-hop routu z tabulky vyhodi
+        # uplne, takze tenhle stav znamena, ze ji prebil jiny zdroj.
+        if not subject.get("active", True):
+            was_active = baseline.get("active", True) if baseline else None
+
+            if was_active is False:
+                return Finding(
+                    Outcome.OK,
+                    f"{rib} {prefix}: neni aktivni, stejne jako v baseline",
+                    label=label,
+                    family=family,
+                    value=NOT_ACTIVE,
+                    baseline_value=NOT_ACTIVE,
+                    baseline=baseline,
+                    subject=subject,
+                )
+
+            # Bez baseline neni z ceho poznat, ze neaktivni byla i predtim -
+            # podle R-2 se nejednoznacnost na FAIL neeskaluje.
+            outcome = Outcome.BROKEN if was_active else Outcome.DEGRADED
+            message = (
+                f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
+                if was_active
+                else f"{rib} {prefix}: je v tabulce, ale neni aktivni"
+            )
+            return Finding(
+                outcome,
+                message,
+                label=label,
+                family=family,
+                value=NOT_ACTIVE,
+                baseline_value=was,
+                baseline=baseline,
+                subject=subject,
+            )
 
         if was is not None and was != now:
             return Finding(

@@ -47,6 +47,71 @@ def _installed(next_hop="152.11.13.2"):
     }
 
 
+def _installed_inactive(next_hop="152.11.13.2"):
+    """Routa v tabulce je, ale hvezdicku nema - prebil ji jiny zdroj."""
+    routes = _installed(next_hop)
+    routes["inet.0"]["198.62.1.0/29"]["active"] = False
+    return routes
+
+
+def test_inactive_route_that_was_inactive_before_passes():
+    """Stav se nezmenil, takze to neni nalez.
+
+    Zabiji mutanta: hlaseni BROKEN pri kazde neaktivni route bez ohledu na
+    baseline.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _installed_inactive())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+
+
+def test_route_that_stopped_being_active_is_broken():
+    """Na starem zarizeni forwardovala, na novem uz ne.
+
+    Zabiji mutanta: vynechani cteni klice "active" - bez nej je next-hop
+    stejny, takze by check vratil OK.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _installed())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "neni aktivni"
+
+
+def test_inactive_route_without_baseline_is_degraded():
+    """Bez baseline neni z ceho poznat, ze neaktivni byla i predtim.
+
+    FAIL by tvrdil, ze se neco zhorsilo, a to doloneno neni - podle R-2 se
+    nejednoznacnost na FAIL neeskaluje. SKIP by naopak znamenal, ze
+    `evaluate --snapshot X` bez --baseline o neaktivni route mlci uplne.
+
+    Zabiji mutanta: BROKEN misto DEGRADED v teto vetvi.
+    """
+    findings = StaticRouteStatusCheck().run(_ctx(_installed_inactive()))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].value == "neni aktivni"
+
+
+def test_route_that_became_active_passes():
+    """Zlepseni neni nalez (R-2).
+
+    Zabiji mutanta: porovnani na nerovnost misto na smer zmeny.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed(), _installed_inactive())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+
+
 def test_installed_route_passes():
     findings = StaticRouteStatusCheck().run(_ctx(_installed(), _installed()))
 
