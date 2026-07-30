@@ -254,7 +254,8 @@ Tři pojistky, které vypadají zbytečně a nejsou:
 - **Prázdné tabulky se zahazují.** RPC vrací přes dvacet tabulek, většinu prázdných;
   ukládat je znamená nafouknout každý snímek o řádky, které nic neříkají.
 - **`.strip()` v `_texts()`** je parita se sousedními collectory (`interfaces.py:32`,
-  `bgp.py:30`), kde MX texty obalené novými řádky opravdu vrací. **Žádná současná nahrávka
+  `bgp.py:30`) — v nahrávce rozhraní má bílé znaky 175 hodnot, takže u `interfaces.py` je ta
+  pojistka doložená pozorováním; u `bgp.py` jde o týž idiom, ne o naměřený vstup. **Žádná současná nahrávka
   rout ale bílé znaky nemá** — ani na `<to>`, `<via>`, `<rt-destination>`, ani na
   `<table-name>` — takže tuhle větev nic netestuje. Drží se kvůli konzistenci, ne kvůli
   pozorovanému vstupu. Test, který tvrdil, že ji měří (`test_values_are_stripped`), byl

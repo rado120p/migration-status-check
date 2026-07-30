@@ -349,6 +349,11 @@ Without the sort, two snapshots reporting the same next hops in a different orde
 a spurious `WARN … next-hop se zmenil A, B -> B, A`, because the `ZMENA` branch compares the
 values as strings. A sorted rendering is deterministic on top of that.
 
+The sort applies to the **value only**. The raw evidence a finding carries into the JSON output
+(`subject` / `baseline`) deliberately stays in XML order — evidence should be verbatim. A JSON
+consumer may therefore see a sorted `value` alongside an unsorted `next_hop` in the evidence;
+that is not an inconsistency but two different roles.
+
 | situation | Outcome | status | `value` |
 |---|---|---|---|
 | in the table, next hop unchanged or no baseline | `ok` | PASS | next hops sorted and joined by commas (`-` when none) |
@@ -392,7 +397,7 @@ The check requires **two areas**: `("bfd", "bgp")`.
 | session exists, any other state | `broken` | FAIL | measured state (`Down`, …) |
 | session exists but is not in the service configuration (service scope) | `degraded` | WARN | `bez konfigurace` |
 | no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `BFD odstraneno` |
-| no session, but the baseline had one (device scope) | `broken` | FAIL | `session zmizela` |
+| no session, but the baseline had one (device scope) — **currently unreachable, see below** | `broken` | FAIL | `session zmizela` |
 | intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
 
@@ -401,14 +406,20 @@ down, so without it a service with a dropped BGP session would collect two FAIL 
 cause. In a live run that would repeat for every service that has not yet come up, and the
 operator would learn to skim past the listing.
 
-**`is_device` does real work here** — unlike in `routes.py`, where an identical-looking
-conjunct is inert. In a device scope the "no intent either" branch is **always** reached:
-without an inventory, `configured` is necessarily `False`. Without the distinction the tool
-would claim, for every vanished session, that it "is not configured in the subject" — about a
-configuration it cannot see in that mode at all (AR‑17). The difference is in the **value**,
-not merely in the message: the value column is what ships in the report (F‑7/AR‑4), while the
-message never appears in the text output. It is the same pattern as `MISSING_FROM_TABLE` vs
-`MISSING_ENTIRELY` in `routes.py`.
+**`is_device` is inert here** — just like the identical-looking conjunct in `routes.py`. Only a
+peer with no session in the subject reaches the "no intent either" branch, and such a peer can
+only enter the union from the baseline. But a device scope never pairs: `device_scope()` has
+`key=None`, and every key function in `scoping/matcher.py` returns an empty list for `None`, so
+the scope ends up in `unmatched_subject` and the engine hands it no baseline at all
+(`_run_scope(..., None, None, ...)`). `baseline_sessions` is therefore always empty in a device
+scope, and the `session zmizela` row cannot currently be printed.
+
+The code stays regardless. Should a future snapshot format give a device scope a baseline, then
+without this distinction the tool would claim, for every vanished session, that it "is not
+configured in the subject" — about a configuration it cannot see in that mode at all (AR‑17).
+The difference is in the **value**, not merely in the message: the value column is what ships in
+the report (F‑7/AR‑4), while the message never appears in the text output. It is the same
+pattern as `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` in `routes.py`.
 
 **Branch order matters:** `BFD odstraneno` is tested **before** `BGP neni Established`. The
 reverse order would silently lose the case where the migration dropped protection that used

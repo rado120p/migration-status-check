@@ -266,8 +266,9 @@ Three safeguards that look redundant and are not:
 - **Empty tables are dropped.** The RPC returns over twenty tables, most of them empty;
   storing them means inflating every snapshot with rows that say nothing.
 - **The `.strip()` in `_texts()`** is parity with the sibling collectors
-  (`interfaces.py:32`, `bgp.py:30`), where MX really does return texts wrapped in newlines.
-  **No current route recording carries whitespace**, though — not on `<to>`, `<via>`,
+  (`interfaces.py:32`, `bgp.py:30`) — 175 values in the interfaces recording carry whitespace,
+  so for `interfaces.py` the guard is backed by observation; for `bgp.py` it is the same idiom
+  rather than a measured input. **No current route recording carries whitespace**, though — not on `<to>`, `<via>`,
   `<rt-destination>` or `<table-name>` — so nothing exercises that branch. It stays for
   consistency, not because of observed input. The test that claimed to measure it
   (`test_values_are_stripped`) was deleted: it measured nothing, and its docstring lied about

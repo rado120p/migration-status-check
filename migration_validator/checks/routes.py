@@ -120,9 +120,13 @@ class StaticRouteStatusCheck(Check):
             #
             # `not is_device` je tady necinny: device_scope() ma vzdy prazdne
             # selektory, takze `configured` uz samo znamena ne-device. Drzi se
-            # jako zapsany zamer AR-17, ne jako prace. NEHARMONIZOVAT s bfd.py:
-            # tam se do obdobne vetve chodi s configured=False, takze tam
-            # rozliseni na is_device zive je.
+            # jako zapsany zamer AR-17, ne jako prace. Totez plati o obdobne
+            # vetvi v bfd.py: device scope se nikdy nesparuje (device_scope()
+            # ma key=None a klicovaci funkce v scoping/matcher.py na None
+            # vraci prazdno), takze mu engine baseline vubec nepreda a vetev
+            # je necinna i tam. Ani jednu nemazat - obe kryji AR-17 pro
+            # pripad, ze by budouci format snapshotu device scope baseline
+            # dal.
             value = MISSING_FROM_TABLE if configured and not is_device else MISSING_ENTIRELY
             message = (
                 f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"

@@ -335,6 +335,11 @@ by dva snímky s týmiž next-hopy v jiném pořadí daly falešný
 `WARN … next-hop se zmenil A, B -> B, A`, protože větev `ZMENA` porovnává hodnoty jako
 řetězce. Setříděný výpis je navíc deterministický.
 
+Setřídění se týká **jen hodnoty**. Surová evidence, kterou nález nese do JSON výstupu
+(`subject` / `baseline`), zůstává v pořadí z XML záměrně — evidence má být doslovná. Konzument
+JSONu tedy může vidět setříděnou `value` a nesetříděný `next_hop` v evidenci; není to
+nekonzistence, ale dvě různé role.
+
 | situace | Outcome | status | `value` |
 |---|---|---|---|
 | v tabulce, next-hop shodný nebo bez baseline | `ok` | PASS | next-hopy setříděné a oddělené čárkou (`-` když žádný) |
@@ -378,7 +383,7 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 | session existuje, jiný stav | `broken` | FAIL | naměřený stav (`Down`, …) |
 | session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `bez konfigurace` |
 | session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `BFD odstraneno` |
-| session není, v baseline byla (device scope) | `broken` | FAIL | `session zmizela` |
+| session není, v baseline byla (device scope) — **dnes nedosažitelné, viz níž** | `broken` | FAIL | `session zmizela` |
 | záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
 
@@ -386,13 +391,19 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 takže bez ní by služba se spadlým BGP dostala dva FAIL řádky za jednu příčinu. V ostrém běhu
 by se to opakovalo u každé nedojeté služby a operátor by si zvykl výpis přeskakovat.
 
-**`is_device` tady dělá práci** — na rozdíl od `routes.py`, kde je stejně vypadající podmínka
-nečinná. Do větve „není ani záměr" se v device scope chodí **vždycky**: bez inventory je
-`configured` nutně `False`. Bez rozlišení by tedy nástroj u každé zmizelé session tvrdil
-„v subjektu není nakonfigurované" o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17).
-Rozdíl je v **hodnotě**, ne jen v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku
-textový výpis nezobrazí. Je to týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY`
-v `routes.py`.
+**`is_device` je tady nečinný — stejně jako stejně vypadající podmínka v `routes.py`.**
+Do větve „není ani záměr" spadne jen peer, který v subjektu session nemá; a takový peer se do
+sjednocení dostane jedině z baseline. Device scope se ale nikdy nespáruje: `device_scope()` má
+`key=None` a každá klíčovací funkce v `scoping/matcher.py` na `None` vrací prázdný seznam,
+takže scope skončí v `unmatched_subject` a engine mu baseline vůbec nepředá
+(`_run_scope(..., None, None, ...)`). `baseline_sessions` je proto v device scope vždy prázdné
+a řádek `session zmizela` se dnes nevypíše.
+
+Kód se přesto drží. Kdyby budoucí formát snapshotu device scope baseline dal, nástroj by bez
+tohoto rozlišení u každé zmizelé session tvrdil „v subjektu není nakonfigurované" —
+o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17). Rozdíl je v **hodnotě**, ne jen
+v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku textový výpis nezobrazí. Je to
+týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
 
 **Na pořadí větví záleží:** `BFD odstraneno` se testuje **před** `BGP neni Established`.
 Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,
