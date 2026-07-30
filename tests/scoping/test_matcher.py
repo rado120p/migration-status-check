@@ -187,3 +187,43 @@ def test_different_service_type_never_matches_automatically():
     result = match_scopes(baseline, subject)
 
     assert result.pairs == []
+
+
+def test_deactivation_does_not_block_pairing():
+    """Sluzba deaktivovana na jedne strane se porad musi sparovat.
+
+    Docasne deaktivovana sluzba se porad migruje, takze deaktivace nesmi
+    rozhodovat o tom, jestli se najde protejsek - jinak by zmizela do
+    NESPAROVANO a operator by prisel prave o ten radek, kvuli kteremu se
+    priznak zavadi.
+
+    Zabiji mutanta: doplneni podminky na priznak do klicovaci funkce nebo do
+    filtru kandidatu v matcher.py. Dnes tam neni; tenhle test hlida, aby se
+    tam nedostala.
+    """
+    baseline = [_scope("ge-0/0/2.113", "L3VPN-CPE13-NNI", "IPVPN")]
+    subject = [_scope("et-0/0/8.113", "L3VPN-CPE13-NNI", "IPVPN")]
+    baseline[0].interface_active = False
+
+    result = match_scopes(baseline, subject)
+
+    assert len(result.pairs) == 1
+    assert result.pairs[0].method == "description+service_type"
+    assert not result.unmatched_baseline
+    assert not result.unmatched_subject
+
+
+def test_pairing_works_when_both_sides_are_deactivated():
+    """Sluzba deaktivovana na obou zarizenich se taky musi sparovat.
+
+    Bez tohoto testu by slo AR-24 splnit podminkou "sparuj, jen kdyz se
+    priznaky lisi" - tedy poloviately.
+    """
+    baseline = [_scope("ge-0/0/2.113", "L3VPN-CPE13-NNI", "IPVPN")]
+    subject = [_scope("et-0/0/8.113", "L3VPN-CPE13-NNI", "IPVPN")]
+    baseline[0].interface_active = False
+    subject[0].interface_active = False
+
+    result = match_scopes(baseline, subject)
+
+    assert len(result.pairs) == 1
