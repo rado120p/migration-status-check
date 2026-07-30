@@ -722,8 +722,8 @@ def test_deactivated_service_shows_the_reason_in_the_report():
                         mode="both",
                         status=Status.SKIP,
                         severity=Severity.CRITICAL,
-                        message="sluzba je v konfiguraci deaktivovana "
-                        "(interface deactivated), baseline neni k porovnani",
+                        message="sluzba je v konfiguraci deaktivovana, "
+                        "baseline neni k porovnani",
                         label="Deaktivace",
                         value="interface deactivated",
                     )
@@ -735,6 +735,9 @@ def test_deactivated_service_shows_the_reason_in_the_report():
     text = render(result)
 
     assert "L3VPN-CPE14-UNI" in text
+    assert "sluzba je v konfiguraci deaktivovana" in text, (
+        "radek checku se do textoveho reportu vubec nedostal"
+    )
     assert "interface deactivated" in text, (
         "duvod deaktivace se do textoveho reportu nedostal - operator vidi "
         "SKIP bez vysvetleni"
