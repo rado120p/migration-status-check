@@ -1,7 +1,7 @@
 # `checks/` — vyhodnocovací logika
 
 Soubory: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py` a prázdný `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py` a prázdný `__init__.py`.
 
 Dvě pravidla:
 
@@ -93,7 +93,7 @@ až v `run_check`).
 
 ## `all.py`
 
-Importuje `bgp`, `evpn`, `ifaces`, `reachability`. Je to samostatný modul **kvůli cyklickému
+Importuje `bfd`, `bgp`, `evpn`, `ifaces`, `reachability`, `routes`. Je to samostatný modul **kvůli cyklickému
 importu**: `checks/ifaces.py` importuje `checks/base.py`, takže `checks/__init__.py` nesmí
 importovat `ifaces`. `load_all()` je idempotentní no-op — práci udělal import.
 
@@ -305,3 +305,109 @@ Zrcadlí `arp_present` pro IPv6:
 `  <cil> neodpovedel`. `details` nese `resolved_from` (`arp` | `nd` | `subnet-fallback`) a
 `address` (`owning_prefix()`), takže je z výsledku vidět, který nakonfigurovaný rozsah cíl
 zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.
+
+---
+
+## `routes.py` — statické routy
+
+### `static_route_status` (both, critical)
+
+Jediný check, který **porovnává konfigurační záměr proti naměřené realitě**. Ostatní checky
+se ptají jen „je to nahoře?"; tenhle se ptá „je tam to, co jsi si objednal?".
+
+**Iteruje přes sjednocení tří zdrojů** (AR‑14) — konfigurace subjektu (`Selectors.static_routes`),
+měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zavírá jednu díru:
+
+| bez tohoto zdroje | co by tiše zmizelo |
+|---|---|
+| konfigurace | rozpor „nakonfigurováno, není v tabulce" |
+| měření subjektu | v režimu bez inventory by nebylo co vypsat |
+| měření baseline | routa vyřazená z konfigurace — do selektorů subjektu se nedostane, takže by se scope na její chybění nikdy nezeptal |
+
+**Identita routy je dvojice (RIB, prefix), next-hop je hodnota.** Díky tomu se změna
+next-hopu čte jako *změněná* routa — jeden řádek se sloupcem `ZMENA` — ne jako „routa zmizela
+a jiná přibyla".
+
+**Při ECMP je hodnotou celá množina next-hopů, ne jejich pořadí v XML.** `_next_hop_text()`
+je proto `", ".join(sorted(...))`: Junos pořadí `<nh>` negarantuje ani mezi platformami, ani
+mezi verzemi — a tenhle check prochází právě tu hranici (`junos` → `junos-evo`). Bez setřídění
+by dva snímky s týmiž next-hopy v jiném pořadí daly falešný
+`WARN … next-hop se zmenil A, B -> B, A`, protože větev `ZMENA` porovnává hodnoty jako
+řetězce. Setříděný výpis je navíc deterministický.
+
+Setřídění se týká **jen hodnoty**. Surová evidence, kterou nález nese do JSON výstupu
+(`subject` / `baseline`), zůstává v pořadí z XML záměrně — evidence má být doslovná. Konzument
+JSONu tedy může vidět setříděnou `value` a nesetříděný `next_hop` v evidenci; není to
+nekonzistence, ale dvě různé role.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| v tabulce, next-hop shodný nebo bez baseline | `ok` | PASS | next-hopy setříděné a oddělené čárkou (`-` když žádný) |
+| v tabulce, next-hop se proti baseline změnil | `degraded` | WARN | nový next-hop, `ZMENA` nese starý |
+| nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
+| v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
+
+Poslední dva řádky rozlišuje `configured`, tedy „je routa v selektorech scopu": device scope
+inventory nemá, jeho selektory jsou vždy prázdné, takže se tam hlásí `chybi`, ne
+`neni v tabulce` — záměr není znám (AR‑17). Podmínka v kódu je
+`configured and not is_device`; **konjunkt `not is_device` je nečinný**, protože `configured`
+už ne‑device implikuje. Zůstává jako zapsaný záměr AR‑17, ne jako práce. V `bfd.py` vypadá
+stejná podmínka stejně, ale **je živá** — tam se do odpovídající větve chodí právě
+s `configured=False`. Nemají se harmonizovat.
+
+Label je `Staticka routa (<RIB> <prefix>)` — jméno RIB jde do kvalifikátoru popisku, ne do
+samostatného podřádku. `family` se odvozuje **z prefixu**, ne z názvu RIB, protože název
+rodinu nést nemusí (`bgp.l3vpn.0`).
+
+**Zapsaný předpoklad:** jména RIB migraci přežijí. `_aligned_baseline_data` v enginu
+přeslovňuje mezi baseline a subjektem jen oblast `interfaces`; `routes` jsou klíčované
+`table -> prefix` a přeslovnění nedostanou. Kdyby budoucí migrace přejmenovala VRF, každá
+routa v ní by se přečetla jako „chybí" + „nová".
+
+---
+
+## `bfd.py` — BFD session
+
+### `bfd_session_state` (both, critical)
+
+Stejně jako `static_route_status` **iteruje přes sjednocení tří zdrojů** (AR‑14): záměr
+z konfigurace (`Selectors.bfd_peers`), session v subjektu a session v baseline.
+**Peer, který BFD nikdy neměl, řádek nedostane** (rozhodnutí R‑1) — služba bez BFD tedy
+v reportu nemá o BFD ani zmínku.
+
+Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| session existuje, stav `Up` | `ok` | PASS | `Up` |
+| session existuje, jiný stav | `broken` | FAIL | naměřený stav (`Down`, …) |
+| session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `bez konfigurace` |
+| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `BFD odstraneno` |
+| session není, v baseline byla (device scope) — **dnes nedosažitelné, viz níž** | `broken` | FAIL | `session zmizela` |
+| záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
+| záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
+
+**Vazba na stav BGP je záměrná, ne kosmetická.** BFD nemůže naběhnout, dokud neběží BGP,
+takže bez ní by služba se spadlým BGP dostala dva FAIL řádky za jednu příčinu. V ostrém běhu
+by se to opakovalo u každé nedojeté služby a operátor by si zvykl výpis přeskakovat.
+
+**`is_device` je tady nečinný — stejně jako stejně vypadající podmínka v `routes.py`.**
+Do větve „není ani záměr" spadne jen peer, který v subjektu session nemá; a takový peer se do
+sjednocení dostane jedině z baseline. Device scope se ale nikdy nespáruje: `device_scope()` má
+`key=None` a každá klíčovací funkce v `scoping/matcher.py` na `None` vrací prázdný seznam,
+takže scope skončí v `unmatched_subject` a engine mu baseline vůbec nepředá
+(`_run_scope(..., None, None, ...)`). `baseline_sessions` je proto v device scope vždy prázdné
+a řádek `session zmizela` se dnes nevypíše.
+
+Kód se přesto drží. Kdyby budoucí formát snapshotu device scope baseline dal, nástroj by bez
+tohoto rozlišení u každé zmizelé session tvrdil „v subjektu není nakonfigurované" —
+o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17). Rozdíl je v **hodnotě**, ne jen
+v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku textový výpis nezobrazí. Je to
+týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
+
+**Na pořadí větví záleží:** `BFD odstraneno` se testuje **před** `BGP neni Established`.
+Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,
+a zároveň nedojelo BGP — což je přesně kombinace, kterou je potřeba vidět.
+
+Label je `BFD (<peer>)`, `family` odvozená `peer_family()` z adresy peeru (sdílená
+s `checks/bgp.py`), takže IPv6 peer zděděný z BGP skupiny skončí v sekci `IPv6`.

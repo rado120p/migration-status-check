@@ -4,6 +4,11 @@ Nástroj pro ověření stavu síťových služeb při migraci z routeru **MX (k
 na router s **Junos EVO** (ACX/PTX). Ověří stav před migrací, po migraci a obojí porovná
 navzdory tomu, že se názvy portů mezi zařízeními liší (`ge-0/0/2.113` → `et-0/0/8.113`).
 
+Ověřuje stav rozhraní, BGP, EVPN (E-Line i E-LAN), dosažitelnost (ARP/ND/ping),
+**statické routy** a **BFD session**. Poslední dvě jsou jediné, kde se naměřený stav
+porovnává i proti **konfiguračnímu záměru** — nakonfigurovaná statická routa, která se
+nikdy nedostala do routovací tabulky, je jinak neviditelná.
+
 - Architektura a to, jak spolu soubory souvisí: [architecture.md](architecture.md)
 - Popis každého souboru: [index.md](index.md)
 - Referenční tabulky (katalog checků, `config.yml`, `mapping.yml`, JSON schémata): [reference.md](reference.md)
@@ -370,7 +375,10 @@ Cesty nejsou nikde zadrátované — `--output` je vždy explicitní.
 | `chyba: ...: autentizace selhala` + kód 2 | špatný uživatel/klíč. Ověřte `--username`, `--key-file`, případně `--auth password --password ...` |
 | `chyba: ...: timeout po 30 s` + kód 2 | zařízení nedostupné nebo nemá povolený NETCONF na portu 22 |
 | `varovani: collector 'X' selhal` na stderr | RPC selhalo, sběr pokračoval. Snapshot vznikl, ale checky nad oblastí `X` budou `SKIP` |
-| `chyba: snapshot ma schema_version N` | snapshot z jiné verze nástroje; přesběrejte ho |
+| `chyba: snapshot ma schema_version N` | snapshot z jiné verze nástroje; **přesběrejte ho**. Data ze starého snímku dopočítat nejde — snímek verze 2 neobsahuje oblasti `routes` ani `bfd`, takže by nové checky mlčely. Týká se to i uložených běhů `runs/ipv6/` a `runs/ipv6-live-2026-07-29/` |
+| `ValueError: ... schema_version 2` při `capture` | inventory YAML je ze starší verze parseru; **vygenerujte ji znovu** (`mx_parser.py` / `evo_parser.py`). Inventory verze 2 nemá pole `static_route` ani `bfd`, takže by služba vypadala, že žádný záměr nemá |
+| Služba má `FAIL … neni v tabulce` u statické routy | routa **je** v konfiguraci, ale v routovací tabulce chybí — typicky proto, že se její next-hop stal nedosažitelným (deaktivované rozhraní). Je to nález, ne chyba nástroje |
+| `SKIP … BGP neni Established` u BFD | BFD je nakonfigurované, ale BGP peer ještě nenaběhl. BFD bez BGP naběhnout nemůže, takže se stav nehlásí jako chyba |
 | Všechno je `SKIP` | typicky selhaly collectory — podívejte se do `capture.collectors` ve snapshotu |
 | Služba chybí ve výpisu | není to migrovaný typ služby (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`), je to management rozhraní, nebo je v `ignore` v `mapping.yml` |
 | Hodně `ambiguous` v `NESPAROVANO` | duplicitní `description` na zařízení — dopárujte přes `mapping.yml` |

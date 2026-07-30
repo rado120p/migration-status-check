@@ -112,6 +112,7 @@ class RoutingInstance:
     evpn_service_type: str | None = None
     instance_vlan_ids: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    bfd: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -132,6 +133,15 @@ class InterfaceConfig:
 
 
 @dataclass
+class StaticRoute:
+    """Jedna statická routa z konfigurace — záměr, ne stav routovací tabulky."""
+
+    rib: str
+    prefix: str
+    next_hop: list[str] = field(default_factory=list)
+
+
+@dataclass
 class InterfaceService:
     interface: str
     description: str | None
@@ -145,6 +155,8 @@ class InterfaceService:
     protocol: list[str]
     active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
+    static_route: list[dict[str, Any]] = field(default_factory=list)
+    bfd: list[dict[str, Any]] = field(default_factory=list)
 
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
@@ -233,6 +245,49 @@ def unique(values: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(value for value in values if value))
 
 
+def rib_instance(rib: str) -> str | None:
+    """Routing-instance ze jména RIB: 'L3VPN-A.inet6.0' -> 'L3VPN-A', 'inet.0' -> None.
+
+    Globální tabulky patří default instanci, kterou inventory zapisuje jako
+    None — stejně jako `routing_instance` služby. Díky tomu jde porovnávat
+    přímo, bez zvláštní větve pro globální tabulku.
+    """
+    head = rib.rsplit(".", 2)[0] if rib.count(".") >= 2 else ""
+    return head or None
+
+
+def _bfd_values(
+    node: etree._Element | None,
+    source: str,
+) -> dict[str, Any] | None:
+    """Hodnoty jedné úrovně BFD. None znamená, že na této úrovni nic není."""
+    if node is None:
+        return None
+
+    return {
+        "minimum_interval": _optional_int(
+            first_text(
+                node,
+                "./*[local-name()='minimum-interval']/text()",
+            )
+        ),
+        "multiplier": _optional_int(
+            first_text(
+                node,
+                "./*[local-name()='multiplier']/text()",
+            )
+        ),
+        "source": source,
+    }
+
+
+def _optional_int(value: str | None) -> int | None:
+    if value is None or not value.isdigit():
+        return None
+
+    return int(value)
+
+
 def xpath_exists(
     node: etree._Element | None,
     xpath: str,
@@ -302,9 +357,12 @@ class JunosServiceParser:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
+        self.default_bfd: dict[str, dict[str, Any]] = {}
+        self.static_routes: list[StaticRoute] = []
 
     def parse(self) -> list[InterfaceService]:
         self._parse_routing_instances()
+        self.static_routes = self._parse_static_routes()
         self._parse_default_bgp_neighbors()
         self._parse_global_l2circuits()
         self._parse_global_connections()
@@ -330,6 +388,13 @@ class JunosServiceParser:
             services,
             interface_configs_by_name,
         )
+
+        self._assign_static_routes(
+            services,
+            interface_configs_by_name,
+        )
+
+        self._assign_bfd(services)
 
         return sorted(
             services,
@@ -417,6 +482,11 @@ class JunosServiceParser:
                     )
                 ),
                 bgp_neighbors=self._parse_bgp_neighbors(
+                    node,
+                    "./*[local-name()='protocols']"
+                    "/*[local-name()='bgp']",
+                ),
+                bfd=self._parse_bfd(
                     node,
                     "./*[local-name()='protocols']"
                     "/*[local-name()='bgp']",
@@ -516,6 +586,246 @@ class JunosServiceParser:
                     neighbors.append(neighbor)
 
         return unique(neighbors)
+
+    def _parse_static_routes(self) -> list[StaticRoute]:
+        """Statiky z globálních routing-options i ze všech routing-instances.
+
+        Jméno RIB se normalizuje na tvar, jaký vrací `show route` v poli
+        table-name. Konfigurace není mezi rodinami symetrická — IPv4 leží
+        přímo pod routing-options/static, IPv6 pod
+        routing-options/rib <jméno>.inet6.0/static — ale RPC ten rozdíl nezná.
+        Parser ho proto zahladí tady a dál se nešíří.
+
+        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) se
+        přeskočí celý, stejně jako se už přeskakuje jednotlivá `route`
+        a `instance`. Bez toho by `deactivate` — standardní idiom pro
+        vyřazení konfigurace při migraci — vyrobil živý záměr a check by
+        hlásil `FAIL … neni v tabulce` za routu, kterou nikdo nechce.
+        """
+
+        routes: list[StaticRoute] = []
+
+        for options_node in self.config_xml.xpath(
+            "./*[local-name()='routing-options']"
+        ):
+            if self._is_inactive(options_node):
+                continue
+
+            routes.extend(
+                self._static_routes_under(options_node, None)
+            )
+
+        for instance_node in self.config_xml.xpath(
+            "./*[local-name()='routing-instances']"
+            "/*[local-name()='instance']"
+        ):
+            if self._is_inactive(instance_node):
+                continue
+
+            instance_name = first_text(
+                instance_node,
+                "./*[local-name()='name']/text()",
+            )
+
+            if not instance_name:
+                continue
+
+            for options_node in instance_node.xpath(
+                "./*[local-name()='routing-options']"
+            ):
+                if self._is_inactive(options_node):
+                    continue
+
+                routes.extend(
+                    self._static_routes_under(
+                        options_node,
+                        instance_name,
+                    )
+                )
+
+        return routes
+
+    def _static_routes_under(
+        self,
+        options_node: etree._Element,
+        instance_name: str | None,
+    ) -> list[StaticRoute]:
+        """Statiky pod jedním routing-options, s odvozeným jménem RIB."""
+
+        default_rib = (
+            f"{instance_name}.inet.0"
+            if instance_name
+            else "inet.0"
+        )
+
+        containers: list[tuple[str, etree._Element]] = [
+            (default_rib, static_node)
+            for static_node in options_node.xpath(
+                "./*[local-name()='static']"
+            )
+        ]
+
+        for rib_node in options_node.xpath(
+            "./*[local-name()='rib']"
+        ):
+            if self._is_inactive(rib_node):
+                continue
+
+            rib_name = first_text(
+                rib_node,
+                "./*[local-name()='name']/text()",
+            )
+
+            if not rib_name:
+                continue
+
+            containers.extend(
+                (rib_name, static_node)
+                for static_node in rib_node.xpath(
+                    "./*[local-name()='static']"
+                )
+            )
+
+        routes: list[StaticRoute] = []
+
+        for rib_name, static_node in containers:
+            # Jediné místo pro oba tvary: `static` přímo pod
+            # routing-options i `static` uvnitř `rib`.
+            if self._is_inactive(static_node):
+                continue
+
+            for route_node in static_node.xpath(
+                "./*[local-name()='route']"
+            ):
+                if self._is_inactive(route_node):
+                    continue
+
+                prefix = first_text(
+                    route_node,
+                    "./*[local-name()='name']/text()",
+                )
+
+                if not prefix:
+                    continue
+
+                routes.append(
+                    StaticRoute(
+                        rib=rib_name,
+                        prefix=prefix,
+                        # Jen holý next-hop. discard, reject, next-table
+                        # a qualified-next-hop nemají adresu k porovnání
+                        # se subnetem rozhraní, takže se na službu
+                        # nenamapují a skončí v unassigned, pokud jsou
+                        # nainstalované. Rozhodnuto ve specu.
+                        next_hop=all_texts(
+                            route_node,
+                            "./*[local-name()='next-hop']/text()",
+                        ),
+                    )
+                )
+
+        return routes
+
+    def _bfd_node(
+        self,
+        node: etree._Element | None,
+    ) -> etree._Element | None:
+        """Element bfd-liveness-detection přímo pod daným uzlem, bez sestupu.
+
+        Deaktivovaná stanza se chová, jako by tam nebyla. `deactivate` je
+        standardní junosí idiom pro vyřazení konfigurace při migraci, takže
+        záměr z ní vzniknout nesmí — jinak by nástroj hlásil `FAIL … bez
+        session` za ochranu, kterou operátor vědomě vypnul, a to je právě
+        ten jeden výstup, který podrývá celou pointu porovnávání
+        konfigurace se skutečností.
+
+        Návrat None navíc pustí dědění o úroveň výš: soused
+        s deaktivovaným BFD zdědí pravidlo skupiny, což je právě to, co
+        udělá i Junos.
+        """
+        if node is None:
+            return None
+
+        found = node.xpath("./*[local-name()='bfd-liveness-detection']")
+
+        if not found or self._is_inactive(found[0]):
+            return None
+
+        return found[0]
+
+    def _parse_bfd(
+        self,
+        node: etree._Element,
+        bgp_xpath: str,
+    ) -> dict[str, dict[str, Any]]:
+        """BFD podle peeru, s děděním neighbor > group > protocols bgp.
+
+        Specifičtější úroveň přepisuje obecnější, a to **celou hodnotou**,
+        ne položku po položce: soused s vlastním minimum-interval si
+        nedědí multiplier ze skupiny.
+
+        Junosí `inherit` tuhle hierarchii nerozbaluje — rozbaluje
+        apply-groups, ne hierarchii protokolu. Ověřeno proti laborce
+        2026-07-29, kdy skupina CPE14 nesla BFD a její sousedé ho neměli
+        ani v konfiguraci stažené s `inherit`.
+        """
+
+        intents: dict[str, dict[str, Any]] = {}
+
+        for bgp_node in node.xpath(bgp_xpath):
+            protocol_level = _bfd_values(
+                self._bfd_node(bgp_node),
+                "bgp",
+            )
+
+            # Soused může viset přímo pod bgp i pod skupinou. Kontejnery
+            # se procházejí zvlášť a jen o úroveň níž, aby se soused
+            # ve skupině nezapočítal dvakrát.
+            containers: list[
+                tuple[etree._Element, dict[str, Any] | None]
+            ] = [(bgp_node, protocol_level)]
+
+            for group_node in bgp_node.xpath(
+                "./*[local-name()='group']"
+            ):
+                if self._is_inactive(group_node):
+                    continue
+
+                containers.append(
+                    (
+                        group_node,
+                        _bfd_values(
+                            self._bfd_node(group_node),
+                            "group",
+                        )
+                        or protocol_level,
+                    )
+                )
+
+            for container, inherited in containers:
+                for neighbor_node in container.xpath(
+                    "./*[local-name()='neighbor']"
+                ):
+                    if self._is_inactive(neighbor_node):
+                        continue
+
+                    peer = first_text(
+                        neighbor_node,
+                        "./*[local-name()='name']/text()",
+                    ) or first_text(neighbor_node, "./text()")
+
+                    if not peer:
+                        continue
+
+                    values = _bfd_values(
+                        self._bfd_node(neighbor_node),
+                        "neighbor",
+                    ) or inherited
+
+                    if values is not None:
+                        intents[peer] = {"peer": peer, **values}
+
+        return intents
 
     def _parse_bridge_domains(
         self,
@@ -622,6 +932,11 @@ class JunosServiceParser:
         """
 
         self.default_bgp_neighbors = self._parse_bgp_neighbors(
+            self.config_xml,
+            "./*[local-name()='protocols']"
+            "/*[local-name()='bgp']",
+        )
+        self.default_bfd = self._parse_bfd(
             self.config_xml,
             "./*[local-name()='protocols']"
             "/*[local-name()='bgp']",
@@ -1139,6 +1454,90 @@ class JunosServiceParser:
                 return True
 
         return False
+
+    def _assign_static_routes(
+        self,
+        services: list[InterfaceService],
+        interface_configs_by_name: dict[str, InterfaceConfig],
+    ) -> None:
+        """Routa patří službě, která má next-hop ve svém subnetu a leží v téže RIB.
+
+        Obě podmínky musí platit současně. Bez shody routing-instance by
+        next-hop, který náhodou padne do subnetu rozhraní v jiné VRF, sedl
+        na špatnou službu.
+
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type:
+        L2 rozhraní nemá IP adresu, takže se namatchovat nemůže, a filtr by
+        byl duplikát podmínky, kterou už dělá shoda adres.
+        """
+
+        for service in services:
+            interface = interface_configs_by_name.get(service.interface)
+
+            if interface is None:
+                continue
+
+            matched = [
+                route
+                for route in self.static_routes
+                if rib_instance(route.rib) == service.routing_instance
+                and any(
+                    self._bgp_neighbor_matches_interface(
+                        next_hop,
+                        interface,
+                    )
+                    for next_hop in route.next_hop
+                )
+            ]
+
+            if not matched:
+                continue
+
+            service.static_route = [
+                asdict(route)
+                for route in matched
+            ]
+            service.detection_reason.append(
+                "Statická routa odpovídá subnetu rozhraní: "
+                + ", ".join(route.prefix for route in matched)
+            )
+
+    def _assign_bfd(
+        self,
+        services: list[InterfaceService],
+    ) -> None:
+        """BFD se připíná jen k peerům, které služba už má v bgp_neighbor.
+
+        Musí běžet **až po** `_assign_bgp_neighbors` — dřív je seznam
+        peerů prázdný a nebylo by co spárovat.
+
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type.
+        Služba bez routing-instance sahá do `self.default_bfd`, což je
+        záměr z globálního `protocols bgp` — a to i tehdy, jde-li o Core
+        nebo E-LAN. Nevadí to, protože `_assign_bgp_neighbors` plní
+        `bgp_neighbor` jen u Internet a IPVPN, takže ostatním službám
+        prázdný seznam ukončí iteraci hned na začátku. Je to podmínka,
+        na které tahle metoda stojí, ne shoda náhod — kdyby se filtr
+        v `_assign_bgp_neighbors` rozšířil, patří sem gate.
+        """
+
+        for service in services:
+            if not service.bgp_neighbor:
+                continue
+
+            if service.routing_instance:
+                instance = self.routing_instances.get(
+                    service.routing_instance
+                )
+                intents = instance.bfd if instance else {}
+            else:
+                intents = self.default_bfd
+
+            service.bfd = [
+                intents[peer]
+                for peer in service.bgp_neighbor
+                if peer in intents
+            ]
 
     def _find_interface_bridge_domains(
         self,
@@ -1744,6 +2143,7 @@ def retrieve_configuration(
 
     Použit je jeden filtr, aby parser viděl vazby mezi:
         interfaces
+        routing-options
         routing-instances
         protocols
         bridge-domains
@@ -1754,6 +2154,7 @@ def retrieve_configuration(
         b"""
         <configuration>
             <interfaces/>
+            <routing-options/>
             <routing-instances/>
             <protocols/>
             <bridge-domains/>
@@ -1779,7 +2180,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 2
+INVENTORY_SCHEMA_VERSION = 3
 
 
 def create_yaml_data(
@@ -1819,6 +2220,8 @@ def clean_service_dict(
         "bgp_neighbor",
         "bridge_domain",
         "customer_vlan",
+        "static_route",
+        "bfd",
         "detection_confidence",
         "detection_reason",
     )

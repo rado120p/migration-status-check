@@ -49,7 +49,7 @@ def test_save_and_load(tmp_path):
     save_snapshot(_snapshot(), path)
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["schema_version"] == 2
+    assert written["schema_version"] == 3
     assert written["device"]["platform"] == "junos"
 
     assert load_snapshot(path) == _snapshot()
@@ -81,10 +81,22 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_two():
-    assert SCHEMA_VERSION == 2
+def test_snapshot_version_is_three():
+    assert SCHEMA_VERSION == 3
 
 
 def test_old_snapshot_fails_loudly():
     with pytest.raises(SnapshotVersionError, match="schema_version"):
         Snapshot.from_dict({"schema_version": 1, "device": {"address": "x"}})
+
+
+def test_version_two_snapshot_is_rejected():
+    """Stary snimek nema oblasti routes a bfd.
+
+    Kontrolou verze by prosel, ale failed_collectors by je nevypsalo -
+    collector neselhal, on vubec nebezel. bfd_session_state by pak videl
+    zamer z inventare, nula session, BGP Established a dal FAIL na kazde
+    sluzbe. Falesny poplach, ne ticha zelen.
+    """
+    with pytest.raises(SnapshotVersionError, match="schema_version 2"):
+        Snapshot.from_dict({"schema_version": 2, "device": {}, "capture": {}})

@@ -1,0 +1,434 @@
+"""Offline testy statickych rout - konfigurace se vklada jako XML, laborka neni potreba.
+
+Oba parsery se meni v zamku, takze kazdy test bezi proti obema.
+
+Tvary XML odpovidaji skutecne konfiguraci laborky z 2026-07-29
+(runs/bfd-static-2026-07-29/cfg/): IPv4 lezi primo pod routing-options/static,
+IPv6 pod routing-options/rib <jmeno>.inet6.0/static, a to jak globalne, tak
+uvnitr routing-instance.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+from lxml import etree
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load(module_name: str, filename: str):
+    """Parsery jsou skripty v korenu repozitare, ne balicek - nacteme je podle cesty."""
+    spec = importlib.util.spec_from_file_location(module_name, ROOT / filename)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+evo = _load("evo_parser_static_test", "evo_parser.py")
+mx = _load("mx_parser_static_test", "mx_parser.py")
+
+PARSERS = (
+    pytest.param(evo, evo.JunosEvoAcxServiceParser, id="evo"),
+    pytest.param(mx, mx.JunosServiceParser, id="mx"),
+)
+
+BOTH_FAMILIES = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet><address><name>152.11.13.1/29</name></address></inet>
+          <inet6><address><name>2001:abcd:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+          <inet6><address><name>2001:db8:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <static>
+      <route>
+        <name>198.62.1.0/29</name>
+        <next-hop>152.11.13.2</next-hop>
+      </route>
+    </static>
+    <rib>
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:aaaa::/64</name>
+          <next-hop>2001:abcd:11:13::b</next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+        <rib>
+          <name>L3VPN-CPE13-NNI.inet6.0</name>
+          <static>
+            <route>
+              <name>2001:eeee::/64</name>
+              <next-hop>2001:db8:11:13::b</next-hop>
+            </route>
+          </static>
+        </rib>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+def _parse(module, parser_class, xml: str):
+    return parser_class(etree.XML(xml.encode())).parse()
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_rib_names_match_what_show_route_returns(module, parser_class):
+    """Obe konfiguracni podoby se normalizuji na jmeno tabulky z RPC.
+
+    Naivni //static/route by nasel oboji, ale ztratil by prislusnost k RIB -
+    a prave ta odlisuje ::/0 v mgmt_junos.inet6.0 od ::/0 v inet6.0.
+    """
+    parser = parser_class(etree.XML(BOTH_FAMILIES.encode()))
+    parser.parse()
+
+    found = {(route.rib, route.prefix) for route in parser.static_routes}
+    assert found == {
+        ("inet.0", "198.62.1.0/29"),
+        ("inet6.0", "2001:aaaa::/64"),
+        ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29"),
+        ("L3VPN-CPE13-NNI.inet6.0", "2001:eeee::/64"),
+    }
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_rib_instance_maps_global_tables_to_none(module, parser_class):
+    """Globalni tabulky patri default instanci, kterou inventory zapisuje jako None."""
+    assert module.rib_instance("inet.0") is None
+    assert module.rib_instance("inet6.0") is None
+    assert module.rib_instance("L3VPN-CPE13-NNI.inet.0") == "L3VPN-CPE13-NNI"
+    assert module.rib_instance("L3VPN-CPE13-NNI.inet6.0") == "L3VPN-CPE13-NNI"
+    assert module.rib_instance("mgmt_junos.inet6.0") == "mgmt_junos"
+
+
+UNMAPPABLE = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+    <interface>
+      <name>fxp0</name>
+      <unit>
+        <name>0</name>
+        <family>
+          <inet><address><name>10.0.0.15/24</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+    <instance>
+      <name>mgmt_junos</name>
+      <routing-options>
+        <static>
+          <route>
+            <name>0.0.0.0/0</name>
+            <next-hop>10.0.0.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+WRONG_VRF = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+    </instance>
+    <instance>
+      <name>L3VPN-JINA</name>
+      <instance-type>vrf</instance-type>
+      <routing-options>
+        <static>
+          <route>
+            <name>10.9.9.0/24</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_route_lands_on_service_whose_subnet_contains_next_hop(module, parser_class):
+    services = _parse(module, parser_class, BOTH_FAMILIES)
+    by_interface = {service.interface: service for service in services}
+
+    assert {
+        (route["rib"], route["prefix"])
+        for route in by_interface["et-0/0/8.113"].static_route
+    } == {
+        ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29"),
+        ("L3VPN-CPE13-NNI.inet6.0", "2001:eeee::/64"),
+    }
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_next_hop_is_carried_as_value(module, parser_class):
+    services = _parse(module, parser_class, BOTH_FAMILIES)
+    by_interface = {service.interface: service for service in services}
+
+    routes = {
+        route["prefix"]: route["next_hop"]
+        for route in by_interface["et-0/0/8.113"].static_route
+    }
+    assert routes["172.26.1.0/29"] == ["198.11.13.2"]
+    assert routes["2001:eeee::/64"] == ["2001:db8:11:13::b"]
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_management_route_lands_on_no_service(module, parser_class):
+    """Statika v mgmt_junos padne na fxp0.0, ze ktere se scope nikdy nestane.
+
+    Do inventory se nedostane. Kdyz je nainstalovana, chyti ji
+    RunResult.unassigned z routovaci tabulky - viz Task 9.
+    """
+    services = _parse(module, parser_class, UNMAPPABLE)
+
+    assert all(
+        route["prefix"] != "0.0.0.0/0"
+        for service in services
+        for route in service.static_route
+    )
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_next_hop_in_foreign_vrf_does_not_match(module, parser_class):
+    """Shoda subnetu sama nestaci - musi sedet i routing-instance.
+
+    Next-hop 198.11.13.2 padne do subnetu et-0/0/8.113, ale routa lezi
+    v L3VPN-JINA. Bez podminky na instanci by sedla na spatnou sluzbu.
+    """
+    services = _parse(module, parser_class, WRONG_VRF)
+
+    assert all(not service.static_route for service in services)
+
+
+# ----------------------------------------------------------------------
+# Deaktivovane kontejnery
+#
+# Tyhle tvary v laborce nejsou: ve vsech ctyrech captureech z 2026-07-29
+# nese inactive="inactive" jen <interface>, nikdy static, rib ani
+# routing-options. Skladaji se proto rucne - je to presne ten tvar, ktery
+# v konfiguraci necha junosi `deactivate`, tedy standardni idiom pro
+# vyrazeni konfigurace pri migraci.
+# ----------------------------------------------------------------------
+
+INTERFACES = """
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet><address><name>152.11.13.1/29</name></address></inet>
+          <inet6><address><name>2001:abcd:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+      <unit>
+        <name>113</name>
+        <description>CPE13-VRF</description>
+        <family>
+          <inet><address><name>198.11.13.1/29</name></address></inet>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+"""
+
+# Deaktivovany je `static` i `rib`; routa v instanci zustava ziva a slouzi
+# jako kontrola, ze guard nevyradil vic, nez mel.
+DEACTIVATED_CONTAINERS = f"""
+<configuration>
+{INTERFACES}
+  <routing-options>
+    <static inactive="inactive">
+      <route>
+        <name>198.62.1.0/29</name>
+        <next-hop>152.11.13.2</next-hop>
+      </route>
+    </static>
+    <rib inactive="inactive">
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:aaaa::/64</name>
+          <next-hop>2001:abcd:11:13::b</next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options>
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+DEACTIVATED_ROUTING_OPTIONS = f"""
+<configuration>
+{INTERFACES}
+  <routing-options inactive="inactive">
+    <static>
+      <route>
+        <name>198.62.1.0/29</name>
+        <next-hop>152.11.13.2</next-hop>
+      </route>
+    </static>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.113</name></interface>
+      <routing-options inactive="inactive">
+        <static>
+          <route>
+            <name>172.26.1.0/29</name>
+            <next-hop>198.11.13.2</next-hop>
+          </route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+def _configured(parser_class, xml: str) -> set[tuple[str, str]]:
+    parser = parser_class(etree.XML(xml.encode()))
+    parser.parse()
+    return {(route.rib, route.prefix) for route in parser.static_routes}
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_static_stanza_yields_no_route(module, parser_class):
+    """Deaktivovany `static` nema vyrobit zivy zamer.
+
+    Jinak check hlasi 'FAIL ... neni v tabulce' za routu, kterou operator
+    vedome vyradil - falesny rozpor je jediny vystup, ktery podryva celou
+    pointu porovnavani konfigurace se skutecnosti.
+    """
+    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
+
+    assert ("inet.0", "198.62.1.0/29") not in found
+    # Kontrola, ze guard nesebral i to, co ma zustat.
+    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_rib_yields_no_route(module, parser_class):
+    """Deaktivovany `rib` bere s sebou i `static` pod sebou."""
+    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
+
+    assert ("inet6.0", "2001:aaaa::/64") not in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_global_routing_options_yields_no_route(module, parser_class):
+    """Deaktivovane globalni `routing-options` vyradi statiky default instance."""
+    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+
+    assert ("inet.0", "198.62.1.0/29") not in found
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_instance_routing_options_yields_no_route(module, parser_class):
+    """Deaktivovane `routing-options` uvnitr instance - druhy, samostatny guard.
+
+    Jsou to dve ruzne smycky v `_parse_static_routes`, takze jeden test na
+    obe by nechal jeden z guardu nepokryty.
+    """
+    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+
+    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") not in found

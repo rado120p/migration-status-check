@@ -19,7 +19,7 @@
 - **Každý `Finding` musí nastavit `family`.** `reporting/view.py:18` má `FAMILY_ORDER = (None, 4, 6)`; finding bez rodiny spadne do bezhlavičkové sekce nad IPv4 a IPv6 sekcemi. U statické routy se rodina odvozuje **z prefixu**, u BFD **z adresy peeru** — nikdy ze jména RIB (AR-11, stejný důvod jako u `peer_family`).
 - **Nový obor faktů se zapisuje na tři místa:** `models/scope.py:FACT_AREAS`, explicitní výčet ve větvi pro service scope v `Scope.select()`, a `capture.py:LIST_AREAS` (jen pokud je obor seznam). `routes` i `bfd` jsou mappingy, takže do `LIST_AREAS` **nepatří** — `_empty()` i `_empty_for()` pro ně vrací `{}` správně už teď.
 - **Mutační disciplína.** U tří míst v tomto plánu je povinné: **nejdřív zavést mutanta, spustit test, ověřit že padne, mutanta vrátit, teprve pak psát implementaci.** Vlna 1 ukázala, že strážní test, který se takhle neověří, projde i s rozbitou větví (T13a/T13b). Označená místa: normalizace jména RIB (Task 1), dědění BFD hierarchií (Task 2), podmínka shody routing-instance při mapování routy (Task 1).
-- **Testy se spouští z kořene repozitáře:** `.venv/bin/pytest`.
+- **Testy se spouští z kořene repozitáře:** `.venv/bin/pytest`. Pokud se pracuje ve worktree, jehož `.venv` je symlink na sdílené venv, musí `pyproject.toml` nést `pythonpath = ["."]` v `[tool.pytest.ini_options]` — bez něj editable install nasměruje `migration_validator` do **rodičovského** repa a sada tiše testuje cizí kód. Totéž platí pro spouštění nástroje: `python -m migration_validator.cli` bere balíček z worktree správně, ale console script `mig-validate` **ne** (shebang má absolutní cestu do sdíleného venv). Proto plán všude používá `python -m`, nikdy `mig-validate`.
 - **Laboratoř:** `172.20.20.4` (vMX, platforma `junos`), `172.20.20.5` (PTX10002-36QDD, platforma `junos-evo`). Uživatel `admin`, autentizace **heslem**, ne klíčem. Heslo je v `~/.bashrc` pod non-interactive guardem, načíst explicitně:
   ```bash
   eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"
@@ -190,7 +190,7 @@ def _parse(module, parser_class, xml: str):
 def test_rib_names_match_what_show_route_returns(module, parser_class):
     """Obe konfiguracni podoby se normalizuji na jmeno tabulky z RPC.
 
-    Naivni //static/route by nasel obojí, ale ztratil by prislusnost k RIB -
+    Naivni //static/route by nasel oboji, ale ztratil by prislusnost k RIB -
     a prave ta odlisuje ::/0 v mgmt_junos.inet6.0 od ::/0 v inet6.0.
     """
     parser = parser_class(etree.XML(BOTH_FAMILIES.encode()))
@@ -658,15 +658,30 @@ Expected: PASS (12 testů)
 
 - [ ] **Step 12: MUTAČNÍ OVĚŘENÍ podmínky na routing-instance**
 
-V `_assign_static_routes` dočasně smazat řádek:
+V `_assign_static_routes` dočasně nahradit dva řádky:
 
 ```python
                 if rib_instance(route.rib) == service.routing_instance
+                and any(
 ```
 
-Run: `.venv/bin/pytest tests/parsers/test_static_routes.py -v`
-Expected: FAIL v `test_next_hop_in_foreign_vrf_does_not_match`.
+za jeden:
 
+```python
+                if any(
+```
+
+**Nemaž jen ten první řádek.** Zbylé `and any(...)` je syntakticky platné —
+`for route in self.static_routes and any(...)` projde parserem a spadne na
+`NameError`, protože `route` není navázané. To není sémantický mutant: shodí
+pět testů najednou a o cílené podmínce nedokáže nic.
+
+Run: `.venv/bin/pytest tests/parsers/test_static_routes.py -v`
+Expected: FAIL v `test_next_hop_in_foreign_vrf_does_not_match` na
+`AssertionError`, ostatní testy prochází.
+
+Mutaci proveď v **obou** parserech zvlášť, ne jen v jednom — zámek zaručuje,
+že jsou soubory shodné, ale nezaručuje, že je otestovaná obě kopie.
 Po ověření mutanta vrátit.
 
 - [ ] **Step 13: Doplnit `routing-options` do filtru konfigurace**
@@ -721,7 +736,11 @@ for service in services:
 EOF
 ```
 
-Expected: 6 rout celkem (4 servisní + 2 mgmt), z toho **4 namapované** — `172.26.1.0/29` a `2001:eeee::/64` na rozhraní v `L3VPN-CPE13-NNI`, `198.62.1.0/29` a `2001:aaaa::/64` na rozhraní v globální instanci. Obě `mgmt_junos` routy namapované **nejsou**.
+Expected: **7 rout celkem** (5 servisních + 2 mgmt), z toho **5 namapovaných** —
+`172.26.1.0/29` a `2001:eeee::/64` na rozhraní v `L3VPN-CPE13-NNI`,
+a `198.62.1.0/29`, `198.62.2.0/24` a `2001:aaaa::/64` na rozhraní v globální
+instanci. Globální `routing-options/static` obsahuje **dvě** IPv4 routy, obě
+s next-hopem `152.11.13.2`. Obě `mgmt_junos` routy namapované **nejsou**.
 
 - [ ] **Step 15: Commit**
 
@@ -1771,11 +1790,22 @@ cp runs/bfd-static-2026-07-29/rpc/172.20.20.4.route_static.xml tests/fixtures/rp
 cp runs/bfd-static-2026-07-29/rpc/172.20.20.5.route_static.xml tests/fixtures/rpc/junos-evo/routes.xml
 ```
 
-Ověř obsah:
+Ověř obsah. **Nepoužívej `grep -c "<rt>"`** — element nese atribut
+(`<rt style="brief">`), takže by ten vzorec vrátil nulu a vypadalo by to, že
+jsou fixtures prázdné:
+
 ```bash
-grep -c "<rt>" tests/fixtures/rpc/junos/routes.xml tests/fixtures/rpc/junos-evo/routes.xml
+.venv/bin/python -c "
+from lxml import etree
+for name in ('junos', 'junos-evo'):
+    t = etree.parse(f'tests/fixtures/rpc/{name}/routes.xml')
+    print(name, 'rt:', len(list(t.getroot().iter('rt'))))
+"
 ```
-Expected: `junos/routes.xml` má 2 (obě mgmt), `junos-evo/routes.xml` má 5 (servisní).
+
+Expected: `junos` má **2** (obě mgmt — servisní statiky na vMX nakonfigurované
+jsou, ale nenainstalovaly se, protože jejich next-hop neexistuje),
+`junos-evo` má **5** ve čtyřech tabulkách.
 
 - [ ] **Step 2: Napsat padající testy**
 
@@ -1966,7 +1996,7 @@ from migration_validator.collectors import (  # noqa: F401
 - [ ] **Step 5: Spustit testy a ověřit, že prochází**
 
 Run: `.venv/bin/pytest tests/collectors/test_routes.py -v`
-Expected: PASS (14 testů)
+Expected: PASS (**10 testů** — 4 parametrizované × 2 platformy + 2 jednotlivé)
 
 - [ ] **Step 6: Commit**
 
@@ -2086,7 +2116,7 @@ Create `migration_validator/collectors/bfd.py`:
 """Sber stavu BFD session.
 
 Collector nerozhoduje, jestli je chybejici session problem - to zavisi na
-tom, jestli je BFD vubec nakonfigurovane a jestli bezi BGP, a obojí vi az
+tom, jestli je BFD vubec nakonfigurovane a jestli bezi BGP, a oboji vi az
 check.
 
 Pouziva detail variantu: strucny vypis nema ani bfd-client, ani
@@ -3148,9 +3178,10 @@ grep -c "static_route:" 172.20.20.5.yml
 grep -A 4 "  bfd:" 172.20.20.5.yml | head -20
 ```
 
-Expected: `schema_version: 3` v obou. Na `.5` čtyři služby s neprázdným `bfd`
-(z toho dvě se `source: group`) a služby v `L3VPN-CPE13-NNI` i v globální
-instanci s neprázdným `static_route`.
+Expected: `schema_version: 3` v obou. Na `.5` **čtyři BFD záměry** rozložené
+do tří služeb (`152.11.13.2` a `198.11.13.2` se `source: neighbor`,
+`198.11.14.2` a `2001:db8:11:14::b` se `source: group`) a neprázdný
+`static_route` u služeb v `L3VPN-CPE13-NNI` i v globální instanci.
 
 - [ ] **Step 2: Zkopírovat inventory do fixtures**
 
@@ -3232,10 +3263,11 @@ je vidět jen na `.4`, kde je konfigurace plná a tabulka prázdná:
   --snapshot runs/bfd-static-2026-07-29/pre.json --detail | grep "Staticka routa"
 ```
 
-Expected: **čtyři řádky `FAIL` s hodnotou `neni v tabulce`** — `198.62.1.0/29`
-a `2001:aaaa::/64` v `inet.0` / `inet6.0`, `172.26.1.0/29` a `2001:eeee::/64`
-v `L3VPN-CPE13-NNI.*`. Mgmt statiky mezi nimi **nejsou** (nemapují se na
-službu), zato musí být v `unassigned.static_routes`:
+Expected: **pět řádků `FAIL` s hodnotou `neni v tabulce`** — `198.62.1.0/29`
+a `198.62.2.0/24` v `inet.0`, `2001:aaaa::/64` v `inet6.0`, `172.26.1.0/29`
+a `2001:eeee::/64` v `L3VPN-CPE13-NNI.*`. (Globální `routing-options/static`
+má dvě IPv4 routy, ne jednu — ověřeno při Tasku 1.) Mgmt statiky mezi nimi
+**nejsou** (nemapují se na službu), zato musí být v `unassigned.static_routes`:
 
 ```bash
 .venv/bin/python -m migration_validator.cli evaluate \
@@ -3246,7 +3278,7 @@ službu), zato musí být v `unassigned.static_routes`:
 Expected: dvě položky, `mgmt_junos.inet.0 0.0.0.0/0` a `mgmt_junos.inet6.0 ::/0`,
 obě s `via: ["fxp0.0"]`.
 
-Pokud tyhle čtyři FAIL řádky nevyjdou, **nespoléhej na to, že je laborka jinak
+Pokud tyhle pět FAIL řádků nevyjdou, **nespoléhej na to, že je laborka jinak
 nakonfigurovaná** — zkontroluj nejdřív `_assign_static_routes` a selektor
 `static_routes` ve scope. Rozpor mezi konfigurací a tabulkou je jediný důvod,
 proč AR-15 vznikl, a je to jediné místo, kde ho jde ověřit proti živému
@@ -3281,6 +3313,7 @@ Ve **stejném commitu** jako kód (pravidlo z vlny 1). Projít a doplnit:
 - `docs/cs/files/checks.md` — `static_route_status` a `bfd_session_state` včetně tabulek stavů
 - `docs/cs/files/parsers.md` — `static_route` a `bfd` v inventory, dědění BFD hierarchií, normalizace jména RIB, `routing-options` ve filtru
 - `docs/cs/files/models.md` — `Selectors.static_routes` / `.bfd_peers`, `FACT_AREAS`
+- `docs/cs/files/models.md:48` a `docs/cs/files/parsers.md:134` a `:168` — konkrétní místa, kde je dnes napsáno `INVENTORY_SCHEMA_VERSION = 2` (nalezeno při review Tasku 3)
 - `docs/cs/reference.md` — **obě** zvýšené verze, ne jen jedna: `schema_version` inventory 2 → 3 **a** `schema_version` snímku 2 → 3. Druhá je ta, kvůli které přestanou jít přehrát `runs/ipv6/` a `runs/ipv6-live-2026-07-29/`, a ten důsledek patří do uživatelské dokumentace. Dále nové klíče `unassigned` (`static_routes`, `bfd_sessions`) a nová pole `static_route` / `bfd` v inventory
 - `docs/cs/README.md` — pokud vyjmenovává, co nástroj kontroluje
 - Totéž v `docs/en/`
@@ -3330,4 +3363,4 @@ oba peery skupiny CPE14 SKIP kvuli BGP Idle."
 
 **F-2 (podřádky se jménem RIB) se v této vlně nedělá.** Jméno RIB jde do kvalifikátoru popisku. Pokud se při implementaci ukáže, že popisky jsou nepohodlně dlouhé, je to vstup pro vlnu 3, ne důvod měnit renderer teď.
 
-**`rpc_kwargs` je zapojené, ale `routes` a `bfd` jsou jeho první uživatelé.** `collectors/base.py:66` volá `rpc(**self.rpc_kwargs(platform))`, takže `{"protocol": "static"}` i `{"detail": True}` se na RPC dostanou — ověřeno při psaní plánu. Všechny stávající collectory vracejí `{}`, takže dosud ten hook nikdo nepoužil. Test `test_collector_passes_detail_flag` ověřuje jen kontrakt metody, ne zapojení; kdyby se `collect()` někdy přepsalo, tenhle test to nechytí a BFD by tiše sbíral stručný výpis bez `remote-state`. Zapojení hlídá až conformance test z Tasku 10.
+**`rpc_kwargs` je zapojené a v produkčním provozu.** `collectors/base.py:66` volá `rpc(**self.rpc_kwargs(platform))`, a hook už používají `ArpCollector` (`{"no_resolve": True}`) i `InterfacesCollector` (`{"extensive": True}`) — takže `{"protocol": "static"}` i `{"detail": True}` se na RPC dostanou po zaběhané cestě, ne po nevyzkoušené. (Dřívější znění tohohle odstavce tvrdilo opak; opraveno po Tasku 5.) Test `test_collector_passes_detail_flag` ověřuje jen kontrakt metody, ne zapojení; kdyby se `collect()` někdy přepsalo, tenhle test to nechytí a BFD by tiše sbíral stručný výpis bez `remote-state`. Zapojení hlídá až conformance test z Tasku 10.

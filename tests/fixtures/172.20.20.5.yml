@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 3
 device: 172.20.20.5
 interfaces:
 - interface: ae0
@@ -15,6 +15,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -37,6 +39,32 @@ interfaces:
   - VL-14
   customer_vlan:
   - '14'
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance explicitně používá service-type vlan-aware.
+- interface: ae0.15
+  description: L3VPN-CPE14-UNI
+  service_type: E-LAN
+  service_subtype: vlan-aware
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VLAN-AWARE-EX-POP1
+  active: true
+  protocol:
+  - ethernet-switching
+  - evpn
+  - mac-vrf
+  bgp_neighbor: []
+  bridge_domain:
+  - VL-15
+  customer_vlan:
+  - '15'
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Routing instance explicitně používá service-type vlan-aware.
@@ -54,6 +82,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -77,6 +107,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
@@ -94,6 +126,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -117,6 +151,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
@@ -134,6 +170,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -151,6 +189,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -176,10 +216,29 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '13'
+  static_route:
+  - rib: inet.0
+    prefix: 198.62.1.0/29
+    next_hop:
+    - 152.11.13.2
+  - rib: inet.0
+    prefix: 198.62.2.0/24
+    next_hop:
+    - 152.11.13.2
+  - rib: inet6.0
+    prefix: 2001:aaaa::/64
+    next_hop:
+    - 2001:abcd:11:13::b
+  bfd:
+  - peer: 152.11.13.2
+    minimum_interval: 3000
+    multiplier: 3
+    source: neighbor
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
   - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.13.2, 2001:abcd:11:13::b'
+  - 'Statická routa odpovídá subnetu rozhraní: 198.62.1.0/29, 198.62.2.0/24, 2001:aaaa::/64'
 - interface: et-0/0/8.113
   description: L3VPN-CPE13-NNI
   service_type: IPVPN
@@ -203,10 +262,25 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  static_route:
+  - rib: L3VPN-CPE13-NNI.inet.0
+    prefix: 172.26.1.0/29
+    next_hop:
+    - 198.11.13.2
+  - rib: L3VPN-CPE13-NNI.inet6.0
+    prefix: 2001:eeee::/64
+    next_hop:
+    - 2001:db8:11:13::b
+  bfd:
+  - peer: 198.11.13.2
+    minimum_interval: 3000
+    multiplier: 3
+    source: neighbor
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
   - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.13.2, 2001:db8:11:13::b'
+  - 'Statická routa odpovídá subnetu rozhraní: 172.26.1.0/29, 2001:eeee::/64'
 - interface: et-0/0/8.213
   description: EVPN-VPWS-CPE13-NNI
   service_type: E-Line
@@ -225,6 +299,8 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '213'
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Routing instance používá instance-type evpn-vpws.
@@ -247,6 +323,8 @@ interfaces:
   - VL-313
   customer_vlan:
   - '313'
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Routing instance explicitně používá service-type vlan-aware.
@@ -269,6 +347,8 @@ interfaces:
   - VL-NONE
   customer_vlan:
   - '413'
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Routing instance explicitně používá service-type vlan-based.
@@ -286,12 +366,14 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: et-0/0/10.0
   description: null
-  service_type: IPVPN
+  service_type: Internet
   service_subtype: null
   ipv4_address:
   - 198.11.14.1/30
@@ -299,22 +381,19 @@ interfaces:
   - 2001:db8:11:14::a/127
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
-  routing_instance: L3VPN-CPE14-UNI
+  routing_instance: null
   active: true
   protocol:
   - inet
   - inet6
-  - bgp
-  - vrf
-  bgp_neighbor:
-  - 198.11.14.2
-  - 2001:db8:11:14::b
+  bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
-  detection_confidence: high
+  static_route: []
+  bfd: []
+  detection_confidence: medium
   detection_reason:
-  - Rozhraní je přiřazeno do routing instance typu vrf.
-  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.2, 2001:db8:11:14::b'
+  - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
 - interface: irb
   description: null
   service_type: Layer1
@@ -329,6 +408,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -351,10 +432,48 @@ interfaces:
   - 152.11.14.4
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
   - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.14.4'
+- interface: irb.15
+  description: L3VPN-CPE14-UNI
+  service_type: IPVPN
+  service_subtype: null
+  ipv4_address:
+  - 198.11.14.1/30
+  ipv6_address:
+  - 2001:db8:11:14::a/127
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: L3VPN-CPE14-UNI
+  active: true
+  protocol:
+  - inet
+  - inet6
+  - bgp
+  - vrf
+  bgp_neighbor:
+  - 198.11.14.2
+  - 2001:db8:11:14::b
+  bridge_domain: []
+  customer_vlan: []
+  static_route: []
+  bfd:
+  - peer: 198.11.14.2
+    minimum_interval: 3000
+    multiplier: 3
+    source: group
+  - peer: 2001:db8:11:14::b
+    minimum_interval: 3000
+    multiplier: 3
+    source: group
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.2, 2001:db8:11:14::b'
 - interface: lo0
   description: null
   service_type: Layer1
@@ -369,6 +488,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -391,6 +512,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
@@ -408,6 +531,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
@@ -427,6 +552,8 @@ interfaces:
   bgp_neighbor: []
   bridge_domain: []
   customer_vlan: []
+  static_route: []
+  bfd: []
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.

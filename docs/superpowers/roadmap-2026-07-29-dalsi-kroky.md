@@ -126,6 +126,11 @@ T1, T2a, T7a, T7b — drobné mezery v pokrytí fixtures, dávkově jedním comm
 
 ## Vlna 2 — druhý spec: BFD a statické routy
 
+> **Vlna 2 je hotová** (2026-07-30, větev `vlna2-bfd-a-staticke-routy`) — co
+> z ní zbylo na příště, je v
+> [`roadmap-2026-07-29-vlna2-hotovo.md`](roadmap-2026-07-29-vlna2-hotovo.md).
+> Sekce níž zůstává jako zadání, proti kterému se to dělalo.
+
 Jediná **chybějící schopnost**, ne doladění. Tool dnes BFD ani statické routy
 nekontroluje vůbec.
 

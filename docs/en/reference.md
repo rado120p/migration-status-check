@@ -23,6 +23,8 @@ Matches the output of `mig-validate checks` (as of commit `1584a43`):
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
 | `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
+| `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
+| `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |
 
 `mode` semantics:
 
@@ -55,6 +57,18 @@ Per-check behaviour: [files/checks.md](files/checks.md).
 - **`bgp_prefix_counts` never sums counts across RIBs.** A peer with several RIBs (`inet.0`,
   `bgp.l3vpn.0`, ...) gets its own set of rows per RIB — a drop confined to a single RIB
   would otherwise disappear into the sum with the others.
+- **`static_route_status` and `bfd_session_state` list "all" service types, but only a
+  service that actually carries the intent gets a row.** A service without BFD carries no
+  mention of BFD in the report (decision R‑1); restricting them by service type would be
+  redundant, since an L2 interface can match neither a static route nor a peer anyway.
+- **`static_route_status` is the only check comparing configured *intent* against measured
+  reality.** The others ask "is it up?"; this one asks "is what you ordered actually there?".
+  That is how it surfaces a route that is in the configuration but never made it into the
+  table (`neni v tabulce`) — for example when its next hop became unreachable after an
+  interface was deactivated.
+- **`bfd_session_state` waits for BGP.** While the peer is not `Established` it returns
+  `SKIP` with the value `BGP neni Established` instead of a FAIL. BFD cannot come up without
+  BGP, and two red rows for one cause are why operators learn to skim past listings.
 
 ### Interface classification
 
@@ -205,14 +219,27 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 2` (was `1` — the version bumped together with the address-by-family split,
-see below). A snapshot is **self-contained** — `evaluate` needs neither an inventory nor the
-network. A different schema version is a hard error (`SnapshotVersionError`), not an attempt
-at data migration.
+`schema_version: 3`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
+attempt at data migration.
+
+Version history:
+
+| version | what changed |
+|---|---|
+| 1 → 2 | addresses split by family, the `nd` area was added |
+| 2 → 3 | the `routes` and `bfd` areas plus the `unassigned.static_routes` / `.bfd_sessions` keys were added |
+
+> **Older snapshots cannot be replayed.** The bump to 3 means `runs/ipv6/` and
+> `runs/ipv6-live-2026-07-29/` — taken with `schema_version: 2` — are now rejected by
+> `evaluate`. That is not a defect: a version 2 snapshot contains neither `routes` nor `bfd`,
+> so both new checks would have nothing to read and a service with a configured but
+> uninstalled route would pass as healthy. Anyone needing such a snapshot evaluated must
+> **take a fresh `capture`**; the missing areas cannot be derived from the old file.
 
 ```jsonc
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -253,7 +280,17 @@ at data migration.
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
                                    "interface": "ae0.14"}},
-    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}}
+    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}},
+    // Verbatim from runs/bfd-static-2026-07-29/pre.json: on this device five
+    // service statics are configured but absent from the table (their next hops
+    // died when ge-0/0/2 was deactivated), and not one BFD session came up.
+    "routes": {
+      "mgmt_junos.inet.0":  {"0.0.0.0/0": {"next_hop": ["10.0.0.2"],
+                                           "via": ["fxp0.0"], "active": true}},
+      "mgmt_junos.inet6.0": {"::/0": {"next_hop": ["2001:db8::1"],
+                                      "via": ["fxp0.0"], "active": true}}
+    },
+    "bfd": {}
   },
   "probes": {
     "ping": [
@@ -278,6 +315,12 @@ Properties:
 - `facts.nd` is the IPv6 counterpart of `facts.arp` — same shape, plus a `state` field.
 - `facts.bgp[peer].ribs` keeps counts **per RIB, never summed** — one peer may have up to 11
   RIBs (`bgp.rtarget.0`, `inet.0`, `bgp.l3vpn.0`, ...).
+- `facts.routes` is keyed **by RIB name, then by prefix**. The name carries the family
+  (`...inet6.0`), so the asymmetry the configuration has between IPv4 and IPv6 does not appear
+  in the snapshot. Empty tables are not stored — the RPC returns over twenty of them.
+- `facts.bfd` is keyed **by neighbour address** — the same key under which the check looks up
+  the inventory intent and the BGP state. An empty dictionary is a valid state (BFD
+  configured, no session came up), not a collection failure.
 - `capture.collectors` records the status of each collection separately — a single failed RPC
   does not abort the capture.
 - `device.uptime_seconds` exists in the model, but `device_meta()` currently always sets it to
@@ -305,10 +348,26 @@ Properties:
     "virtual_gw_v4":       [],
     "virtual_gw_v6":       [],
     "vlans":               ["113"],
-    "bridge_domains":      []
+    "bridge_domains":      [],
+    "static_routes": [
+      {"rib": "L3VPN-CPE13-NNI.inet.0",  "prefix": "172.26.1.0/29",
+       "next_hop": ["198.11.13.2"]},
+      {"rib": "L3VPN-CPE13-NNI.inet6.0", "prefix": "2001:eeee::/64",
+       "next_hop": ["2001:db8:11:13::b"]}
+    ],
+    "bfd_peers": [
+      {"peer": "198.11.13.2", "minimum_interval": 3000, "multiplier": 3,
+       "source": "neighbor"}
+    ]
   }
 }
 ```
+
+`static_routes` and `bfd_peers` are **configured intent**, not measurement — they are the only
+selectors carrying values rather than just names. `static_routes` doubles as a filter (a route
+belongs to the scope when the `(rib, prefix)` pair matches); `bfd_peers` does **not** —
+sessions are selected via `bgp_neighbors`, so that a session for a peer missing from the intent
+does not disappear without a trace.
 
 A scope is **purely a filter** and holds no measured data. The device scope has
 `kind: "device"` and empty selectors = "take everything". Addresses and virtual-gateway are
@@ -387,7 +446,17 @@ snapshot above); `models/result.py::RunResult.schema_version` stays `1`.
   },
 
   "unassigned": {
-    "bgp_peers": [{"peer": "10.1.0.5", "routing_instance": null, "snapshot": "subject"}]
+    "bgp_peers": [{"peer": "10.1.0.5", "routing_instance": null, "snapshot": "subject"}],
+    "static_routes": [
+      {"rib": "mgmt_junos.inet.0", "prefix": "0.0.0.0/0", "next_hop": ["10.0.0.2"],
+       "via": ["fxp0.0"], "snapshot": "subject"},
+      {"rib": "mgmt_junos.inet6.0", "prefix": "::/0", "next_hop": ["2001:db8::1"],
+       "via": ["fxp0.0"], "snapshot": "subject"}
+    ],
+    "bfd_sessions": [
+      {"peer": "10.1.0.5", "interface": "ge-0/0/9.0", "state": "Up",
+       "snapshot": "subject"}
+    ]
   }
 }
 ```
@@ -418,8 +487,18 @@ Properties:
   see.
 - **Unpaired baseline scopes get no entry in `scopes`** — they are not on the subject, so
   there is nothing to measure. They appear only in `unmatched.baseline`.
-- `unassigned.bgp_peers` currently reports only peers on the **subject** (the new device). In
-  device mode the list is always empty.
+- `unassigned` currently reports data from the **subject** only (the new device), and all
+  three lists (`bgp_peers`, `static_routes`, `bfd_sessions`) are always empty in device mode —
+  the device scope claims everything, so "unassigned" has no meaning there.
+- **`unassigned.static_routes` doubles as a safety net against parsing gaps.** Statics in the
+  management instance land here (`mgmt_junos.inet.0 0.0.0.0/0` via `fxp0.0` — `fxp0.0` can
+  never become a scope), but so does a route whose configuration shape the parser could not
+  read: it never reaches the selectors, yet it is plainly visible in the table.
+- **`unassigned.bfd_sessions`** holds sessions of peers absent from every `bgp_neighbors` —
+  typically BFD held by a client other than BGP, whose intent the parser does not read at all.
+- `unassigned` is **not rendered in the text report** — the `NESPAROVANO` section prints
+  `unmatched`, which is a different thing. All three lists are so far machine-output only
+  (`--format json`).
 - `message` is in Czech (without diacritics), consistently with the rest of the tool.
 
 ---
@@ -450,7 +529,18 @@ being believed.
 | `evpn_vpws` | `get_evpn_vpws_information` | same | — |
 | `evpn_esi` | `get_evpn_instance_information` | same | `extensive=True` |
 | `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
+| `routes` | `get_route_information` | same | `protocol="static"` |
+| `bfd` | `get_bfd_session_information` | same | `detail=True` |
 | ping (probe) | `ping` | same | `host`, `count`, `rapid=True`, optionally `source`, `routing_instance`, `interface` (IPv6 link-local target only) |
 
 `extensive` on `evpn_esi` is not cosmetic: without it, `show evpn instance` returns a summary
 with no ESI at all and the collector would silently return nothing.
+
+Two more arguments that look cosmetic and are not:
+
+- **`protocol="static"`** keeps the response small even on a device carrying a full internet
+  table.
+- **`detail=True`** is a necessity, not a convenience: the brief BFD listing has neither
+  `bfd-client` nor `remote-state`, so the collector would silently gather data from which
+  there is no way to tell that BGP holds the session and that the far end shut it down
+  administratively.

@@ -79,6 +79,8 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                     virtual_gw_v6=list(entry.virtual_gw_ipv6_address),
                     vlans=list(entry.customer_vlan),
                     bridge_domains=list(entry.bridge_domain),
+                    static_routes=[dict(route) for route in entry.static_route],
+                    bfd_peers=[dict(intent) for intent in entry.bfd],
                 ),
             )
         )

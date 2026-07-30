@@ -179,6 +179,61 @@ def _unassigned_bgp_peers(subject: Snapshot, scopes: list[Scope]) -> list[dict[s
     ]
 
 
+def _unassigned_static_routes(
+    subject: Snapshot, scopes: list[Scope]
+) -> list[dict[str, Any]]:
+    """Routy z tabulky, ktere si nenarokuje zadny scope.
+
+    Sem spadne statika v management instanci - fxp0.0 se scopem nikdy
+    nestane, takze routa nema ke ktere sluzbe patrit. A taky routa, kterou
+    parser neumel precist: kdyz konfiguracni tvar nezname, do selektoru se
+    nedostane, ale v tabulce ji videt je. Je to tedy i pojistka proti
+    mezeram v parsovani.
+    """
+    assigned = {
+        (str(route.get("rib")), str(route.get("prefix")))
+        for scope in scopes
+        for route in scope.selectors.static_routes
+    }
+    if any(scope.is_device for scope in scopes):
+        return []
+    return [
+        {
+            "rib": table,
+            "prefix": prefix,
+            "next_hop": data.get("next_hop", []),
+            "via": data.get("via", []),
+            "snapshot": "subject",
+        }
+        for table, prefixes in sorted((subject.facts.get("routes") or {}).items())
+        for prefix, data in sorted(prefixes.items())
+        if (table, prefix) not in assigned
+    ]
+
+
+def _unassigned_bfd_sessions(
+    subject: Snapshot, scopes: list[Scope]
+) -> list[dict[str, Any]]:
+    """Session peeru, ktery neni v zadnem bgp_neighbors.
+
+    Napriklad BFD drzene jinym klientem nez BGP - parser takovy zamer
+    necte, takze by session jinak nikde nefigurovala.
+    """
+    assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    if any(scope.is_device for scope in scopes):
+        return []
+    return [
+        {
+            "peer": peer,
+            "interface": data.get("interface"),
+            "state": data.get("state"),
+            "snapshot": "subject",
+        }
+        for peer, data in sorted((subject.facts.get("bfd") or {}).items())
+        if peer not in assigned
+    ]
+
+
 def evaluate_snapshots(
     subject: Snapshot,
     baseline: Snapshot | None = None,
@@ -244,5 +299,9 @@ def evaluate_snapshots(
         summary=summary,
         scopes=scope_results,
         unmatched=unmatched,
-        unassigned={"bgp_peers": _unassigned_bgp_peers(subject, subject_scopes)},
+        unassigned={
+            "bgp_peers": _unassigned_bgp_peers(subject, subject_scopes),
+            "static_routes": _unassigned_static_routes(subject, subject_scopes),
+            "bfd_sessions": _unassigned_bfd_sessions(subject, subject_scopes),
+        },
     )

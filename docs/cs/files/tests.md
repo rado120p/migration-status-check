@@ -85,6 +85,7 @@ Konkrétní tvrzení:
 | `test_interfaces_reach_their_scopes` | aspoň jeden scope vidí aspoň jedno rozhraní |
 | `test_checks_produce_real_verdicts_not_all_skip` | nad reálnými daty padne aspoň jeden ne-`SKIP` verdikt |
 | `test_specific_check_sees_data` | per oblast a platformu — aby selhání ukázalo, **který** šev se rozpojil |
+| `test_static_route_check_really_reads_the_routing_table` | u statik „ne‑`SKIP`" nestačí: `static_route_status` vydá FAIL i ze samotného záměru (AR‑14), takže šev drží až `PASS` |
 
 ---
 
@@ -118,6 +119,7 @@ a párování, ne parsování.
 | `test_end_to_end.py::test_evpn_checks_produce_real_verdicts_on_real_data` | EVPN fact-schéma nesmí tiše sklouznout do samých `SKIP` |
 | `scoping/test_matcher.py::test_ambiguity_never_guesses` | radši nespárováno než tichý špatný match |
 | `scoping/test_matcher.py::test_ambiguous_under_one_key_is_not_paired_under_a_sibling_key` | scope nesmí skončit zároveň v `pairs` i v `unmatched` |
+| `parsers/test_static_routes.py::test_deactivated_*` a `parsers/test_bfd_config.py::test_deactivated_*` | `deactivate` nesmí vyrobit živý záměr — falešný `FAIL` je horší než žádný |
 | `checks/test_base.py::test_missing_data_never_passes` | nadřazené pravidlo celého nástroje |
 | `models/test_result.py::test_degraded_is_warn_even_when_critical` | „částečný úspěch = WARN" platí i při `critical` |
 | `cli` testy s kódy 0/1/2 | *nástroj selhal* ≠ *test selhal* |

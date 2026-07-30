@@ -213,6 +213,161 @@ def test_unassigned_bgp_peers_are_reported():
     assert result.unassigned["bgp_peers"][0]["peer"] == "10.9.9.9"
 
 
+MGMT_ROUTE = {
+    "mgmt_junos.inet.0": {
+        "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}
+    }
+}
+
+SERVICE_ROUTE = {
+    "inet.0": {
+        "198.62.1.0/29": {
+            "next_hop": ["152.11.13.2"],
+            "via": ["et-0/0/8.13"],
+            "active": True,
+        }
+    }
+}
+
+
+def test_management_static_route_lands_in_unassigned():
+    """Statika v mgmt_junos padne na fxp0.0, ze ktere se scope nikdy nestane.
+
+    Do inventory se nedostane. Kdyby ji nezachytil unassigned, zmizela by
+    z vystupu uplne.
+    """
+    subject = _new()
+    subject.facts["routes"] = MGMT_ROUTE
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["static_routes"] == [
+        {
+            "rib": "mgmt_junos.inet.0",
+            "prefix": "0.0.0.0/0",
+            "next_hop": ["10.0.0.2"],
+            "via": ["fxp0.0"],
+            "snapshot": "subject",
+        }
+    ]
+
+
+def test_route_claimed_by_a_scope_is_not_unassigned():
+    subject = _new()
+    subject.facts["routes"] = SERVICE_ROUTE
+    subject.scopes[0].selectors.static_routes = [
+        {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]}
+    ]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["static_routes"] == []
+
+
+def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
+    """Klic je (rib, prefix) - shoda jen na prefixu nestaci.
+
+    0.0.0.0/0 casto existuje soucasne v inet.0 i v mgmt_junos.inet.0. Kdyby
+    se assigned mnozina klicovala jen prefixem, claim v inet.0 by tise
+    schoval statiku ve mgmt_junos.inet.0.
+    """
+    subject = _new()
+    subject.facts["routes"] = {
+        "inet.0": {
+            "0.0.0.0/0": {
+                "next_hop": ["152.11.13.1"],
+                "via": ["et-0/0/8.13"],
+                "active": True,
+            }
+        },
+        "mgmt_junos.inet.0": {
+            "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}
+        },
+    }
+    subject.scopes[0].selectors.static_routes = [
+        {"rib": "inet.0", "prefix": "0.0.0.0/0", "next_hop": ["152.11.13.1"]}
+    ]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["static_routes"] == [
+        {
+            "rib": "mgmt_junos.inet.0",
+            "prefix": "0.0.0.0/0",
+            "next_hop": ["10.0.0.2"],
+            "via": ["fxp0.0"],
+            "snapshot": "subject",
+        }
+    ]
+
+
+def test_bfd_session_of_unknown_peer_lands_in_unassigned():
+    subject = _new()
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bfd_sessions"] == [
+        {
+            "peer": "10.1.1.1",
+            "interface": "et-0/0/9.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
+
+
+def test_bfd_session_of_known_peer_is_not_unassigned():
+    subject = _new()
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.scopes[0].selectors.bgp_neighbors = ["10.1.1.1"]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bfd_sessions"] == []
+
+
+def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
+    """Assigned mnozina se klicuje bgp_neighbors, ne bfd_peers zamerem.
+
+    Chyti implementaci, ktera by do "assigned" sjednotila i zamer
+    (`{str(b.get("peer")) for scope in scopes for b in
+    scope.selectors.bfd_peers}`) - presne anti-vzor, ktery AR-14 a komentar
+    u `Scope.select()` (`models/scope.py:177-181`) zakazuji. Peer je
+    v zameru (`bfd_peers`), ale nikdy se nedostal do `bgp_neighbors` -
+    to je zrovna ten pripad meznery v parsovani, kvuli ktere `unassigned`
+    existuje. Kdyby se zamer sjednotil do "assigned", session by se tise
+    ztratila misto aby upozornila na rozpor.
+    """
+    subject = _new()
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.scopes[0].selectors.bfd_peers = [{"peer": "10.1.1.1"}]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bfd_sessions"] == [
+        {
+            "peer": "10.1.1.1",
+            "interface": "et-0/0/9.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
+
+
+def test_device_scope_reports_nothing_as_unassigned():
+    """Device scope propousti vsechno, takze nic neprirazene byt nemuze."""
+    subject = _new()
+    subject.facts["routes"] = MGMT_ROUTE
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.scopes = []
+
+    result = api.evaluate(subject, now=NOW)
+
+    assert result.unassigned["static_routes"] == []
+    assert result.unassigned["bfd_sessions"] == []
+
+
 def test_failed_collector_produces_skip_not_pass():
     subject = _new()
     subject.capture.collectors["interfaces"] = {

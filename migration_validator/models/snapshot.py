@@ -14,7 +14,7 @@ from typing import Any
 from migration_validator.models.inventory import ServiceEntry
 from migration_validator.models.scope import Scope
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SnapshotVersionError(Exception):

@@ -21,6 +21,7 @@ from lxml import etree
 
 from migration_validator import api
 from migration_validator.collectors.arp import ArpCollector
+from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.collectors.bgp import BgpCollector
 from migration_validator.collectors.evpn import (
     EvpnEsiCollector,
@@ -29,6 +30,7 @@ from migration_validator.collectors.evpn import (
 )
 from migration_validator.collectors.interfaces import InterfacesCollector
 from migration_validator.collectors.nd import NdCollector
+from migration_validator.collectors.routes import RoutesCollector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -53,6 +55,8 @@ COLLECTORS = (
     EvpnVpwsCollector(),
     EvpnEsiCollector(),
     EvpnMacCollector(),
+    RoutesCollector(),
+    BfdCollector(),
 )
 
 
@@ -205,6 +209,13 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         ("junos-evo", "evpn_mac_count"),
         ("junos-evo", "evpn_esi_status"),
         ("junos-evo", "evpn_vpws_status"),
+        ("junos", "static_route_status"),
+        ("junos-evo", "static_route_status"),
+        # bfd_session_state schvalne jen pro junos-evo: fixture pro junos je
+        # zamerne prazdny vypis (BGP je u obou peeru Idle), takze check tam
+        # spravne vraci same SKIP a "aspon jeden ne-SKIP" by na nem selhalo
+        # z legitimniho duvodu.
+        ("junos-evo", "bfd_session_state"),
     ],
 )
 def test_specific_check_sees_data(platform, check_id):
@@ -220,4 +231,34 @@ def test_specific_check_sees_data(platform, check_id):
     assert any(check.status is not Status.SKIP for check in matching), (
         f"{platform}: check {check_id} vratil jen SKIP - collector emituje "
         f"jine klice, nez check konzumuje"
+    )
+
+
+def test_static_route_check_really_reads_the_routing_table():
+    """U statik "ne-SKIP" na sev nestaci - musi to byt PASS.
+
+    static_route_status iteruje pres sjednoceni tri zdroju (AR-14), takze
+    verdikt vyda i tehdy, kdyz oblast `routes` z faktu vubec neprecte: ze
+    samotneho zameru vyrobi FAIL 'neni v tabulce', a to je ne-SKIP. Overeno
+    mutaci: po zmene ctenoho klice na ctx.subject.get("routes_x") zustava
+    test_specific_check_sees_data[*-static_route_status] zeleny.
+
+    Na .5 jsou vsechny staticke routy nainstalovane a shodne se zamerem, takze
+    PASS muze vzniknout JEDINE tak, ze check tabulku opravdu videl. Tohle je
+    ten sev; ne-SKIP ho nedrzi. (Prejmenovat samotny collector jako mutanta
+    nejde - jmeno oblasti urcuje i cestu k fixture, takze se cely modul
+    preskoci misto aby spadl.)
+    """
+    result = api.evaluate(_snapshot("junos-evo"), now=NOW)
+    matching = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "static_route_status"
+    ]
+
+    assert matching
+    assert any(check.status is Status.PASS for check in matching), (
+        "junos-evo: zadna statika nedostala PASS - check nevidi oblast "
+        "'routes' z faktu, jen svuj vlastni zamer"
     )

@@ -12,7 +12,17 @@ from typing import Any
 
 DEVICE_SCOPE_ID = "device"
 
-FACT_AREAS = ("interfaces", "arp", "nd", "bgp", "evpn_vpws", "evpn_esi", "evpn_mac")
+FACT_AREAS = (
+    "interfaces",
+    "arp",
+    "nd",
+    "bgp",
+    "evpn_vpws",
+    "evpn_esi",
+    "evpn_mac",
+    "routes",
+    "bfd",
+)
 
 
 @dataclass(frozen=True)
@@ -49,6 +59,14 @@ class Selectors:
     virtual_gw_v6: list[str] = field(default_factory=list)
     vlans: list[str] = field(default_factory=list)
     bridge_domains: list[str] = field(default_factory=list)
+    # Zamer z konfigurace. Slouzi zaroven jako filtr (vyber podle
+    # (rib, prefix)) i jako mnozina, proti ktere check pozna, ze
+    # nakonfigurovana routa v tabulce chybi.
+    static_routes: list[dict[str, Any]] = field(default_factory=list)
+    # Jen zamer. Session se vybiraji pres bgp_neighbors - jsou to dve
+    # ruzne veci a slevat je do jednoho seznamu by znamenalo drzet je
+    # v synchronu.
+    bfd_peers: list[dict[str, Any]] = field(default_factory=list)
 
     def matches_interface(self, name: str) -> bool:
         return name in self.interfaces or name in self.physical_interfaces
@@ -65,6 +83,8 @@ class Selectors:
             "virtual_gw_v6": list(self.virtual_gw_v6),
             "vlans": list(self.vlans),
             "bridge_domains": list(self.bridge_domains),
+            "static_routes": [dict(route) for route in self.static_routes],
+            "bfd_peers": [dict(intent) for intent in self.bfd_peers],
         }
 
     @classmethod
@@ -134,6 +154,32 @@ class Scope:
             for name, data in (facts.get("evpn_mac") or {}).items()
             if name in self.selectors.routing_instances
         }
+        wanted_routes = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in self.selectors.static_routes
+        }
+        routes = {}
+        for table, prefixes in (facts.get("routes") or {}).items():
+            selected_prefixes = {
+                prefix: data
+                for prefix, data in prefixes.items()
+                if (table, prefix) in wanted_routes
+            }
+            # Prazdna tabulka se nevraci - v reportu by nic nerekla a
+            # check by ji musel preskakovat.
+            if selected_prefixes:
+                routes[table] = selected_prefixes
+
+        # Session patri scopu podle peeru, ne podle zameru: kdyby se
+        # vybiralo podle bfd_peers, session peeru, ktereho parser do
+        # zameru nedoplnil, by se sem nedostala a chyba v pruchodu
+        # hierarchii by se schovala pred vystupem nastroje (AR-14).
+        bfd = {
+            peer: data
+            for peer, data in (facts.get("bfd") or {}).items()
+            if peer in self.selectors.bgp_neighbors
+        }
+
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
 
         return {
@@ -144,6 +190,8 @@ class Scope:
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
             "evpn_mac": evpn_mac,
+            "routes": routes,
+            "bfd": bfd,
             "ping": ping,
         }
 

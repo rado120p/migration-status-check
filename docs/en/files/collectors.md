@@ -1,7 +1,7 @@
 # `collectors/` — collecting operational state
 
 Files: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
-`evpn.py` and an empty `__init__.py`.
+`evpn.py`, `routes.py`, `bfd.py` and an empty `__init__.py`.
 
 Two rules the entire layer rests on:
 
@@ -56,7 +56,8 @@ The `@register` decorator stores an **instance** of the class in a module-level 
 
 ## `all.py` — populating the registry
 
-Imports `arp`, `bgp`, `evpn`, `interfaces`, `nd`, which triggers their `@register`. It exists
+Imports `arp`, `bfd`, `bgp`, `evpn`, `interfaces`, `nd`, `routes`, which triggers their
+`@register`. It exists
 as a separate module (not `__init__.py`) to avoid a circular import.
 
 **A collector forgotten in this file would silently drop an entire area** — checks over it
@@ -217,3 +218,97 @@ which keeps the tests simple.
   (`_is_no_domain()` catches both: the `__` prefix and the `NONE` suffix). Both platforms do
   report a VLAN id, though, so keying on that alone would leave vlan-based instances
   mismatched.
+
+## `routes.py` — static routes from the routing table
+
+RPC: `get_route_information` with `rpc_kwargs` `{"protocol": "static"}` (both platforms).
+
+The protocol filter keeps the response small even on a device carrying a full internet table.
+`all=True` is **not** used — it only adds `__juniper_private*` tables, which is noise.
+
+The output is a two-level dictionary `{RIB: {prefix: {next_hop, via, active}}}`, exactly as
+the collector produces it from the `tests/fixtures/rpc/junos-evo/routes.xml` recording:
+
+```json
+{
+  "inet.0": {
+    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true },
+    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true }
+  },
+  "inet6.0": {
+    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true }
+  },
+  "L3VPN-CPE13-NNI.inet.0": {
+    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true }
+  },
+  "L3VPN-CPE13-NNI.inet6.0": {
+    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true }
+  }
+}
+```
+
+Three things verified against the lab:
+
+- **`table-name` carries the RIB name including the family** (`L3VPN-CPE13-NNI.inet6.0`). The
+  asymmetry the configuration has between IPv4 and IPv6 (`routing-options` vs. `rib inet6.0`)
+  does not appear in the RPC — so the collector needs no name normalisation at all.
+- **`via` carries the outgoing interface**, so mapping a route onto a service needs no
+  arithmetic over the next hop. `engine.py` relies on that when filling
+  `unassigned.static_routes`.
+- **`to` and `via` sit inside `<nh>`, not directly under `<rt-entry>`** — hence `_texts()`
+  uses `iter()`, not `find()`.
+
+Three safeguards that look redundant and are not:
+
+- **The `protocol-name` filter in `parse()`** is a second line of defence behind the RPC
+  filter. A deployment calling the RPC without `protocol` would otherwise record BGP routes
+  as static ones.
+- **Empty tables are dropped.** The RPC returns over twenty tables, most of them empty;
+  storing them means inflating every snapshot with rows that say nothing.
+- **The `.strip()` in `_texts()`** is parity with the sibling collectors
+  (`interfaces.py:32`, `bgp.py:30`) — 175 values in the interfaces recording carry whitespace,
+  so for `interfaces.py` the guard is backed by observation; for `bgp.py` it is the same idiom
+  rather than a measured input. **No current route recording carries whitespace**, though — not on `<to>`, `<via>`,
+  `<rt-destination>` or `<table-name>` — so nothing exercises that branch. It stays for
+  consistency, not because of observed input. The test that claimed to measure it
+  (`test_values_are_stripped`) was deleted: it measured nothing, and its docstring lied about
+  the recording on top of that.
+
+## `bfd.py` — BFD session state
+
+RPC: `get_bfd_session_information` with `rpc_kwargs` `{"detail": True}` (both platforms).
+
+**Without `detail` the collector would silently gather incomplete data.** The brief listing
+has neither `bfd-client` nor `remote-state` — without the client there is no way to tell a
+BGP-held session from any other, and without `remote-state` no way to see that the far end
+administratively shut the session down. That the flag really reaches the RPC is guarded by
+the conformance test; the recorded fixtures carry it in the
+`<bfd-session-information style="detail">` attribute.
+
+The output is `{peer_ip: {state, interface, remote_state, local_diagnostic, clients,
+detection_time, transmission_interval, multiplier}}`, from the
+`tests/fixtures/rpc/junos-evo/bfd.xml` recording:
+
+```json
+{
+  "152.11.13.2": {
+    "state": "Up", "interface": "et-0/0/8.13", "remote_state": "Up",
+    "local_diagnostic": "None", "clients": ["BGP"],
+    "detection_time": "9.000", "transmission_interval": "3.000", "multiplier": 3
+  },
+  "198.11.13.2": {
+    "state": "Down", "interface": "et-0/0/8.113", "remote_state": "AdminDown",
+    "local_diagnostic": "None", "clients": ["BGP"],
+    "detection_time": "0.000", "transmission_interval": "3.000", "multiplier": 3
+  }
+}
+```
+
+**The key is the neighbour address**, because that is exactly what the check uses to look up
+both the intent from the inventory (`Selectors.bfd_peers`) and the BGP state
+(`facts["bgp"]`).
+
+**An empty listing is a valid state, not an error.** The vMX recording
+(`tests/fixtures/rpc/junos/bfd.xml`) is `<sessions>0</sessions>` — BFD is configured there,
+but no session came up. Only the check can decide whether that is a problem: it depends on
+whether BFD is configured at all and whether BGP is running.

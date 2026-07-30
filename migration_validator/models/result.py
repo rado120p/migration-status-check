@@ -190,7 +190,11 @@ class RunResult:
         default_factory=lambda: {"baseline": [], "subject": []}
     )
     unassigned: dict[str, list[dict[str, Any]]] = field(
-        default_factory=lambda: {"bgp_peers": []}
+        default_factory=lambda: {
+            "bgp_peers": [],
+            "static_routes": [],
+            "bfd_sessions": [],
+        }
     )
     # Zaznam o tom, ze tohle uz neni cely beh. Vyplneny je jen u vysledku,
     # ktery prosel filtrem - a protoze `evaluate --format json --status fail`
