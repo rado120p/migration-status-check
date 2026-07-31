@@ -694,9 +694,6 @@ class JunosServiceParser:
         for rib_node in options_node.xpath(
             "./*[local-name()='rib']"
         ):
-            if self._is_inactive(rib_node):
-                continue
-
             rib_name = first_text(
                 rib_node,
                 "./*[local-name()='name']/text()",
@@ -814,9 +811,6 @@ class JunosServiceParser:
             for group_node in bgp_node.xpath(
                 "./*[local-name()='group']"
             ):
-                if self._is_inactive(group_node):
-                    continue
-
                 containers.append(
                     (
                         group_node,
@@ -1100,7 +1094,7 @@ class JunosServiceParser:
                         # Jednotka pod deaktivovaným rodičem je deaktivovaná
                         # taky, i když sama atribut nemá - Junos to tak i
                         # vyhodnocuje.
-                        active=not (physical_inactive or self._is_inactive(unit_node)),
+                        active=not self._is_inactive(unit_node),
                     )
                 )
 

@@ -243,3 +243,91 @@ def test_deactivated_unit_under_active_interface_is_flagged(module, parser_class
     assert _by_name(services, "ge-0/0/2").interface_active is True
     assert _by_name(services, "ge-0/0/2.113").interface_active is False
     assert _by_name(services, "ge-0/0/2.13").interface_active is True
+
+
+INACTIVE_RIB = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>ge-0/0/4</name>
+      <unit>
+        <name>0</name>
+        <description>L3VPN-CPE14-UNI</description>
+        <family><inet><address><name>198.11.14.1/30</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE14-UNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>ge-0/0/4.0</name></interface>
+      <routing-options>
+        <rib inactive="inactive">
+          <name>L3VPN-CPE14-UNI.inet.0</name>
+          <static>
+            <route><name>10.8.8.0/24</name><next-hop>198.11.14.2</next-hop></route>
+          </static>
+        </rib>
+        <static>
+          <route><name>10.9.9.0/24</name><next-hop>198.11.14.2</next-hop></route>
+        </static>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+INACTIVE_GROUP = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>ge-0/0/2</name>
+      <unit>
+        <name>13</name>
+        <description>INTERNET-CPE13-NNI</description>
+        <family><inet><address><name>152.11.13.1/30</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+  <protocols>
+    <bgp>
+      <group inactive="inactive">
+        <name>CPE13</name>
+        <neighbor><name>152.11.13.2</name></neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_inactive_rib_drops_only_its_own_routes(module, parser_class):
+    """Deaktivovaný `rib` vypustí své statiky a sousední `static` nechá být.
+
+    Zabíjí mutanta (až po smazání guardu na rib_node): `_is_inactive` bez
+    chůze po předcích. Routa uvnitř `rib` sama atribut nemá, takže bez dědění
+    unikne do záměru.
+
+    Next-hop uvnitř deaktivovaného `rib` musí ležet v subnetu rozhraní -
+    jinak ji `_assign_static_routes` ke službě nepřipne a test by prošel
+    i pod mutantem, protože by únik neviděl.
+    """
+    services = _services(module, parser_class, INACTIVE_RIB)
+    routes = [route for service in services for route in service.static_route]
+
+    assert [route["prefix"] for route in routes] == ["10.9.9.0/24"], routes
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_inactive_bgp_group_drops_its_neighbors(module, parser_class):
+    """Deaktivovaná `group` nedá souseda.
+
+    Zabíjí mutanta (až po smazání guardu na group_node): `_is_inactive` bez
+    chůze po předcích. `neighbor` sám atribut nemá.
+    """
+    services = _services(module, parser_class, INACTIVE_GROUP)
+    peers = [peer for service in services for peer in service.bgp_neighbor]
+
+    assert peers == [], peers
