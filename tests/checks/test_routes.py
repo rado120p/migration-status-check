@@ -57,8 +57,13 @@ def _installed_inactive(next_hop="152.11.13.2"):
 def test_inactive_route_that_was_inactive_before_passes():
     """Stav se nezmenil, takze to neni nalez.
 
-    Zabiji mutanta: hlaseni BROKEN pri kazde neaktivni route bez ohledu na
-    baseline.
+    Zabiji mutanta: vypusteni vetve `was_active is False`, tedy hlaseni
+    nalezu i u routy, ktera nebyla aktivni uz v baseline.
+
+    Vetev bez baseline (DEGRADED miste BROKEN) tenhle test nehlida - ta ma
+    vlastni test test_inactive_route_without_baseline_is_degraded. Overeno
+    mutaci 2026-07-31: `outcome = Outcome.BROKEN` natvrdo tenhle test prezije
+    a shodi az ten druhy.
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed_inactive(), _installed_inactive())
