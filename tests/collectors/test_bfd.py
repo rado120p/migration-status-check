@@ -23,7 +23,6 @@ def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
     assert isinstance(result, dict)
     # Jmeno testu slibuje klicovani adresou peeru, tak to i asertujme.
-    # Fixture pro junos je zamerne prazdna, tam neni co overit.
     if platform == "junos-evo":
         assert "152.11.13.2" in result
 
