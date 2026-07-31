@@ -160,7 +160,7 @@ Do parametrizace `test_specific_check_sees_data` přibude
 `("junos", "bfd_session_state")` a komentář o záměrně prázdné fixture se
 odstraní.
 
-„Aspoň jeden ne-SKIP" tady drží šev poctivě — na rozdíl od statik, kde ho
+„Aspoň jeden ne-SKIP" tady šev **nedrží** — stejně jako u statik, kde ho
 vydá i manufakturovaný FAIL ze samotného záměru (AR‑29). `BfdSessionStateCheck`
 iteruje přes záměry z inventory a bez přečtené oblasti `bfd` vydá ne-SKIP
 i naslepo — z holého záměru vyrobí FAIL „bez session", a to je ne-SKIP.
