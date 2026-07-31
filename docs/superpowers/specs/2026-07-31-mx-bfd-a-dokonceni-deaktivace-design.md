@@ -25,7 +25,12 @@ vznikly BFD session. Měření provedené při psaní tohoto specu ale ukázalo,
 - neprázdná MX BFD nahrávka a end-to-end pokrytí `bfd_session_state` na `junos`
 - regenerace `172.20.20.4.yml` a `tests/fixtures/rpc/junos/*.xml` proti laborce
 - test na top-level `<protocols inactive="inactive">`
-- čtyři drobnosti z bodu 5 roadmapy
+- smazání tří redundantních guardů, které stíní dědění deaktivace, a testy,
+  které tím teprve začnou něco měřit (bod 5 roadmapy, první a třetí odrážka)
+- chybějící pokrytí deaktivované jednotky pod aktivním rozhraním — nález
+  z měření při psaní tohoto specu, v roadmapě není
+- tichý default v `checks/routes.py` a oprava jednoho docstringu (bod 5,
+  druhá a čtvrtá odrážka)
 
 **Mimo rozsah:**
 
@@ -157,11 +162,12 @@ odstraní.
 
 „Aspoň jeden ne-SKIP" tady drží šev poctivě — na rozdíl od statik, kde ho
 vydá i manufakturovaný FAIL ze samotného záměru (AR‑29). `BfdSessionStateCheck`
-iteruje přes záměry z inventory a bez přečtené oblasti `bfd` by vydal jen
-„session chybí"; **to je potřeba ověřit, ne předpokládat** — plán mutanta
-(`ctx.subject.get("bfd_x")`) pustí a zapíše výsledek. Pokud mutant přežije,
-platí stejný závěr jako u statik a k parametru se přidá test vyžadující
-konkrétně PASS na `152.11.13.2`.
+iteruje přes záměry z inventory a bez přečtené oblasti `bfd` by mohl vydat
+ne-SKIP i naslepo. **Ověřeno, ne předpokládáno:** mutant
+`ctx.subject.get("bfd_x", {})` na `checks/bfd.py:56` shodil 2026‑07‑31 obě
+parametrizace — `junos` i `junos-evo`. Šev tedy „aspoň jeden ne-SKIP" drží
+a test vyžadující konkrétně PASS, jaký si vyžádaly statiky (AR‑29), tu není
+potřeba.
 
 ### AR-32 — parser MX BFD odpovědi má vlastní test proti reálnému XML
 
@@ -190,20 +196,65 @@ neříká nic o `evo_parser.py`.
 
 Mutant: v `_is_inactive` (`:406`) se zastaví chůze po předcích na prvním uzlu.
 
-### AR-34 — čtyři drobnosti z bodu 5
+### AR-34 — tři redundantní guardy, které stíní chůzi po předcích
 
-**(a) Redundantní disjunkt.** `mx_parser.py:1103` a `evo_parser.py:1103`:
-`not (physical_inactive or self._is_inactive(unit_node))`. Po AR‑19 dojde
-chůze po předcích z `unit` na fyzické rozhraní stejně, takže první disjunkt
-nic nepřidává. Odstraní se v obou parserech; `diff | wc -l` musí zůstat **146**.
+Roadmapa vede tuhle položku jako dvě nesouvisející drobnosti — „redundantní
+disjunkt" (bod 5, první odrážka) a „`rib`/`group` mají jen nepřímé pokrytí"
+(třetí odrážka). Měření při psaní tohoto specu ukázalo, že jde o **jeden
+a týž vzorec na třech místech**, a že druhá z nich není mezera v pokrytí, ale
+jeho příčina.
 
-Tohle je jediná změna produkčního kódu, u které hrozí, že by ji sada
-nezachytila. Plán proto **nejdřív** ověří, že existující test na deaktivované
-fyzické rozhraní s aktivní jednotkou padne, když se odstraní i druhý disjunkt
-— pokud ne, chybí pokrytí a doplní se dřív, než se maže.
+Všechna tři místa volají `_is_inactive` na uzlu, který atribut `inactive`
+nese **přímo**:
 
-**(b) Tichý default v `checks/routes.py:152`.** `subject.get("active", True)`
-znamená, že by se regrese collectoru (přejmenovaný nebo vypuštěný klíč)
+| místo | výraz |
+|---|---|
+| `mx_parser.py:1103`, `evo_parser.py:1103` | `not (physical_inactive or self._is_inactive(unit_node))` |
+| `:697` (obě) | `if self._is_inactive(rib_node): continue` |
+| `:817` (obě) | `if self._is_inactive(group_node): continue` |
+
+Po AR‑19 je každý z nich redundantní: chůze po předcích dojde z `unit` na
+fyzické rozhraní, ze `static` na `rib` a z `neighbor` na `group` sama.
+**Zároveň každý z nich stíní chůzi** — protože uzel atribut nese přímo, vrátí
+guard `True` i tehdy, kdyby se `_is_inactive` chodit po předcích přestalo.
+Tím se testy, které by dědění hlídaly, stávají nediskriminujícími.
+
+Změřeno (2026‑07‑31, mutant `_is_inactive` → `return self._node_is_inactive(node)`):
+
+- s guardy na místě: `tests/parsers/test_inactive.py` → **8 failed, 6 passed**
+- po smazání disjunktu na `:1103`: **10 failed, 4 passed**
+- po smazání guardů na `:697` a `:817` začnou mutanta zabíjet i nové testy
+  na `rib` a `group`, které s guardy procházejí za obou stavů kódu
+
+Smazání všech tří guardů v obou parserech je tedy **předpoklad pokrytí**, ne
+úklid navíc. Sada zůstává zelená (588/1) a `diff mx_parser.py evo_parser.py |
+wc -l` zůstává **146** — ověřeno spuštěním.
+
+Nové testy pro `rib` a `group` patří do `tests/parsers/test_inactive.py`,
+oba parametrizované přes oba parsery. U `rib` musí mít routa uvnitř
+deaktivovaného `rib` next-hop **v subnetu rozhraní** — jinak ji
+`_assign_static_routes` ke službě nepřipne a test neuvidí ani únik, ani jeho
+absenci. Na tohle jsem při psaní specu narazil: první verze testu procházela
+i pod mutantem, protože měla IPv6 next-hop k IPv4 rozhraní.
+
+### AR-34b — deaktivovaná jednotka pod aktivním rozhraním nemá test
+
+Samostatný nález, ne součást AR‑34: mutant `active=not physical_inactive`
+(tedy „úroveň jednotky se ignoruje") **přežije celou sadu** — 588 passed.
+Žádná fixture nemá `<unit inactive="inactive">` pod aktivním fyzickým
+rozhraním; všechny deaktivují až fyzické rozhraní.
+
+Doplní se fixture se dvěma jednotkami pod aktivním `ge-0/0/2`, z nichž jen
+`113` je deaktivovaná, a asertace na všechny tři úrovně naráz: fyzické
+rozhraní `True`, `.113` `False`, `.13` `True`. Ověřeno, že mutanta zabíjí na
+obou parserech.
+
+Musí být hotové **dřív**, než se sáhne na guard na `:1103` — jinak se maže
+kód, jehož jedinou pojistkou by byl test, který ještě neexistuje.
+
+### AR-34c — tichý default v `checks/routes.py:152`
+
+`subject.get("active", True)` znamená, že by se regrese collectoru (přejmenovaný nebo vypuštěný klíč)
 přečetla jako **PASS**, ne jako chybějící kontrola. Je to jediné takové místo
 v repu.
 
@@ -221,16 +272,12 @@ schematu; `subject` ne, ten vzniká vždy aktuálním collectorem. Asymetrie obo
 řádků je tím pádem věcná, ne přehlédnutí — plán ji zapíše do komentáře
 u kódu, aby ji příští čtenář nesjednotil.
 
-Rozlišení proti (b)-alternativě „nechat default, jen přidat test": test by
+Rozlišení proti alternativě „nechat default, jen přidat test": test by
 hlídal, že se `True` doplní, tedy zabetonoval by chování, které je špatné.
 
-**(c) Přímé pokrytí `_is_inactive` na `rib` a `group`.** Volání na
-`mx_parser.py:697` (`rib`) a `:817` (`group`) mají dnes jen nepřímé pokrytí
-přes jednu sdílenou fixture. Dostanou vlastní test s vlastním mutantem
-(`_node_is_inactive` ignoruje atribut na tomto typu uzlu), aby budoucí změna
-atributové sémantiky spadla na konkrétním místě.
+### AR-34d — docstring
 
-**(d) Docstring.** `test_inactive_route_that_was_inactive_before_passes`
+`test_inactive_route_that_was_inactive_before_passes`
 slibuje širšího mutanta, než jaký ten test doopravdy zabíjí. Docstring se
 opraví na mutanta, kterého test skutečně zabíjí — ověřeno spuštěním, ne
 přečtením.
@@ -241,16 +288,33 @@ přečtením.
 vedle na obou stranách: predikovala kaskádu, která nenastala, a minula dva
 konkrétní důvody, které nastaly.
 
-Plán proto **nesmí obsahovat seznam testů, které regenerace rozbije.**
-Místo toho předepíše krok: regenerovat, spustit sadu, a teprve pak
-u každého padlého testu rozhodnout, jestli jde o (a) změněnou realitu
-laborky, nebo (b) regresi kódu — a rozhodnutí zdůvodnit. Kategorie (b) je
-důvod se zastavit, ne opravit očekávání.
+Plán proto **nesmí obsahovat předpověď, které testy regenerace rozbije.**
+Změřený výsledek ale zapsat smí a má — s datem a příkazem, který ho vyrobil.
+Rozdíl je v tom, čemu se dá věřit, ne v tom, kolik se toho napíše.
 
-Očekávatelný dopad, který **není** predikcí seznamu: služby na `ge-0/0/2.*`,
-`ge-0/0/4*` a `ge-0/0/5*` přejdou z deaktivovaných na aktivní, takže
-`deactivation_state` u nich přestane hlásit WARN a checky, které dosud
-vracely SKIP, začnou měřit.
+Změřeno 2026‑07‑31: nahrávky a inventory z laborky podstrčeny do stromu,
+`.venv/bin/python -m pytest -o addopts="" -q`, pak `git checkout -- .`.
+S přidaným conformance parametrem `("junos", "bfd_session_state")`:
+
+```
+1 failed, 589 passed
+FAILED tests/collectors/test_bfd.py::test_empty_output_is_a_valid_state
+```
+
+Padne **jediný** test, a je to ten, který čte prázdnou `junos` fixture
+napřímo. `test_full_migration_run_has_no_unexplained_fail_or_warn` ani žádný
+jiný deaktivační test se regenerací nerozbije — to je přímý důsledek toho, že
+`ge-0/0/3` zůstalo deaktivované (AR‑30).
+
+Navíc **přibude** jedno pokrytí: `test_esi_interface_matches_a_scope[junos]`
+dnes skipuje se zprávou „junos nema zadny ESI segment", po regeneraci běží
+a prochází. Sada tím jde z 588 passed / 1 skipped na 590 passed / 0 skipped.
+
+Krok „změř a rozhodni" v plánu tím **nezaniká**: při provádění se sada spustí
+znovu a u každého odchýlení od těchto čísel se rozhodne, jestli jde o (a)
+změněnou realitu laborky, nebo (b) regresi kódu. Kategorie (b) je důvod se
+zastavit, ne opravit očekávání. Čísla výš jsou výchozí hypotéza k ověření,
+ne povolení sadu nespustit.
 
 ## Přejímací kritéria implementačního plánu
 
@@ -265,13 +329,28 @@ protože autor plánu mutanta nikdy nespustil, jen popsal. Když to nejde
 (test se opírá o kód, který ještě neexistuje), plán to musí říct nahlas
 a uložit mutanta jako povinný krok úlohy.
 
-Konkrétně to znamená, že mutanti u **AR‑31, AR‑32, AR‑33 a AR‑34(a)** se
-pustí ve fázi psaní plánu. U AR‑33 a AR‑34(a) je to přímočaré — jde o dnešní
-kód i dnešní fixtures. U AR‑31 a AR‑32 mutant potřebuje neprázdnou `junos`
-BFD nahrávku, která je až výstupem AR‑30; „ještě to nejde" ale neplatí ani
-tam, protože nahrávka **už je pořízená** ve scratchpadu a na dobu spuštění
-mutanta se dá dočasně podstrčit na místo commitnuté fixture. Přesně tak
-vznikl důkaz o osmi SKIPech v sekci „Stav deaktivace v laborce".
+**Toto pravidlo je u tohoto specu splněné, ne slíbené.** Všichni mutanti
+byli puštění 2026‑07‑31 při psaní specu, ne popsáni:
+
+| požadavek | mutant | výsledek |
+|---|---|---|
+| AR‑31 | `ctx.subject.get("bfd_x", {})` | zabit na obou platformách |
+| AR‑32 | vypuštěná smyčka přes `bfd-client` | zabit |
+| AR‑33 | `_is_inactive` bez chůze po předcích | zabit na obou parserech |
+| AR‑34 (`rib`, `group`) | tentýž, po smazání guardů | zabit na obou parserech |
+| AR‑34 (`:1103`) | tentýž, po smazání disjunktu | 8 → 10 padlých testů |
+| AR‑34b | `active=not physical_inactive` | zabit na obou parserech |
+
+U AR‑31 a AR‑32 mutant potřebuje neprázdnou `junos` BFD nahrávku, která je až
+výstupem AR‑30; „ještě to nejde" ale neplatilo, protože nahrávka **už byla
+pořízená** a na dobu běhu se podstrčila na místo commitnuté fixture. Tímtéž
+způsobem vznikl důkaz o osmi SKIPech v sekci „Stav deaktivace v laborce"
+i čísla v AR‑35.
+
+Dva mutanti se přitom **zpočátku nezabili a odhalily tím vadu v předpokladu,
+ne v kódu** — `rib` a `group` (guardy stínily chůzi, viz AR‑34). Kdyby se
+podle pravidla vlny 3 nepustily, plán by předepsal dva testy, které měří
+nulu. Přesně tomu to pravidlo mělo zabránit.
 
 A past z úlohy 5: **mutantí bloky končí `git checkout <soubor>`, takže se
 pouští až po commitu.** Před commitem si tím implementace smaže vlastní práci.
