@@ -22,9 +22,9 @@ PLATFORMS = ("junos", "junos-evo")
 def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
     assert isinstance(result, dict)
-    # Jmeno testu slibuje klicovani adresou peeru, tak to i asertujme.
-    if platform == "junos-evo":
-        assert "152.11.13.2" in result
+    # Obe nahravky nesou session se stejnym peerem, takze vyjimka na
+    # platformu uz neni potreba (AR-30).
+    assert "152.11.13.2" in result
 
 
 EMPTY_OUTPUT = """
@@ -64,6 +64,35 @@ def test_client_names_are_collected(rpc_fixture):
     result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
 
     assert result["152.11.13.2"]["clients"] == ["BGP"]
+
+
+def test_mx_sessions_are_recorded_verbatim(rpc_fixture):
+    """Odpoved z MX ma tentyz tvar jako z EVO - jen jina jmena rozhrani.
+
+    Roadmapa vlny 3 predpokladala MX-specificke parsovani; nahravka z
+    2026-07-31 ukazala, ze zadne neni. Tenhle test to drzi: kdyby MX odpoved
+    vlastni tvar dostala, spadne tady, ne az v conformance.
+    """
+    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+
+    assert result["152.11.13.2"]["state"] == "Up"
+    assert result["152.11.13.2"]["interface"] == "ge-0/0/2.13"
+    assert result["152.11.13.2"]["remote_state"] == "Up"
+    assert result["198.11.13.2"]["state"] == "Down"
+    assert result["198.11.13.2"]["remote_state"] == "AdminDown"
+
+
+def test_mx_client_names_are_collected(rpc_fixture):
+    """Bez klienta nejde odlisit session drzenou BGP od jine.
+
+    Zabíjí mutanta: vypusteni smycky pres bfd-client, po nemz zustane
+    `clients` prazdny seznam. Je to duvod, proc collector vubec pouziva
+    detail variantu RPC.
+    """
+    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+
+    assert result["152.11.13.2"]["clients"] == ["BGP"]
+    assert result["198.11.13.2"]["clients"] == ["BGP"]
 
 
 def test_entries_have_expected_keys(rpc_fixture):

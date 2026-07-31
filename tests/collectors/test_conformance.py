@@ -246,11 +246,14 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         # Skutecny seam drzi test_static_route_check_really_reads_the_routing_table
         # na junos-evo, ktery vyzaduje PASS.
         ("junos-evo", "static_route_status"),
-        # bfd_session_state schvalne jen pro junos-evo: fixture pro junos je
-        # zamerne prazdny vypis (BGP je u obou peeru Idle), takze check tam
-        # spravne vraci same SKIP a "aspon jeden ne-SKIP" by na nem selhalo
-        # z legitimniho duvodu.
+        # Obe platformy: po regeneraci .4 (AR-30) ma junos dve realne session
+        # na ge-0/0/2 a sluzby, ktere je nesou, uz nejsou deaktivovane.
+        # "Aspon jeden ne-SKIP" tady drzi sev poctive - overeno mutantem
+        # ctx.subject.get("bfd_x"), ktery shodil obe parametrizace. Na rozdil
+        # od statik (viz komentar vyse) tu tedy neni potreba test vyzadujici
+        # konkretne PASS.
         ("junos-evo", "bfd_session_state"),
+        ("junos", "bfd_session_state"),
     ],
 )
 def test_specific_check_sees_data(platform, check_id):
