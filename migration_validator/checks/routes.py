@@ -149,7 +149,23 @@ class StaticRouteStatusCheck(Check):
         # Routa v tabulce bez hvezdicky forwarding nedela. Neni to totez co
         # "neni v tabulce": nedosazitelny next-hop routu z tabulky vyhodi
         # uplne, takze tenhle stav znamena, ze ji prebil jiny zdroj.
-        if not subject.get("active", True):
+        # Default "aktivni" tady byl jedine misto v repu, kde by se regrese
+        # collectoru precetla jako PASS misto jako chybejici kontrola.
+        # Na `baseline` niz default zustava zamerne: baseline muze pochazet
+        # ze starsiho schematu a bez defaultu by chybejici klic skoncil jako
+        # BROKEN, tedy eskalace chybejiciho udaje na FAIL proti R-2.
+        if "active" not in subject:
+            return Finding(
+                Outcome.SKIP,
+                f"{rib} {prefix}: mereni neobsahuje aktivitu routy",
+                label=label,
+                family=family,
+                value="bez dat",
+                baseline=baseline,
+                subject=subject,
+            )
+
+        if not subject["active"]:
             was_active = baseline.get("active", True) if baseline else None
 
             if was_active is False:

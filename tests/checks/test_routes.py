@@ -305,3 +305,22 @@ def test_service_scope_does_claim_a_route_is_missing_from_the_table():
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == "neni v tabulce"
+
+
+def _installed_without_active():
+    """Mereni bez klice 'active' - tvar, ktery by vyrobila regrese collectoru."""
+    routes = _installed()
+    del routes["inet.0"]["198.62.1.0/29"]["active"]
+    return routes
+
+
+def test_route_without_active_key_is_skipped():
+    """Chybejici klic je chybejici kontrola, ne PASS.
+
+    Zabíjí mutanta: `subject.get("active", True)`, tedy default "aktivni".
+    S nim by check vydal OK a regrese collectoru by se cetla jako uspech.
+    """
+    findings = StaticRouteStatusCheck().run(_ctx(_installed_without_active()))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
