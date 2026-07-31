@@ -40,7 +40,7 @@
 
 ---
 
-### Úloha 1: Deaktivovaná jednotka pod aktivním rozhraním
+### Task 1: Deaktivovaná jednotka pod aktivním rozhraním
 
 Mutant „úroveň jednotky se ignoruje" dnes přežije **celou sadu** (588 passed). Žádná fixture nemá `<unit inactive="inactive">` pod aktivním fyzickým rozhraním — všechny deaktivují až fyzické rozhraní. Tahle úloha tu díru zalátá, aby úloha 2 měla o co opřít mazání.
 
@@ -128,7 +128,7 @@ Očekávej: **2 failed** (`evo` i `mx`). Když mutant přežije, test neměří 
 
 ---
 
-### Úloha 2: Smazat tři guardy, které stíní dědění
+### Task 2: Smazat tři guardy, které stíní dědění
 
 Tři místa volají `_is_inactive` na uzlu, který atribut `inactive` nese přímo. Po AR‑19 jsou redundantní — a zároveň **stíní** chůzi po předcích: vrátí `True` i tehdy, kdyby se dědění rozbilo. Dokud tam jsou, žádný test dědění na těchto cestách neměří.
 
@@ -314,7 +314,7 @@ Očekávej: **nejméně 12 failed** — a mezi nimi obě parametrizace `test_ina
 
 ---
 
-### Úloha 3: Top-level `<protocols inactive>`
+### Task 3: Top-level `<protocols inactive>`
 
 `tests/parsers/test_inactive.py` procvičuje `<protocols>`/`<bgp>` jen vnořené pod deaktivovanou `routing-instances`. K top-level kontejneru vede samostatná cesta: `_parse_default_bgp_neighbors()` (`mx_parser.py:952`) plní `self.default_bgp_neighbors` a `self.default_bfd`, které konzumují služby **bez** routing-instance (`mx_parser.py:1570`).
 
@@ -429,7 +429,7 @@ Očekávej: **2 failed, 2 passed** — padnou obě parametrizace `test_deactivat
 
 ---
 
-### Úloha 4: Regenerace `.4` proti laborce
+### Task 4: Regenerace `.4` proti laborce
 
 **Soubory:**
 - Modify: `172.20.20.4.yml`, `tests/fixtures/172.20.20.4.yml`
@@ -589,7 +589,7 @@ git commit -m "chore: regenerovat inventory a fixtures .4 proti laborce (AR-30)"
 
 ---
 
-### Úloha 5: MX BFD se dostane k reálnému verdiktu
+### Task 5: MX BFD se dostane k reálnému verdiktu
 
 **Soubory:**
 - Modify: `tests/collectors/test_conformance.py` (parametrizace `test_specific_check_sees_data`)
@@ -732,7 +732,7 @@ Očekávej: padne `test_mx_client_names_are_collected` i `test_client_names_are_
 
 ---
 
-### Úloha 6: Chybějící `active` v měření není PASS
+### Task 6: Chybějící `active` v měření není PASS
 
 `checks/routes.py:152` čte `subject.get("active", True)` — regrese collectoru (přejmenovaný nebo vypuštěný klíč) by se přečetla jako **PASS**, ne jako chybějící kontrola. Je to jediné takové místo v repu.
 
@@ -832,7 +832,7 @@ Očekávej: **1 failed** — `test_route_without_active_key_is_skipped`. (Mutant
 
 ---
 
-### Úloha 7: Docstring, který slibuje víc, než zabíjí
+### Task 7: Docstring, který slibuje víc, než zabíjí
 
 `test_inactive_route_that_was_inactive_before_passes` slibuje mutanta „hlášení BROKEN při každé neaktivní routě **bez ohledu na baseline**". Změřeno 2026‑07‑31: doslovná čtení téhle věty test **zabíjí** (obě varianty), ale varianta „bez baseline taky BROKEN místo DEGRADED" ho **přežije** — tu chytá až sousední `test_inactive_route_without_baseline_is_degraded`. Docstring si tedy přisvojuje cizí pokrytí.
 
