@@ -310,7 +310,9 @@ EOF
 git checkout mx_parser.py evo_parser.py
 ```
 
-Očekávej: **nejméně 12 failed** — a mezi nimi obě parametrizace `test_inactive_rib_drops_only_its_own_routes`, `test_inactive_bgp_group_drops_its_neighbors` a `test_deactivated_unit_under_active_interface_is_flagged`. Před smazáním guardů padalo 8; když číslo nevzroste, guardy se nesmazaly ve všech šesti místech.
+Očekávej: **nejméně 12 failed** — a mezi nimi obě parametrizace `test_inactive_rib_drops_only_its_own_routes` a `test_inactive_bgp_group_drops_its_neighbors`. Před smazáním guardů padalo 8; když číslo nevzroste, guardy se nesmazaly ve všech šesti místech.
+
+`test_deactivated_unit_under_active_interface_is_flagged` z úlohy 1 pod tímhle mutantem **projde**, a je to správně: jeho fixture nese `inactive` přímo na `<unit>`, takže chůze po předcích a přímý dotaz dají stejnou odpověď. Ten test zabíjí jiného mutanta (`active=not physical_inactive`, úloha 1, krok 5). Dva testy, které smazání disjunktu na `:1103` nově zabíjí, jsou obě parametrizace `test_deactivated_interface_is_flagged` — tam `<unit>` atribut nemá a dědí ho po fyzickém rozhraní.
 
 ---
 
