@@ -7,9 +7,9 @@ check.
 Pouziva detail variantu: strucny vypis nema ani bfd-client, ani
 remote-state, a bez klienta nejde odlisit session drzenou BGP od jine.
 
-Prazdny vypis je platny stav. Overeno proti laborce 2026-07-29: na vMX je
-BFD nakonfigurovane u dvou sousedu, ale BGP je u obou Idle, takze session
-je nula.
+Prazdny vypis je platny stav. Stav laborky k 2026-07-31: obe nahravky
+(junos i junos-evo) nesou po dvou session, takze prazdny vypis uz neni
+pokryty nahravkou - testuje se na syntetickem XML v tests/collectors/test_bfd.py.
 """
 
 from __future__ import annotations

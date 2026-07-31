@@ -280,13 +280,20 @@ vydá `Outcome.SKIP` se zprávou, že měření aktivitu routy neobsahuje. Hodno
 **zaniká**.
 
 Na `:153` (`baseline.get("active", True) if baseline else None`) default
-**zůstává**, a to záměrně. Kdyby zanikl i tam, chybějící klíč v baseline by
-skončil jako `was_active=True`, což kód o pár řádků níž překlápí na
-`Outcome.BROKEN` — tedy eskalace chybějícího údaje na FAIL, přímo proti R‑2,
-o který se opírá AR‑25. Baseline navíc může legitimně pocházet ze staršího
-schematu; `subject` ne, ten vzniká vždy aktuálním collectorem. Asymetrie obou
-řádků je tím pádem věcná, ne přehlédnutí — plán ji zapíše do komentáře
-u kódu, aby ji příští čtenář nesjednotil.
+**zůstává nezměněný**, ale je to mimo rozsah této vlny, ne proto, že by byl
+správný. Původní zdůvodnění v komentáři u kódu bylo chybné na obou premisách:
+baseline nemůže pocházet ze staršího schématu — `Snapshot.from_dict`
+(`models/snapshot.py:115-119`) na jakoukoli neshodu `schema_version` vyhodí
+`SnapshotVersionError`, a baseline i subjekt se načítají stejnou cestou.
+A znaménko bylo obráceně — s defaultem `baseline.get("active", True)` na
+chybějícím klíči vrátí `True`, což o pár řádků níž znamená `Outcome.BROKEN`;
+bez defaultu by to bylo `None` → `Outcome.DEGRADED`. Ponechání defaultu je
+tedy to, co eskalaci na BROKEN způsobuje, ne to, co jí brání. Asymetrie mezi
+`subject` a `baseline` je věcná z jiného důvodu: `subject` vždy vzniká
+aktuálním collectorem (`collectors/routes.py:84` vždy nastavuje `active`),
+takže chybějící klíč tam může znamenat jen regresi collectoru — proto SKIP.
+U `baseline` zůstává otevřená otázka pro příští vlnu, zda chybějící `active`
+má dávat `DEGRADED` místo `BROKEN`, podle R‑2.
 
 Rozlišení proti alternativě „nechat default, jen přidat test": test by
 hlídal, že se `True` doplní, tedy zabetonoval by chování, které je špatné.

@@ -151,9 +151,13 @@ class StaticRouteStatusCheck(Check):
         # uplne, takze tenhle stav znamena, ze ji prebil jiny zdroj.
         # Default "aktivni" tady byl jedine misto v repu, kde by se regrese
         # collectoru precetla jako PASS misto jako chybejici kontrola.
-        # Na `baseline` niz default zustava zamerne: baseline muze pochazet
-        # ze starsiho schematu a bez defaultu by chybejici klic skoncil jako
-        # BROKEN, tedy eskalace chybejiciho udaje na FAIL proti R-2.
+        # `subject` vzdy pochazi z aktualniho collectoru (collectors/routes.py
+        # vzdy nastavuje "active"), takze chybejici klic tady muze znamenat
+        # jedine regresi collectoru - proto SKIP.
+        # Na `baseline` niz se default nemeni - je to mimo rozsah teto vlny,
+        # ne proto, ze by byl spravny. Zustava otevrena otazka pro dalsi vlnu:
+        # ma chybejici "active" v baseline davat DEGRADED misto BROKEN, podle
+        # R-2?
         if "active" not in subject:
             return Finding(
                 Outcome.SKIP,

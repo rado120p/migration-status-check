@@ -625,6 +625,17 @@ tímto:
         ("junos", "bfd_session_state"),
 ```
 
+> **Oprava po provedení:** komentář v Kroku 1 tvrdil, že "aspoň jeden ne-SKIP"
+> je ověřeno mutantem `ctx.subject.get("bfd_x")`, který shodil obě
+> parametrizace, a proto tam prý není potřeba test vyžadující konkrétně PASS.
+> Toto tvrzení bylo při provádění změřeno jako nepravdivé: mutant na `junos`
+> přežívá, protože BGP je tam Established, takže check vyrobí slepé
+> `FAIL "bez session"`, které asertaci "aspoň jeden ne-SKIP" splní i bez
+> skutečné session. Původní měření běželo nad smíšenou sadou fixture (nové
+> `bfd.xml` proti starému `bgp.xml`, kde bylo BGP ještě Idle). Commitovaný
+> kód i opravená spec (AR-31) odrážejí skutečné chování; tento odstavec plánu
+> zůstává jako záznam toho, co se tehdy věřilo.
+
 - [ ] **Krok 2: Spusť conformance test**
 
 ```bash
@@ -713,6 +724,12 @@ git checkout migration_validator/checks/bfd.py
 
 Očekávej: **2 failed** — `junos-bfd_session_state` i `junos-evo-bfd_session_state`.
 
+> **Oprava po provedení:** toto očekávání bylo měřeno nesprávně (viz oprava
+> u Kroku 1) — mutant na `junos` ve skutečnosti přežívá, protože BGP je tam
+> Established a check vyrobí slepé `FAIL "bez session"`, které projde jako
+> ne-SKIP i bez detekce mutantu. Skutečný výsledek je proto **1 failed**
+> (jen `junos-evo-bfd_session_state`). Viz opravená spec AR-31.
+
 ```bash
 python3 - <<'EOF'
 import pathlib
@@ -738,7 +755,7 @@ Očekávej: padne `test_mx_client_names_are_collected` i `test_client_names_are_
 
 `checks/routes.py:152` čte `subject.get("active", True)` — regrese collectoru (přejmenovaný nebo vypuštěný klíč) by se přečetla jako **PASS**, ne jako chybějící kontrola. Je to jediné takové místo v repu.
 
-`:153` (`baseline.get("active", True)`) se **nemění**. Baseline může legitimně pocházet ze staršího schematu, a bez defaultu by chybějící klíč skončil jako `was_active=True`, což kód níž překlápí na `BROKEN` — eskalace chybějícího údaje na FAIL, přímo proti R‑2.
+`:153` (`baseline.get("active", True)`) se **nemění** — je to mimo rozsah této vlny, ne proto, že by byl správný. Původní zdůvodnění bylo chybné na obou premisách: baseline nemůže pocházet ze staršího schematu (`Snapshot.from_dict` na neshodu `schema_version` vždy vyhodí výjimku, baseline i subjekt se načítají stejnou cestou) a znaménko bylo obráceně — s defaultem chybějící klíč vrátí `True` → `BROKEN`, bez defaultu by to bylo `None` → `DEGRADED`. Ponechání defaultu tedy BROKEN způsobuje, nikoli mu brání. Otevřená otázka pro příští vlnu (má chybějící `active` v baseline dávat `DEGRADED` podle R‑2?) zůstává zapsaná v AR‑34c.
 
 **Soubory:**
 - Modify: `migration_validator/checks/routes.py:152`

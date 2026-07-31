@@ -622,9 +622,11 @@ class JunosEvoAcxServiceParser:
         routing-options/rib <jméno>.inet6.0/static — ale RPC ten rozdíl nezná.
         Parser ho proto zahladí tady a dál se nešíří.
 
-        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) se
-        přeskočí celý, stejně jako se už přeskakuje jednotlivá `route`
-        a `instance`. Bez toho by `deactivate` — standardní idiom pro
+        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) route
+        nepustí dál, stejně jako se už přeskakuje jednotlivá `route`
+        a `instance` — `_is_inactive` chodí po předcích, takže i deaktivovaný
+        `rib` chytí `_is_inactive(static_node)` o úroveň níž, ne skip na
+        samotném `rib` uzlu. Bez toho by `deactivate` — standardní idiom pro
         vyřazení konfigurace při migraci — vyrobil živý záměr a check by
         hlásil `FAIL … neni v tabulce` za routu, kterou nikdo nechce.
         """
