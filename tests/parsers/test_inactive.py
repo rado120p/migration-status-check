@@ -331,3 +331,68 @@ def test_inactive_bgp_group_drops_its_neighbors(module, parser_class):
     peers = [peer for service in services for peer in service.bgp_neighbor]
 
     assert peers == [], peers
+
+
+DEACTIVATED_TOP_LEVEL_PROTOCOLS = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>ge-0/0/2</name>
+      <unit>
+        <name>13</name>
+        <description>INTERNET-CPE13-NNI</description>
+        <family><inet><address><name>152.11.13.1/30</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+  <protocols inactive="inactive">
+    <bgp>
+      <group>
+        <name>CPE13</name>
+        <neighbor>
+          <name>152.11.13.2</name>
+          <bfd-liveness-detection>
+            <minimum-interval>3000</minimum-interval>
+            <multiplier>3</multiplier>
+          </bfd-liveness-detection>
+        </neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
+ACTIVE_TOP_LEVEL_PROTOCOLS = DEACTIVATED_TOP_LEVEL_PROTOCOLS.replace(
+    '<protocols inactive="inactive">', "<protocols>"
+)
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_active_top_level_protocols_produce_intent(module, parser_class):
+    """Kontrolní test: bez něj by test níž mohl měřit prázdnou fixture.
+
+    Zabíjí mutanta: `self.default_bfd = {}` v _parse_default_bgp_neighbors.
+    Služba bez routing-instance sahá do default_bgp_neighbors a default_bfd -
+    kdyby se neplnily, byl by test na deaktivaci zelený z nesprávného důvodu.
+    """
+    services = _services(module, parser_class, ACTIVE_TOP_LEVEL_PROTOCOLS)
+    service = _by_name(services, "ge-0/0/2.13")
+
+    assert service.bgp_neighbor == ["152.11.13.2"]
+    assert service.bfd
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_top_level_protocols_drop_neighbors_and_bfd(module, parser_class):
+    """<protocols inactive> na top-level úrovni nedá souseda ani BFD záměr.
+
+    Zabíjí mutanta: `_is_inactive` bez chůze po předcích. K top-level
+    kontejneru vede jiná cesta než k tomu pod routing-instances
+    (_parse_default_bgp_neighbors), takže existující testy tenhle mutant
+    na téhle cestě nechytí.
+    """
+    services = _services(module, parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
+    service = _by_name(services, "ge-0/0/2.13")
+
+    assert service.bgp_neighbor == []
+    assert service.bfd == []
