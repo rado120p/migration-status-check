@@ -206,3 +206,40 @@ def test_deactivated_bgp_container_drops_neighbors_and_bfd(module, parser_class)
 
     assert peers == [], f"deaktivovaný kontejner vyrobil BGP záměr: {peers}"
     assert bfd == [], f"deaktivovaný kontejner vyrobil BFD záměr: {bfd}"
+
+
+DEACTIVATED_UNIT_ONLY = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>ge-0/0/2</name>
+      <unit inactive="inactive">
+        <name>113</name>
+        <description>L3VPN-CPE13-NNI</description>
+        <family><inet><address><name>198.11.13.1/30</name></address></inet></family>
+      </unit>
+      <unit>
+        <name>13</name>
+        <description>INTERNET-CPE13-NNI</description>
+        <family><inet><address><name>152.11.13.1/30</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_unit_under_active_interface_is_flagged(module, parser_class):
+    """Deaktivace jednotky nesmí spadnout ani nahoru, ani na sousední jednotku.
+
+    Zabíjí mutanta: `active=not physical_inactive` v _parse_interfaces, tedy
+    "úroveň jednotky se ignoruje". Ten dnes přežije celou sadu - všechny
+    ostatní fixtures deaktivují až fyzické rozhraní, takže se zděděná
+    a vlastní deaktivace nedají rozlišit.
+    """
+    services = _services(module, parser_class, DEACTIVATED_UNIT_ONLY)
+
+    assert _by_name(services, "ge-0/0/2").interface_active is True
+    assert _by_name(services, "ge-0/0/2.113").interface_active is False
+    assert _by_name(services, "ge-0/0/2.13").interface_active is True
