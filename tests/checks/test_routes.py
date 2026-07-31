@@ -57,8 +57,13 @@ def _installed_inactive(next_hop="152.11.13.2"):
 def test_inactive_route_that_was_inactive_before_passes():
     """Stav se nezmenil, takze to neni nalez.
 
-    Zabiji mutanta: hlaseni BROKEN pri kazde neaktivni route bez ohledu na
-    baseline.
+    Zabiji mutanta: vypusteni vetve `was_active is False`, tedy hlaseni
+    nalezu i u routy, ktera nebyla aktivni uz v baseline.
+
+    Vetev bez baseline (DEGRADED miste BROKEN) tenhle test nehlida - ta ma
+    vlastni test test_inactive_route_without_baseline_is_degraded. Overeno
+    mutaci 2026-07-31: `outcome = Outcome.BROKEN` natvrdo tenhle test prezije
+    a shodi az ten druhy.
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed_inactive(), _installed_inactive())
@@ -305,3 +310,22 @@ def test_service_scope_does_claim_a_route_is_missing_from_the_table():
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == "neni v tabulce"
+
+
+def _installed_without_active():
+    """Mereni bez klice 'active' - tvar, ktery by vyrobila regrese collectoru."""
+    routes = _installed()
+    del routes["inet.0"]["198.62.1.0/29"]["active"]
+    return routes
+
+
+def test_route_without_active_key_is_skipped():
+    """Chybejici klic je chybejici kontrola, ne PASS.
+
+    Zabíjí mutanta: `subject.get("active", True)`, tedy default "aktivni".
+    S nim by check vydal OK a regrese collectoru by se cetla jako uspech.
+    """
+    findings = StaticRouteStatusCheck().run(_ctx(_installed_without_active()))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP

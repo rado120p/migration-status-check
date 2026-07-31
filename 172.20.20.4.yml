@@ -147,7 +147,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -169,7 +169,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -215,7 +215,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -256,7 +256,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE13-NNI
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - ccc
   - evpn
@@ -280,7 +280,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -305,7 +305,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-BASED-CPE13-NNI
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -371,7 +371,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -393,7 +393,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE14-UNI
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -420,7 +420,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bridge_domain: []
@@ -441,7 +441,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - bgp

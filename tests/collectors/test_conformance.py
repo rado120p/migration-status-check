@@ -246,11 +246,15 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         # Skutecny seam drzi test_static_route_check_really_reads_the_routing_table
         # na junos-evo, ktery vyzaduje PASS.
         ("junos-evo", "static_route_status"),
-        # bfd_session_state schvalne jen pro junos-evo: fixture pro junos je
-        # zamerne prazdny vypis (BGP je u obou peeru Idle), takze check tam
-        # spravne vraci same SKIP a "aspon jeden ne-SKIP" by na nem selhalo
-        # z legitimniho duvodu.
+        # Obe platformy: po regeneraci .4 (AR-30) ma junos dve realne session
+        # na ge-0/0/2 a sluzby, ktere je nesou, uz nejsou deaktivovane. Mutant
+        # ctx.subject.get("bfd_x") ale na junos prezije: BGP je tam
+        # Established, takze check ze sameho zameru vyrobi FAIL "bez
+        # session" - manufakturovany ne-SKIP stejneho druhu, jaky uz drzi
+        # komentar u statik vyse. Skutecny sev drzi
+        # test_bfd_check_really_reads_the_session_table, ktery vyzaduje PASS.
         ("junos-evo", "bfd_session_state"),
+        ("junos", "bfd_session_state"),
     ],
 )
 def test_specific_check_sees_data(platform, check_id):
@@ -296,4 +300,36 @@ def test_static_route_check_really_reads_the_routing_table():
     assert any(check.status is Status.PASS for check in matching), (
         "junos-evo: zadna statika nedostala PASS - check nevidi oblast "
         "'routes' z faktu, jen svuj vlastni zamer"
+    )
+
+
+def test_bfd_check_really_reads_the_session_table():
+    """U BFD na junos "ne-SKIP" na sev take nestaci - musi to byt PASS.
+
+    bfd_session_state iteruje pres sjednoceni tri zdroju (AR-14), takze
+    verdikt vyda i tehdy, kdyz oblast `bfd` z faktu vubec neprecte: ze
+    sameho zameru s BGP Established vyrobi FAIL 'bez session', a to je
+    ne-SKIP. Overeno mutaci: po zmene ctenoho klice na
+    ctx.subject.get("bfd_x") zustava test_specific_check_sees_data[junos-
+    bfd_session_state] zeleny, protoze BGP je na junos Established a check
+    manufakturuje FAIL bez toho, aby session tabulku videl.
+
+    Na .4 ma svc:INTERNET-CPE13-NNI:Internet peera 152.11.13.2 s session Up
+    (PASS) a svc:L3VPN-CPE13-NNI:IPVPN peera 198.11.13.2 s session Down
+    (FAIL). FAIL je tedy dosazitelny naslepo - proto sev drzi PASS, ne
+    ne-SKIP: PASS muze vzniknout JEDINE tak, ze check tabulku session
+    opravdu videl.
+    """
+    result = api.evaluate(_snapshot("junos"), now=NOW)
+    matching = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "bfd_session_state"
+    ]
+
+    assert matching
+    assert any(check.status is Status.PASS for check in matching), (
+        "junos: zadna BFD session nedostala PASS - check nevidi oblast "
+        "'bfd' z faktu, jen svuj vlastni zamer"
     )

@@ -622,9 +622,11 @@ class JunosEvoAcxServiceParser:
         routing-options/rib <jméno>.inet6.0/static — ale RPC ten rozdíl nezná.
         Parser ho proto zahladí tady a dál se nešíří.
 
-        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) se
-        přeskočí celý, stejně jako se už přeskakuje jednotlivá `route`
-        a `instance`. Bez toho by `deactivate` — standardní idiom pro
+        Deaktivovaný kontejner (`routing-options`, `rib` i `static`) route
+        nepustí dál, stejně jako se už přeskakuje jednotlivá `route`
+        a `instance` — `_is_inactive` chodí po předcích, takže i deaktivovaný
+        `rib` chytí `_is_inactive(static_node)` o úroveň níž, ne skip na
+        samotném `rib` uzlu. Bez toho by `deactivate` — standardní idiom pro
         vyřazení konfigurace při migraci — vyrobil živý záměr a check by
         hlásil `FAIL … neni v tabulce` za routu, kterou nikdo nechce.
         """
@@ -694,9 +696,6 @@ class JunosEvoAcxServiceParser:
         for rib_node in options_node.xpath(
             "./*[local-name()='rib']"
         ):
-            if self._is_inactive(rib_node):
-                continue
-
             rib_name = first_text(
                 rib_node,
                 "./*[local-name()='name']/text()",
@@ -814,9 +813,6 @@ class JunosEvoAcxServiceParser:
             for group_node in bgp_node.xpath(
                 "./*[local-name()='group']"
             ):
-                if self._is_inactive(group_node):
-                    continue
-
                 containers.append(
                     (
                         group_node,
@@ -1100,7 +1096,7 @@ class JunosEvoAcxServiceParser:
                         # Jednotka pod deaktivovaným rodičem je deaktivovaná
                         # taky, i když sama atribut nemá - Junos to tak i
                         # vyhodnocuje.
-                        active=not (physical_inactive or self._is_inactive(unit_node)),
+                        active=not self._is_inactive(unit_node),
                     )
                 )
 

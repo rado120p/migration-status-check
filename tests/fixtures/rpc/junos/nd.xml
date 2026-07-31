@@ -10,7 +10,7 @@ none
 unreachable
 </ipv6-nd-state>
     <ipv6-nd-expire>
-3
+0
 </ipv6-nd-expire>
     <ipv6-nd-isrouter>
 no
@@ -20,6 +20,75 @@ no
 </ipv6-nd-issecure>
     <ipv6-nd-interface-name>
 fxp0.0
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+2001:db8:11:13::b
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+0c:00:32:f4:d6:01
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+reachable
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+16
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+yes
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/2.113
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+2001:db8:11:14::b
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+0c:00:cd:31:35:02
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+reachable
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+37
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+yes
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/4.0
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+2001:abcd:11:13::b
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+0c:00:32:f4:d6:01
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+reachable
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+16
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+yes
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/2.13
 </ipv6-nd-interface-name>
   </ipv6-nd-entry>
   <ipv6-nd-entry>
@@ -33,7 +102,7 @@ fe80::2
 stale
 </ipv6-nd-state>
     <ipv6-nd-expire>
-792
+349
 </ipv6-nd-expire>
     <ipv6-nd-isrouter>
 yes
@@ -47,16 +116,62 @@ fxp0.0
   </ipv6-nd-entry>
   <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>
-fe80::5c28:99ff:fedd:d5e6
+fe80::e00:3200:df4:d601
 </ipv6-nd-neighbor-address>
     <ipv6-nd-neighbor-l2-address>
-5e:28:99:dd:d5:e6
+0c:00:32:f4:d6:01
 </ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>
 stale
 </ipv6-nd-state>
     <ipv6-nd-expire>
-330
+384
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+yes
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/2.13
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+fe80::e00:3200:71f4:d601
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+0c:00:32:f4:d6:01
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+stale
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+343
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+yes
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/2.113
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+fe80::3c3e:35ff:fe9e:3a75
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+3e:3e:35:9e:3a:75
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+stale
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+250
 </ipv6-nd-expire>
     <ipv6-nd-isrouter>
 no
@@ -70,16 +185,16 @@ ge-0/0/4.0
   </ipv6-nd-entry>
   <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>
-fe80::96da:53ff:fe1c:9
+fe80::3e99:7bff:fe1a:9
 </ipv6-nd-neighbor-address>
     <ipv6-nd-neighbor-l2-address>
-94:da:53:1c:00:09
+3c:99:7b:1a:00:09
 </ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>
 stale
 </ipv6-nd-state>
     <ipv6-nd-expire>
-452
+113
 </ipv6-nd-expire>
     <ipv6-nd-isrouter>
 yes
@@ -93,16 +208,85 @@ ge-0/0/1.0
   </ipv6-nd-entry>
   <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>
-fe80::c66b:b8ff:fe48:0
+fe80::9c56:f0ff:fed8:c79c
 </ipv6-nd-neighbor-address>
     <ipv6-nd-neighbor-l2-address>
-c4:6b:b8:48:00:00
+9e:56:f0:d8:c7:9c
 </ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>
 stale
 </ipv6-nd-state>
     <ipv6-nd-expire>
-872
+250
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+no
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/0.0
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+fe80::a8c1:abff:fe0c:20f8
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+aa:c1:ab:0c:20:f8
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+stale
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+775
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+no
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/4.0
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+fe80::a8c1:abff:fecf:3e22
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+aa:c1:ab:cf:3e:22
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+stale
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+775
+</ipv6-nd-expire>
+    <ipv6-nd-isrouter>
+no
+</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>
+no
+</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>
+ge-0/0/4.0
+</ipv6-nd-interface-name>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>
+fe80::eee2:fbff:fe0a:0
+</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>
+ee:e2:fb:0a:00:00
+</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>
+stale
+</ipv6-nd-state>
+    <ipv6-nd-expire>
+111
 </ipv6-nd-expire>
     <ipv6-nd-isrouter>
 yes
@@ -115,6 +299,6 @@ ge-0/0/0.0
 </ipv6-nd-interface-name>
   </ipv6-nd-entry>
   <ipv6-nd-total>
-5
+13
 </ipv6-nd-total>
 </ipv6-nd-information>

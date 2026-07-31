@@ -1,13 +1,17 @@
 """Testy collectoru BFD proti nahranemu XML z laborky.
 
-Fixture pro junos je zamerne PRAZDNY vypis: na vMX je BFD nakonfigurovane
-u dvou sousedu, ale BGP je u obou Idle, takze zadna session nevznikla.
-Prazdny vypis je platny stav, ne chyba sberu.
+Obe nahravky maji session: na 172.20.20.4 (junos) jsou dve na ge-0/0/2,
+na 172.20.20.5 (junos-evo) dve na et-0/0/8. Tvar odpovedi se mezi rodinami
+nelisi - same elementy, jen jina jmena rozhrani.
+
+Prazdny vypis je platny stav a testuje se na syntetickem XML (EMPTY_OUTPUT),
+ne na nahravce, aby o pokryti nerozhodoval stav laborky.
 """
 
 from __future__ import annotations
 
 import pytest
+from lxml import etree
 
 from migration_validator.collectors.bfd import BfdCollector
 
@@ -18,15 +22,30 @@ PLATFORMS = ("junos", "junos-evo")
 def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
     assert isinstance(result, dict)
-    # Jmeno testu slibuje klicovani adresou peeru, tak to i asertujme.
-    # Fixture pro junos je zamerne prazdna, tam neni co overit.
-    if platform == "junos-evo":
-        assert "152.11.13.2" in result
+    # Obe nahravky nesou session se stejnym peerem, takze vyjimka na
+    # platformu uz neni potreba (AR-30).
+    assert "152.11.13.2" in result
 
 
-def test_empty_output_is_a_valid_state(rpc_fixture):
-    """Nula session neni selhani collectoru - collector nema co interpretovat."""
-    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+EMPTY_OUTPUT = """
+<bfd-session-information style="detail">
+  <sessions>0</sessions>
+  <clients>0</clients>
+  <cumulative-transmission-rate>0.0</cumulative-transmission-rate>
+  <cumulative-reception-rate>0.0</cumulative-reception-rate>
+</bfd-session-information>
+"""
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_empty_output_is_a_valid_state(platform):
+    """Nula session neni selhani collectoru - collector nema co interpretovat.
+
+    XML je synteticke, ne nahravka. Drive se tenhle stav bral z `junos`
+    fixture, ktera zadnou session nemela - jenze to znamenalo, ze stav
+    laborky rozhodoval o tom, jestli je tenhle pripad vubec testovany.
+    """
+    result = BfdCollector().parse(etree.fromstring(EMPTY_OUTPUT.encode()), platform)
 
     assert result == {}
 
@@ -45,6 +64,35 @@ def test_client_names_are_collected(rpc_fixture):
     result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
 
     assert result["152.11.13.2"]["clients"] == ["BGP"]
+
+
+def test_mx_sessions_are_recorded_verbatim(rpc_fixture):
+    """Odpoved z MX ma tentyz tvar jako z EVO - jen jina jmena rozhrani.
+
+    Roadmapa vlny 3 predpokladala MX-specificke parsovani; nahravka z
+    2026-07-31 ukazala, ze zadne neni. Tenhle test to drzi: kdyby MX odpoved
+    vlastni tvar dostala, spadne tady, ne az v conformance.
+    """
+    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+
+    assert result["152.11.13.2"]["state"] == "Up"
+    assert result["152.11.13.2"]["interface"] == "ge-0/0/2.13"
+    assert result["152.11.13.2"]["remote_state"] == "Up"
+    assert result["198.11.13.2"]["state"] == "Down"
+    assert result["198.11.13.2"]["remote_state"] == "AdminDown"
+
+
+def test_mx_client_names_are_collected(rpc_fixture):
+    """Bez klienta nejde odlisit session drzenou BGP od jine.
+
+    Zabíjí mutanta: vypusteni smycky pres bfd-client, po nemz zustane
+    `clients` prazdny seznam. Je to duvod, proc collector vubec pouziva
+    detail variantu RPC.
+    """
+    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+
+    assert result["152.11.13.2"]["clients"] == ["BGP"]
+    assert result["198.11.13.2"]["clients"] == ["BGP"]
 
 
 def test_entries_have_expected_keys(rpc_fixture):
