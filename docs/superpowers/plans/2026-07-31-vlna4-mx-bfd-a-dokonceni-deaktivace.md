@@ -694,7 +694,7 @@ za bezpodmínečnou verzi:
 .venv/bin/python -m pytest -o addopts="" -q
 ```
 
-Očekávej: **603 passed, 0 skipped**.
+Očekávej: **604 passed, 0 skipped**. (Plán původně počítal 603; opravné kolo AR-31 přidalo test vyžadující PASS, viz spec.)
 
 - [ ] **Krok 6: Commit**
 
@@ -813,7 +813,7 @@ blokem:
 .venv/bin/python -m pytest -o addopts="" -q
 ```
 
-Očekávej: **1 passed**, pak **604 passed, 0 skipped**.
+Očekávej: **1 passed**, pak **605 passed, 0 skipped**.
 
 - [ ] **Krok 5: Commit**
 
@@ -874,7 +874,7 @@ za:
 .venv/bin/python -m pytest -o addopts="" -q
 ```
 
-Očekávej: **604 passed, 0 skipped** — změna je jen v docstringu.
+Očekávej: **605 passed, 0 skipped** — změna je jen v docstringu.
 
 - [ ] **Krok 3: Commit**
 
@@ -893,7 +893,7 @@ git commit -m "docs(test): docstring popisuje mutanta, ktereho test opravdu zabi
 .venv/bin/python -m pytest -o addopts="" -q
 ```
 
-Očekávej: **604 passed, 0 skipped**.
+Očekávej: **605 passed, 0 skipped**.
 
 - [ ] **Zámek parserů**
 
