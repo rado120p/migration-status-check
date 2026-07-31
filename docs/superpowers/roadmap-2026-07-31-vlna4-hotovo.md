@@ -106,8 +106,14 @@ oba guardy volaly `_is_inactive` na uzlu, který atribut `inactive` nese
 
 Totéž platilo o disjunktu `physical_inactive or` na `:1103`, vedeném
 v roadmapě jako samostatná drobnost. Tři odrážky, jeden vzorec. Teprve po
-smazání všech tří začaly testy mutanta zabíjet — s guardy padalo 8 testů,
-bez nich 14.
+smazání všech tří začaly testy mutanta zabíjet.
+
+Čísla, ať jsou reprodukovatelná: mutant chůze po předcích proti
+`tests/parsers/test_inactive.py` shodil **8** testů, dokud guardy stály.
+Po smazání samotného disjunktu na `:1103`, bez jediného nového testu, **10**
+— ty dva navíc jsou obě parametrizace `test_deactivated_interface_is_flagged`.
+Konečných **14** je stav po smazání všech tří guardů **i** po přidání nových
+testů; není to přírůstek ze samotného mazání.
 
 ### 4. Deaktivovaná jednotka pod aktivním rozhraním neměla test
 

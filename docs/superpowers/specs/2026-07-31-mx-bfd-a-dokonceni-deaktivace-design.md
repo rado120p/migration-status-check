@@ -1,7 +1,8 @@
 # MX BFD na živých datech a dokončení deaktivace — návrh
 
 **Datum:** 2026-07-31
-**Stav:** k revizi uživatelem
+**Stav:** schváleno a provedeno; vlna 4 hotová, viz
+[`roadmap-2026-07-31-vlna4-hotovo.md`](../roadmap-2026-07-31-vlna4-hotovo.md)
 **Navazuje na:** [`roadmap-2026-07-30-vlna3-hotovo.md`](../roadmap-2026-07-30-vlna3-hotovo.md),
 sekce „Co zbývá" — body 2, 4 (první odrážka) a 5
 **Výchozí stav:** 588 testů zelených / 1 přeskočen, `diff mx_parser.py evo_parser.py | wc -l` = 146

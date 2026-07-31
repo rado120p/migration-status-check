@@ -13,7 +13,7 @@
 ## Globální omezení
 
 - **Zámek parserů:** `diff mx_parser.py evo_parser.py | wc -l` musí vracet **146** po každé změně parseru, ne až na konci.
-- **Výchozí stav sady:** 588 passed, 1 skipped. Cílový stav po úloze 4: **590 passed, 0 skipped**.
+- **Výchozí stav sady:** 588 passed, 1 skipped. Po úloze 4 (regenerace) **600 passed, 0 skipped** — přeskočený test tam mizí právem. Konečný stav větve: **605 passed, 0 skipped**. (Původně tu stálo „590 passed, 0 skipped po úloze 4"; bylo to špatně dvakrát — 590 je číslo úlohy 1, a to ještě s jedním přeskočeným.)
 - **Testovací příkaz:** `.venv/bin/python -m pytest -o addopts="" -q` (bez `-o addopts=""` se přidá coverage a výstup je nečitelný).
 - **Každý test musí říct, kterou špatnou implementaci zabíjí**, a mutant se pouští, ne popisuje. Parametrizovaný test = mutant na každou větev.
 - **Mutantí bloky končí `git checkout <soubor>`, takže se pouští až PO commitu.** Před commitem si tím implementace smaže vlastní práci.
