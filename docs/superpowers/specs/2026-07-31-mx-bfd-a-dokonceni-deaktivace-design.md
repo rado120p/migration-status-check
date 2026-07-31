@@ -162,12 +162,28 @@ odstraní.
 
 „Aspoň jeden ne-SKIP" tady drží šev poctivě — na rozdíl od statik, kde ho
 vydá i manufakturovaný FAIL ze samotného záměru (AR‑29). `BfdSessionStateCheck`
-iteruje přes záměry z inventory a bez přečtené oblasti `bfd` by mohl vydat
-ne-SKIP i naslepo. **Ověřeno, ne předpokládáno:** mutant
-`ctx.subject.get("bfd_x", {})` na `checks/bfd.py:56` shodil 2026‑07‑31 obě
-parametrizace — `junos` i `junos-evo`. Šev tedy „aspoň jeden ne-SKIP" drží
-a test vyžadující konkrétně PASS, jaký si vyžádaly statiky (AR‑29), tu není
-potřeba.
+iteruje přes záměry z inventory a bez přečtené oblasti `bfd` vydá ne-SKIP
+i naslepo — z holého záměru vyrobí FAIL „bez session", a to je ne-SKIP.
+
+**Oprava dřívějšího tvrzení tohoto specu.** První měření mutanta
+`ctx.subject.get("bfd_x", {})` (`checks/bfd.py:56`) tvrdilo, že shodí obě
+parametrizace, a spec z toho vyvodil, že „aspoň jeden ne-SKIP" tu šev drží.
+**Neplatí.** To měření běželo nad **smíchanou sadou fixtures** — nová
+`bfd.xml` proti staré `bgp.xml`, ve které bylo BGP na `.4` ještě Idle, takže
+check SKIPoval. Po regeneraci celé `junos` sady (AR‑30) je BGP Established
+a mutant na `junos` **přežije**; padne jen `junos-evo`. Nalezeno
+implementerem úlohy 5 a ověřeno znovu.
+
+Platí tedy původní pravidlo: `bfd_session_state` je **tentýž případ jako
+statiky** (AR‑29) a potřebuje test vyžadující konkrétně **PASS**. Na `junos`
+je dosažitelný a jednoznačný — `152.11.13.2` má session Up, takže PASS může
+vzniknout jedině z přečtené tabulky session; `198.11.13.2` je Down, takže
+FAIL vydá i slepý check. Test proto vyžaduje PASS, ne ne-SKIP.
+
+Poučení nad rámec tohoto bodu: **mutant puštěný nad nekonzistentní sadou
+fixtures neměří nic.** Pravidlo vlny 3 („mutant se pouští, ne popisuje")
+tímhle dostává druhou půlku — pouští se nad tím stavem repa, ve kterém
+poběží doopravdy.
 
 ### AR-32 — parser MX BFD odpovědi má vlastní test proti reálnému XML
 
@@ -334,7 +350,7 @@ byli puštění 2026‑07‑31 při psaní specu, ne popsáni:
 
 | požadavek | mutant | výsledek |
 |---|---|---|
-| AR‑31 | `ctx.subject.get("bfd_x", {})` | zabit na obou platformách |
+| AR‑31 | `ctx.subject.get("bfd_x", {})` | **měřeno špatně** — viz AR‑31, mutant na `junos` přežije |
 | AR‑32 | vypuštěná smyčka přes `bfd-client` | zabit |
 | AR‑33 | `_is_inactive` bez chůze po předcích | zabit na obou parserech |
 | AR‑34 (`rib`, `group`) | tentýž, po smazání guardů | zabit na obou parserech |
