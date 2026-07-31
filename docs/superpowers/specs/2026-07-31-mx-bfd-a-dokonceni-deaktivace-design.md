@@ -132,12 +132,22 @@ prázdná. Ten komentář výměnou přestane platit a musí zmizet spolu s ní.
 `tests/fixtures/172.20.20.4.yml`, dnes bajtově shodná) se pořídí znovu proti
 laborce ve stavu popsaném výš.
 
-Výsledná inventory musí obsahovat právě dvě položky s `interface_active: false`
-— `ge-0/0/3` a `ge-0/0/3.0`, tedy fyzické rozhraní a jeho jednotka zděděná
-podle AR‑19 — a právě jednu s `routing_instance_active: false` (`ge-0/0/3.0`).
-Jiný počet znamená, že se
-laborka mezitím změnila; plán se v tom případě zastaví a stav se ověří znovu,
-místo aby se čísla dopsala podle skutečnosti.
+Očekávaný výsledek **není predikce** — inventory byla při psaní tohoto specu
+vygenerována do scratchpadu (`mx_parser.py 172.20.20.4 --auth password
+-u admin`) a změřena:
+
+```
+schema 4, 24 služeb
+  ge-0/0/3      interface_active: false
+  ge-0/0/3.0    interface_active: false, routing_instance_active: false
+```
+
+Tedy dvě položky s `interface_active: false` a jedna s
+`routing_instance_active: false`, žádná další. Počet služeb se nemění (24,
+stejně jako v commitnuté inventory) — deaktivovaná služba z inventory
+nevypadává, přesně podle AR‑20. Jiný výsledek při provádění plánu znamená, že
+se laborka mezitím změnila; plán se v tom případě zastaví a stav se ověří
+znovu, místo aby se čísla dopsala podle skutečnosti.
 
 ### AR-31 — `bfd_session_state` vydá na `junos` reálný verdikt
 
@@ -197,9 +207,19 @@ znamená, že by se regrese collectoru (přejmenovaný nebo vypuštěný klíč)
 přečetla jako **PASS**, ne jako chybějící kontrola. Je to jediné takové místo
 v repu.
 
-Nové chování: chybí-li klíč `active` v měření úplně, check vydá
-`Outcome.SKIP` se zprávou, že měření aktivitu routy neobsahuje. Hodnota
-`False` se chová dál přesně jako dnes (AR‑25). Default `True` **zaniká**.
+Nové chování: chybí-li klíč `active` v **měření** (`subject`) úplně, check
+vydá `Outcome.SKIP` se zprávou, že měření aktivitu routy neobsahuje. Hodnota
+`False` se chová dál přesně jako dnes (AR‑25). Default `True` na `:152`
+**zaniká**.
+
+Na `:153` (`baseline.get("active", True) if baseline else None`) default
+**zůstává**, a to záměrně. Kdyby zanikl i tam, chybějící klíč v baseline by
+skončil jako `was_active=True`, což kód o pár řádků níž překlápí na
+`Outcome.BROKEN` — tedy eskalace chybějícího údaje na FAIL, přímo proti R‑2,
+o který se opírá AR‑25. Baseline navíc může legitimně pocházet ze staršího
+schematu; `subject` ne, ten vzniká vždy aktuálním collectorem. Asymetrie obou
+řádků je tím pádem věcná, ne přehlédnutí — plán ji zapíše do komentáře
+u kódu, aby ji příští čtenář nesjednotil.
 
 Rozlišení proti (b)-alternativě „nechat default, jen přidat test": test by
 hlídal, že se `True` doplní, tedy zabetonoval by chování, které je špatné.
@@ -246,8 +266,12 @@ protože autor plánu mutanta nikdy nespustil, jen popsal. Když to nejde
 a uložit mutanta jako povinný krok úlohy.
 
 Konkrétně to znamená, že mutanti u **AR‑31, AR‑32, AR‑33 a AR‑34(a)** se
-pustí ve fázi psaní plánu — všechny čtyři se opírají o kód, který už
-existuje, takže výmluva „ještě to nejde" neplatí ani u jednoho.
+pustí ve fázi psaní plánu. U AR‑33 a AR‑34(a) je to přímočaré — jde o dnešní
+kód i dnešní fixtures. U AR‑31 a AR‑32 mutant potřebuje neprázdnou `junos`
+BFD nahrávku, která je až výstupem AR‑30; „ještě to nejde" ale neplatí ani
+tam, protože nahrávka **už je pořízená** ve scratchpadu a na dobu spuštění
+mutanta se dá dočasně podstrčit na místo commitnuté fixture. Přesně tak
+vznikl důkaz o osmi SKIPech v sekci „Stav deaktivace v laborce".
 
 A past z úlohy 5: **mutantí bloky končí `git checkout <soubor>`, takže se
 pouští až po commitu.** Před commitem si tím implementace smaže vlastní práci.
@@ -271,7 +295,14 @@ a CPE14, a `ge-0/0/3` je to jediné, co z původního směru zůstává.
 
 ### Prázdný BFD výpis přestane být v repu zastoupený
 
-Po AR‑30 nemá žádná nahrávka nulový počet session. Chování collectoru na
-prázdném výpisu (docstring `collectors/bfd.py:10`) je platný stav a nesmí
-zůstat nepokryté — pokud ho dosud držela jen ta fixture, doplní se
-syntetický test na úrovni collectoru. Plán to ověří grepem, ne úvahou.
+Po AR‑30 nemá žádná nahrávka nulový počet session. Ověřeno čtením, ne úvahou:
+`tests/collectors/test_bfd.py::test_empty_output_is_a_valid_state` čte
+**přímo `junos` fixture** a asertuje `result == {}`, takže AR‑30 ho rozbije.
+Prázdný výpis je platný stav (docstring `collectors/bfd.py:10`) a nesmí
+zůstat nepokrytý — test dostane vlastní syntetické XML, ne nahrávku, a tím
+se odváže od stavu laborky nadobro.
+
+Ve stejném souboru padne s AR‑30 i výjimka
+`if platform == "junos-evo"` v `test_returns_mapping_keyed_by_neighbor`
+a modulový docstring, který prázdnou `junos` fixture popisuje. Obojí je
+materiál AR‑32, ne samostatná položka.
