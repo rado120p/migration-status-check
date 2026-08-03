@@ -153,7 +153,7 @@ za:
             if was_active:
                 outcome = Outcome.BROKEN
                 message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
-            elif baseline is not None:
+            elif baseline:
                 outcome = Outcome.DEGRADED
                 message = (
                     f"{rib} {prefix}: je v tabulce, ale neni aktivni; "
@@ -165,6 +165,8 @@ za:
 ```
 
 Větev `if was_active is False:` o pár řádků výš (AR‑25, shoda na neaktivitě = OK) se **nemění** — `None` do ní nespadne, protože porovnává identitou.
+
+`elif baseline:` je pravdivostní schválně, ne opomenutím: `:176` o dva řádky výš testuje `if baseline` taky. Kdyby tady stálo `is not None`, prázdný slovník `{}` by prošel jednou větví jako „baseline není" a druhou jako „baseline mlčí" — dvě různé odpovědi na tentýž vstup. Obě podmínky musí číst stejně.
 
 Zároveň smaž z komentáře nad `:163` poslední dvě věty, které tuhle otázku vedly jako otevřenou:
 
@@ -418,13 +420,17 @@ Očekávané: **636 passed, 0 skipped** a **146**. Čísla, která vyjdou, se za
 
 - [ ] **Step 2: Podívej se na změněné chování očima, ne jen testy**
 
-Vyrob si dočasně report ze společných fixtures postupem z
-`.superpowers/sdd/2026-08-03-vlna5-report-skupiny-a-nezarazeno/task-8-brief.md`,
-krok 1. Pokud ten soubor neexistuje (viz poznámka o rozvržení `.superpowers/sdd/`
-v Global Constraints), postup je: dočasný test, který zavolá
-`migration_validator.reporting.text_report.render` nad dvojicí snapshotů z
-`synthetic_snapshot(DEVICE_4, ...)` a `synthetic_snapshot(DEVICE_5, ...)`,
-vytiskne výstup a po přečtení se **smaže**.
+Vyrob si dočasně report ze společných fixtures: napiš dočasný test, který
+zavolá `migration_validator.reporting.text_report.render` nad dvojicí snapshotů
+z `synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")` a
+`synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")`, vytiskne
+výstup (`pytest -s`) a po přečtení se **smaže**.
+
+Roadmapa vlny 5 na tenhle postup odkazuje cestou
+`.superpowers/sdd/2026-08-03-vlna5-report-skupiny-a-nezarazeno/task-8-brief.md`.
+Změřeno 2026‑08‑03: **ten soubor ani ten adresář neexistují** (`ls -d
+.superpowers/sdd/*/` nevrací nic). Nehledej ho — je to doc drift a patří jako
+nález do „Co vyšlo jinak" v uzavírací roadmapě.
 
 Co hledat: **nic** — sdílené fixtures mají všechny routy `"active": True`, takže
 větev, kterou vlna změnila, se na nich nevyskytne. Zapiš to jako změřený fakt,
@@ -453,6 +459,7 @@ git commit -m "docs: roadmapa vlny 6 - semantika zavaznosti hotova"
 
 ## Poznámka k dokončení větve
 
-Vlna běží na větvi `vlna6-semantika-zavaznosti` (založ ji z `main` na `576b0eb`
-před úlohou 1). Po úloze 4 se merge řeší přes skill
+Vlna běží na větvi `vlna6-semantika-zavaznosti`, kterou založ před úlohou 1 z
+**aktuálního `main`** — spec i tenhle plán tam už jsou zacommitované a musí být
+součástí základu větve, ne až jejího obsahu. Po úloze 4 se merge řeší přes skill
 `superpowers:finishing-a-development-branch`, ne ručně.
