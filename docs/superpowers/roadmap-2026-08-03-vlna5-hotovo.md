@@ -34,7 +34,8 @@ sekci pro objekty, které `engine.py` nedokáže spárovat s žádnou službou.
   (`(nic)`), aby chybějící sekce neznamenala „nic nezařazeného" tiše
   splývající s „sekce se nevytiskla".
 
-Osm commitů, `a4a403b..fc7143b`.
+Osm z toho implementačních; rozsah `a4a403b..fc7143b` má 11 commitů (zbytek
+jsou dokumentační), celá větev 13.
 
 ## Jak si vyrobit důkazy
 
@@ -218,7 +219,7 @@ blok na dnešních datech neexistuje.
 
 ### 9. Peer je v popisku `BGP status` bezpodmínečně
 
-Vědomé rozhodnutí plánu AR-37, ne opomenutí — ale na ostrém výstupu je
+Vědomé rozhodnutí plánu AR-36 (úloha 5, `checks/bgp.py`), ne opomenutí — ale na ostrém výstupu je
 vidět, že je to redundantní tam, kde rodinová sekce má jen jednoho peera:
 `-- IPv4  152.11.13.1/30` následuje `BGP status (152.11.13.2)`, ačkoliv
 hlavička už `152.11.13.2` jako jediného souseda dané `/30` implikuje.

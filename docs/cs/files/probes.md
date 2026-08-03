@@ -70,7 +70,8 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
 - **IPv4**: vezme všechny ARP adresy naučené na rozhraních scope;
 - **IPv6**: vezme jen ND záznamy, které jsou **použitelné** (`_usable_nd()`: mají MAC a stav
   není `unreachable`/`incomplete`) a nejsou link-local — **pokud služba nemá link-local
-  adresu nakonfigurovanou přímo pod rozhraním** (`_link_local_configured()`: kontroluje jen
+  adresu nakonfigurovanou přímo pod rozhraním** (`link_local_is_configured()` z
+  `migration_validator/addressing.py`, sdílená s `checks/reachability.py`: kontroluje jen
   přítomnost, ne výlučnost — stačí, aby mezi nakonfigurovanými adresami byla jedna
   link-local, i vedle běžné routovatelné); pak se link-local sousedé ponechají jako legitimní
   cíle;
