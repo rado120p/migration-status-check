@@ -362,10 +362,13 @@ def test_route_without_active_key_is_skipped():
 def test_static_routes_from_different_ribs_share_one_group():
     """Zabiji mutanta, ktery skupinu odvodi z RIB misto konstanty.
 
-    Dve routy ve dvou RUZNYCH RIB musi skoncit v JEDNE skupine - deleni po
-    RIB uz nese popisek radku. S jedinou RIB by mutant `group = rib` prosel.
-    Sourozenec test_label_carries_rib_and_prefix hlida popisek, tenhle
-    skupinu. Tvar fixture i pocet vysledku (2) overen proti kodu 2026-08-03.
+    Assert porovnava skupinu s presnou konstantou "Staticke routy", takze
+    mutanta `group = rib` chyti i s jedinou RIB. Dve RUZNE RIB tu jsou z
+    jineho duvodu: modeluji skutecny pripad, ktery skupiny zavedly - dve
+    routy z ruznych RIB musi skoncit v JEDNE skupine, deleni po RIB uz nese
+    popisek radku. Sourozenec test_label_carries_rib_and_prefix hlida
+    popisek, tenhle skupinu. Tvar fixture i pocet vysledku (2) overen proti
+    kodu 2026-08-03.
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed_two_ribs(), scope=_scope(CONFIGURED_TWO_RIBS))

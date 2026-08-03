@@ -3,9 +3,9 @@
 Vychozi vypis je souhrn, radek na sluzbu a plny blok u sluzeb se stavem
 WARN nebo FAIL. --detail rozbali bloky u vsech vcetne PASS.
 
-Sekce NESPAROVANO se vypisuje vzdy, i kdyz je vsechno ostatni zelene, a
-filtrovani se na ni nevztahuje - je to hlavni pojistka proti prehlednuti
-nezmigrovane sluzby.
+Sekce NESPAROVANO a NEZARAZENO se vypisuji vzdy, i kdyz je vsechno ostatni
+zelene, a filtrovani se na ne nevztahuje - jsou to hlavni pojistky proti
+prehlednuti nezmigrovane sluzby, respektive objektu bez prirazene sluzby.
 """
 
 from __future__ import annotations
@@ -40,10 +40,11 @@ def filter_result(
     """Vrati kopii vysledku s profiltrovanymi scopy.
 
     Souhrnne pocty se prepocitaji za vybranou mnozinu - jinak hlavicka
-    tvrdi neco jineho nez tabulka hned pod ni. Unmatched se ale
-    NEprepocitava: sekce NESPAROVANO je pojistka proti prehlednuti
-    nezmigrovane sluzby a filtrovani se na ni nevztahuje, takze prepocet
-    jejich cisel by tise smazal presne to, co ma sekce ukazat.
+    tvrdi neco jineho nez tabulka hned pod ni. Unmatched a unassigned se ale
+    NEprepocitavaji: sekce NESPAROVANO a NEZARAZENO jsou pojistky proti
+    prehlednuti nezmigrovane sluzby, respektive nezarazeneho objektu, a
+    filtrovani se na ne nevztahuje, takze prepocet jejich cisel by tise
+    smazal presne to, co maji sekce ukazat.
 
     Ze uz to neni cely beh, nese `filtered` - kdyby to vysledek nerekl,
     prepoctena cisla by byla jen druha podoba teze chyby.
@@ -244,7 +245,7 @@ def _filter_note(result: RunResult) -> list[str]:
         f"  filtr: {'  '.join(criteria)} -- "
         f"{applied['scopes_shown']} z {applied['scopes_total']} sluzeb",
         "  (pocty sluzeb a checku plati za vyber; radek Sparovano ani sekce"
-        " NESPAROVANO se neprepocitavaji)",
+        " NESPAROVANO ci NEZARAZENO se neprepocitavaji)",
         "",
     ]
 

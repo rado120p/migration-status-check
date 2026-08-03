@@ -358,9 +358,11 @@ def test_peer_family_derived_from_address():
 def test_bgp_group_carries_peer_and_rib():
     """Zabiji mutanta M1: `group = f"BGP {peer}"` bez jmena RIB.
 
-    Peer ma schvalne DVE RIB - s jedinou by mutant prosel, protoze jedna
-    skupina je porad jedna skupina. Tvar fixture i pocet vysledku (8) je
-    overeny proti skutecnemu kodu 2026-08-03.
+    Assert porovnava presne retezce vcetne jmena RIB, takze mutanta chyti i
+    s jedinou RIB. Dve RIB tu jsou z jineho duvodu - modeluji skutecny
+    problem, ktery report pred touto vlnou mel: peer se dvema RIB davajici
+    osm nerozlisitelnych radku bez skupiny. Tvar fixture i pocet vysledku
+    (8) je overeny proti skutecnemu kodu 2026-08-03.
     """
     peer = _peer()
     peer["ribs"]["bgp.l3vpn.0"] = {

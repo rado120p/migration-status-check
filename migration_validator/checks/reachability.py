@@ -17,7 +17,6 @@ from migration_validator.addressing import is_link_local, link_local_is_configur
 from migration_validator.checks.base import Check, CheckContext, Mode
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
-from migration_validator.models.scope import Scope
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 

@@ -822,7 +822,7 @@ _LONG_GROUP = "BGP 2001:db8:11:13::b / VELMI-DLOUHE-JMENO-ROUTING-INSTANCE.inet6
 def test_rendered_block_puts_ungrouped_rows_above_the_first_group_header():
     """Zabiji mutanta M2: renderer tiskne neseskupene radky az ZA skupinami.
 
-    Sesterský test test_ungrouped_rows_stand_before_groups ve
+    Sesterny test test_ungrouped_rows_stand_before_groups ve
     test_view.py tohohle mutanta PREZIL - poradi v datove strukture zustane
     spravne, prohodi se az sazba. Zmereno na prototypu 2026-08-03.
     """
@@ -864,6 +864,44 @@ def test_group_header_is_not_padded_with_dashes():
     lines = render(result, detail=True).splitlines()
     header = next(line for line in lines if line.strip().startswith("-- S"))
     assert header == "   -- S"
+
+
+def test_group_title_does_not_widen_the_check_column():
+    """Zabiji mutanta, ktery nadpis skupiny primicha do label_width sloupce CHECK.
+
+    Sesterny test test_long_group_title_widens_the_block_frame hlida SIRKU
+    RAMCE bloku (radek '='...), do ktere nadpis skupiny vstupovat MA (AR-38).
+    Tenhle hlida neco jineho: pozici ':' ve sloupci CHECK u datovych radku,
+    kam nadpis skupiny vstupovat NEMA - jinak by dlouhy nazev peeru/RIB
+    roztahl sloupec s popisky u vsech radku bloku, i tech s kratkym labelem.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group=_LONG_GROUP)])
+    lines = render(result, detail=True).splitlines()
+    data_row = next(line for line in lines if line.startswith(" PASS |"))
+    expected_label_width = max(len("x"), len("CHECK"))
+    assert data_row.index(":") == 9 + expected_label_width
+
+
+def test_two_groups_in_one_section_keep_first_occurrence_order():
+    """Zabiji mutanta, ktery renderer seradi skupiny v sekci abecedne.
+
+    Sesterny test test_ungrouped_rows_stand_before_groups (ve view testech)
+    hlida poradi na urovni DAT (Section.groups) mezi neseskupenymi radky a
+    prvni skupinou. Tenhle hlida SAZBU renderu, kdyz je v jedne sekci
+    skupin vic - podle AR-37 je poradi skupin poradim prvniho vyskytu, ne
+    abecedni. Fixture jde schvalne proti abecede (Zebra pred Alfa) - s
+    poradim, ktere abecede odpovida, by mutant prosel i beze zmeny.
+    """
+    result = _grouped_result(
+        [
+            _grouped_check("a", label="z1", group="Zebra"),
+            _grouped_check("b", label="a1", group="Alfa"),
+        ]
+    )
+    lines = render(result, detail=True).splitlines()
+    zebra_idx = next(i for i, line in enumerate(lines) if line.strip() == "-- Zebra")
+    alfa_idx = next(i for i, line in enumerate(lines) if line.strip() == "-- Alfa")
+    assert zebra_idx < alfa_idx
 
 
 def test_unmatched_service_type_column_is_padded():
