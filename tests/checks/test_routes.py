@@ -359,6 +359,45 @@ def test_route_without_active_key_is_skipped():
     assert findings[0].outcome is Outcome.SKIP
 
 
+def test_inactive_route_with_silent_baseline_is_degraded():
+    """Baseline, ktery o aktivite mlci, je nejednoznacnost - podle R-2 se
+    nejednoznacnost na FAIL neeskaluje.
+
+    Zabiji mutanta: navrat defaultu `baseline.get("active", True)`. S nim se
+    mlceni precte jako "forwardovala" a check vyda BROKEN, tedy tvrdy FAIL
+    za neco, co neni dolozene.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _installed_without_active())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].value == "neni aktivni"
+
+
+def test_silent_baseline_has_its_own_message():
+    """Tri stavy baseline musi dat tri zpravy, ne dve.
+
+    Zabiji mutanta: slouceni obou DEGRADED vetvi do jedne zpravy. Pak by
+    mlcici baseline dostal formulaci urcenou pro "baseline vubec neni" a
+    operator by z radku nepoznal, ktery z tech dvou duvodu nastal.
+
+    Porovnava se CELA zprava: obe vetve sdileji prefix "je v tabulce, ale
+    neni aktivni", takze assert na podretezec by je nerozlisil.
+    """
+    silent = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _installed_without_active())
+    )
+    missing = StaticRouteStatusCheck().run(_ctx(_installed_inactive()))
+
+    assert silent[0].message == (
+        "inet.0 198.62.1.0/29: je v tabulce, ale neni aktivni; "
+        "baseline aktivitu neuvadi"
+    )
+    assert missing[0].message == "inet.0 198.62.1.0/29: je v tabulce, ale neni aktivni"
+
+
 def test_static_routes_from_different_ribs_share_one_group():
     """Zabiji mutanta, ktery skupinu odvodi z RIB misto konstanty.
 
