@@ -26,10 +26,14 @@ Link-local predikáty se přestěhují do nového `migration_validator/addressin
   zelených **nejméně 605**; žádný se nesmí přeskočit.
 - **Zámek parserů:** `diff mx_parser.py evo_parser.py | wc -l` = **146**. Tahle
   vlna se parserů nedotýká, takže číslo musí zůstat 146. Zkontroluj to na konci.
-- **Diakritika se v kódu ani v testech nepoužívá** — soubory v
-  `migration_validator/` i `tests/` jsou bez háčků a čárek. Drž se toho i
-  v docstringech a hláškách. (Tenhle plán a spec diakritiku mají; ty jsou
-  dokumentace.)
+- **Nová diakritika se do souboru, který ji nemá, nezanáší.** Změřeno
+  2026‑08‑03: z 94 souborů v `migration_validator/` a `tests/` ji nese
+  **devět** — mimo jiné `checks/test_bgp.py`, `checks/test_routes.py`
+  a `reporting/text_report.py`, tedy soubory, které tahle vlna mění.
+  Převažující konvence je ASCII a `tests/reporting/test_text_report.py`
+  měl před vlnou 5 nula výskytů. Řiď se souborem, do kterého píšeš: kde
+  diakritika není, tam ji nezaváděj; kde už je, přepisovat ji není úkol
+  téhle vlny. (Plán a spec diakritiku mají, ty jsou dokumentace.)
 - **Každý test jmenuje mutanta, kterého zabíjí.** Domácí pravidlo z vlny 3.
   Docstring testu má říct, které konkrétní poškození kódu ten test shodí — a
   pokud to sourozenec hlídá lépe, má se toho výslovně zříct.
@@ -714,7 +718,7 @@ _LONG_GROUP = "BGP 2001:db8:11:13::b / VELMI-DLOUHE-JMENO-ROUTING-INSTANCE.inet6
 def test_rendered_block_puts_ungrouped_rows_above_the_first_group_header():
     """Zabiji mutanta M2: renderer tiskne neseskupene radky az ZA skupinami.
 
-    Sesterský test test_ungrouped_rows_stand_before_groups ve
+    Sesterny test test_ungrouped_rows_stand_before_groups ve
     test_view.py tohohle mutanta PREZIL - poradi v datove strukture zustane
     spravne, prohodi se az sazba. Zmereno na prototypu 2026-08-03.
     """
