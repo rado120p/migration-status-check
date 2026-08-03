@@ -17,8 +17,14 @@ provedení
 ## Co vlna 6 přinesla
 
 Malá vlna: jedna změna chování, jeden chybějící test a jedna oprava
-dokumentace. Tři commity vlny: `7a73848` (kód), `6fb3ca5` (test),
-`7120a75` (dokumentace), plus tenhle dokument.
+dokumentace. Obsah vlny nese rozsah `09fca25..HEAD` (spec i plán jsou ve
+výchozím bodě větve, ne v jejím obsahu): tři commity úloh 1–3 — `7a73848`
+(kód), `6fb3ca5` (test), `7120a75` (dokumentace) — a zbytek je tenhle
+dokument a jeho opravy. Absolutní číslo tu schválně nestojí: uzavírací úloha
+si vlastní review opravovala (rozpad statusů `4dcbe86`→`f88492e`, upřesnění
+formulací `9cbf24c`, oprava po review větve dál), takže každý napsaný součet
+by zestárnul dřív, než ho někdo přečte. Přesný počet dá
+`git log --oneline 09fca25..HEAD | wc -l`.
 
 - **AR-43** — `baseline.get("active", True)` ve
   `StaticRouteStatusCheck._finding` (`migration_validator/checks/routes.py`)
@@ -43,8 +49,10 @@ cd /home/rado/Desktop/scripts/migration-status-check
 diff mx_parser.py evo_parser.py | wc -l    # 146
 ```
 
-Obě čísla jsou změřená v této úloze nad finálním stavem větve (`7120a75`) a
-obě odpovídají tomu, co plán čekal.
+Obě čísla jsou změřená v této úloze nad commitem `7120a75`, tedy nad stavem
+po poslední úloze, která sáhla na kód a testy — všechno další na větvi je
+tenhle dokument, takže čísla platí i pro její špičku. Obě odpovídají tomu,
+co plán čekal.
 
 **Ostrý report ze společných fixtures** (`tests/fixtures/172.20.20.4.yml` /
 `.5.yml`) se vyrenderuje takhle — postup je tu napsaný celý schválně, ne
@@ -65,8 +73,10 @@ odkazem (viz „Co vyšlo jinak", bod 1):
 ## Co vyšlo jinak, než plán čekal
 
 **Na úrovni jednotlivých úloh žádná odchylka nebyla.** Všechny tři reporty
-uzavírají sekci „Concerns" slovem „None" a měření v nich sedí s předpovědí
-briefů řádek po řádku: AR-43 dalo 635 = 633 + 2 nové testy bez ripple,
+uzavírají závěrečnou sekci o obavách negativně — úlohy 1 a 2 anglicky
+(`## Concerns` / „None"), úloha 3 česky (`## Obavy` / „Žádné.") — a měření
+v nich sedí s předpovědí briefů řádek po řádku: AR-43 dalo 635 = 633 + 2
+nové testy bez ripple,
 oba mutanti shodili přesně předpovězené testy; AR-44 dalo 636 a jeho mutant
 předpovězené tři testy; AR-45 je čistě textová oprava dvou souborů. To je
 samo o sobě měření, ne mlčení — vlna byla malá a předpovězená správně.
@@ -77,8 +87,10 @@ Odchylky, které vznikly, jsou na úrovni celé vlny, ne úloh:
 
 Roadmapa vlny 5 vede postup na vyrenderování ostrého reportu odkazem na
 `.superpowers/sdd/2026-08-03-vlna5-report-skupiny-a-nezarazeno/task-8-brief.md`.
-Změřeno 2026‑08‑03: **ten soubor ani ten adresář neexistují.** Artefakty
-vlny 5 v repu nejsou.
+Změřeno 2026‑08‑03: **ten soubor ani ten adresář nejsou v pracovním
+stromu.** Netýká se to gitu — `.superpowers/` je v `.gitignore` (řádek 8),
+takže tyhle artefakty nejsou verzované u žádné vlny; ten odkaz stál od
+začátku na souboru, který existuje jen lokálně a jen dokud ho někdo nesmaže.
 
 Dvě upřesnění, obě změřená:
 
@@ -186,8 +198,10 @@ Beze změny — pět kosmetických bodů (viz roadmapa vlny 4, „Co zbývá" bo
 ### 7. Sdílený syntetický pomocník dává IPv6 peerům skupinu `inet.0`
 
 Beze změny z vlny 5. Na obou fixtures nese každý BGP peer, IPv4 i IPv6,
-countery `BGP {peer} / inet.0`; u IPv6 peerů to má být `inet6.0`. Zdroj
-**není** `migration_validator/checks/bgp.py`, ale `tests/conftest.py:100-109`
+countery `BGP {peer} / inet.0` — u IPv6 peerů to má být `inet6.0`, jak
+správně dělá sousední skupina statických rout ve stejné sekci. Zdroj
+**není** `migration_validator/checks/bgp.py` (`_prefix_finding` bere
+`rib_name` beze změny z dat, která dostane), ale `tests/conftest.py:100-109`
 (`_facts_for`), který každému peerovi bez ohledu na rodinu syntetizuje
 `"ribs": {"inet.0": {...}}`. Countery jsou navíc uniformně `14/14/14/3` —
 sdílené fixtures nikdy nemodelovaly RIB podle rodiny ani reálné hodnoty per
@@ -200,8 +214,14 @@ Beze změny z vlny 5. Peer se dvěma RIB, který dával osm nerozlišitelných
 skupina má právě jednoho peera a jednu RIB. Scénář je ověřený jen
 jednotkovými testy (`CONFIGURED_TWO_RIBS` / `_installed_two_ribs()` v
 `test_routes.py`, `test_bgp_group_carries_peer_and_rib` v `test_bgp.py`).
-Vlna 6 přidala do stejné kategorie svůj vlastní případ — viz „Co vyšlo
-jinak", bod 2.
+**Až se fixtures příště regenerují nebo doplní o druhou RIB u některého
+peera, stojí za to si ten blok znovu přečíst očima** — vlna 5 to nemohla a
+vlna 6 taky ne, protože takový blok na dnešních datech pořád neexistuje.
+
+Vlna 6 přidala do stejné kategorie svůj vlastní, **jiný** případ, s vlastní
+spouštěcí podmínkou (routa bez klíče `active`, ne druhá RIB u peera) — viz
+„Co vyšlo jinak", bod 2. Oba body čekají na jiné doplnění fixtures a zavírají
+se nezávisle.
 
 ### 9. Peer je v popisku `BGP status` bezpodmínečně
 
@@ -239,10 +259,10 @@ zbyla jedna nezakrytá díra. V téhle vlně navíc vyvrátilo tvrzení briefu o
 `ls -d .superpowers/sdd/*/` (viz „Co vyšlo jinak", bod 1).
 
 **„Test, který hledá řetězec kdekoliv ve výstupu, neměří sekci — měří
-výstup."** Přeneseno, ale v téhle vlně **se neuplatnilo**: oba nové testy
-(úloha 1 i 2) tvrdí nad objekty — `Outcome`, `Status`, `message` konkrétního
-findingu — ne nad vykresleným textem, takže situace, na kterou pravidlo míří,
-vůbec nenastala. Platí dál pro reportovou vrstvu.
+výstup."** Přeneseno, ale v téhle vlně **se neuplatnilo**: všechny tři nové
+testy (dva z úlohy 1, jeden z úlohy 2) tvrdí nad objekty — `Outcome`,
+`Status`, `message` konkrétního findingu — ne nad vykresleným textem, takže
+situace, na kterou pravidlo míří, vůbec nenastala. Platí dál pro reportovou vrstvu.
 
 ### Čtvrté, z plánu vlny 6
 
