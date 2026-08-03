@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from conftest import DUAL_RIB_PEER
 from migration_validator import api
 from migration_validator.models.result import Status
 from migration_validator.reporting.json_report import to_json
@@ -246,3 +247,59 @@ def test_render_after_filter_still_shows_unmatched_section(synthetic_snapshot):
         for item in filtered.unmatched[side]
     }
     assert any(label in rendered for label in unmatched_labels)
+
+
+def _prefix_count_checks(result):
+    """Vsechny vysledky checku bgp_prefix_counts napric scopy.
+
+    Vraci dvojice (group, rib). SKIP vysledky bez details se vypousti -
+    nesou (None, None) a o jmenu RIB netvrdi nic.
+    """
+    return {
+        (check.group, check.details.get("rib"))
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "bgp_prefix_counts" and check.details.get("rib")
+    }
+
+
+def test_ipv6_peers_carry_inet6_rib(synthetic_snapshot):
+    """Sdilene fixtures musi u IPv6 peera hlasit inet6.0, ne inet.0.
+
+    Zabiji mutanta: `rib_name` napevno na "inet.0" v `_prefix_finding`
+    (migration_validator/checks/bgp.py). S nim by kazdy peer bez ohledu na
+    rodinu hlasil inet.0 a report by tvrdil neco, co na zarizeni neplati.
+
+    Test tvrdi nad objekty (group, details["rib"]), ne nad vykreslenym
+    textem - hledani retezce kdekoliv ve vystupu by nemerilo sekci.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    ipv6_ribs = {
+        rib for group, rib in _prefix_count_checks(result) if ":" in group
+    }
+    assert ipv6_ribs, "fixture nema zadneho IPv6 BGP peera k overeni"
+    assert ipv6_ribs == {"inet6.0"}
+
+
+def test_dual_rib_peer_yields_two_distinguishable_blocks(synthetic_snapshot):
+    """Motivujici scenar AR-36 musi byt na sdilenych fixtures k videni.
+
+    Zabiji tehoz mutanta: `rib_name` napevno na "inet.0". S nim by obe RIB
+    tehoz peera splynuly do jedine skupiny a osm nerozlisitelnych radku,
+    kvuli kterym vlna 5 report prepsala, by se vratilo.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    ribs = {
+        rib
+        for group, rib in _prefix_count_checks(result)
+        if group.startswith(f"BGP {DUAL_RIB_PEER} / ")
+    }
+    assert ribs == {"inet.0", "inet6.0"}
