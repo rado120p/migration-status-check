@@ -22,6 +22,11 @@ každém měření čistý.
 |---|---|
 | v6 peer dostane `inet6.0` (bod 7) | 636 passed, **0 ripple** |
 | každý peer dostane druhou RIB (bod 8) | 636 passed, **0 ripple** |
+| **obojí dohromady, v podobě, kterou spec předepisuje** (jeden peer, druhá RIB s odlišnými countery) | 636 passed, **0 ripple** |
+
+Třetí řádek je podstatný: první dvě měření běžela s countery `14/14/14/3` v
+obou RIB, ale spec předepisuje odlišná čísla. Doměřeno zvlášť, aby ripple
+odpovídal tomu, co se skutečně nasadí, a ne přibližné variantě.
 
 Nulový ripple je podle pravidla vlny 6 **nález, ne potvrzení**, a tenhle
 konkrétní nález zní: **jméno RIB u BGP peera dnes neasertuje žádný test.**
@@ -36,7 +41,7 @@ se objeví ve vyrenderovaném reportu. To bylo ověřeno zvlášť (postup viz
  PASS | active-prefix-count               : 14                  |
    ...
    -- BGP 152.11.13.2 / inet6.0
- PASS | active-prefix-count               : 14                  |
+ PASS | active-prefix-count               : 5                   |
 ```
 
 Zároveň bylo očima ověřeno, že v6 peer `2001:abcd:11:13::b` sedí ve **vlastní
@@ -83,31 +88,41 @@ zmiňuje jako známý fakt, ale žádný otevřený bod je nežádá opravit;
 rozrůznění counterů napříč peery je samostatná položka pro pozdější vlnu.
 Nová `inet6.0` RIB u `DUAL_RIB_PEER` **vlastní čísla dostane** — jsou to nově
 přidávaná data uvnitř bodu 8 a bez nich by se dva bloky téhož peera lišily
-jen hlavičkou.
+jen hlavičkou. Konkrétní hodnoty
+(`received 6 / accepted 5 / advertised 2 / active 5 / suppressed 1`) jsou
+libovolné v tom smyslu, že nic neměří; podstatné je, že se liší od
+`14/14/14/3` a že `accepted < received`, takže na řádcích jde vidět, že to
+nejsou tytéž countery zkopírované podruhé. Ověřeno renderem — viz měření výš.
 
 ### Bod 11 — `migration_validator/checks/routes.py:194`
 
 `if was_active:` → `if was_active is True:`, symetricky s existujícím
 `was_active is False` o pár řádků výš.
 
-Čtyři větve `StaticRouteStatusCheck._finding` dnes dopadnou takhle:
+Chování všech větví bylo **změřeno** přímým voláním
+`StaticRouteStatusCheck().run(...)` nad baseline s podstrčenou hodnotou
+`active` — před změnou, po ní i pod mutantem:
 
-| `was_active` | výsledek dnes | správně? |
-|---|---|---|
-| `True` | FAIL | ano |
-| `False` | OK | ano |
-| klíč chybí (`None`) | WARN „baseline aktivitu neuvádí" | ano |
-| bez baseline | WARN | ano |
-| `0` | WARN „baseline aktivitu **neuvádí**" | ne — hláška; `0` neaktivitu uvádí |
-| `"false"` | **FAIL** | ne — závažnost; neprázdný řetězec je pravdivý |
+| `was_active` | dnes | po `is True` | pod mutantem `is not False` |
+|---|---|---|---|
+| `True` | BROKEN | BROKEN | BROKEN |
+| `False` | OK | OK | OK |
+| klíč chybí (`None`) | DEGRADED | DEGRADED | DEGRADED |
+| `0` | DEGRADED | DEGRADED | **BROKEN** |
+| `1` | BROKEN | DEGRADED | BROKEN |
+| `"false"` | **BROKEN** | DEGRADED | BROKEN |
+| `""` | DEGRADED | DEGRADED | **BROKEN** |
 
-Jsou to dvě různé vady. `"false"` má špatnou **závažnost** — eskaluje
-nejednoznačnost na FAIL, což je přesně to, co pravidlo R-2 zakazuje. `0` má
-špatnou **hlášku**; závažnost má správnou (WARN) už dneska.
+Z toho plynou tři fakta, která spec drží jako změřená, ne odvozená:
 
-Změna na `is True` zavírá tu první: `"false"` propadne na větev `elif
-baseline:` a skončí jako DEGRADED. Vedlejším důsledkem přestane být FAIL i
-`1` — konzistentní s R-2.
+1. **`"false"` je jediná vada závažnosti** — eskaluje nejednoznačnost na
+   FAIL, což je přesně to, co pravidlo R-2 zakazuje. Změna na `is True` ji
+   zavírá. Vedlejším důsledkem přestane být FAIL i `1`.
+2. **`0` má špatnou hlášku, a tahle vlna ji nemění.** DEGRADED dostane před
+   změnou i po ní; větev `elif baseline:` mu přiřkne „baseline aktivitu
+   neuvádí", ačkoliv `0` neaktivitu uvádí.
+3. **Zpřísnění nezmění chování žádné hodnoty, která dnes reálně nastane** —
+   `True` i `False` procházejí beze změny.
 
 **Hláška u `0` se v téhle vlně nemění. Je to vědomé rozhodnutí, ne
 opomenutí.** Opravit ji by znamenalo rozšířit i větev `was_active is False`
@@ -132,18 +147,36 @@ Findingy `bgp_prefix_counts` nesou `group = f"BGP {peer} / {rib_name}"` a
 Pravidlo *„test, který hledá řetězec kdekoliv ve výstupu, neměří sekci —
 měří výstup"* se tedy v téhle vlně neuplatní; přeneseno pro reportovou vrstvu.
 
-| test | mutant, který ho shodí | červený před opravou? |
-|---|---|---|
-| v6 peer nese `inet6.0`, ne `inet.0` | `_ribs_for` vrátí `inet.0` vždy | ne |
-| `DUAL_RIB_PEER` dá dva findingy s různým `rib` | odebrání druhé RIB | ne |
-| `{"active": "false"}` → `DEGRADED` | návrat `is True` → `if was_active:` | **ano** |
-| `{"active": 0}` → `DEGRADED`, ne FAIL | týž mutant | ne |
+| # | test | soubor | mutant, který ho shodí | červený před opravou? |
+|---|---|---|---|---|
+| 1 | v6 peer nese `inet6.0`, ne `inet.0` | `tests/test_end_to_end.py` | `_prefix_finding` v `checks/bgp.py` má `rib_name` napevno na `"inet.0"` | ne |
+| 2 | `DUAL_RIB_PEER` dá dva findingy s různým `details["rib"]` | `tests/test_end_to_end.py` | týž | ne |
+| 3 | `{"active": "false"}` → `DEGRADED` | `tests/checks/test_routes.py` | návrat `is True` → `if was_active:` | **ano** |
+| 4 | `{"active": 0}` → `DEGRADED`, ne FAIL | `tests/checks/test_routes.py` | `if was_active is not False:` | ne |
+
+**Mutanti u testů 1 a 2 míří schválně do produkčního kódu, ne do
+`conftest.py`.** Mutant, který mění týž generátor fixtures, proti kterému
+test asertuje, neprokazuje nic — test by spadl proto, že mu někdo smazal
+vstup, ne proto, že hlídá chování. Cíl je proto
+`migration_validator/checks/bgp.py`, `_prefix_finding` (řádky ~188 a ~194,
+kde se z `rib_name` staví `group` a `details["rib"]`): napevno nastavené
+`inet.0` shodí oba nové testy a doloží, že skutečně chrání produkční
+chování. Úloha 1 je přitom celá test-only, takže podle pravidla 6 níž **tohohle
+mutanta musí změřit někdo mimo review té úlohy** — produkční soubor v jejím
+diffu z definice nebude.
+
+**Mutant u testu 4 není návrat změny.** Změřeno: `if was_active:` i
+`if was_active is True:` dají u `{"active": 0}` shodně DEGRADED, takže návrat
+změny ten test nezabije. Zabije ho až blízký překlep vlastní opravy —
+`is not False` — pod kterým `0` skončí jako BROKEN. Test 4 tedy nechrání
+změnu samotnou, ale její okolí; to je legitimní důvod ho napsat, a spec ho
+takhle pojmenovává, aby nikdo netvrdil víc, než co měření unese.
 
 Tři ze čtyř testů připínají chování, které po své změně už platí — proto
 projdou napoprvé a nemají červenou fázi. To je totéž jako u AR-44 ve vlně 6 a
 zapisuje se to předem, aby se to nemuselo vysvětlovat zpětně. Červený je
-jediný test — `{"active": "false"}` — a jeho červená fáze se doloží vlepeným
-výstupem pytestu, ne prózou.
+jediný test — `{"active": "false"}`, dnes BROKEN — a jeho červená fáze se
+doloží vlepeným výstupem pytestu, ne prózou.
 
 Očekávaná sada: **636 + 4 = 640**, bez ripple na existující testy. Pokud
 ripple nastane, je to nález a měření má přednost před tímhle odhadem.
