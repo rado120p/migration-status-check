@@ -742,3 +742,26 @@ def test_deactivated_service_shows_the_reason_in_the_report():
         "duvod deaktivace se do textoveho reportu nedostal - operator vidi "
         "SKIP bez vysvetleni"
     )
+
+
+def test_group_reaches_the_json_report():
+    """Zabiji mutanta, ktery `group` do to_dict() nezapise.
+
+    Strojovy vystup ma nest tutez informaci jako text. Sourozenec
+    test_group_travels_from_finding_to_check_result hlida cestu k
+    CheckResultu, tenhle az serializaci.
+    """
+    result = _legacy_result()
+    result.scopes[0].checks[0].group = "BGP 198.11.13.2 / inet.0"
+    payload = json.loads(to_json(result))
+    assert payload["scopes"][0]["checks"][0]["group"] == "BGP 198.11.13.2 / inet.0"
+
+
+def test_json_report_omits_group_when_there_is_none():
+    """Zabiji mutanta, ktery `group` zapise vzdy, i kdyz je None.
+
+    Nefiltrovany beh bez skupin ma zustat presne tim tvarem, ktery uz cte
+    okoli - stejne pravidlo, jake plati pro `filtered` a pro `details`.
+    """
+    payload = json.loads(to_json(_legacy_result()))
+    assert "group" not in payload["scopes"][0]["checks"][0]

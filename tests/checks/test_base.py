@@ -291,3 +291,26 @@ def test_live_scope_still_runs_its_checks():
 
     assert results
     assert all(result.status is Status.PASS for result in results)
+
+
+def test_group_travels_from_finding_to_check_result():
+    """Zabiji mutanta, ktery v run_check() `group=finding.group` vypusti.
+
+    Bez tohohle by skupina koncila u Findingu a renderer by ji nikdy
+    nevidel - vsechny radky by spadly mezi neseskupene a nadpisy by nikdy
+    nevznikly.
+    """
+
+    class _Grouped(Check):
+        id = "grouped_probe"
+        title = "Zkouska skupiny"
+        label = "Zkouska"
+
+        def run(self, ctx):
+            return [
+                Finding(Outcome.OK, "s", label="a", group="Skupina"),
+                Finding(Outcome.OK, "b", label="b"),
+            ]
+
+    results = run_check(_Grouped(), _ctx())
+    assert [r.group for r in results] == ["Skupina", None]

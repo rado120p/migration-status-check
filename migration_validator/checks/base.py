@@ -178,6 +178,7 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
             # checku - a to je presne ten radek, ktery se do reportu nemel
             # nikdy dostat.
             label=finding.label or check.label,
+            group=finding.group,
             family=finding.family,
             value=finding.value,
             baseline_value=finding.baseline_value,
