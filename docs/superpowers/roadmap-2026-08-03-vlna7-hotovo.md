@@ -35,7 +35,7 @@ a `1a1fe41` (zpřísnění) — a zbytek je tenhle dokument.
   baseline".
 - **Bod 11** — `if was_active:` ve `StaticRouteStatusCheck._finding`
   (`migration_validator/checks/routes.py`) je nově `if was_active is True:`,
-  symetricky s existujícím `was_active is False` o dvacet řádků výš. Hodnota
+  symetricky s existujícím `was_active is False` o dvacet sedm řádků výš. Hodnota
   `"false"` je neprázdný řetězec, tedy pravdivá, a proto dosud eskalovala
   nejednoznačnost na tvrdý FAIL — přesně to, co pravidlo R-2 zakazuje. **Je
   to zpřísnění, ne oprava vady:** `collectors/routes.py:84` vyrábí skutečný
@@ -64,7 +64,7 @@ odkazem, protože roadmapa vlny 5 ho vedla odkazem na soubor pod
 2. V testu si vyrob dvojici snapshotů
    `synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")` a
    `synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")` (konstanty
-   `DEVICE_4`/`DEVICE_5` viz `tests/test_end_to_end.py:11-13`), prožeň je
+   `DEVICE_4`/`DEVICE_5` viz `tests/test_end_to_end.py:12-14`), prožeň je
    `api.evaluate(new, baseline=old, now=NOW)` a výsledek předej
    `migration_validator.reporting.text_report.render(result, detail=True)`.
 3. Výstup vytiskni a spusť `.venv/bin/python -m pytest -o addopts="" -s -q
@@ -223,12 +223,12 @@ nechala být: rozrůznění counterů nežádal žádný otevřený nález a byl
 šíření rozsahu. Kdyby se to jednou udělalo, vedlejším přínosem by bylo, že
 záměna peerů v kódu by byla na reportu vidět.
 
-### 13. Komentář ve `checks/routes.py` splývá se starším blokem
+### 13. ~~Komentář ve `checks/routes.py` splývá se starším blokem~~
 
-Nový bod, zapsaný review úlohy 2, neopravovaný. Nový šestiřádkový komentář
-navazuje bez prázdného řádku na starší osmiřádkový, takže zdůvodnění DEGRADED
-větve vizuálně přetéká na řádek, který vede k BROKEN. Oprava je jeden prázdný
-řádek; patří do vlny, která na ten soubor sáhne příště.
+**Vyřízeno** opravnou vlnou po závěrečném review. Mezi starší osmiřádkový
+komentář (zdůvodnění DEGRADED větve) a nový šestiřádkový komentář (zdůvodnění
+`is True`, ne pravdivostního testu) přibyl prázdný řádek, takže zdůvodnění
+DEGRADED větve už vizuálně nepřetéká na řádek, který vede k BROKEN.
 
 ---
 

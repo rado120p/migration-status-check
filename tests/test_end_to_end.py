@@ -291,15 +291,42 @@ def test_dual_rib_peer_yields_two_distinguishable_blocks(synthetic_snapshot):
     Zabiji tehoz mutanta: `rib_name` napevno na "inet.0". S nim by obe RIB
     tehoz peera splynuly do jedine skupiny a osm nerozlisitelnych radku,
     kvuli kterym vlna 5 report prepsala, by se vratilo.
+
+    Zabiji i mutanta `_SECOND_RIB_COUNTERS = dict(_RIB_COUNTERS)` v
+    `tests/conftest.py`: samotna mnozina jmen RIB {"inet.0", "inet6.0"}
+    je jen hlavicka. Bez porovnani hodnot by dva bloky tehoz peera
+    mohly nest stejne countery a byly by rozlisitelne jen hlavickou -
+    presne to, co komentar nad `_SECOND_RIB_COUNTERS` popisuje jako vadu.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
+    dual_rib_checks = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "bgp_prefix_counts"
+        and check.group
+        and check.group.startswith(f"BGP {DUAL_RIB_PEER} / ")
+    ]
+
     ribs = {
-        rib
-        for group, rib in _prefix_count_checks(result)
-        if group.startswith(f"BGP {DUAL_RIB_PEER} / ")
+        check.details.get("rib")
+        for check in dual_rib_checks
+        if check.details.get("rib")
     }
     assert ribs == {"inet.0", "inet6.0"}
+
+    values_by_rib = {
+        rib: {
+            (check.label, check.value)
+            for check in dual_rib_checks
+            if check.details.get("rib") == rib
+        }
+        for rib in ribs
+    }
+    assert values_by_rib["inet.0"] != values_by_rib["inet6.0"], (
+        "oba bloky DUAL_RIB_PEER nesou stejne countery - lisi se jen hlavickou"
+    )

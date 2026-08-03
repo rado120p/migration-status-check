@@ -68,7 +68,7 @@ _RIB_COUNTERS = {
     "suppressed": 0,
 }
 
-# Druha RIB ma vlastni cisla, jinak by se dva bloky teho peera lisily jen
+# Druha RIB ma vlastni cisla, jinak by se dva bloky tehoz peera lisily jen
 # hlavickou. Nic nemeri; podstatne je, ze se lisi od 14/14/14/3 a ze
 # accepted < received.
 _SECOND_RIB_COUNTERS = {
@@ -90,7 +90,8 @@ def _ribs_for(peer: str, family: int) -> dict:
     primary = "inet6.0" if family == 6 else "inet.0"
     ribs = {primary: dict(_RIB_COUNTERS)}
     if peer == DUAL_RIB_PEER:
-        ribs["inet6.0"] = dict(_SECOND_RIB_COUNTERS)
+        secondary = "inet.0" if primary == "inet6.0" else "inet6.0"
+        ribs.setdefault(secondary, dict(_SECOND_RIB_COUNTERS))
     return ribs
 
 

@@ -256,7 +256,7 @@ mezitím zmizel:
 2. V testu vyrob dvojici snapshotů
    `synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")` a
    `synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")` (konstanty
-   viz `tests/test_end_to_end.py:11-13`), prožeň je
+   viz `tests/test_end_to_end.py:12-14`), prožeň je
    `api.evaluate(new, baseline=old, now=NOW)` a výsledek předej
    `migration_validator.reporting.text_report.render(result, detail=True)`.
 3. Výstup vytiskni a spusť
