@@ -151,7 +151,33 @@ blok, který končí zdůvodněním DEGRADED větve. Spojený čtrnáctiřádkov
 pak vizuálně působí, jako by se to zdůvodnění vztahovalo i na následující
 řádek `if was_active is True:`, který ale vede k BROKEN. Text komentáře
 implementer převzal doslova ze zadání, takže vada je **v předpisu plánu**, ne
-v jeho úsudku. Nese se dál jako bod 13 v „Co zbývá".
+v jeho úsudku. Nese se dál jako bod 13 v „Co zbývá" — **vyřídila to opravná
+vlna po závěrečném review**, viz bod 6 níž.
+
+### 6. Závěrečné review našlo test, který netvrdil to, co má v názvu
+
+Nález, který per-úlohová review vidět nemohla, a proto se whole-branch review
+dělá. `test_dual_rib_peer_yields_two_distinguishable_blocks` tvrdil jen
+množinu **jmen** RIB — tedy hlavičku — ačkoliv komentář nad
+`_SECOND_RIB_COUNTERS` výslovně říká, že odlišná čísla existují proto, aby se
+dva bloky téhož peera nelišily jen hlavičkou.
+
+Reviewer to **změřil**, nevydedukoval: nahradil `_SECOND_RIB_COUNTERS` kopií
+`_RIB_COUNTERS` a sada zůstala na `640 passed`. Odlišnost counterů tedy
+nehlídal nikdo — a mutant, kterého test podle svého docstringu měl zabíjet,
+byl jiný než ten, kterému skutečně podléhal.
+
+Opravná vlna po závěrečném review to zavřela jedním commitem (`03e1165`)
+spolu se čtyřmi drobnostmi: test teď countery porovnává a jmenuje nového
+mutanta, `_ribs_for` už nemůže druhou RIB přepsat přes primární, komentář ve
+`checks/routes.py` má oddělovací prázdný řádek (bod 13 zavřen) a **v tomhle
+dokumentu i ve specu se opravil zestaralý odkaz na řádky
+`tests/test_end_to_end.py:11-13` na `:12-14`** — táž vada, kterou vlna vede
+jako svůj hlavní nález, tentokrát ve vlastní roadmapě.
+
+Zaparkovaný minor „oba nové testy míří na téhož mutanta" závěrečné review
+naopak **vyvrátilo měřením**: užší mutant `sorted(subject_ribs)[:1]` shodí
+jen jeden z nich, takže testy rozlišitelné jsou.
 
 ---
 
@@ -249,6 +275,15 @@ zapsáním mutanta do plánu se pouští; „je to zjevně ten správný" je odh
 Zaplaceno psaním specu vlny 7 (viz „Co vyšlo jinak", bod 2), kde návrh
 tvrdil, že návrat změny shodí test na `{"active": 0}` — neshodí, protože ta
 hodnota dává DEGRADED před změnou i po ní.
+
+**Test, jehož název slibuje víc než jeho aserce, je slabší, než jak vypadá —
+a pozná se to jen mutantem na tu nedotvrzenou část.**
+`test_dual_rib_peer_yields_two_distinguishable_blocks` sliboval
+rozlišitelnost bloků, ale tvrdil jen jejich jména; odlišnost counterů, kvůli
+které ta data vůbec vznikla, nehlídal nikdo. Recept je pustit mutanta právě
+na tu vlastnost, kterou název slibuje — tady `_SECOND_RIB_COUNTERS =
+dict(_RIB_COUNTERS)`. Zaplaceno závěrečným review (viz „Co vyšlo jinak",
+bod 6); per-úlohová review to vidět nemohla.
 
 **Mutant nesmí mířit do téhož souboru, proti kterému test asertuje.** Když
 test tvrdí něco o datech z generátoru fixtures, mutant patří do produkčního
