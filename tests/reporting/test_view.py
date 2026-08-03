@@ -3,7 +3,8 @@ from migration_validator.reporting.view import build_view, change_text
 
 
 def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
-           mode="state", baseline_value=None, delta=None, message="msg", address=None):
+           mode="state", baseline_value=None, delta=None, message="msg", address=None,
+           group=None):
     return CheckResult(
         id=check_id,
         mode=mode,
@@ -11,6 +12,7 @@ def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
         severity=Severity.ADVISORY,
         message=message,
         label=label,
+        group=group,
         family=family,
         value=value,
         baseline_value=baseline_value,
@@ -247,3 +249,71 @@ def test_no_baseline_at_all_prints_nothing():
     ).sections[0].rows[0]
 
     assert change_text(row, has_baseline=False) == ""
+
+
+def test_ungrouped_rows_stand_before_groups():
+    """Zabiji dva mutanty najednou.
+
+    (1) `groups.sort(key=lambda g: g.title)` - skupiny by se seradily
+    abecedne misto poradim vyskytu, takze 'Skupina A' by predbehla
+    'Skupinu B'. (2) neseskupene radky pripojene do posledni skupiny misto
+    do `section.rows`.
+
+    NEhlida to, co se opravdu VYTISKNE - poradi v datove strukture umi byt
+    spravne a renderer ho presto prohodi. To meri sourozenec
+    test_rendered_block_puts_ungrouped_rows_above_the_first_group_header
+    v tests/reporting/test_text_report.py; overeno mutantem M2, ktery
+    tenhle test prezil.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("a", family=4, label="b1", group="Skupina B"),
+                _check("b", family=4, label="volny"),
+                _check("c", family=4, label="a1", group="Skupina A"),
+                _check("d", family=4, label="b2", group="Skupina B"),
+            ]
+        )
+    )
+    section = view.sections[0]
+    assert [row.label for row in section.rows] == ["volny"]
+    assert [(g.title, [r.label for r in g.rows]) for g in section.groups] == [
+        ("Skupina B", ["b1", "b2"]),
+        ("Skupina A", ["a1"]),
+    ]
+
+
+def test_all_rows_returns_grouped_rows_too():
+    """Zabiji mutanta `return list(self.rows)` v all_rows().
+
+    Sirky sloupcu se pocitaji prave z all_rows(); kdyby zapomnela radky ve
+    skupinach, dlouha hodnota uvnitr skupiny by prerostla ramec bloku.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("a", family=4, label="volny"),
+                _check("b", family=4, label="ve skupine", group="S"),
+            ]
+        )
+    )
+    assert [row.label for row in view.sections[0].all_rows()] == ["volny", "ve skupine"]
+
+
+def test_groups_do_not_cross_family_sections():
+    """Zabiji mutanta, ktery skupiny sbira globalne misto po sekcich.
+
+    Tataz skupina v IPv4 i IPv6 sekci musi dat dva samostatne nadpisy -
+    jinak by radky jedne rodiny spadly pod nadpis v sekci te druhe.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("a", family=4, label="v4", group="Staticke routy"),
+                _check("b", family=6, label="v6", group="Staticke routy"),
+            ]
+        )
+    )
+    families = {section.family: section for section in view.sections}
+    assert [r.label for r in families[4].groups[0].rows] == ["v4"]
+    assert [r.label for r in families[6].groups[0].rows] == ["v6"]
