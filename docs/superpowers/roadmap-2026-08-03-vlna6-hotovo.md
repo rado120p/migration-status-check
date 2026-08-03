@@ -17,8 +17,8 @@ provedení
 ## Co vlna 6 přinesla
 
 Malá vlna: jedna změna chování, jeden chybějící test a jedna oprava
-dokumentace. Tři implementační commity (`7a73848`, `6fb3ca5`, `7120a75`),
-plus tenhle dokument.
+dokumentace. Tři commity vlny: `7a73848` (kód), `6fb3ca5` (test),
+`7120a75` (dokumentace), plus tenhle dokument.
 
 - **AR-43** — `baseline.get("active", True)` ve
   `StaticRouteStatusCheck._finding` (`migration_validator/checks/routes.py`)
@@ -138,7 +138,7 @@ stojí za to si ten blok přečíst očima.
   po AR-44 mu podléhá i nový test — dohromady tři. Není to nepravda (text
   nikde netvrdí, že je výčet úplný), ale podceňuje to ochranu, která dneska
   existuje. **Zapsáno, ne opraveno** — diff téhle úlohy smí obsahovat jen
-  tenhle soubor. Nese se dál jako bod 6 v „Co zbývá".
+  tenhle soubor. Nese se dál jako bod 10 v „Co zbývá".
 
 ### 4. Mutanta úlohy 2 musel přeměřit controller
 
@@ -183,13 +183,6 @@ doplnila tahle vlna jako
 Beze změny — pět kosmetických bodů (viz roadmapa vlny 4, „Co zbývá" bod 6),
 žádná neblokovala merge tehdy ani teď.
 
-### 6. Opravený bod 4 v roadmapě vlny 5 podceňuje počet chránících testů
-
-Text z AR-45 jmenuje dva testy, které mutant `engine.py:145` shodí; po AR-44
-jsou tři. Nepravdivé to není (výčet se nikde neprohlašuje za úplný), jen
-slabší, než jaká je skutečnost. Neopraveno záměrně: diff uzavírací úlohy smí
-obsahovat jen tenhle dokument. Jednořádková oprava pro vlnu 7.
-
 ### 7. Sdílený syntetický pomocník dává IPv6 peerům skupinu `inet.0`
 
 Beze změny z vlny 5. Na obou fixtures nese každý BGP peer, IPv4 i IPv6,
@@ -217,6 +210,16 @@ opomenutí — ale na ostrém výstupu je vidět, že je to redundantní tam, kd
 rodinová sekce má jen jednoho peera: `-- IPv4  152.11.13.1/30` následuje
 `BGP status (152.11.13.2)`, ačkoliv hlavička už `152.11.13.2` jako jediného
 souseda dané `/30` implikuje. Vstup pro některou z dalších vln.
+
+### 10. Opravený bod 4 v roadmapě vlny 5 podceňuje počet chránících testů
+
+Nový bod téhle vlny; číslo 10 schválně, aby se nekřížilo s bodem 6 vlny 5
+(čísla bodů se napříč roadmapami používají jako identifikátory).
+
+Text z AR-45 jmenuje dva testy, které mutant `engine.py:145` shodí; po AR-44
+jsou tři. Nepravdivé to není (výčet se nikde neprohlašuje za úplný), jen
+slabší, než jaká je skutečnost. Neopraveno záměrně: diff uzavírací úlohy smí
+obsahovat jen tenhle dokument. Jednořádková oprava pro vlnu 7.
 
 ---
 
