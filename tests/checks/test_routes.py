@@ -419,3 +419,49 @@ def test_static_routes_from_different_ribs_share_one_group():
         "inet.0 198.62.1.0/29",
         "L3VPN-CPE13-NNI.inet6.0 2001:eeee::/64",
     }
+
+
+def _baseline_with_active(value):
+    """Baseline s podstrcenou hodnotou 'active'.
+
+    Zadna z techto hodnot dnes nenastane - collectors/routes.py:84 vyrabi
+    skutecny bool a YAML round-tripuje bool jako bool. Testy hlidaji, ze
+    R-2 plati konstrukci, ne argumentem o nedosazitelnosti.
+    """
+    routes = _installed()
+    routes["inet.0"]["198.62.1.0/29"]["active"] = value
+    return routes
+
+
+def test_nonbool_truthy_active_does_not_escalate_to_fail():
+    """Nejednoznacnost se podle R-2 na FAIL neeskaluje ani u nebool hodnot.
+
+    Zabiji mutanta: navrat `if was_active is True:` na `if was_active:`.
+    S nim je "false" jako neprazdny retezec pravdivy a check vyda BROKEN,
+    tedy tvrdy FAIL za hodnotu, ktera ve skutecnosti tvrdi opak.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _baseline_with_active("false"))
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED
+
+
+def test_falsy_nonbool_active_does_not_escalate_either():
+    """Nula neaktivitu uvadi, takze uz vubec nesmi skoncit jako FAIL.
+
+    Zabiji mutanta: `if was_active is not False:`, tedy blizky preklep
+    vlastni opravy. S nim by 0 spadla do BROKEN.
+
+    Navrat zmeny (`if was_active:`) tenhle test NEZABIJE - zmereno, 0 dava
+    DEGRADED pred zmenou i po ni. Test tedy nechrani zmenu samotnou, ale
+    jeji okoli; pojmenovava se to takhle schvalne, aby nikdo netvrdil vic,
+    nez co mereni unese.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _baseline_with_active(0))
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED

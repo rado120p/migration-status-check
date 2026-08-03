@@ -191,7 +191,14 @@ class StaticRouteStatusCheck(Check):
             # vyrabi aktualni collector), ale starsi artefakt, ktery o stavu
             # sveta mlci. Proto DEGRADED, ale s vlastni zpravou - jinak by
             # operator nepoznal, ktery z tech dvou duvodu nastal.
-            if was_active:
+
+            # Symetricky s `was_active is False` vyse: pravdivostni test by
+            # kazdou nebool hodnotu (napr. retezec "false") precetl jako
+            # "forwardovala" a eskaloval nejednoznacnost na FAIL, coz R-2
+            # zakazuje. Takova hodnota dnes nenastane - proto zprisneni, ne
+            # oprava vady: R-2 ma platit konstrukci, ne argumentem o
+            # nedosazitelnosti.
+            if was_active is True:
                 outcome = Outcome.BROKEN
                 message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
             elif baseline:

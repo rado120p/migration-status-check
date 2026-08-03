@@ -51,6 +51,50 @@ def _neighbour_for(prefix: str) -> str | None:
     return None
 
 
+# Peer, ktery jako jediny nese dve RIB. Bez nej by motivujici scenar AR-36
+# nebyl na sdilenych fixtures k videni - kazdy peer by mel prave jednu RIB
+# a blok, kvuli kteremu vlna 5 report prepsala, by se nikdy nevyrenderoval.
+# Vybrany je zamerne: 152.11.13.2 je na obou fixtures (.4 i .5), takze
+# baseline i subject nesou tutez strukturu a bgp_prefix_counts je porovna
+# misto aby hlasil "RIB neni v baseline". Je to IPv4 peer nesouci navic
+# inet6.0, tedy multiprotokolova session, ne fabulace.
+DUAL_RIB_PEER = "152.11.13.2"
+
+_RIB_COUNTERS = {
+    "received": 14,
+    "accepted": 14,
+    "advertised": 3,
+    "active": 14,
+    "suppressed": 0,
+}
+
+# Druha RIB ma vlastni cisla, jinak by se dva bloky tehoz peera lisily jen
+# hlavickou. Nic nemeri; podstatne je, ze se lisi od 14/14/14/3 a ze
+# accepted < received.
+_SECOND_RIB_COUNTERS = {
+    "received": 6,
+    "accepted": 5,
+    "advertised": 2,
+    "active": 5,
+    "suppressed": 1,
+}
+
+
+def _ribs_for(peer: str, family: int) -> dict:
+    """RIB peera podle rodiny; DUAL_RIB_PEER dostane navic druhou.
+
+    Sdilene fixtures drive davaly kazdemu peerovi inet.0 bez ohledu na
+    rodinu - u IPv6 peera to bylo v rozporu se sousedni skupinou statickych
+    rout ve stejne sekci, ktera inet6.0 pouzivala spravne.
+    """
+    primary = "inet6.0" if family == 6 else "inet.0"
+    ribs = {primary: dict(_RIB_COUNTERS)}
+    if peer == DUAL_RIB_PEER:
+        secondary = "inet.0" if primary == "inet6.0" else "inet6.0"
+        ribs.setdefault(secondary, dict(_SECOND_RIB_COUNTERS))
+    return ribs
+
+
 def _facts_for(scopes, pps: int) -> dict:
     interfaces = {}
     arp = []
@@ -97,15 +141,7 @@ def _facts_for(scopes, pps: int) -> dict:
                     if scope.selectors.routing_instances
                     else None
                 ),
-                "ribs": {
-                    "inet.0": {
-                        "received": 14,
-                        "accepted": 14,
-                        "advertised": 3,
-                        "active": 14,
-                        "suppressed": 0,
-                    }
-                },
+                "ribs": _ribs_for(peer, family),
             }
         # Sluzba s adresou, ale bez peeru te rodiny, by jinak zustala s
         # prazdnou ARP/ND tabulkou. Fabrikuje se proto soused odvozeny ze
