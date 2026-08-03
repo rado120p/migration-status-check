@@ -201,6 +201,12 @@ samé se říkalo o `subject`, a AR‑34c to změnil.
 celý `static_route_status` daného scopu na SKIP a zakryje PASSy sourozenců.
 Obhajitelné („nešlo doměřit"), ale je to nové chování, které spec nezvažoval.
 
+**Opraveno 2026‑08‑03:** tvrzení neplatí. `engine.py:145` SKIPy z hlasování
+odfiltruje dřív, než se hlasuje, takže scope zůstane PASS a sourozenci zakrytí
+nejsou. Změřeno ve vlně 6 — viz bod 4 v
+[`roadmap-2026-08-03-vlna5-hotovo.md`](roadmap-2026-08-03-vlna5-hotovo.md).
+Text výše se nemaže: je to zápis toho, co si vlna 4 tehdy myslela.
+
 ### 6. Drobnosti, které závěrečné review nechalo projít
 
 Vesměs kosmetika; žádná neblokovala merge.

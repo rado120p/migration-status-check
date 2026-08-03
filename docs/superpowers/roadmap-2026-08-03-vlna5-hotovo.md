@@ -198,10 +198,29 @@ Beze změny z vlny 4. Otázka pro některou z dalších vln: nemá chybějící
 `active` v baseline dávat `DEGRADED` (WARN) podle R-2, stejně jako to
 AR-34c udělalo pro `subject`?
 
-### 4. Priorita SKIP nad PASS
+### 4. Priorita SKIP nad PASS — změřeno, vada neexistuje
 
-Beze změny z vlny 4 (`models/result.py:44-48`). Jedna routa bez `active`
-stáhne celý `static_route_status` scopu na SKIP a zakryje PASSy sourozenců.
+`Status.SKIP` má v `_STATUS_RANK` (`models/result.py:44-48`) vyšší prioritu
+než `Status.PASS`, ale na status scopu se to nedostane: `engine.py:145`
+SKIPy z hlasování `Status.worst()` vyfiltruje ještě předtím, než se hlasuje.
+
+Změřeno 2026‑08‑03 sondou nad `tests/fixtures/172.20.20.4.yml`, ze které se
+routě `inet.0 198.62.1.0/29` smazal klíč `active`:
+
+    svc:INTERNET-CPE13-NNI:Internet  scope.status = PASS
+    routy = [('inet.0 198.62.1.0/29', SKIP),
+             ('inet.0 198.62.2.0/24', PASS),
+             ('inet6.0 2001:aaaa::/64', PASS)]
+
+Sourozenci zakrytí nejsou. Filtr je navíc chráněný — mutant „filtr pryč"
+shodí `test_healthy_scope_without_baseline_is_pass_not_skip` i
+`test_service_deactivated_on_both_sides_is_pass`.
+
+Zbyl z toho jeden chybějící test: ani jeden z těch dvou nechodí přes
+`static_route_status`, takže scénář, který tenhle bod popisoval, netvrdil
+nikdo. Doplnila ho vlna 6 jako AR‑44. **Pořadí v `_STATUS_RANK` se nemění** —
+přerovnat ho a zahodit filtr by byl refaktor beze změny chování, který
+přepisuje kód připnutý dvěma testy a záměrným komentářem.
 
 ### 5. Drobnosti ze závěrečného review vlny 4
 
