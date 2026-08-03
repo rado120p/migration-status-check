@@ -15,6 +15,7 @@ from typing import Any
 
 from lxml import etree
 
+from migration_validator.addressing import is_link_local, link_local_is_configured
 from migration_validator.models.scope import Scope
 
 PING_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
@@ -109,23 +110,6 @@ def subnet_fallback(
     return None
 
 
-def _is_link_local(address: str) -> bool:
-    try:
-        return ipaddress.ip_address(address).is_link_local
-    except ValueError:
-        return False
-
-
-def _link_local_configured(scope: Scope) -> bool:
-    for address in scope.selectors.local_ipv6:
-        try:
-            if ipaddress.ip_interface(address).ip.is_link_local:
-                return True
-        except ValueError:
-            continue
-    return False
-
-
 def _usable_nd(entry: dict[str, Any]) -> bool:
     """Zaznam bez MAC nebo v nedokoncenem stavu neni cil."""
     mac = (entry.get("mac") or "").strip().lower()
@@ -157,7 +141,7 @@ def resolve_targets(
             if scope.service_type == "IPVPN" and scope.selectors.routing_instances
             else None
         )
-        keep_link_local = _link_local_configured(scope)
+        keep_link_local = link_local_is_configured(scope)
 
         for family in (4, 6):
             source = source_address(scope, family)
@@ -177,13 +161,13 @@ def resolve_targets(
                     (
                         str(entry["ip"]),
                         # Link-local cil bez interface Junos odmitne (overeno).
-                        str(entry["interface"]) if _is_link_local(str(entry["ip"])) else None,
+                        str(entry["interface"]) if is_link_local(str(entry["ip"])) else None,
                     )
                     for entry in nd_entries
                     if scope.selectors.matches_interface(str(entry.get("interface", "")))
                     and entry.get("ip")
                     and _usable_nd(entry)
-                    and (keep_link_local or not _is_link_local(str(entry["ip"])))
+                    and (keep_link_local or not is_link_local(str(entry["ip"])))
                 ]
                 origin = "nd"
                 local = scope.selectors.local_ipv6
