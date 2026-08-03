@@ -91,6 +91,7 @@ class Finding:
     outcome: Outcome
     message: str
     label: str | None = None
+    group: str | None = None
     family: int | None = None
     value: str | None = None
     baseline_value: str | None = None
@@ -108,6 +109,7 @@ class CheckResult:
     severity: Severity
     message: str
     label: str | None = None
+    group: str | None = None
     family: int | None = None
     value: str | None = None
     baseline_value: str | None = None
@@ -126,6 +128,8 @@ class CheckResult:
         }
         if self.label is not None:
             payload["label"] = self.label
+        if self.group is not None:
+            payload["group"] = self.group
         for name in ("family", "value", "baseline_value", "delta"):
             attribute = getattr(self, name)
             if attribute is not None:

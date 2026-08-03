@@ -464,7 +464,8 @@ Vlastnosti:
   (`Interface admin status (<jméno>)` / `Interface operational status (<jméno>)`;
   `Interface traffic in (<jméno>)` / `Interface traffic out (<jméno>)`), ne jeden souhrnný
   na rozhraní. `bgp_prefix_counts` vrací jeden na
-  **RIB × counter** (`BGP <counter>-prefix-count`), ne souhrn napříč RIB.
+  **RIB × counter** (`label="<counter>-prefix-count"`, `group=f"BGP {peer} / {rib}"`), ne
+  souhrn napříč RIB.
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
   `summary` = agregát přes **checky**. Počty služeb si terminál dopočítá ze `scopes` — je to
   týž výpočet za celý běh i za filtrovaný výběr, takže v `summary` být nemusí.
@@ -487,9 +488,9 @@ Vlastnosti:
   selektorů se nedostane, v tabulce ji ale vidět je.
 - **`unassigned.bfd_sessions`** obsahuje session peeru, který není v žádném `bgp_neighbors` —
   typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte.
-- `unassigned` se **do textového reportu nevypisuje** — sekce `NESPAROVANO` vypisuje
-  `unmatched`, což je něco jiného. Všechny tři seznamy jsou zatím jen ve strojovém výstupu
-  (`--format json`).
+- `unassigned` se **do textového reportu vypisuje** v sekci `NEZARAZENO` (AR-39) — to je něco
+  jiného než `NESPAROVANO`, která vypisuje `unmatched`. Sekce `NEZARAZENO` se vypisuje vždy,
+  i prázdná (`(nic)`), a filtrování se na ni nevztahuje.
 - `message` je česky (bez diakritiky), konzistentně se zbytkem nástroje.
 
 ---

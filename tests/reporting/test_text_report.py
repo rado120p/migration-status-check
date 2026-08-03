@@ -742,3 +742,305 @@ def test_deactivated_service_shows_the_reason_in_the_report():
         "duvod deaktivace se do textoveho reportu nedostal - operator vidi "
         "SKIP bez vysvetleni"
     )
+
+
+def test_group_reaches_the_json_report():
+    """Zabiji mutanta, ktery `group` do to_dict() nezapise.
+
+    Strojovy vystup ma nest tutez informaci jako text. Sourozenec
+    test_group_travels_from_finding_to_check_result hlida cestu k
+    CheckResultu, tenhle az serializaci.
+    """
+    result = _legacy_result()
+    result.scopes[0].checks[0].group = "BGP 198.11.13.2 / inet.0"
+    payload = json.loads(to_json(result))
+    assert payload["scopes"][0]["checks"][0]["group"] == "BGP 198.11.13.2 / inet.0"
+
+
+def test_json_report_omits_group_when_there_is_none():
+    """Zabiji mutanta, ktery `group` zapise vzdy, i kdyz je None.
+
+    Nefiltrovany beh bez skupin ma zustat presne tim tvarem, ktery uz cte
+    okoli - stejne pravidlo, jake plati pro `filtered` a pro `details`.
+    """
+    payload = json.loads(to_json(_legacy_result()))
+    assert "group" not in payload["scopes"][0]["checks"][0]
+
+
+def _grouped_check(check_id, *, label, group=None):
+    return CheckResult(
+        id=check_id,
+        mode="state",
+        status=Status.PASS,
+        severity=Severity.ADVISORY,
+        message="msg",
+        label=label,
+        group=group,
+        family=4,
+        value="v",
+    )
+
+
+def _grouped_result(checks) -> RunResult:
+    return RunResult(
+        evaluated_at="2026-07-24T11:40:02Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration"},
+        baseline={"address": "172.20.20.4", "phase": "pre-migration"},
+        summary={
+            "pass": 1, "warn": 0, "fail": 0, "skip": 0,
+            "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0,
+        },
+        scopes=[
+            ScopeResult(
+                scope_id="svc:X:Internet",
+                key={"description": "X", "service_type": "Internet"},
+                status=Status.PASS,
+                match=MatchInfo(
+                    status="matched",
+                    baseline_interfaces=["ge-0/0/2.13"],
+                    subject_interfaces=["et-0/0/8.13"],
+                ),
+                checks=checks,
+                identity={
+                    "description": "X",
+                    "service_type": "Internet",
+                    "routing_instance": None,
+                    "interfaces": ["et-0/0/8.13"],
+                    "ipv4": ["152.11.13.1/30"],
+                    "ipv6": [],
+                    "virtual_gw_v4": [],
+                    "virtual_gw_v6": [],
+                },
+            )
+        ],
+    )
+
+
+_LONG_GROUP = "BGP 2001:db8:11:13::b / VELMI-DLOUHE-JMENO-ROUTING-INSTANCE.inet6.0"
+
+
+def test_rendered_block_puts_ungrouped_rows_above_the_first_group_header():
+    """Zabiji mutanta M2: renderer tiskne neseskupene radky az ZA skupinami.
+
+    Sesterny test test_ungrouped_rows_stand_before_groups ve
+    test_view.py tohohle mutanta PREZIL - poradi v datove strukture zustane
+    spravne, prohodi se az sazba. Zmereno na prototypu 2026-08-03.
+    """
+    result = _grouped_result(
+        [
+            _grouped_check("a", label="b1", group="Skupina B"),
+            _grouped_check("b", label="volny"),
+        ]
+    )
+    lines = render(result, detail=True).splitlines()
+    free = next(i for i, line in enumerate(lines) if "volny" in line)
+    header = next(i for i, line in enumerate(lines) if line.strip() == "-- Skupina B")
+    grouped = next(i for i, line in enumerate(lines) if "b1" in line)
+    assert free < header < grouped
+
+
+def test_long_group_title_widens_the_block_frame():
+    """Zabiji mutanta M3: nadpisy skupin vypadnou z max() ve vypoctu sirky.
+
+    Nadpis je schvalne DELSI nez cela tabulka sloupcu - s kratkym nadpisem
+    by test prosel i tehdy, kdyby se do sirky nezapocitaval, protoze ramec
+    uz je siroky z jinych duvodu. Ctvrty vyskyt tehoz tvaru chyby; tri
+    predchozi jsou popsane v komentari text_report.py:140.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group=_LONG_GROUP)])
+    lines = render(result, detail=True).splitlines()
+    frame = [line for line in lines if line and set(line) == {"="}]
+    assert frame, "blok nema ramec"
+    assert len(frame[0]) >= len(f"   -- {_LONG_GROUP}")
+
+
+def test_group_header_is_not_padded_with_dashes():
+    """Zabiji mutanta, ktery nadpis skupiny doplni pomlckami jako sekci.
+
+    Dve urovne nadpisu maji zustat rozlisitelne: sekce rodiny drzi caru pres
+    celou sirku, skupina ne.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group="S")])
+    lines = render(result, detail=True).splitlines()
+    header = next(line for line in lines if line.strip().startswith("-- S"))
+    assert header == "   -- S"
+
+
+def test_group_title_does_not_widen_the_check_column():
+    """Zabiji mutanta, ktery nadpis skupiny primicha do label_width sloupce CHECK.
+
+    Sesterny test test_long_group_title_widens_the_block_frame hlida SIRKU
+    RAMCE bloku (radek '='...), do ktere nadpis skupiny vstupovat MA (AR-38).
+    Tenhle hlida neco jineho: pozici ':' ve sloupci CHECK u datovych radku,
+    kam nadpis skupiny vstupovat NEMA - jinak by dlouhy nazev peeru/RIB
+    roztahl sloupec s popisky u vsech radku bloku, i tech s kratkym labelem.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group=_LONG_GROUP)])
+    lines = render(result, detail=True).splitlines()
+    data_row = next(line for line in lines if line.startswith(" PASS |"))
+    expected_label_width = max(len("x"), len("CHECK"))
+    assert data_row.index(":") == 9 + expected_label_width
+
+
+def test_two_groups_in_one_section_keep_first_occurrence_order():
+    """Zabiji mutanta, ktery renderer seradi skupiny v sekci abecedne.
+
+    Sesterny test test_ungrouped_rows_stand_before_groups (ve view testech)
+    hlida poradi na urovni DAT (Section.groups) mezi neseskupenymi radky a
+    prvni skupinou. Tenhle hlida SAZBU renderu, kdyz je v jedne sekci
+    skupin vic - podle AR-37 je poradi skupin poradim prvniho vyskytu, ne
+    abecedni. Fixture jde schvalne proti abecede (Zebra pred Alfa) - s
+    poradim, ktere abecede odpovida, by mutant prosel i beze zmeny.
+    """
+    result = _grouped_result(
+        [
+            _grouped_check("a", label="z1", group="Zebra"),
+            _grouped_check("b", label="a1", group="Alfa"),
+        ]
+    )
+    lines = render(result, detail=True).splitlines()
+    zebra_idx = next(i for i, line in enumerate(lines) if line.strip() == "-- Zebra")
+    alfa_idx = next(i for i, line in enumerate(lines) if line.strip() == "-- Alfa")
+    assert zebra_idx < alfa_idx
+
+
+def test_unmatched_service_type_column_is_padded():
+    """Zabiji mutanta M7: sloupec (TYP) se nedoplnuje na sirku.
+
+    Puvodni F-14 z 2026-07-28. Test se diva na POZICI sloupce s duvodem, ne
+    na pritomnost mezer - dva ruzne dlouhe typy sluzby ('Core', 'Internet')
+    musi dat duvod ve stejnem sloupci.
+    """
+    result = _grouped_result([_grouped_check("a", label="x")])
+    result.unmatched = {
+        "baseline": [
+            {
+                "scope_id": "s1",
+                "description": "clab-pop-migration-P1;et-0/0/0",
+                "service_type": "Core",
+                "reason": "zadny kandidat na subject",
+            }
+        ],
+        "subject": [
+            {
+                "scope_id": "s2",
+                "description": "svc:et-0/0/10.0:Internet",
+                "service_type": "Internet",
+                "reason": "nova sluzba, chybi baseline",
+            }
+        ],
+    }
+    lines = render(result).splitlines()
+    rows = [
+        line for line in lines
+        if line.startswith("  baseline") or line.startswith("  subject")
+    ]
+    assert len(rows) == 2
+    starts = {
+        line.index("zadny") if "zadny" in line else line.index("nova") for line in rows
+    }
+    assert len(starts) == 1, f"sloupec s duvodem nestoji v jedne linii: {rows}"
+
+
+def _unassigned_result():
+    result = _grouped_result([_grouped_check("a", label="x")])
+    result.unassigned = {
+        "bgp_peers": [
+            {"peer": "10.9.9.9", "routing_instance": "MGMT", "snapshot": "subject"}
+        ],
+        "static_routes": [
+            {
+                "rib": "inet.0",
+                "prefix": "10.0.0.0/8",
+                "next_hop": ["172.20.20.1"],
+                "via": [],
+                "snapshot": "subject",
+            },
+            {
+                "rib": "inet.0",
+                "prefix": "10.1.0.0/16",
+                "next_hop": [],
+                "via": ["et-0/0/8.13"],
+                "snapshot": "subject",
+            },
+        ],
+        "bfd_sessions": [
+            {
+                "peer": "10.9.9.9",
+                "interface": "et-0/0/2",
+                "state": "Up",
+                "snapshot": "subject",
+            }
+        ],
+    }
+    return result
+
+
+def test_unassigned_objects_reach_the_text_report():
+    """Zabiji mutanta, ktery `unassigned` necha jen v JSON.
+
+    Do vlny 5 se retezec 'unassigned' v reporting/ nevyskytoval ani jednou,
+    takze pojistka proti mezeram v parsovani byla videt jen strojove.
+
+    `via 10.1.0.0/16` ma zaroven pokryt vetev `_unassigned_row` pro
+    prazdny next_hop - bez ni by mutace textu 'via ' na cokoliv jineho
+    prosla, protoze fixture do teto ulohy mela `via` vzdy prazdne.
+    """
+    out = render(_unassigned_result())
+    assert "NEZARAZENO" in out
+    assert "10.9.9.9" in out and "MGMT" in out
+    assert "inet.0 10.0.0.0/8" in out and "172.20.20.1" in out
+    assert "et-0/0/2" in out
+    assert "via et-0/0/8.13" in out
+    assert "-> et-0/0/8.13" not in out
+
+
+def test_unassigned_section_is_printed_even_when_empty():
+    """Zabiji mutanta, ktery `(nic)` z prazdne vetve `_unassigned_lines` vynecha.
+
+    Hleda se schvalne az za nadpisem 'NEZARAZENO (jen subject)', ne kdekoliv
+    ve vystupu - sekce NESPAROVANO hned nad ni tiskne pri prazdnem
+    `unmatched` tentyz retezec '(nic)', takze `"(nic)" in out` by prosel i
+    kdyby _unassigned_lines svou prazdnou vetev vubec nevytiskla. Tohle
+    nehlida sourozenec test_unassigned_detail_column_stands_in_one_line -
+    ten bezi jen nad naplnenou sekci.
+    """
+    out = render(_grouped_result([_grouped_check("a", label="x")]))
+    lines = out.splitlines()
+    start = lines.index("NEZARAZENO (jen subject)")
+    assert lines[start + 1] == "  (nic)"
+
+
+def test_unassigned_detail_column_stands_in_one_line():
+    """Zabiji mutanta, ktery `identity_width` z formatovani vypusti.
+
+    Sourozenec test_unassigned_objects_reach_the_text_report hlida, ze se
+    data vypisou; tenhle, ze stoji ve sloupcich. Ctyri objekty ve fixture
+    maji ruzne dlouhou identitu ('10.9.9.9' vs 'inet.0 10.0.0.0/8' vs
+    'inet.0 10.1.0.0/16'), takze bez doplneni identity_width by podrobnost
+    skoncila ve ctyrech ruznych sloupcich - tataz vada, jakou AR-40 opravuje
+    v NESPAROVANO.
+    """
+    lines = render(_unassigned_result()).splitlines()
+    start = lines.index("NEZARAZENO (jen subject)")
+    rows = [line for line in lines[start + 1 :] if line.startswith("  ")]
+    assert len(rows) == 4
+    starts = {
+        line.index("RI ") if "RI " in line else
+        line.index("-> ") if "-> " in line else
+        line.index("via ") if "via " in line else
+        line.index("et-0/0/2")
+        for line in rows
+    }
+    assert len(starts) == 1, f"sloupec s podrobnosti nestoji v jedne linii: {rows}"
+
+
+def test_unassigned_survives_a_filter_that_hides_every_scope():
+    """Zabiji mutanta M8: filtr se pusti i na NEZARAZENO.
+
+    Je to pojistka, ne data - stejne jako NESPAROVANO, ktere filter_result
+    schvalne neprepocitava. Objekty bez sluzby navic zadny status nemaji,
+    takze --status fail by je schoval vzdycky.
+    """
+    out = render(filter_result(_unassigned_result(), statuses={Status.FAIL}))
+    assert "10.9.9.9" in out, "filtr smazal pojistku"

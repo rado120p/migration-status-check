@@ -33,11 +33,33 @@ class Row:
 
 
 @dataclass
+class Group:
+    """Pojmenovana skupina radku uvnitr sekce rodiny.
+
+    Nadpis skupinu OTEVIRA a nic ji nezavira - proto plati AR-37: radky bez
+    skupiny stoji nahore, pred prvnim nadpisem. Kdyby stal radek bez
+    skupiny za posledni skupinou, cetl by se jako jeji soucast.
+    """
+
+    title: str
+    rows: list[Row] = field(default_factory=list)
+
+
+@dataclass
 class Section:
     family: int | None
     addresses: list[str] = field(default_factory=list)
     virtual_gw: list[str] = field(default_factory=list)
     rows: list[Row] = field(default_factory=list)
+    groups: list[Group] = field(default_factory=list)
+
+    def all_rows(self) -> list[Row]:
+        """Vsechny radky sekce, neseskupene i ve skupinach.
+
+        Sirky sloupcu se pocitaji odsud. Kdyby vracela jen `rows`, dlouha
+        hodnota uvnitr skupiny by prerostla ramec bloku.
+        """
+        return [*self.rows, *(row for group in self.groups for row in group.rows)]
 
 
 @dataclass
@@ -135,13 +157,28 @@ def build_view(scope: ScopeResult) -> ServiceView:
         if not checks:
             continue
         own = addresses.get(family, [])
-        rows = [_row(check, qualify=len(own) > 1) for check in checks]
+        qualify = len(own) > 1
+        rows: list[Row] = []
+        groups: list[Group] = []
+        by_title: dict[str, Group] = {}
+        for check in checks:
+            row = _row(check, qualify=qualify)
+            if check.group is None:
+                rows.append(row)
+                continue
+            group = by_title.get(check.group)
+            if group is None:
+                group = Group(title=check.group)
+                by_title[check.group] = group
+                groups.append(group)
+            group.rows.append(row)
         sections.append(
             Section(
                 family=family,
                 addresses=own,
                 virtual_gw=gateways.get(family, []),
                 rows=rows,
+                groups=groups,
             )
         )
 

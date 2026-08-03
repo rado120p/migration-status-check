@@ -194,5 +194,4 @@ za adresou v hlavičce sekce navíc objeví `VGW <adresa>` — např.
 Co v reportu dnes **není**:
 
 - žádné barvy ani unicode symboly,
-- `unassigned.bgp_peers` se v textovém výstupu **netiskne** (v JSON ano),
 - `match.method` a `confidence` se v textu neobjeví — na to je podpříkaz `match`.

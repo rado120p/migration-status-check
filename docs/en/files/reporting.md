@@ -202,6 +202,5 @@ address — e.g. `-- IPv4  152.11.14.2/29   VGW 152.11.14.1`.
 What the report does **not** have today:
 
 - no colours and no unicode symbols,
-- `unassigned.bgp_peers` is **not printed** in the text output (it is present in JSON),
 - `match.method` and `confidence` do not appear in the text — the `match` subcommand is for
   that.

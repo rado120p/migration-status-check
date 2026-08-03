@@ -196,7 +196,7 @@ Both checks run only on `Internet` and `IPVPN` and return `SKIP` when the scope 
   change does not vanish: the message names it and the `ZMENA` column shows the previous state,
 - state `Established` and unchanged (or no baseline) → PASS.
 
-Every `Finding` carries `label="BGP status"` and a `family` derived by `peer_family()` from
+Every `Finding` carries `label=f"BGP status ({peer})"` and a `family` derived by `peer_family()` from
 the peer's address — the report uses it to place the row in the `IPv4`/`IPv6` section.
 
 ### `bgp_prefix_counts` (compare, advisory)
@@ -214,8 +214,9 @@ peer is missing a specific RIB in the baseline, that pair gets its own `SKIP`
 name need not carry a family at all (`bgp.l3vpn.0`), and a peer with an IPv4 address that
 also carries an IPv6 RIB is filed entirely under the IPv4 section (a documented limitation).
 
-The row label is `BGP <key>-prefix-count` (e.g. `BGP active-prefix-count`), so the report
-gets five separate rows per RIB, not one summary row.
+The row label is `<key>-prefix-count` (e.g. `active-prefix-count`) and the identity goes
+into `group=f"BGP {peer} / {rib_name}"`, so the report gets five separate rows per RIB
+gathered under a named peer/RIB heading, not one summary row.
 
 Comparison uses **a tolerance, not 1:1 equality**. Experience from JSNAPy is that exact
 matching generates a flood of FAILs over a difference of a few routes, which is not
@@ -273,8 +274,9 @@ Shared helpers:
   that says which range it belongs to; the report only prints it in the label when the
   family has more than one address (`view.py::_row`, `qualify=len(own) > 1`) — with a single
   address it is redundant, since the address is already in the section header.
-- **`link_local_is_configured(scope)`** (in `nd_present`) / the functionally identical
-  `_link_local_configured()` in `probes/ping.py` — does the service have a link-local address
+- **`link_local_is_configured(scope)`** from `migration_validator/addressing.py` (used by
+  both `nd_present` and `probes/ping.py` — since AR-41 a single shared occurrence instead of
+  the earlier duplication) — does the service have a link-local address
   configured directly under the interface? This checks **presence, not exclusivity**: one
   link-local address among the configured ones is enough, even alongside an ordinary
   routable address — either way it returns `True`. Link-local neighbours show up on every
@@ -387,8 +389,9 @@ already implies not-device. It stays as a written record of the AR‑17 intent, 
 `bfd.py` the same-looking condition **does real work** — there the corresponding branch is
 reached precisely with `configured=False`. The two must not be harmonised.
 
-The label is `Staticka routa (<RIB> <prefix>)` — the RIB name goes into the label qualifier,
-not onto a sub-row of its own. `family` is derived **from the prefix**, not from the RIB
+The label is `<RIB> <prefix>` and the identity goes into `group="Staticke routy"` — routes
+from different RIBs end up in one named row group instead of separate sub-rows distinguished
+only by a qualifier in the label. `family` is derived **from the prefix**, not from the RIB
 name, because the name need not carry a family at all (`bgp.l3vpn.0`).
 
 **Recorded assumption:** RIB names survive the migration. `_aligned_baseline_data` in the

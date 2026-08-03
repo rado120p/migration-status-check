@@ -474,7 +474,8 @@ Properties:
   (`Interface admin status (<name>)` / `Interface operational status (<name>)`;
   `Interface traffic in (<name>)` / `Interface traffic out (<name>)`), not one summary result
   per interface. `bgp_prefix_counts` returns
-  one per **RIB × counter** (`BGP <counter>-prefix-count`), not one summary across RIBs.
+  one per **RIB × counter** (`label="<counter>-prefix-count"`, `group=f"BGP {peer} / {rib}"`),
+  not one summary across RIBs.
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
   better to report); `summary` aggregates across **checks**. The terminal derives the service
   counts from `scopes` itself — the same computation holds for the whole run and for a
@@ -498,9 +499,9 @@ Properties:
   read: it never reaches the selectors, yet it is plainly visible in the table.
 - **`unassigned.bfd_sessions`** holds sessions of peers absent from every `bgp_neighbors` —
   typically BFD held by a client other than BGP, whose intent the parser does not read at all.
-- `unassigned` is **not rendered in the text report** — the `NESPAROVANO` section prints
-  `unmatched`, which is a different thing. All three lists are so far machine-output only
-  (`--format json`).
+- `unassigned` **is rendered in the text report** in the `NEZARAZENO` section (AR-39) — that is
+  a different thing than `NESPAROVANO`, which prints `unmatched`. The `NEZARAZENO` section is
+  always printed, even when empty (`(nic)`), and filtering does not apply to it.
 - `message` is in Czech (without diacritics), consistently with the rest of the tool.
 
 ---

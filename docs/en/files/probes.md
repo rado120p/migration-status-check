@@ -72,7 +72,8 @@ The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) 
 - **IPv6**: takes only ND entries that are **usable** (`_usable_nd()`: have a MAC and a state
   that is not `unreachable`/`incomplete`) and are not link-local — **unless the service has a
   link-local address configured directly under the interface**
-  (`_link_local_configured()`: this checks for *presence*, not exclusivity — one link-local
+  (`link_local_is_configured()` from `migration_validator/addressing.py`, shared with
+  `checks/reachability.py`: this checks for *presence*, not exclusivity — one link-local
   address among the configured addresses is enough, even alongside an ordinary routable one),
   in which case link-local neighbours are kept as legitimate targets;
 - **a link-local target without an interface is rejected by Junos ping** — so

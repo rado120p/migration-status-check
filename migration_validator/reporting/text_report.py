@@ -3,9 +3,9 @@
 Vychozi vypis je souhrn, radek na sluzbu a plny blok u sluzeb se stavem
 WARN nebo FAIL. --detail rozbali bloky u vsech vcetne PASS.
 
-Sekce NESPAROVANO se vypisuje vzdy, i kdyz je vsechno ostatni zelene, a
-filtrovani se na ni nevztahuje - je to hlavni pojistka proti prehlednuti
-nezmigrovane sluzby.
+Sekce NESPAROVANO a NEZARAZENO se vypisuji vzdy, i kdyz je vsechno ostatni
+zelene, a filtrovani se na ne nevztahuje - jsou to hlavni pojistky proti
+prehlednuti nezmigrovane sluzby, respektive objektu bez prirazene sluzby.
 """
 
 from __future__ import annotations
@@ -13,7 +13,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from migration_validator.models.result import RunResult, Status, count_statuses
-from migration_validator.reporting.view import Section, ServiceView, build_view, change_text
+from migration_validator.reporting.view import (
+    Group,
+    Section,
+    ServiceView,
+    build_view,
+    change_text,
+)
 
 SYMBOL = {
     Status.PASS: "PASS",
@@ -34,10 +40,11 @@ def filter_result(
     """Vrati kopii vysledku s profiltrovanymi scopy.
 
     Souhrnne pocty se prepocitaji za vybranou mnozinu - jinak hlavicka
-    tvrdi neco jineho nez tabulka hned pod ni. Unmatched se ale
-    NEprepocitava: sekce NESPAROVANO je pojistka proti prehlednuti
-    nezmigrovane sluzby a filtrovani se na ni nevztahuje, takze prepocet
-    jejich cisel by tise smazal presne to, co ma sekce ukazat.
+    tvrdi neco jineho nez tabulka hned pod ni. Unmatched a unassigned se ale
+    NEprepocitavaji: sekce NESPAROVANO a NEZARAZENO jsou pojistky proti
+    prehlednuti nezmigrovane sluzby, respektive nezarazeneho objektu, a
+    filtrovani se na ne nevztahuje, takze prepocet jejich cisel by tise
+    smazal presne to, co maji sekce ukazat.
 
     Ze uz to neni cely beh, nese `filtered` - kdyby to vysledek nerekl,
     prepoctena cisla by byla jen druha podoba teze chyby.
@@ -91,6 +98,16 @@ def _section_header(section: Section) -> str:
     return f" -- {title}  {addresses}{gateway} "
 
 
+def _group_header(group: Group) -> str:
+    """Nadpis skupiny. Nedoplnuje se pomlckami na sirku bloku.
+
+    Sekce rodiny caru pres celou sirku ma; skupina ne, aby zustaly obe
+    urovne nadpisu rozlisitelne. Do SIRKY bloku ale nadpis vstupuje
+    (AR-38) - jen se do ni nedoplnuje.
+    """
+    return f"   -- {group.title}"
+
+
 def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     """Blok jedne sluzby. Sirky se pocitaji ze VSECH radku bloku.
 
@@ -98,7 +115,7 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     oddelovaci caru, ktera se kresli jednou. Neorezava se: orezana IPv6
     adresa nebo jmeno RIB jsou horsi nez nic.
     """
-    rows = [row for section in view.sections for row in section.rows]
+    rows = [row for section in view.sections for row in section.all_rows()]
     changes = {id(row): change_text(row, has_baseline) for row in rows}
 
     subject_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
@@ -142,7 +159,18 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     # tvaru: u hlavicky bloku i u souhrnne tabulky uz to ostre overeni
     # naslo, pokazde na skutecnych datech z laborky.
     headers = [_section_header(section) for section in view.sections]
-    width = max([table_width, len(header_line)] + [len(text) for text in headers])
+    # Nadpisy skupin taky - ctvrty vyskyt tehoz tvaru, ktery komentar vys
+    # popisuje u hlavicky bloku, souhrnne tabulky a nadpisu sekce. Tady
+    # nesou jmeno peeru a RIB, coz u dlouheho jmena routing instance
+    # prekona celou tabulku sloupcu.
+    group_titles = [
+        _group_header(group) for section in view.sections for group in section.groups
+    ]
+    width = max(
+        [table_width, len(header_line)]
+        + [len(text) for text in headers]
+        + [len(text) for text in group_titles]
+    )
 
     lines = [
         "=" * width,
@@ -163,6 +191,12 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
             lines.append(
                 line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
             )
+        for group in section.groups:
+            lines.append(_group_header(group))
+            for row in group.rows:
+                lines.append(
+                    line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
+                )
 
     lines.append("")
     return lines
@@ -211,9 +245,72 @@ def _filter_note(result: RunResult) -> list[str]:
         f"  filtr: {'  '.join(criteria)} -- "
         f"{applied['scopes_shown']} z {applied['scopes_total']} sluzeb",
         "  (pocty sluzeb a checku plati za vyber; radek Sparovano ani sekce"
-        " NESPAROVANO se neprepocitavaji)",
+        " NESPAROVANO ci NEZARAZENO se neprepocitavaji)",
         "",
     ]
+
+
+# Poradi je soucast pozadavku: sekce se cte shora dolu a BGP peer je
+# nejcastejsi pripad.
+UNASSIGNED_TITLES = (
+    ("bgp_peers", "BGP peer"),
+    ("static_routes", "Staticka routa"),
+    ("bfd_sessions", "BFD session"),
+)
+
+
+def _unassigned_row(kind: str, item: dict[str, object]) -> tuple[str, str]:
+    """Rozpad na identitu a podrobnost, ne jeden neprusvitny retezec.
+
+    Kdyby to byl jeden retezec, tri druhy objektu by daly tri ruzne dlouhe
+    identity a podrobnost by skoncila ve trech ruznych sloupcich - presne ta
+    vada, kterou AR-40 opravuje o kus vys v NESPAROVANO.
+
+    `via` se od `next_hop` odlisuje slovem, ne jen sipkou: `-> et-0/0/8.13`
+    by vydavalo rozhrani za branu.
+    """
+    if kind == "bgp_peers":
+        return item["peer"], f"RI {item.get('routing_instance') or '-'}"
+    if kind == "static_routes":
+        hops = item.get("next_hop") or []
+        detail = (
+            f"-> {', '.join(hops)}"
+            if hops
+            else f"via {', '.join(item.get('via') or ['-'])}"
+        )
+        return f"{item['rib']} {item['prefix']}", detail
+    return item["peer"], f"{item.get('interface') or '-'}   {item.get('state') or '-'}"
+
+
+def _unassigned_lines(result: RunResult) -> list[str]:
+    """Objekty, ktere si nenarokovala zadna sluzba.
+
+    Vypisuje se VZDY, i prazdna, a filtrovani se na ni nevztahuje - je to
+    pojistka proti mezeram v parsovani (routa, kterou parser neumel precist,
+    se do selektoru nedostane, ale v tabulce ji videt je). Pojistka, kterou
+    je nutne si vyzadat prepinacem, chyti min. Totez odduvodneni nese
+    docstring filter_result u NESPAROVANO.
+
+    '(jen subject)' v nadpisu neni kosmetika: engine plni vsechny tri
+    seznamy jen ze subjectu a v device scope vraci prazdno. Bez teto
+    poznamky by prazdna sekce tvrdila 'nic nezarazeneho neni', zatimco se
+    ve skutecnosti nesbiralo.
+    """
+    lines = ["NEZARAZENO (jen subject)"]
+    rows = [
+        (title, *_unassigned_row(kind, item))
+        for kind, title in UNASSIGNED_TITLES
+        for item in result.unassigned.get(kind, [])
+    ]
+    if not rows:
+        lines.append("  (nic)")
+        return lines
+    # Obe sirky z obsahu, stejne jako v NESPAROVANO o kus vys (AR-5).
+    title_width = max(len(title) for title, _, _ in rows)
+    identity_width = max(len(identity) for _, identity, _ in rows)
+    for title, identity, detail in rows:
+        lines.append(f"  {title:<{title_width}}  {identity:<{identity_width}}  {detail}")
+    return lines
 
 
 def render(result: RunResult, *, detail: bool = False) -> str:
@@ -306,7 +403,17 @@ def render(result: RunResult, *, detail: bool = False) -> str:
             for item in result.unmatched[side]
         ]
         label_width = max(len(label) for _, label, _, _ in rows)
+        # Sirka z obsahu, ne napevno - stejne pravidlo jako u popisku o radek
+        # vys (AR-5). Zavorky se pocitaji do sirky, ne kolem ni: jinak by se
+        # o dva znaky rozesly radky s ruzne dlouhym typem.
+        type_width = max(len(service_type) for _, _, service_type, _ in rows) + 2
         for side, label, service_type, reason in rows:
-            lines.append(f"  {side:<9} {label:<{label_width}} ({service_type})  {reason}")
+            typed = f"({service_type})"
+            lines.append(
+                f"  {side:<9} {label:<{label_width}} {typed:<{type_width}}  {reason}"
+            )
+
+    lines.append("")
+    lines.extend(_unassigned_lines(result))
 
     return "\n".join(lines) + "\n"

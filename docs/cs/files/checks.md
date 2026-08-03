@@ -185,7 +185,7 @@ Oba checky běží jen na `Internet` a `IPVPN` a bez peerů ve scope vrací `SKI
   zpráva a sloupec `ZMENA` píše předchozí stav,
 - stav `Established` a shodný (nebo bez baseline) → PASS.
 
-Každý Finding nese `label="BGP status"` a `family` odvozenou `peer_family()` z adresy peeru —
+Každý Finding nese `label=f"BGP status ({peer})"` a `family` odvozenou `peer_family()` z adresy peeru —
 report tak řádek zařadí do sekce `IPv4`/`IPv6`.
 
 ### `bgp_prefix_counts` (compare, advisory)
@@ -202,8 +202,9 @@ odvozuje `peer_family()` z **adresy peeru**, ne z názvu RIB — název ji nemus
 (`bgp.l3vpn.0`), a peer s IPv4 adresou nesoucí zároveň IPv6 RIB se celý zařadí do sekce IPv4
 (zdokumentované omezení).
 
-Label řádku je `BGP <klíč>-prefix-count` (např. `BGP active-prefix-count`), takže report má
-pět samostatných řádků na RIB, ne jeden souhrnný.
+Label řádku je `<klíč>-prefix-count` (např. `active-prefix-count`) a identita jde do
+`group=f"BGP {peer} / {rib_name}"`, takže report má pět samostatných řádků na RIB seskupených
+pod jmenovaný nadpis peeru a RIB, ne jeden souhrnný.
 
 Porovnává se **s tolerancí, ne 1:1**. Zkušenost z JSNAPy je, že přesná shoda generuje
 množství FAILů kvůli rozdílu několika rout, což není signifikantní. Růst počtu prefixů
@@ -260,9 +261,10 @@ Sdílené pomocné funkce:
   rodiny popsal, ke kterému rozsahu řádek patří; report ho vypíše v labelu, jen když má
   rodina víc než jednu adresu (`view.py::_row`, `qualify=len(own) > 1`) — u jediné adresy je
   zbytečný, protože už je v hlavičce sekce.
-- **`link_local_is_configured(scope)`** (v `nd_present`) / funkčně stejná
-  `_link_local_configured()` v `probes/ping.py` — má služba link-local adresu přímo
-  nakonfigurovanou pod rozhraním? Testuje se **přítomnost, ne výlučnost**: stačí, aby mezi
+- **`link_local_is_configured(scope)`** z `migration_validator/addressing.py` (používá ji
+  `nd_present` i `probes/ping.py` — od AR-41 jeden společný výskyt místo dřívější duplicity)
+  — má služba link-local adresu přímo nakonfigurovanou pod rozhraním? Testuje se
+  **přítomnost, ne výlučnost**: stačí, aby mezi
   nakonfigurovanými adresami byla jedna link-local, klidně i vedle běžné routovatelné, a
   vrací `True`. Link-local sousedé se objeví u každého IPv6 rozhraní a o zákaznické službě
   sami o sobě neříkají nic — proto se jinak vyřazují. Existují ale nasazení, kde služba
@@ -371,8 +373,9 @@ už ne‑device implikuje. Zůstává jako zapsaný záměr AR‑17, ne jako pr�
 stejná podmínka stejně, ale **je živá** — tam se do odpovídající větve chodí právě
 s `configured=False`. Nemají se harmonizovat.
 
-Label je `Staticka routa (<RIB> <prefix>)` — jméno RIB jde do kvalifikátoru popisku, ne do
-samostatného podřádku. `family` se odvozuje **z prefixu**, ne z názvu RIB, protože název
+Label je `<RIB> <prefix>` a identita jde do `group="Staticke routy"` — routy z různých RIB
+tak skončí v jedné pojmenované skupině řádků, ne v samostatných podřádcích rozlišených jen
+kvalifikátorem v popisku. `family` se odvozuje **z prefixu**, ne z názvu RIB, protože název
 rodinu nést nemusí (`bgp.l3vpn.0`).
 
 **Zapsaný předpoklad:** jména RIB migraci přežijí. `_aligned_baseline_data` v enginu
