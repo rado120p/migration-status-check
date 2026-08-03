@@ -765,3 +765,102 @@ def test_json_report_omits_group_when_there_is_none():
     """
     payload = json.loads(to_json(_legacy_result()))
     assert "group" not in payload["scopes"][0]["checks"][0]
+
+
+def _grouped_check(check_id, *, label, group=None):
+    return CheckResult(
+        id=check_id,
+        mode="state",
+        status=Status.PASS,
+        severity=Severity.ADVISORY,
+        message="msg",
+        label=label,
+        group=group,
+        family=4,
+        value="v",
+    )
+
+
+def _grouped_result(checks) -> RunResult:
+    return RunResult(
+        evaluated_at="2026-07-24T11:40:02Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration"},
+        baseline={"address": "172.20.20.4", "phase": "pre-migration"},
+        summary={
+            "pass": 1, "warn": 0, "fail": 0, "skip": 0,
+            "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0,
+        },
+        scopes=[
+            ScopeResult(
+                scope_id="svc:X:Internet",
+                key={"description": "X", "service_type": "Internet"},
+                status=Status.PASS,
+                match=MatchInfo(
+                    status="matched",
+                    baseline_interfaces=["ge-0/0/2.13"],
+                    subject_interfaces=["et-0/0/8.13"],
+                ),
+                checks=checks,
+                identity={
+                    "description": "X",
+                    "service_type": "Internet",
+                    "routing_instance": None,
+                    "interfaces": ["et-0/0/8.13"],
+                    "ipv4": ["152.11.13.1/30"],
+                    "ipv6": [],
+                    "virtual_gw_v4": [],
+                    "virtual_gw_v6": [],
+                },
+            )
+        ],
+    )
+
+
+_LONG_GROUP = "BGP 2001:db8:11:13::b / VELMI-DLOUHE-JMENO-ROUTING-INSTANCE.inet6.0"
+
+
+def test_rendered_block_puts_ungrouped_rows_above_the_first_group_header():
+    """Zabiji mutanta M2: renderer tiskne neseskupene radky az ZA skupinami.
+
+    Sesterský test test_ungrouped_rows_stand_before_groups ve
+    test_view.py tohohle mutanta PREZIL - poradi v datove strukture zustane
+    spravne, prohodi se az sazba. Zmereno na prototypu 2026-08-03.
+    """
+    result = _grouped_result(
+        [
+            _grouped_check("a", label="b1", group="Skupina B"),
+            _grouped_check("b", label="volny"),
+        ]
+    )
+    lines = render(result, detail=True).splitlines()
+    free = next(i for i, line in enumerate(lines) if "volny" in line)
+    header = next(i for i, line in enumerate(lines) if line.strip() == "-- Skupina B")
+    grouped = next(i for i, line in enumerate(lines) if "b1" in line)
+    assert free < header < grouped
+
+
+def test_long_group_title_widens_the_block_frame():
+    """Zabiji mutanta M3: nadpisy skupin vypadnou z max() ve vypoctu sirky.
+
+    Nadpis je schvalne DELSI nez cela tabulka sloupcu - s kratkym nadpisem
+    by test prosel i tehdy, kdyby se do sirky nezapocitaval, protoze ramec
+    uz je siroky z jinych duvodu. Ctvrty vyskyt tehoz tvaru chyby; tri
+    predchozi jsou popsane v komentari text_report.py:140.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group=_LONG_GROUP)])
+    lines = render(result, detail=True).splitlines()
+    frame = [line for line in lines if line and set(line) == {"="}]
+    assert frame, "blok nema ramec"
+    assert len(frame[0]) >= len(f"   -- {_LONG_GROUP}")
+
+
+def test_group_header_is_not_padded_with_dashes():
+    """Zabiji mutanta, ktery nadpis skupiny doplni pomlckami jako sekci.
+
+    Dve urovne nadpisu maji zustat rozlisitelne: sekce rodiny drzi caru pres
+    celou sirku, skupina ne.
+    """
+    result = _grouped_result([_grouped_check("a", label="x", group="S")])
+    lines = render(result, detail=True).splitlines()
+    header = next(line for line in lines if line.strip().startswith("-- S"))
+    assert header == "   -- S"

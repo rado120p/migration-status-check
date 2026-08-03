@@ -13,7 +13,13 @@ from __future__ import annotations
 from dataclasses import replace
 
 from migration_validator.models.result import RunResult, Status, count_statuses
-from migration_validator.reporting.view import Section, ServiceView, build_view, change_text
+from migration_validator.reporting.view import (
+    Group,
+    Section,
+    ServiceView,
+    build_view,
+    change_text,
+)
 
 SYMBOL = {
     Status.PASS: "PASS",
@@ -91,6 +97,16 @@ def _section_header(section: Section) -> str:
     return f" -- {title}  {addresses}{gateway} "
 
 
+def _group_header(group: Group) -> str:
+    """Nadpis skupiny. Nedoplnuje se pomlckami na sirku bloku.
+
+    Sekce rodiny caru pres celou sirku ma; skupina ne, aby zustaly obe
+    urovne nadpisu rozlisitelne. Do SIRKY bloku ale nadpis vstupuje
+    (AR-38) - jen se do ni nedoplnuje.
+    """
+    return f"   -- {group.title}"
+
+
 def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     """Blok jedne sluzby. Sirky se pocitaji ze VSECH radku bloku.
 
@@ -98,7 +114,7 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     oddelovaci caru, ktera se kresli jednou. Neorezava se: orezana IPv6
     adresa nebo jmeno RIB jsou horsi nez nic.
     """
-    rows = [row for section in view.sections for row in section.rows]
+    rows = [row for section in view.sections for row in section.all_rows()]
     changes = {id(row): change_text(row, has_baseline) for row in rows}
 
     subject_port = view.subject_interfaces[0] if view.subject_interfaces else "-"
@@ -142,7 +158,18 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     # tvaru: u hlavicky bloku i u souhrnne tabulky uz to ostre overeni
     # naslo, pokazde na skutecnych datech z laborky.
     headers = [_section_header(section) for section in view.sections]
-    width = max([table_width, len(header_line)] + [len(text) for text in headers])
+    # Nadpisy skupin taky - ctvrty vyskyt tehoz tvaru, ktery komentar vys
+    # popisuje u hlavicky bloku, souhrnne tabulky a nadpisu sekce. Tady
+    # nesou jmeno peeru a RIB, coz u dlouheho jmena routing instance
+    # prekona celou tabulku sloupcu.
+    group_titles = [
+        _group_header(group) for section in view.sections for group in section.groups
+    ]
+    width = max(
+        [table_width, len(header_line)]
+        + [len(text) for text in headers]
+        + [len(text) for text in group_titles]
+    )
 
     lines = [
         "=" * width,
@@ -163,6 +190,12 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
             lines.append(
                 line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
             )
+        for group in section.groups:
+            lines.append(_group_header(group))
+            for row in group.rows:
+                lines.append(
+                    line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
+                )
 
     lines.append("")
     return lines
