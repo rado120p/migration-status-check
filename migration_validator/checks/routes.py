@@ -110,7 +110,8 @@ class StaticRouteStatusCheck(Check):
         is_device: bool,
     ) -> Finding:
         rib, prefix = identity
-        label = f"{self.label} ({rib} {prefix})"
+        label = f"{rib} {prefix}"
+        group = "Staticke routy"
         family = prefix_family(prefix)
         was = _next_hop_text(baseline)
 
@@ -138,6 +139,7 @@ class StaticRouteStatusCheck(Check):
                 Outcome.BROKEN,
                 message,
                 label=label,
+                group=group,
                 family=family,
                 value=value,
                 baseline_value=was,
@@ -163,6 +165,7 @@ class StaticRouteStatusCheck(Check):
                 Outcome.SKIP,
                 f"{rib} {prefix}: mereni neobsahuje aktivitu routy",
                 label=label,
+                group=group,
                 family=family,
                 value="bez dat",
                 baseline=baseline,
@@ -177,6 +180,7 @@ class StaticRouteStatusCheck(Check):
                     Outcome.OK,
                     f"{rib} {prefix}: neni aktivni, stejne jako v baseline",
                     label=label,
+                    group=group,
                     family=family,
                     value=NOT_ACTIVE,
                     baseline_value=NOT_ACTIVE,
@@ -196,6 +200,7 @@ class StaticRouteStatusCheck(Check):
                 outcome,
                 message,
                 label=label,
+                group=group,
                 family=family,
                 value=NOT_ACTIVE,
                 baseline_value=was,
@@ -208,6 +213,7 @@ class StaticRouteStatusCheck(Check):
                 Outcome.DEGRADED,
                 f"{rib} {prefix}: next-hop se zmenil {was} -> {now}",
                 label=label,
+                group=group,
                 family=family,
                 value=now,
                 baseline_value=was,
@@ -219,6 +225,7 @@ class StaticRouteStatusCheck(Check):
             Outcome.OK,
             f"{rib} {prefix}: {now}",
             label=label,
+            group=group,
             family=family,
             value=now,
             baseline_value=was,

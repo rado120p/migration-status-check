@@ -16,6 +16,15 @@ CONFIGURED = [
     {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]},
 ]
 
+CONFIGURED_TWO_RIBS = [
+    {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]},
+    {
+        "rib": "L3VPN-CPE13-NNI.inet6.0",
+        "prefix": "2001:eeee::/64",
+        "next_hop": ["2001:db8:11:13::b"],
+    },
+]
+
 
 def _scope(static_routes=None) -> Scope:
     return Scope(
@@ -44,6 +53,25 @@ def _installed(next_hop="152.11.13.2"):
                 "active": True,
             }
         }
+    }
+
+
+def _installed_two_ribs():
+    return {
+        "inet.0": {
+            "198.62.1.0/29": {
+                "next_hop": ["152.11.13.2"],
+                "via": ["et-0/0/8.13"],
+                "active": True,
+            }
+        },
+        "L3VPN-CPE13-NNI.inet6.0": {
+            "2001:eeee::/64": {
+                "next_hop": ["2001:db8:11:13::b"],
+                "via": ["et-0/0/8.113"],
+                "active": True,
+            }
+        },
     }
 
 
@@ -255,7 +283,7 @@ def test_label_carries_rib_and_prefix():
     """Identita jde do popisku, next-hop je hodnota - jinak by ZMENA vypsala par dvakrat."""
     findings = StaticRouteStatusCheck().run(_ctx(_installed()))
 
-    assert findings[0].label == "Staticka routa (inet.0 198.62.1.0/29)"
+    assert findings[0].label == "inet.0 198.62.1.0/29"
 
 
 def test_service_without_static_routes_gets_no_row():
@@ -329,3 +357,23 @@ def test_route_without_active_key_is_skipped():
 
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.SKIP
+
+
+def test_static_routes_from_different_ribs_share_one_group():
+    """Zabiji mutanta, ktery skupinu odvodi z RIB misto konstanty.
+
+    Dve routy ve dvou RUZNYCH RIB musi skoncit v JEDNE skupine - deleni po
+    RIB uz nese popisek radku. S jedinou RIB by mutant `group = rib` prosel.
+    Sourozenec test_label_carries_rib_and_prefix hlida popisek, tenhle
+    skupinu. Tvar fixture i pocet vysledku (2) overen proti kodu 2026-08-03.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_two_ribs(), scope=_scope(CONFIGURED_TWO_RIBS))
+    )
+
+    assert len(findings) == 2
+    assert {f.group for f in findings} == {"Staticke routy"}
+    assert {f.label for f in findings} == {
+        "inet.0 198.62.1.0/29",
+        "L3VPN-CPE13-NNI.inet6.0 2001:eeee::/64",
+    }

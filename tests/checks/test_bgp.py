@@ -79,14 +79,17 @@ def test_session_findings_carry_peer_family():
     by_family = {finding.family for finding in findings}
 
     assert by_family == {4, 6}
-    assert all(finding.label == "BGP status" for finding in findings)
+    assert {finding.label for finding in findings} == {
+        "BGP status (152.11.13.2)",
+        "BGP status (2001:abcd:11:13::b)",
+    }
     assert all(finding.value == "Established" for finding in findings)
 
 
 def test_established_passes():
     result = run_check(BgpSessionStateCheck(), _ctx({"bgp": {"198.11.13.2": _peer()}}))[0]
     assert result.status is Status.PASS
-    assert result.label == "BGP status"
+    assert result.label == "BGP status (198.11.13.2)"
     assert result.family == 4
     assert result.value == "Established"
 
@@ -177,7 +180,7 @@ def test_prefix_counts_within_tolerance_pass():
         baseline={"bgp": {"198.11.13.2": _peer(received=14, accepted=14)}},
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
-    result = _by_label(results, "BGP received-prefix-count")
+    result = _by_label(results, "received-prefix-count")
     assert result.status is Status.PASS
 
 
@@ -187,7 +190,7 @@ def test_prefix_counts_below_tolerance_warn():
         baseline={"bgp": {"198.11.13.2": _peer(received=14, accepted=14)}},
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
-    result = _by_label(results, "BGP received-prefix-count")
+    result = _by_label(results, "received-prefix-count")
     assert result.status is Status.WARN
     assert "received" in result.message
     assert result.baseline == {"received": 14}
@@ -202,7 +205,7 @@ def test_prefix_tolerance_is_configurable():
         config=config,
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
-    result = _by_label(results, "BGP received-prefix-count")
+    result = _by_label(results, "received-prefix-count")
     assert result.status is Status.PASS
 
 
@@ -239,7 +242,7 @@ def test_prefix_growth_is_not_a_problem():
         baseline={"bgp": {"198.11.13.2": _peer(received=14, accepted=14)}},
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
-    result = _by_label(results, "BGP received-prefix-count")
+    result = _by_label(results, "received-prefix-count")
     assert result.status is Status.PASS
 
 
@@ -287,8 +290,8 @@ def test_prefix_counts_are_reported_per_rib_not_summed():
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
     labels = {result.label: result for result in results}
-    assert labels["BGP received-prefix-count"].status is Status.WARN
-    assert "inet6.0" in labels["BGP received-prefix-count"].message
+    assert labels["received-prefix-count"].status is Status.WARN
+    assert "inet6.0" in labels["received-prefix-count"].message
 
 
 def test_prefix_finding_family_is_derived_from_peer_address_not_rib_name():
@@ -338,11 +341,11 @@ def test_prefix_counts_produce_a_row_per_counter():
     rows = [
         result
         for result in run_check(BgpPrefixCountsCheck(), ctx)
-        if result.label.startswith("BGP ")
+        if result.label.endswith("-prefix-count")
     ]
 
     assert sorted(r.label for r in rows) == sorted(
-        f"BGP {key}-prefix-count" for key in PREFIX_KEYS
+        f"{key}-prefix-count" for key in PREFIX_KEYS
     )
 
 
@@ -350,3 +353,48 @@ def test_peer_family_derived_from_address():
     assert peer_family("198.11.13.2") == 4
     assert peer_family("2001:db8:11:13::b") == 6
     assert peer_family("not-an-address") is None
+
+
+def test_bgp_group_carries_peer_and_rib():
+    """Zabiji mutanta M1: `group = f"BGP {peer}"` bez jmena RIB.
+
+    Peer ma schvalne DVE RIB - s jedinou by mutant prosel, protoze jedna
+    skupina je porad jedna skupina. Tvar fixture i pocet vysledku (8) je
+    overeny proti skutecnemu kodu 2026-08-03.
+    """
+    peer = _peer()
+    peer["ribs"]["bgp.l3vpn.0"] = {
+        "received": 9, "accepted": 9, "advertised": 2, "active": 9, "suppressed": 0,
+    }
+    facts = {"bgp": {"198.11.13.2": peer}}
+    results = run_check(BgpPrefixCountsCheck(), _ctx(facts, baseline=facts))
+
+    assert len(results) == 8
+    assert {r.group for r in results} == {
+        "BGP 198.11.13.2 / inet.0",
+        "BGP 198.11.13.2 / bgp.l3vpn.0",
+    }
+    assert {r.label for r in results} == {
+        "active-prefix-count",
+        "received-prefix-count",
+        "accepted-prefix-count",
+        "advertised-prefix-count",
+    }
+
+
+def test_bgp_status_label_carries_the_peer():
+    """Zabiji mutanta, ktery peera z popisku BGP status vypusti.
+
+    Dva peery tehoz rodiny v jedne sluzbe by daly dva nerozlisitelne radky.
+    Skupinu tenhle radek NEDOSTAVA schvalne - je jeden na peera a RIB se ho
+    netyka, takze by nadpis stal nad jedinym radkem.
+    """
+    facts = {"bgp": {"198.11.13.2": _peer(), "198.11.13.6": _peer()}}
+    results = run_check(BgpSessionStateCheck(), _ctx(facts, baseline=facts))
+
+    assert len(results) == 2
+    assert {r.label for r in results} == {
+        "BGP status (198.11.13.2)",
+        "BGP status (198.11.13.6)",
+    }
+    assert {r.group for r in results} == {None}

@@ -77,7 +77,7 @@ class BgpSessionStateCheck(Check):
                     Finding(
                         Outcome.BROKEN,
                         f"{peer}: stav {state}, ocekavano {ESTABLISHED}",
-                        label="BGP status",
+                        label=f"BGP status ({peer})",
                         family=peer_family(peer),
                         value=state,
                         baseline_value=baseline_state,
@@ -102,7 +102,7 @@ class BgpSessionStateCheck(Check):
                         if changed
                         else f"{peer}: {ESTABLISHED}"
                     ),
-                    label="BGP status",
+                    label=f"BGP status ({peer})",
                     family=peer_family(peer),
                     value=state,
                     baseline_value=baseline_state,
@@ -184,7 +184,8 @@ def _prefix_finding(
     family: int | None,
 ) -> Finding:
     """Jeden radek na counter - report je vypisuje jednotlive."""
-    label = f"BGP {key}-prefix-count"
+    label = f"{key}-prefix-count"
+    group = f"BGP {peer} / {rib_name}"
     change = percent_change(baseline, subject)
     delta = None
     if subject != baseline:
@@ -207,6 +208,7 @@ def _prefix_finding(
         outcome,
         message,
         label=label,
+        group=group,
         family=family,
         value=str(subject),
         baseline_value=str(baseline),
