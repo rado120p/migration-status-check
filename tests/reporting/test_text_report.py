@@ -864,3 +864,41 @@ def test_group_header_is_not_padded_with_dashes():
     lines = render(result, detail=True).splitlines()
     header = next(line for line in lines if line.strip().startswith("-- S"))
     assert header == "   -- S"
+
+
+def test_unmatched_service_type_column_is_padded():
+    """Zabiji mutanta M7: sloupec (TYP) se nedoplnuje na sirku.
+
+    Puvodni F-14 z 2026-07-28. Test se diva na POZICI sloupce s duvodem, ne
+    na pritomnost mezer - dva ruzne dlouhe typy sluzby ('Core', 'Internet')
+    musi dat duvod ve stejnem sloupci.
+    """
+    result = _grouped_result([_grouped_check("a", label="x")])
+    result.unmatched = {
+        "baseline": [
+            {
+                "scope_id": "s1",
+                "description": "clab-pop-migration-P1;et-0/0/0",
+                "service_type": "Core",
+                "reason": "zadny kandidat na subject",
+            }
+        ],
+        "subject": [
+            {
+                "scope_id": "s2",
+                "description": "svc:et-0/0/10.0:Internet",
+                "service_type": "Internet",
+                "reason": "nova sluzba, chybi baseline",
+            }
+        ],
+    }
+    lines = render(result).splitlines()
+    rows = [
+        line for line in lines
+        if line.startswith("  baseline") or line.startswith("  subject")
+    ]
+    assert len(rows) == 2
+    starts = {
+        line.index("zadny") if "zadny" in line else line.index("nova") for line in rows
+    }
+    assert len(starts) == 1, f"sloupec s duvodem nestoji v jedne linii: {rows}"

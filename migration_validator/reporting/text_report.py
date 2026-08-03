@@ -339,7 +339,14 @@ def render(result: RunResult, *, detail: bool = False) -> str:
             for item in result.unmatched[side]
         ]
         label_width = max(len(label) for _, label, _, _ in rows)
+        # Sirka z obsahu, ne napevno - stejne pravidlo jako u popisku o radek
+        # vys (AR-5). Zavorky se pocitaji do sirky, ne kolem ni: jinak by se
+        # o dva znaky rozesly radky s ruzne dlouhym typem.
+        type_width = max(len(service_type) for _, _, service_type, _ in rows) + 2
         for side, label, service_type, reason in rows:
-            lines.append(f"  {side:<9} {label:<{label_width}} ({service_type})  {reason}")
+            typed = f"({service_type})"
+            lines.append(
+                f"  {side:<9} {label:<{label_width}} {typed:<{type_width}}  {reason}"
+            )
 
     return "\n".join(lines) + "\n"
