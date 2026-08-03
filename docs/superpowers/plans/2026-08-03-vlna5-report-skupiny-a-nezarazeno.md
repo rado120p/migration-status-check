@@ -27,8 +27,8 @@ Link-local predikáty se přestěhují do nového `migration_validator/addressin
 - **Zámek parserů:** `diff mx_parser.py evo_parser.py | wc -l` = **146**. Tahle
   vlna se parserů nedotýká, takže číslo musí zůstat 146. Zkontroluj to na konci.
 - **Nová diakritika se do souboru, který ji nemá, nezanáší.** Změřeno
-  2026‑08‑03: z 94 souborů v `migration_validator/` a `tests/` ji nese
-  **devět** — mimo jiné `checks/test_bgp.py`, `checks/test_routes.py`
+  2026‑08‑03: ze 94 souborů `.py` v `migration_validator/` a `tests/` ji nese
+  **sedm** — mimo jiné `checks/test_bgp.py`, `checks/test_routes.py`
   a `reporting/text_report.py`, tedy soubory, které tahle vlna mění.
   Převažující konvence je ASCII a `tests/reporting/test_text_report.py`
   měl před vlnou 5 nula výskytů. Řiď se souborem, do kterého píšeš: kde

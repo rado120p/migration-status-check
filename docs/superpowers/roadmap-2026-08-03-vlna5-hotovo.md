@@ -185,10 +185,10 @@ Beze změny — pět kosmetických bodů (viz roadmapa vlny 4, „Co zbývá" bo
   mutant padne i s jednou RIB. Dvě RIB jsou pořád správná fixture (modelují
   skutečný problém v reportu, kdy peer se dvěma RIB dával nerozlišitelné
   řádky), jen zdůvodnění v docstringu je nadhodnocené.
-- Podmínka o diakritice v `global-constraints.md` tvrdí „9 z 94"; ostré
-  přeměření (viz „Co vyšlo jinak", bod 5) dává **7**. Číslo nikde v kódu
-  nerozhoduje o ničem — jen k opravě v dokumentaci, pokud se k ní příští
-  vlna vrátí.
+- ~~Podmínka o diakritice tvrdí „9 z 94".~~ **Vyřízeno 2026‑08‑03:** ostré
+  přeměření implementera úlohy 8 dalo **7 z 94** a mělo pravdu — původní
+  devítka smíchala jmenovatele, počítala i dvě YAML fixtures, zatímco
+  devadesát čtyři je jen soubory `.py`. Plán opraven.
 
 ### 7. Sdílený syntetický pomocník dává IPv6 peerům skupinu `inet.0`
 
