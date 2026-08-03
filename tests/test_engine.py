@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from migration_validator import api
@@ -7,6 +9,9 @@ from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 
 NOW = "2026-07-24T11:40:02Z"
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 
 
 def _scope(scope_id, description, service_type, interface, peers=(), physical=()):
@@ -518,3 +523,35 @@ def test_service_reactivated_after_migration_is_warn():
 
     assert result.scopes
     assert result.scopes[0].status is Status.WARN
+
+
+def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snapshot):
+    """SKIP na jedne route nesmi stahnout cely scope a zakryt PASSy sourozencu.
+
+    Roadmapa vlny 5 vedla tenhle stav jako vadu (bod 4), protoze
+    _STATUS_RANK ma SKIP nad PASS. Merenim se ukazalo, ze vada neexistuje:
+    engine.py:145 SKIPy z hlasovani Status.worst() vyfiltruje driv, nez se
+    hlasuje. Chybel jen test, ktery to tvrdi.
+
+    Zabiji mutanta: vypusteni `if result.status is not Status.SKIP` z
+    engine.py:145. Sourozenci ho zabijeji taky, ale oba pres jiny scenar -
+    compare-only check bez baseline a sluzba deaktivovana na obou stranach.
+    Pres static_route_status nechodi ani jeden.
+    """
+    subject = synthetic_snapshot(DEVICE_4, "172.20.20.4", "post-migration")
+    del subject.facts["routes"]["inet.0"]["198.62.1.0/29"]["active"]
+
+    result = api.evaluate(subject, now=NOW)
+
+    scope = next(
+        s for s in result.scopes if s.scope_id == "svc:INTERNET-CPE13-NNI:Internet"
+    )
+    statuses = [c.status for c in scope.checks if c.id == "static_route_status"]
+
+    # Bez tehle dvojice by test prosel i tehdy, kdyby se SKIP vubec nevyrobil
+    # nebo kdyby scope nemel zadneho zdraveho sourozence - tedy kdyby merit
+    # nebylo co.
+    assert statuses.count(Status.SKIP) == 1
+    assert Status.PASS in statuses
+
+    assert scope.status is Status.PASS

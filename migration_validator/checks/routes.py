@@ -156,10 +156,6 @@ class StaticRouteStatusCheck(Check):
         # `subject` vzdy pochazi z aktualniho collectoru (collectors/routes.py
         # vzdy nastavuje "active"), takze chybejici klic tady muze znamenat
         # jedine regresi collectoru - proto SKIP.
-        # Na `baseline` niz se default nemeni - je to mimo rozsah teto vlny,
-        # ne proto, ze by byl spravny. Zustava otevrena otazka pro dalsi vlnu:
-        # ma chybejici "active" v baseline davat DEGRADED misto BROKEN, podle
-        # R-2?
         if "active" not in subject:
             return Finding(
                 Outcome.SKIP,
@@ -173,7 +169,7 @@ class StaticRouteStatusCheck(Check):
             )
 
         if not subject["active"]:
-            was_active = baseline.get("active", True) if baseline else None
+            was_active = baseline.get("active") if baseline else None
 
             if was_active is False:
                 return Finding(
@@ -189,13 +185,24 @@ class StaticRouteStatusCheck(Check):
                 )
 
             # Bez baseline neni z ceho poznat, ze neaktivni byla i predtim -
-            # podle R-2 se nejednoznacnost na FAIL neeskaluje.
-            outcome = Outcome.BROKEN if was_active else Outcome.DEGRADED
-            message = (
-                f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
-                if was_active
-                else f"{rib} {prefix}: je v tabulce, ale neni aktivni"
-            )
+            # podle R-2 se nejednoznacnost na FAIL neeskaluje. Baseline, ktery
+            # klic "active" nema, je tataz nejednoznacnost, jen z jineho
+            # duvodu: neni to porucha mereni jako u `subject` vyse (ten vzdy
+            # vyrabi aktualni collector), ale starsi artefakt, ktery o stavu
+            # sveta mlci. Proto DEGRADED, ale s vlastni zpravou - jinak by
+            # operator nepoznal, ktery z tech dvou duvodu nastal.
+            if was_active:
+                outcome = Outcome.BROKEN
+                message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
+            elif baseline:
+                outcome = Outcome.DEGRADED
+                message = (
+                    f"{rib} {prefix}: je v tabulce, ale neni aktivni; "
+                    "baseline aktivitu neuvadi"
+                )
+            else:
+                outcome = Outcome.DEGRADED
+                message = f"{rib} {prefix}: je v tabulce, ale neni aktivni"
             return Finding(
                 outcome,
                 message,
