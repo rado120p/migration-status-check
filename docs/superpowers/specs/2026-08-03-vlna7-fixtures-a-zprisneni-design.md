@@ -161,7 +161,8 @@ vstup, ne proto, že hlídá chování. Cíl je proto
 `migration_validator/checks/bgp.py`, `_prefix_finding` (řádky ~188 a ~194,
 kde se z `rib_name` staví `group` a `details["rib"]`): napevno nastavené
 `inet.0` shodí oba nové testy a doloží, že skutečně chrání produkční
-chování. Úloha 1 je přitom celá test-only, takže podle pravidla 6 níž **tohohle
+chování. Změřeno při psaní plánu: shodí **tři** testy — oba nové plus
+existující `test_bgp_group_carries_peer_and_rib` z vlny 5. Úloha 1 je přitom celá test-only, takže podle pravidla 6 níž **tohohle
 mutanta musí změřit někdo mimo review té úlohy** — produkční soubor v jejím
 diffu z definice nebude.
 
