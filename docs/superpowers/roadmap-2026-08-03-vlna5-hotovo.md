@@ -213,8 +213,9 @@ routě `inet.0 198.62.1.0/29` smazal klíč `active`:
              ('inet6.0 2001:aaaa::/64', PASS)]
 
 Sourozenci zakrytí nejsou. Filtr je navíc chráněný — mutant „filtr pryč"
-shodí `test_healthy_scope_without_baseline_is_pass_not_skip` i
-`test_service_deactivated_on_both_sides_is_pass`.
+shodí `test_healthy_scope_without_baseline_is_pass_not_skip`,
+`test_service_deactivated_on_both_sides_is_pass` a (od commitu `6fb3ca5`)
+`test_route_without_active_key_does_not_mask_healthy_siblings`.
 
 Zbyl z toho jeden chybějící test: ani jeden z těch dvou nechodí přes
 `static_route_status`, takže scénář, který tenhle bod popisoval, netvrdil

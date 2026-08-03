@@ -12,6 +12,13 @@ Návrh je
 provedení
 [`plans/2026-08-03-vlna6-semantika-zavaznosti.md`](plans/2026-08-03-vlna6-semantika-zavaznosti.md).
 
+Tři dokumenty, tři různé výchozí commity — `6da9d3d` (spec), `576b0eb`
+(plán), `09fca25` (tenhle dokument) — a je to konzistentní chronologie, ne
+rozpor: každý dokument zaznamenává špičku `main`/větve v okamžiku svého
+psaní, a `576b0eb` a `09fca25` jsou navíc vlastní commity spec a plánu (spec
+se commitla jako `576b0eb`, plán dopsal `09fca25`), takže je plán i tenhle
+dokument logicky přebírají jako svůj základ.
+
 ---
 
 ## Co vlna 6 přinesla
@@ -195,6 +202,12 @@ doplnila tahle vlna jako
 Beze změny — pět kosmetických bodů (viz roadmapa vlny 4, „Co zbývá" bod 6),
 žádná neblokovala merge tehdy ani teď.
 
+### 6. Číslo schválně chybí
+
+Bod 6 patří vlně 5 a uzavřela ho vlna 5 v commitu `4f60b36` — čísla bodů se
+napříč roadmapami používají jako identifikátory, ne jako sekvence, takže tady
+mezera zůstává a nedoplňuje se.
+
 ### 7. Sdílený syntetický pomocník dává IPv6 peerům skupinu `inet.0`
 
 Beze změny z vlny 5. Na obou fixtures nese každý BGP peer, IPv4 i IPv6,
@@ -231,15 +244,51 @@ rodinová sekce má jen jednoho peera: `-- IPv4  152.11.13.1/30` následuje
 `BGP status (152.11.13.2)`, ačkoliv hlavička už `152.11.13.2` jako jediného
 souseda dané `/30` implikuje. Vstup pro některou z dalších vln.
 
-### 10. Opravený bod 4 v roadmapě vlny 5 podceňuje počet chránících testů
+### 10. ~~Opravený bod 4 v roadmapě vlny 5 podceňuje počet chránících testů~~
 
 Nový bod téhle vlny; číslo 10 schválně, aby se nekřížilo s bodem 6 vlny 5
 (čísla bodů se napříč roadmapami používají jako identifikátory).
 
-Text z AR-45 jmenuje dva testy, které mutant `engine.py:145` shodí; po AR-44
-jsou tři. Nepravdivé to není (výčet se nikde neprohlašuje za úplný), jen
-slabší, než jaká je skutečnost. Neopraveno záměrně: diff uzavírací úlohy smí
-obsahovat jen tenhle dokument. Jednořádková oprava pro vlnu 7.
+**Vyřízeno — závěrečné review větve.** Text z AR-45 jmenoval jen dva testy,
+které mutant `engine.py:145` shodí; po AR-44 jsou tři —
+`test_route_without_active_key_does_not_mask_healthy_siblings` se přidal
+commitem `6fb3ca5`. Nepravdivé to nebylo (výčet se nikde neprohlašoval za
+úplný), jen slabší, než jaká byla skutečnost. Tahle úloha to neopravila
+záměrně kvůli diffové kázni pro *tuhle jednu úlohu* — ne kvůli omezení, které
+by svazovalo celou vlnu. Vlna jako celek mohla tu větu doplnit kdykoliv;
+uzavřel ji až závěrečný review větve, který tu jednořádkovou opravu skutečně
+provedl a nezávisle přeměřil mutanta, aby potvrdil, že tři je přesné číslo
+(viz roadmapa vlny 5, bod 4).
+
+### 11. Robustnost trojcestné větve u `active` na nebool hodnotách
+
+Nový bod, zapsaný závěrečným review větve, neopravovaný — jde o vylepšení
+pro pozdější vlnu, ne o vadu téhle.
+
+`StaticRouteStatusCheck._finding` (`migration_validator/checks/routes.py:174`)
+testuje `was_active is False` na OK větvi („neni aktivni, stejne jako v
+baseline"), ale rozcestí, které z toho zbylo mezi FAIL a DEGRADED
+(`routes.py:194`, `if was_active:`), je pravdivostní test, ne symetrický
+`is True`. Pro všechny hodnoty, které dnes reálně nastávají, to funguje. Dva
+hypotetické nebool vstupy by ale zaváhaly:
+
+- `{"active": 0}` neprojde `is False`, takže dá hlášku „baseline aktivitu
+  neuvádí", ačkoliv `0` neaktivitu ve skutečnosti uvádí,
+- `{"active": "false"}` je pravdivé (neprázdný řetězec), takže by spadlo do
+  tvrdého FAIL na tom, co je ve skutečnosti jen nejednoznačnost — přesně to,
+  co má pravidlo R-2 zakazovat.
+
+Ani jeden vstup není dosažitelný: `collectors/routes.py:84` produkuje
+skutečný `bool`, baseline snapshoty jdou přes tentýž kolektor, a YAML
+round-tripuje bool jako bool. Cesta `"false"` je navíc předchozí stav věci —
+staré `baseline.get("active", True)` bylo na ní stejně tak pravdivé, takže
+tahle vlna v tomhle nic neregredovala.
+
+Levné zpřísnění pro pozdější vlnu: napsat FAIL větev jako
+`if was_active is True:`, symetricky s existujícím `is False`, takže každá
+nebool hodnota spadne do DEGRADED a R-2 bude platit konstrukcí, ne jen
+argumentem o nedosažitelnosti. **Kód se v téhle úloze neupravuje** — je to
+rozhodnutí pro vlnu 7.
 
 ---
 
