@@ -126,6 +126,40 @@ souboru, který diakritiku nemá, ji nezanášej") implementeři úloh 5–7
 dodrželi bez ohledu na přesné číslo. Zapsáno, protože „měření má přednost
 před zadáním" platí i pro čísla v samotné roadmapě.
 
+### 6. Závěrečná review našla dva mutanty, kteří přežili celou sadu
+
+Nejcennější nález celé vlny, a je to **potřetí týž tvar**.
+
+Po všech osmi úlohách a osmi zelených review přežili nad sadou 631 testů
+dva mutanti v `reporting/text_report.py`:
+
+- **nadpis skupiny přimíchaný do `label_width`** — spec má na tohle vlastní
+  zapsaný předpoklad („kdyby vstupoval do `label_width`, dlouhý nadpis by
+  roztáhl sloupec s popisky u všech řádků bloku"), ale nikdo na něj
+  nešlápl. `test_long_group_title_widens_the_block_frame` mutanta nechytí:
+  rámec se jen rozšíří.
+- **renderer seřadí skupiny abecedně** místo pořadím výskytu. AR‑37 to
+  zakazuje a `test_ungrouped_rows_stand_before_groups` to připíná — ale jen
+  na **datové** straně. Žádný test v `test_text_report.py` neměl v jedné
+  sekci dvě skupiny.
+
+Druhý z nich je **doslova týž šev jako nález 2**. Lekce „test nad datovou
+strukturou prohozené pořadí v rendereru nechytí" se aplikovala na pořadí
+*neseskupené vs. skupiny* (úloha 4) a **neaplikovala** na pořadí *skupina
+vs. skupina* — úloha 3 předepsala datový test, úloha 4 sazbový, a na tomhle
+bodě se nepotkaly. Vidět to šlo jedině přes celou větev; osm review po
+jednotlivých úlohách to minulo, protože každá viděla jen svůj diff.
+
+Přitěžující okolnost: na dnešních fixtures je ten druhý mutant **neviditelný
+i očima**. V každé sekci stojí skupiny `BGP …` a `Staticke routy`, tedy
+B před S — abecední řazení dá týž výstup. Ostré ověření z úlohy 8 ho proto
+chytit nemohlo.
+
+Obojí zavřela opravná vlna (`4f60b36`), oba nové testy byly ověřeny
+mutantem a každý shodí právě a jen sebe.
+
+---
+
 ### Vedlejší nález review úlohy 5 — dvě opravy testů byly zesílení, ne oslabení
 
 Nejde o odchylku od plánu, ale stojí to za zaznamenání, protože se to
@@ -176,16 +210,20 @@ Beze změny — pět kosmetických bodů (viz roadmapa vlny 4, „Co zbývá" bo
 
 ### 6. Odložené drobnosti z téhle vlny
 
-- `tests/reporting/test_text_report.py` docstring
-  `test_rendered_block_puts_ungrouped_rows_above_the_first_group_header`
-  nese slovo „Sesterský" s diakritikou v souboru, který jich měl **před
-  vlnou 5 nula**. Zdroj byl plán; plán opraven commitem `6f537bc`, kód ne.
-- Docstringy `test_bgp_group_carries_peer_and_rib` a
+Obě, které tu stály, **zavřela opravná vlna po závěrečné review**
+(commit `4f60b36`) — zůstávají zapsané, protože jsou to zaplacené nálezy,
+ne proto, že by čekaly na práci:
+
+- ~~Docstring `test_rendered_block_puts_ungrouped_rows_above_the_first_group_header`
+  nese slovo „Sesterský" s diakritikou v souboru, který jich měl před vlnou 5
+  nula.~~ **Vyřízeno.** Zdroj byl plán; opraven commitem `6f537bc`, kód
+  commitem `4f60b36`.
+- ~~Docstringy `test_bgp_group_carries_peer_and_rib` a
   `test_static_routes_from_different_ribs_share_one_group` tvrdí „s jedinou
-  RIB by mutant prošel". Neplatí — assert porovnává přesné řetězce, takže
-  mutant padne i s jednou RIB. Dvě RIB jsou pořád správná fixture (modelují
-  skutečný problém v reportu, kdy peer se dvěma RIB dával nerozlišitelné
-  řádky), jen zdůvodnění v docstringu je nadhodnocené.
+  RIB by mutant prošel".~~ **Vyřízeno.** Neplatilo — assert porovnává přesné
+  řetězce, takže mutant padne i s jednou RIB. Dvě RIB jsou pořád správná
+  fixture (modelují skutečný problém v reportu, kdy peer se dvěma RIB dával
+  nerozlišitelné řádky); nadhodnocené bylo jen zdůvodnění a to je přepsané.
 - ~~Podmínka o diakritice tvrdí „9 z 94".~~ **Vyřízeno 2026‑08‑03:** ostré
   přeměření implementera úlohy 8 dalo **7 z 94** a mělo pravdu — původní
   devítka smíchala jmenovatele, počítala i dvě YAML fixtures, zatímco
