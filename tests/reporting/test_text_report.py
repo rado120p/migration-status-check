@@ -917,7 +917,14 @@ def _unassigned_result():
                 "next_hop": ["172.20.20.1"],
                 "via": [],
                 "snapshot": "subject",
-            }
+            },
+            {
+                "rib": "inet.0",
+                "prefix": "10.1.0.0/16",
+                "next_hop": [],
+                "via": ["et-0/0/8.13"],
+                "snapshot": "subject",
+            },
         ],
         "bfd_sessions": [
             {
@@ -936,41 +943,54 @@ def test_unassigned_objects_reach_the_text_report():
 
     Do vlny 5 se retezec 'unassigned' v reporting/ nevyskytoval ani jednou,
     takze pojistka proti mezeram v parsovani byla videt jen strojove.
+
+    `via 10.1.0.0/16` ma zaroven pokryt vetev `_unassigned_row` pro
+    prazdny next_hop - bez ni by mutace textu 'via ' na cokoliv jineho
+    prosla, protoze fixture do teto ulohy mela `via` vzdy prazdne.
     """
     out = render(_unassigned_result())
     assert "NEZARAZENO" in out
     assert "10.9.9.9" in out and "MGMT" in out
     assert "inet.0 10.0.0.0/8" in out and "172.20.20.1" in out
     assert "et-0/0/2" in out
+    assert "via et-0/0/8.13" in out
+    assert "-> et-0/0/8.13" not in out
 
 
 def test_unassigned_section_is_printed_even_when_empty():
-    """Zabiji mutanta, ktery sekci pri prazdnem obsahu vynecha.
+    """Zabiji mutanta, ktery `(nic)` z prazdne vetve `_unassigned_lines` vynecha.
 
-    Chybejici sekce se cte jinak nez sekce s '(nic)': prvni nerika nic,
-    druha rika 'meril jsem a nic tam neni'. Totez pravidlo drzi NESPAROVANO.
+    Hleda se schvalne az za nadpisem 'NEZARAZENO (jen subject)', ne kdekoliv
+    ve vystupu - sekce NESPAROVANO hned nad ni tiskne pri prazdnem
+    `unmatched` tentyz retezec '(nic)', takze `"(nic)" in out` by prosel i
+    kdyby _unassigned_lines svou prazdnou vetev vubec nevytiskla. Tohle
+    nehlida sourozenec test_unassigned_detail_column_stands_in_one_line -
+    ten bezi jen nad naplnenou sekci.
     """
     out = render(_grouped_result([_grouped_check("a", label="x")]))
-    assert "NEZARAZENO (jen subject)" in out
-    assert "(nic)" in out
+    lines = out.splitlines()
+    start = lines.index("NEZARAZENO (jen subject)")
+    assert lines[start + 1] == "  (nic)"
 
 
 def test_unassigned_detail_column_stands_in_one_line():
     """Zabiji mutanta, ktery `identity_width` z formatovani vypusti.
 
     Sourozenec test_unassigned_objects_reach_the_text_report hlida, ze se
-    data vypisou; tenhle, ze stoji ve sloupcich. Tri druhy objektu maji
-    ruzne dlouhou identitu ('10.9.9.9' vs 'inet.0 10.0.0.0/8'), takze bez
-    doplneni by podrobnost skoncila ve trech ruznych sloupcich - tataz vada,
-    jakou AR-40 opravuje v NESPAROVANO.
+    data vypisou; tenhle, ze stoji ve sloupcich. Ctyri objekty ve fixture
+    maji ruzne dlouhou identitu ('10.9.9.9' vs 'inet.0 10.0.0.0/8' vs
+    'inet.0 10.1.0.0/16'), takze bez doplneni identity_width by podrobnost
+    skoncila ve ctyrech ruznych sloupcich - tataz vada, jakou AR-40 opravuje
+    v NESPAROVANO.
     """
     lines = render(_unassigned_result()).splitlines()
     start = lines.index("NEZARAZENO (jen subject)")
     rows = [line for line in lines[start + 1 :] if line.startswith("  ")]
-    assert len(rows) == 3
+    assert len(rows) == 4
     starts = {
         line.index("RI ") if "RI " in line else
         line.index("-> ") if "-> " in line else
+        line.index("via ") if "via " in line else
         line.index("et-0/0/2")
         for line in rows
     }
