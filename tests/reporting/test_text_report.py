@@ -902,3 +902,87 @@ def test_unmatched_service_type_column_is_padded():
         line.index("zadny") if "zadny" in line else line.index("nova") for line in rows
     }
     assert len(starts) == 1, f"sloupec s duvodem nestoji v jedne linii: {rows}"
+
+
+def _unassigned_result():
+    result = _grouped_result([_grouped_check("a", label="x")])
+    result.unassigned = {
+        "bgp_peers": [
+            {"peer": "10.9.9.9", "routing_instance": "MGMT", "snapshot": "subject"}
+        ],
+        "static_routes": [
+            {
+                "rib": "inet.0",
+                "prefix": "10.0.0.0/8",
+                "next_hop": ["172.20.20.1"],
+                "via": [],
+                "snapshot": "subject",
+            }
+        ],
+        "bfd_sessions": [
+            {
+                "peer": "10.9.9.9",
+                "interface": "et-0/0/2",
+                "state": "Up",
+                "snapshot": "subject",
+            }
+        ],
+    }
+    return result
+
+
+def test_unassigned_objects_reach_the_text_report():
+    """Zabiji mutanta, ktery `unassigned` necha jen v JSON.
+
+    Do vlny 5 se retezec 'unassigned' v reporting/ nevyskytoval ani jednou,
+    takze pojistka proti mezeram v parsovani byla videt jen strojove.
+    """
+    out = render(_unassigned_result())
+    assert "NEZARAZENO" in out
+    assert "10.9.9.9" in out and "MGMT" in out
+    assert "inet.0 10.0.0.0/8" in out and "172.20.20.1" in out
+    assert "et-0/0/2" in out
+
+
+def test_unassigned_section_is_printed_even_when_empty():
+    """Zabiji mutanta, ktery sekci pri prazdnem obsahu vynecha.
+
+    Chybejici sekce se cte jinak nez sekce s '(nic)': prvni nerika nic,
+    druha rika 'meril jsem a nic tam neni'. Totez pravidlo drzi NESPAROVANO.
+    """
+    out = render(_grouped_result([_grouped_check("a", label="x")]))
+    assert "NEZARAZENO (jen subject)" in out
+    assert "(nic)" in out
+
+
+def test_unassigned_detail_column_stands_in_one_line():
+    """Zabiji mutanta, ktery `identity_width` z formatovani vypusti.
+
+    Sourozenec test_unassigned_objects_reach_the_text_report hlida, ze se
+    data vypisou; tenhle, ze stoji ve sloupcich. Tri druhy objektu maji
+    ruzne dlouhou identitu ('10.9.9.9' vs 'inet.0 10.0.0.0/8'), takze bez
+    doplneni by podrobnost skoncila ve trech ruznych sloupcich - tataz vada,
+    jakou AR-40 opravuje v NESPAROVANO.
+    """
+    lines = render(_unassigned_result()).splitlines()
+    start = lines.index("NEZARAZENO (jen subject)")
+    rows = [line for line in lines[start + 1 :] if line.startswith("  ")]
+    assert len(rows) == 3
+    starts = {
+        line.index("RI ") if "RI " in line else
+        line.index("-> ") if "-> " in line else
+        line.index("et-0/0/2")
+        for line in rows
+    }
+    assert len(starts) == 1, f"sloupec s podrobnosti nestoji v jedne linii: {rows}"
+
+
+def test_unassigned_survives_a_filter_that_hides_every_scope():
+    """Zabiji mutanta M8: filtr se pusti i na NEZARAZENO.
+
+    Je to pojistka, ne data - stejne jako NESPAROVANO, ktere filter_result
+    schvalne neprepocitava. Objekty bez sluzby navic zadny status nemaji,
+    takze --status fail by je schoval vzdycky.
+    """
+    out = render(filter_result(_unassigned_result(), statuses={Status.FAIL}))
+    assert "10.9.9.9" in out, "filtr smazal pojistku"

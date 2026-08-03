@@ -249,6 +249,69 @@ def _filter_note(result: RunResult) -> list[str]:
     ]
 
 
+# Poradi je soucast pozadavku: sekce se cte shora dolu a BGP peer je
+# nejcastejsi pripad.
+UNASSIGNED_TITLES = (
+    ("bgp_peers", "BGP peer"),
+    ("static_routes", "Staticka routa"),
+    ("bfd_sessions", "BFD session"),
+)
+
+
+def _unassigned_row(kind: str, item: dict[str, object]) -> tuple[str, str]:
+    """Rozpad na identitu a podrobnost, ne jeden neprusvitny retezec.
+
+    Kdyby to byl jeden retezec, tri druhy objektu by daly tri ruzne dlouhe
+    identity a podrobnost by skoncila ve trech ruznych sloupcich - presne ta
+    vada, kterou AR-40 opravuje o kus vys v NESPAROVANO.
+
+    `via` se od `next_hop` odlisuje slovem, ne jen sipkou: `-> et-0/0/8.13`
+    by vydavalo rozhrani za branu.
+    """
+    if kind == "bgp_peers":
+        return item["peer"], f"RI {item.get('routing_instance') or '-'}"
+    if kind == "static_routes":
+        hops = item.get("next_hop") or []
+        detail = (
+            f"-> {', '.join(hops)}"
+            if hops
+            else f"via {', '.join(item.get('via') or ['-'])}"
+        )
+        return f"{item['rib']} {item['prefix']}", detail
+    return item["peer"], f"{item.get('interface') or '-'}   {item.get('state') or '-'}"
+
+
+def _unassigned_lines(result: RunResult) -> list[str]:
+    """Objekty, ktere si nenarokovala zadna sluzba.
+
+    Vypisuje se VZDY, i prazdna, a filtrovani se na ni nevztahuje - je to
+    pojistka proti mezeram v parsovani (routa, kterou parser neumel precist,
+    se do selektoru nedostane, ale v tabulce ji videt je). Pojistka, kterou
+    je nutne si vyzadat prepinacem, chyti min. Totez odduvodneni nese
+    docstring filter_result u NESPAROVANO.
+
+    '(jen subject)' v nadpisu neni kosmetika: engine plni vsechny tri
+    seznamy jen ze subjectu a v device scope vraci prazdno. Bez teto
+    poznamky by prazdna sekce tvrdila 'nic nezarazeneho neni', zatimco se
+    ve skutecnosti nesbiralo.
+    """
+    lines = ["NEZARAZENO (jen subject)"]
+    rows = [
+        (title, *_unassigned_row(kind, item))
+        for kind, title in UNASSIGNED_TITLES
+        for item in result.unassigned.get(kind, [])
+    ]
+    if not rows:
+        lines.append("  (nic)")
+        return lines
+    # Obe sirky z obsahu, stejne jako v NESPAROVANO o kus vys (AR-5).
+    title_width = max(len(title) for title, _, _ in rows)
+    identity_width = max(len(identity) for _, identity, _ in rows)
+    for title, identity, detail in rows:
+        lines.append(f"  {title:<{title_width}}  {identity:<{identity_width}}  {detail}")
+    return lines
+
+
 def render(result: RunResult, *, detail: bool = False) -> str:
     lines: list[str] = []
 
@@ -348,5 +411,8 @@ def render(result: RunResult, *, detail: bool = False) -> str:
             lines.append(
                 f"  {side:<9} {label:<{label_width}} {typed:<{type_width}}  {reason}"
             )
+
+    lines.append("")
+    lines.extend(_unassigned_lines(result))
 
     return "\n".join(lines) + "\n"
