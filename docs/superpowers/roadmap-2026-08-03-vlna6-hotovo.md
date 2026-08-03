@@ -108,9 +108,9 @@ Změřeno dvěma způsoby, oba souhlasí:
 - grep na vykresleném textu: žádný řádek neobsahuje `neni aktivni`
   (prázdný seznam),
 - výčet všech výsledků checku `static_route_status` napříč scopy: osm
-  výskytů, z toho šest PASS (routa v tabulce se stejným next-hopem) a dva
-  SKIP (`sluzba je v konfiguraci deaktivovana (interface deactivated)`).
-  Žádný BROKEN ani DEGRADED.
+  výskytů, z toho **pět PASS** (routa v tabulce se stejným next-hopem) a
+  **tři SKIP** (`sluzba je v konfiguraci deaktivovana (interface
+  deactivated)`). Žádný BROKEN ani DEGRADED.
 
 Zapsáno jako změřený fakt, ne jako mezera: **AR-43 je ověřené výhradně
 jednotkovými testy a ostrý report ho potvrdit nemůže.** Je to týž tvar jako
