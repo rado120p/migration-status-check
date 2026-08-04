@@ -614,9 +614,13 @@ def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snaps
     hlasuje. Chybel jen test, ktery to tvrdi.
 
     Zabiji mutanta: vypusteni `if result.status is not Status.SKIP` z
-    engine.py:145. Sourozenci ho zabijeji taky, ale oba pres jiny scenar -
-    compare-only check bez baseline a sluzba deaktivovana na obou stranach.
-    Pres static_route_status nechodi ani jeden.
+    engine.py:145. Zmereno (vlna 9, fix round 1): tenhle test ho zabije
+    primo (asserty nize) a `test_healthy_scope_without_baseline_is_pass_not_skip`
+    ho zabiji taky, pres jiny scenar - compare-only check bez baseline.
+    Sluzba deaktivovana na obou stranach uz od vlny 9 nekryje: DEGRADED
+    (WARN) vyhrava v `Status.worst()` nad SKIP i bez filtru, takze
+    `test_service_deactivated_on_both_sides_is_warn` na tenhle mutant
+    nezavisi.
     """
     subject = synthetic_snapshot(DEVICE_4, "172.20.20.4", "post-migration")
     del subject.facts["routes"]["inet.0"]["198.62.1.0/29"]["active"]
