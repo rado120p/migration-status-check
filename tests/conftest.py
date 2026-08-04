@@ -88,8 +88,8 @@ def _counters_for(peer: str) -> dict[str, int]:
     }
 
 # Druha RIB ma vlastni cisla, jinak by se dva bloky tehoz peera lisily jen
-# hlavickou. Nic nemeri; podstatne je, ze se lisi od 14/14/14/3 a ze
-# accepted < received.
+# hlavickou. Nic nemeri; podstatne je, ze se lisi od primarni RIB stejneho
+# peera (ta je odvozena z adresy pres _counters_for) a ze accepted < received.
 _SECOND_RIB_COUNTERS = {
     "received": 6,
     "accepted": 5,
