@@ -37,8 +37,13 @@ counterů ve fixtures a capture z laborky.
 - **Mutant se pouští až nad zacommitovanou prací.** `git checkout -- <soubor>`
   při revertu mutanta zahodí i neuložené změny téže úlohy. Pořadí v každé
   úloze je: commit → mutant → revert mutanta → hotovo.
-- **Mutant nesmí mířit do téhož souboru, proti kterému test asertuje.** Míří do
-  produkčního kódu, ne do `tests/`.
+- **Mutant nesmí mířit do téhož souboru, proti kterému test asertuje.** Smysl
+  pravidla je, aby mutant nezabil sám sebe: kdyby mířil do souboru, ve kterém
+  žije i aserce, mohl by shodit test způsobem, který o produkčním kódu nic
+  neříká. Prakticky to znamená „do produkčního kódu, ne do `tests/`" —
+  s jedinou výjimkou, kterou uživatel 2026‑08‑04 potvrdil: v **úloze 4** je
+  produkčním kódem úlohy `tests/conftest.py` a asertující testy leží
+  v `tests/test_end_to_end.py`, takže smysl pravidla porušený není.
 - **Každý mutant končí `grep -n MUTANT <soubor>`, který musí něco vypsat.**
   Když nevypíše, `sed` se neaplikoval, mutant nic neměří a je třeba ho upravit
   ručně. Nečinný mutant je horší než žádný — vypadá jako důkaz a není.
