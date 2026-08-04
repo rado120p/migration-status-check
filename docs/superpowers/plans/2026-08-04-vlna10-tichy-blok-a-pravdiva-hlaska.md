@@ -180,9 +180,21 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     result = api.evaluate(new, baseline=old, now=NOW)
     rendered = render(result)
 
+    # Cela hlaska je v souhrnne tabulce ve sloupci NALEZ, ne v bloku: blok
+    # tiskne status/label/value/change (_block v text_report.py), message
+    # nikdy. Zmereno.
+    summary_row = next(
+        line
+        for line in rendered.splitlines()
+        if line.startswith("FAIL") and "INTERNET-CPE13-NNI" in line
+    )
+    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in summary_row
+    assert "v subjektu neni" not in rendered
+
+    # V bloku je vidět `value`, a ta se meni taky.
     block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
-    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in block
-    assert "v subjektu neni" not in block
+    assert "BGP status (152.11.13.2)" in block
+    assert "neni ve sluzbe" in block
 
     # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
     # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by
@@ -319,6 +331,10 @@ Expected: FAIL — musí padnout **jak** `tests/checks/test_bgp.py::test_peer_me
 **tak** `tests/test_end_to_end.py::test_peer_moved_out_of_service_is_not_claimed_to_be_missing`.
 Kdyby padl jen ten jednotkový, nová sémantika není pokrytá přes skutečnou
 cestu — zastav a nahlas.
+
+Mutant mění **jen hlášku**, ne `value`, takže end-to-end test ho zabíjí
+výhradně přes aserci na souhrnný řádek. Aserce na `neni ve sluzbe` v bloku
+hlídá druhou polovinu změny; tu by zabil mutant měnící `value`.
 
 - [ ] **Step 10: Revert the mutant**
 
