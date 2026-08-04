@@ -24,16 +24,34 @@ takže sourozenec téže služby zůstane PASS.
 - **Zámek parserů:** `diff mx_parser.py evo_parser.py | wc -l` musí být
   **146** po každém commitu, který sáhl na parser. Každá úprava se dělá
   **v obou souborech identicky**.
-- **ASCII-only platí pro `migration_validator/` a `tests/`**, dokazuje se
-  `grep -nP '[^\x00-\x7F]'`. **Neplatí pro parsery** — `mx_parser.py` a
-  `evo_parser.py` jsou komentované česky s diakritikou (172 řádků s ne‑ASCII
-  znaky). Nové komentáře v parserech se píšou **s diakritikou**.
+- **Znaková sada se řídí souborem, který upravuješ — ne repem.** První znění
+  plánu tvrdilo „ASCII-only platí pro `migration_validator/` a `tests/`" a
+  **bylo to špatně**; vzniklo to tak, že autor plánu přečetl podmíněnou větu
+  roadmapy vlny 7 („*je-li* ASCII-only tvrdá podmínka…") jako tvrzení a
+  neověřil ji. Doměřeno až během úlohy 1, kdy to nahlásil implementer:
+  repo‑wide grep prázdný **není**, na `main` je 61 řádků s ne‑ASCII znaky v
+  šesti souborech.
+
+  Co platí doopravdy, po souborech:
+
+  | soubor | stav | co psát |
+  |---|---|---|
+  | `mx_parser.py`, `evo_parser.py` | 172 řádků česky | **s diakritikou** |
+  | `tests/parsers/test_inactive.py` | 54 řádků česky | **s diakritikou** |
+  | `tests/checks/test_routes.py`, `tests/checks/test_bgp.py` | 1 a 3 řádky | drž se okolí v místě zásahu |
+  | všechny ostatní soubory téhle vlny (`migration_validator/**`, `tests/parsers/test_static_routes.py`, `tests/models/**`) | čisté ASCII | **ASCII** |
+
+  Ověř si soubor před psaním: `grep -cP '[^\x00-\x7F]' <soubor>`.
+  **Existující ne‑ASCII obsah se neopravuje** — je předchozí a s vlnou 8
+  nesouvisí.
 - **Celá sada zelená, 0 přeskočených**, po každém commitu:
   `.venv/bin/python -m pytest -o addopts="" -q`. Výchozí stav je
   **640 passed**.
 - **Interpret je `.venv/bin/python`**, ne systémový `python`.
 - **Mutant se pouští nad tím stavem repa, ve kterém poběží doopravdy** — tedy
-  až po krocích téže úlohy, které mění dotčené soubory.
+  až po krocích téže úlohy, které mění dotčené soubory, a **až po commitu
+  té práce.** Revert mutanta (`git checkout -- <soubor>`) zahodí i neuložené
+  změny téže úlohy; s prací v commitu je revert bezpečný. Zaplaceno úlohou 2.
 - **Mutant se neadresuje číslem řádku.** Používej `python - <<'EOF'` s
   `str.replace` a `assert text.count(old) == 1`, ne `sed -i '194s/…/…/'`.
   Po každém mutantovi je `git diff --stat` **povinný krok**: prázdný výstup
@@ -509,7 +527,7 @@ neplatí). Očekávané: nejméně 12 failed. **Vlep skutečný výstup do repor
 
 ```bash
 diff mx_parser.py evo_parser.py | wc -l
-grep -rnP '[^\x00-\x7F]' tests/ | head
+git diff --name-only | xargs -r -I{} sh -c 'printf "%-50s %s\n" {} $(grep -cP "[^\x00-\x7F]" {})'
 .venv/bin/python -m pytest -o addopts="" -q | tail -2
 git add -A
 git commit -m "feat: deaktivovana statika zustava v zameru s priznakem active"
@@ -557,6 +575,12 @@ stav:
 ```
 
 - [ ] **Step 2: Napiš failující test na nové chování**
+
+**Pozor na znakovou sadu:** `tests/parsers/test_inactive.py` je psaný
+**česky s diakritikou** (54 řádků s ne‑ASCII znaky). Kódové bloky téhle
+úlohy jsou pro jednoduchost napsané bez diakritiky — **při vkládání do
+souboru diakritiku doplň**, ať docstringy sedí k okolí. Týká se to všech
+testů v téhle úloze; v `migration_validator/**` naopak zůstává ASCII.
 
 Do `tests/parsers/test_inactive.py`:
 
@@ -840,6 +864,13 @@ Když ti vyjde jiné číslo, spočítej si, kolik testů jsi doopravdy přidal,
 
 - [ ] **Step 8: Pusť mutanta**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 ```bash
 .venv/bin/python - <<'EOF'
 old = """                if self._is_inactive(neighbor_node):
@@ -865,7 +896,7 @@ ze Step 6. **Vlep skutečný výstup do reportu úlohy.**
 
 ```bash
 diff mx_parser.py evo_parser.py | wc -l
-grep -rnP '[^\x00-\x7F]' tests/ | head
+git diff --name-only | xargs -r -I{} sh -c 'printf "%-50s %s\n" {} $(grep -cP "[^\x00-\x7F]" {})'
 .venv/bin/python -m pytest -o addopts="" -q | tail -2
 git add -A
 git commit -m "feat: deaktivovany BGP soused jde do paralelniho seznamu misto zahozeni"
@@ -1048,6 +1079,13 @@ Očekávané: `647 passed` (645 + 2 nové).
 
 - [ ] **Step 9: Pusť mutanta na engine**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 ```bash
 .venv/bin/python - <<'EOF'
 old = """        for peer in (
@@ -1071,7 +1109,7 @@ výstup do reportu.
 - [ ] **Step 10: Commit**
 
 ```bash
-grep -rnP '[^\x00-\x7F]' migration_validator/ tests/ | head
+git diff --name-only | xargs -r -I{} sh -c 'printf "%-50s %s\n" {} $(grep -cP "[^\x00-\x7F]" {})'
 .venv/bin/python -m pytest -o addopts="" -q | tail -2
 git add -A
 git commit -m "feat: priznak deaktivace protece z inventory do Selectors a enginu"
@@ -1240,6 +1278,13 @@ Očekávané: `649 passed`.
 
 - [ ] **Step 6: Pusť dva mutanty**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 První ověřuje, že SKIP vůbec hlídá někdo:
 
 ```bash
@@ -1280,7 +1325,7 @@ oprav test, ne mutanta.
 - [ ] **Step 7: Commit**
 
 ```bash
-grep -rnP '[^\x00-\x7F]' migration_validator/ tests/ | head
+git diff --name-only | xargs -r -I{} sh -c 'printf "%-50s %s\n" {} $(grep -cP "[^\x00-\x7F]" {})'
 git add -A
 git commit -m "feat: deaktivovana statika dava SKIP na svem radku"
 ```
@@ -1442,6 +1487,13 @@ Očekávané: `653 passed`.
 
 - [ ] **Step 6: Pusť dva mutanty**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 ```bash
 .venv/bin/python - <<'EOF'
 old = "        if not peers and not inactive:"
@@ -1498,7 +1550,7 @@ regrese. Zapiš do reportu, co jsi viděl.
 - [ ] **Step 8: Commit**
 
 ```bash
-grep -rnP '[^\x00-\x7F]' migration_validator/ tests/ | head
+git diff --name-only | xargs -r -I{} sh -c 'printf "%-50s %s\n" {} $(grep -cP "[^\x00-\x7F]" {})'
 git status --short   # tests/test_tmp_render.py tu nesmi byt
 .venv/bin/python -m pytest -o addopts="" -q | tail -2
 git add -A
@@ -1515,7 +1567,7 @@ Až jsou všechny úlohy hotové, **před** whole-branch review:
 cd /home/rado/Desktop/scripts/migration-status-check
 .venv/bin/python -m pytest -o addopts="" | tail -3   # zelene, 0 skipped
 diff mx_parser.py evo_parser.py | wc -l              # 146
-grep -rnP '[^\x00-\x7F]' migration_validator/ tests/ # prazdne
+# znakova sada: viz Global Constraints, ridi se souborem
 grep -rn "schema_version" tests/fixtures/*.yml       # obojí 5
 git status --short                                   # cisty strom
 ```

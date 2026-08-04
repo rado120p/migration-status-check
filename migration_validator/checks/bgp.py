@@ -52,7 +52,16 @@ class BgpSessionStateCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
-        if not peers:
+        inactive = [
+            peer
+            for peer in ctx.scope.selectors.bgp_neighbors_inactive
+            if peer not in peers
+        ]
+
+        # Poradi je soucast pozadavku: sluzba, jejiz jediny peer je
+        # deaktivovany, nesmi dostat 'nema zadne BGP peery' - to by tvrdilo,
+        # ze v konfiguraci zadny neni.
+        if not peers and not inactive:
             return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
 
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
@@ -108,6 +117,20 @@ class BgpSessionStateCheck(Check):
                     baseline_value=baseline_state,
                     baseline={"state": baseline_state} if baseline_state else None,
                     subject=subject,
+                )
+            )
+
+        # Deaktivovany peer, pro ktery presto prisla session, se sem
+        # nedostane (filtr `peer not in peers` vys) a projde normalni vetvi -
+        # je to rozpor konfigurace se stavem a ma byt videt.
+        for peer in sorted(inactive):
+            findings.append(
+                Finding(
+                    Outcome.SKIP,
+                    f"peer {peer} je v konfiguraci deaktivovan",
+                    label=f"BGP status ({peer})",
+                    family=peer_family(peer),
+                    value="deaktivovan",
                 )
             )
         return findings

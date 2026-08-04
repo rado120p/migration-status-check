@@ -52,7 +52,7 @@ def test_load_inventory(tmp_path):
     path.write_text(
         textwrap.dedent(
             """\
-            schema_version: 4
+            schema_version: 5
             device: 172.20.20.4
             interfaces:
             - interface: ge-0/0/2.113
@@ -92,7 +92,7 @@ def test_load_inventory(tmp_path):
 
 def test_load_inventory_rejects_missing_interfaces_key(tmp_path):
     path = tmp_path / "bad.yml"
-    path.write_text("schema_version: 4\ndevice: 1.2.3.4\n", encoding="utf-8")
+    path.write_text("schema_version: 5\ndevice: 1.2.3.4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="interfaces"):
         load_inventory(path)
@@ -150,7 +150,7 @@ def test_old_inventory_fails_loudly(tmp_path):
 def test_current_inventory_loads(tmp_path):
     path = tmp_path / "new.yml"
     path.write_text(
-        "schema_version: 4\n"
+        "schema_version: 5\n"
         "device: 172.20.20.4\n"
         "interfaces:\n"
         "  - interface: ge-0/0/2.13\n"
@@ -186,7 +186,7 @@ def test_static_routes_and_bfd_survive_load(tmp_path):
     path = tmp_path / "nova.yml"
     path.write_text(
         """
-schema_version: 4
+schema_version: 5
 device: r1
 interfaces:
   - interface: et-0/0/8.113
@@ -220,7 +220,7 @@ interfaces:
 def test_missing_new_fields_default_to_empty(tmp_path):
     path = tmp_path / "bez.yml"
     path.write_text(
-        "schema_version: 4\ndevice: r1\n"
+        "schema_version: 5\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n",
         encoding="utf-8",
     )
@@ -243,7 +243,7 @@ def test_mapping_list_rejects_scalars(tmp_path):
     """
     path = tmp_path / "spatna.yml"
     path.write_text(
-        "schema_version: 4\ndevice: r1\n"
+        "schema_version: 5\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n"
         "    static_route: [not-a-mapping]\n",
         encoding="utf-8",
@@ -262,7 +262,7 @@ def test_service_entry_carries_both_deactivation_flags(tmp_path):
     """
     path = tmp_path / "inv.yml"
     path.write_text(
-        "schema_version: 4\ndevice: r1\n"
+        "schema_version: 5\ndevice: r1\n"
         "interfaces:\n"
         "  - interface: ge-0/0/4.0\n"
         "    service_type: IPVPN\n"
@@ -283,6 +283,25 @@ def test_service_entry_carries_both_deactivation_flags(tmp_path):
     )
 
 
+def test_entry_reads_inactive_bgp_neighbors(tmp_path):
+    """Deaktivovany soused se cte do vlastniho seznamu, ne do zivych."""
+    path = tmp_path / "inv.yml"
+    path.write_text(
+        "schema_version: 5\n"
+        "device: dev\n"
+        "interfaces:\n"
+        "- interface: ge-0/0/2.13\n"
+        "  service_type: Internet\n"
+        "  bgp_neighbor: [198.11.13.2]\n"
+        "  bgp_neighbor_inactive: [198.11.13.9]\n",
+        encoding="utf-8",
+    )
+    entry = load_inventory(str(path)).entries[0]
+
+    assert entry.bgp_neighbor == ["198.11.13.2"]
+    assert entry.bgp_neighbor_inactive == ["198.11.13.9"]
+
+
 def test_inventory_rejects_schema_three():
     """Stara inventory se nemigruje, generuje se znovu."""
-    assert INVENTORY_SCHEMA_VERSION == 4
+    assert INVENTORY_SCHEMA_VERSION == 5

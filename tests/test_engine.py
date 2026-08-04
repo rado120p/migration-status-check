@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from migration_validator import api
-from migration_validator.engine import _identity
+from migration_validator.engine import (
+    _identity,
+    _unassigned_bfd_sessions,
+    _unassigned_bgp_peers,
+)
 from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -218,6 +222,81 @@ def test_unassigned_bgp_peers_are_reported():
     assert result.unassigned["bgp_peers"][0]["peer"] == "10.9.9.9"
 
 
+def test_inactive_peer_is_assigned_not_unassigned():
+    """Ziva session deaktivovaneho peera patri sve sluzbe, ne do NEZARAZENO.
+
+    Deaktivovany peer je porad peer teto sluzby - kdyz pro nej presto prijde
+    session, je to nalez o teto sluzbe. Spadnout do NEZARAZENO by ten vztah
+    zahodilo.
+
+    Zabiji mutanta: `assigned` postavene jen z `bgp_neighbors`.
+    """
+    scope = Scope(
+        id="s1",
+        kind="service",
+        key=ScopeKey(None, "Internet"),
+        selectors=Selectors(bgp_neighbors_inactive=["198.11.13.9"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bgp": {"198.11.13.9": {"state": "Established"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bgp_peers(snapshot, [scope]) == []
+
+
+def test_inactive_peer_bfd_session_stays_visible_in_unassigned():
+    """Ziva BFD session deaktivovaneho peera musi zustat v NEZARAZENO.
+
+    Zamerna asymetrie proti BGP: u BGP dostane deaktivovany peer se zivou
+    session skutecny nalez u sve sluzby, takze do NEZARAZENO nepatri. U BFD
+    zadny takovy check neni - checks/bfd.py iteruje zamer bfd_peers, ktery
+    je pro deaktivovaneho peera prazdny. Kdyby se session zaroven povazovala
+    za zarazenou, nevykreslila by se nikde.
+
+    Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` postavene jako
+    sjednoceni `bgp_neighbors` a `bgp_neighbors_inactive` (tj. symetricky
+    s `_unassigned_bgp_peers`).
+    """
+    scope = Scope(
+        id="s1",
+        kind="service",
+        key=ScopeKey(None, "Internet"),
+        selectors=Selectors(bgp_neighbors_inactive=["198.11.13.9"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bfd": {"198.11.13.9": {"state": "Up", "interface": "et-0/0/9.0"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == [
+        {
+            "peer": "198.11.13.9",
+            "interface": "et-0/0/9.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
+
+
 MGMT_ROUTE = {
     "mgmt_junos.inet.0": {
         "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}
@@ -338,7 +417,7 @@ def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
     Chyti implementaci, ktera by do "assigned" sjednotila i zamer
     (`{str(b.get("peer")) for scope in scopes for b in
     scope.selectors.bfd_peers}`) - presne anti-vzor, ktery AR-14 a komentar
-    u `Scope.select()` (`models/scope.py:177-181`) zakazuji. Peer je
+    u vyberu `bfd` v `Scope.select()` zakazuji. Peer je
     v zameru (`bfd_peers`), ale nikdy se nedostal do `bgp_neighbors` -
     to je zrovna ten pripad meznery v parsovani, kvuli ktere `unassigned`
     existuje. Kdyby se zamer sjednotil do "assigned", session by se tise

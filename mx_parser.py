@@ -112,6 +112,11 @@ class RoutingInstance:
     evpn_service_type: str | None = None
     instance_vlan_ids: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    # Deaktivovaný soused se ze záměru nevypouští, jen se drží zvlášť.
+    # Paralelní seznam, ne mapa: `bgp_neighbors` slouží jako **selektor**
+    # (podle něj se k službě párují naměřené session), a přepis na mapu by
+    # rozbil čtyři testy členství v enginu a ve scopu bez užitku.
+    bgp_neighbors_inactive: list[str] = field(default_factory=list)
     bfd: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -140,6 +145,12 @@ class StaticRoute:
     rib: str
     prefix: str
     next_hop: list[str] = field(default_factory=list)
+    # Deaktivovaná routa se ze záměru **nevypouští**. Kdyby zmizela, check
+    # by neměl co přeskočit a operátor by z reportu nepoznal, že v
+    # konfiguraci vůbec je. Příznak se čte na listu, protože `_is_inactive`
+    # chodí po předcích — pokryje tím deaktivaci na libovolné úrovni nad
+    # routou, včetně celého `routing-options`.
+    active: bool = True
 
 
 @dataclass
@@ -157,6 +168,7 @@ class InterfaceService:
     routing_instance_active: bool = True
     interface_active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
+    bgp_neighbor_inactive: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
 
@@ -359,6 +371,7 @@ class JunosServiceParser:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
+        self.default_bgp_neighbors_inactive: list[str] = []
         self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
 
@@ -471,6 +484,14 @@ class JunosServiceParser:
             if not instance_name:
                 continue
 
+            instance_neighbors, instance_neighbors_inactive = (
+                self._parse_bgp_neighbors(
+                    node,
+                    "./*[local-name()='protocols']"
+                    "/*[local-name()='bgp']",
+                )
+            )
+
             instance = RoutingInstance(
                 name=instance_name,
                 active=not self._is_inactive(node),
@@ -507,11 +528,8 @@ class JunosServiceParser:
                         "/*[local-name()='name']/text()",
                     )
                 ),
-                bgp_neighbors=self._parse_bgp_neighbors(
-                    node,
-                    "./*[local-name()='protocols']"
-                    "/*[local-name()='bgp']",
-                ),
+                bgp_neighbors=instance_neighbors,
+                bgp_neighbors_inactive=instance_neighbors_inactive,
                 bfd=self._parse_bfd(
                     node,
                     "./*[local-name()='protocols']"
@@ -593,25 +611,28 @@ class JunosServiceParser:
         self,
         node: etree._Element,
         bgp_xpath: str,
-    ) -> list[str]:
+    ) -> tuple[list[str], list[str]]:
         neighbors: list[str] = []
+        inactive: list[str] = []
 
         for bgp_node in node.xpath(bgp_xpath):
             for neighbor_node in bgp_node.xpath(
                 ".//*[local-name()='neighbor']"
             ):
-                if self._is_inactive(neighbor_node):
-                    continue
-
                 neighbor = first_text(
                     neighbor_node,
                     "./*[local-name()='name']/text()",
                 ) or first_text(neighbor_node, "./text()")
 
-                if neighbor:
+                if not neighbor:
+                    continue
+
+                if self._is_inactive(neighbor_node):
+                    inactive.append(neighbor)
+                else:
                     neighbors.append(neighbor)
 
-        return unique(neighbors)
+        return unique(neighbors), unique(inactive)
 
     def _parse_static_routes(self) -> list[StaticRoute]:
         """Statiky z globálních routing-options i ze všech routing-instances.
@@ -636,8 +657,6 @@ class JunosServiceParser:
         for options_node in self.config_xml.xpath(
             "./*[local-name()='routing-options']"
         ):
-            if self._is_inactive(options_node):
-                continue
 
             routes.extend(
                 self._static_routes_under(options_node, None)
@@ -647,8 +666,6 @@ class JunosServiceParser:
             "./*[local-name()='routing-instances']"
             "/*[local-name()='instance']"
         ):
-            if self._is_inactive(instance_node):
-                continue
 
             instance_name = first_text(
                 instance_node,
@@ -661,8 +678,6 @@ class JunosServiceParser:
             for options_node in instance_node.xpath(
                 "./*[local-name()='routing-options']"
             ):
-                if self._is_inactive(options_node):
-                    continue
 
                 routes.extend(
                     self._static_routes_under(
@@ -714,16 +729,10 @@ class JunosServiceParser:
         routes: list[StaticRoute] = []
 
         for rib_name, static_node in containers:
-            # Jediné místo pro oba tvary: `static` přímo pod
-            # routing-options i `static` uvnitř `rib`.
-            if self._is_inactive(static_node):
-                continue
 
             for route_node in static_node.xpath(
                 "./*[local-name()='route']"
             ):
-                if self._is_inactive(route_node):
-                    continue
 
                 prefix = first_text(
                     route_node,
@@ -746,6 +755,7 @@ class JunosServiceParser:
                             route_node,
                             "./*[local-name()='next-hop']/text()",
                         ),
+                        active=not self._is_inactive(route_node),
                     )
                 )
 
@@ -953,7 +963,10 @@ class JunosServiceParser:
         klasifikovanými jako Internet.
         """
 
-        self.default_bgp_neighbors = self._parse_bgp_neighbors(
+        (
+            self.default_bgp_neighbors,
+            self.default_bgp_neighbors_inactive,
+        ) = self._parse_bgp_neighbors(
             self.config_xml,
             "./*[local-name()='protocols']"
             "/*[local-name()='bgp']",
@@ -1431,9 +1444,11 @@ class JunosServiceParser:
                 continue
 
             candidate_neighbors: list[str] = []
+            candidate_inactive: list[str] = []
 
             if service.service_type == "Internet":
                 candidate_neighbors = self.default_bgp_neighbors
+                candidate_inactive = self.default_bgp_neighbors_inactive
             elif service.routing_instance:
                 instance = self.routing_instances.get(
                     service.routing_instance
@@ -1441,6 +1456,7 @@ class JunosServiceParser:
 
                 if instance:
                     candidate_neighbors = instance.bgp_neighbors
+                    candidate_inactive = instance.bgp_neighbors_inactive
 
             matched_neighbors = [
                 neighbor
@@ -1450,6 +1466,17 @@ class JunosServiceParser:
                     interface,
                 )
             ]
+
+            matched_inactive = [
+                neighbor
+                for neighbor in candidate_inactive
+                if self._bgp_neighbor_matches_interface(neighbor, interface)
+            ]
+
+            if matched_inactive:
+                service.bgp_neighbor_inactive = unique(
+                    service.bgp_neighbor_inactive + matched_inactive
+                )
 
             if not matched_neighbors:
                 continue
@@ -2212,7 +2239,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 4
+INVENTORY_SCHEMA_VERSION = 5
 
 
 def create_yaml_data(
@@ -2251,6 +2278,7 @@ def clean_service_dict(
         "interface_active",
         "protocol",
         "bgp_neighbor",
+        "bgp_neighbor_inactive",
         "bridge_domain",
         "customer_vlan",
         "static_route",

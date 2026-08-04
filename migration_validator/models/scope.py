@@ -53,6 +53,7 @@ class Selectors:
     physical_interfaces: list[str] = field(default_factory=list)
     routing_instances: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    bgp_neighbors_inactive: list[str] = field(default_factory=list)
     local_ipv4: list[str] = field(default_factory=list)
     local_ipv6: list[str] = field(default_factory=list)
     virtual_gw_v4: list[str] = field(default_factory=list)
@@ -77,6 +78,7 @@ class Selectors:
             "physical_interfaces": list(self.physical_interfaces),
             "routing_instances": list(self.routing_instances),
             "bgp_neighbors": list(self.bgp_neighbors),
+            "bgp_neighbors_inactive": list(self.bgp_neighbors_inactive),
             "local_ipv4": list(self.local_ipv4),
             "local_ipv6": list(self.local_ipv6),
             "virtual_gw_v4": list(self.virtual_gw_v4),
@@ -154,10 +156,15 @@ class Scope:
             for entry in (facts.get("nd") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
+        # Deaktivovany peer patri scopu stejne jako aktivni. Kdyby se sem
+        # jeho session nedostala, check by ho videl jako bezsessioveho,
+        # dal by mu SKIP 'deaktivovan' - a rozpor 'konfigurace vypnuto,
+        # zarizeni bezi' by z reportu zmizel.
         bgp = {
             peer: data
             for peer, data in (facts.get("bgp") or {}).items()
             if peer in self.selectors.bgp_neighbors
+            or peer in self.selectors.bgp_neighbors_inactive
         }
         evpn_vpws = {
             name: data
@@ -194,6 +201,15 @@ class Scope:
         # vybiralo podle bfd_peers, session peeru, ktereho parser do
         # zameru nedoplnil, by se sem nedostala a chyba v pruchodu
         # hierarchii by se schovala pred vystupem nastroje (AR-14).
+        #
+        # Na rozdil od bgp vys se tady bgp_neighbors_inactive zamerne
+        # nepricita. checks/bfd.py o deaktivovanych peerech nevi - zamer si
+        # bere z bfd_peers, ktery pro deaktivovaneho peera prazdny je -
+        # takze vybranou session by vypsal jako WARN 'session existuje,
+        # v konfiguraci sluzby neni'. To je nepravda: v konfiguraci sluzby
+        # peer je, jen deaktivovany. BFD se na teto vlne zamerne nemenilo,
+        # takze session zustava nezarazena a videt je v NEZARAZENO - viz
+        # _unassigned_bfd_sessions v engine.py.
         bfd = {
             peer: data
             for peer, data in (facts.get("bfd") or {}).items()

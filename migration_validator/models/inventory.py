@@ -62,6 +62,10 @@ class ServiceEntry:
     interface_active: bool = True
     protocol: list[str] = field(default_factory=list)
     bgp_neighbor: list[str] = field(default_factory=list)
+    # Deaktivovany soused. Drzi se zvlast od bgp_neighbor, protoze ten
+    # slouzi jako selektor merenych session; slit je do jednoho seznamu by
+    # znamenalo drzet je v synchronu.
+    bgp_neighbor_inactive: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
@@ -94,6 +98,7 @@ class ServiceEntry:
             interface_active=bool(data.get("interface_active", True)),
             protocol=_as_list(data.get("protocol")),
             bgp_neighbor=_as_list(data.get("bgp_neighbor")),
+            bgp_neighbor_inactive=_as_list(data.get("bgp_neighbor_inactive")),
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
             static_route=_as_mapping_list(data.get("static_route")),
@@ -115,6 +120,7 @@ class ServiceEntry:
             "interface_active": self.interface_active,
             "protocol": list(self.protocol),
             "bgp_neighbor": list(self.bgp_neighbor),
+            "bgp_neighbor_inactive": list(self.bgp_neighbor_inactive),
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
             "static_route": [dict(route) for route in self.static_route],
@@ -128,7 +134,7 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 4
+INVENTORY_SCHEMA_VERSION = 5
 
 
 def load_inventory(path: str | Path) -> Inventory:
