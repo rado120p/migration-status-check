@@ -201,7 +201,7 @@ def test_bgp_session_of_deactivated_peer_is_selected():
     """Deaktivovany peer se zivou session patri scopu stejne jako aktivni.
 
     Kdyby se session nevybrala, checks/bgp.py by peera videl jako
-    bezsessioveho, dal by mu SKIP 'deaktivovan' a rozpor 'konfigurace
+    bezsessioveho, dal by mu WARN 'deaktivovan' a rozpor 'konfigurace
     vypnuto, zarizeni bezi' by z reportu zmizel.
 
     Zabiji mutanta: vyber `bgp` filtrovany jen pres `bgp_neighbors`

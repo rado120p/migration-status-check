@@ -477,10 +477,10 @@ def test_deactivated_route_warns_on_own_row_and_sibling_stays_ok():
     Treti routa (aktivni, ale chybejici v tabulce) je tu schvalne: bez ni
     by mutant `if route.get("active", True) is False:` -> `if True:` prosel
     beze zmeny vysledku - sourozenec s daty v subjektu skonci OK porad,
-    protoze vetev SKIP pro nej neni dosazitelna (subject neni None). Treti
-    routa ma subject None, takze mutant, ktery oznaci za deaktivovanou i
-    tuhle aktivni routu, by ji misto BROKEN vratil chybne jako SKIP - a
-    tenhle test to zachyti.
+    protoze vetev deaktivace pro nej neni dosazitelna (subject neni None).
+    Treti routa ma subject None, takze mutant, ktery oznaci za deaktivovanou
+    i tuhle aktivni routu, by ji misto BROKEN vratil chybne jako DEGRADED -
+    a tenhle test to zachyti.
     """
     scope = _scope(
         static_routes=[
@@ -603,15 +603,18 @@ def test_route_active_now_deactivated_in_baseline_gets_no_deactivation_row():
     assert "deaktivovan" not in findings[0].message
 
 
-def test_deactivated_route_still_in_the_table_is_not_skipped():
-    """Deaktivovana routa, ktera v tabulce presto je, SKIP nedostane.
+def test_deactivated_route_still_in_the_table_is_not_hidden_by_deactivation_branch():
+    """Deaktivovana routa, ktera v tabulce presto je, nespadne do vetve
+    deaktivace - jde normalni cestou a nese normalni stavovy radek.
 
     Konfigurace rika 'vypnuto', tabulka rika 'nainstalovana' - to je
-    skutecny rozpor zameru se stavem a ma zustat viditelny, ne se schovat
-    pod SKIP. Zabiji mutanta, ktery druhy konjunkt SKIP podminky vypusti:
+    skutecny rozpor zameru se stavem a ma zustat viditelny se svym
+    obvyklym stavem, ne za cenu radku 'routa je v konfiguraci deaktivovana'.
+    Zabiji mutanta, ktery druhy konjunkt vetve deaktivace vypusti:
     `if deactivated and subject is None:` -> `if deactivated:`. Bez teto
     routy (deaktivovana, ale s datmi v subjektu) by takovy mutant prosel
-    beze zmeny vysledku testu.
+    beze zmeny vysledku testu - s ni vetev deaktivace vrati DEGRADED misto
+    OK, ktere normalni cesta vydava.
     """
     scope = _scope(
         static_routes=[
@@ -632,6 +635,5 @@ def test_deactivated_route_still_in_the_table_is_not_skipped():
 
     assert len(findings) == 1
     finding = findings[0]
-    assert finding.outcome is not Outcome.SKIP
     assert finding.outcome is Outcome.OK
     assert finding.value == "4.4.4.4"

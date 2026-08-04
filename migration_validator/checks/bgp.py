@@ -176,10 +176,11 @@ class BgpSessionStateCheck(Check):
                 )
             )
 
-        # Peer, ktery ma byt a session pro nej neprisla. Zrcadli
-        # checks/routes.py:163-178: 'nakonfigurovana, ale neni v tabulce' vs
-        # 'v baseline byla, v subjektu neni'. Deaktivovane peery uz vyresila
-        # smycka vys, proto se odectou.
+        # Peer, ktery ma byt a session pro nej neprisla. Zrcadli vetev
+        # `if subject is None:` v checks/routes.py (hlasky 'nakonfigurovana,
+        # ale neni v routovaci tabulce' vs 'v baseline byla, v subjektu
+        # neni'). Deaktivovane peery uz vyresila smycka vys, proto se
+        # odectou.
         without_session = universe - set(peers) - set(ctx.scope.selectors.bgp_neighbors_inactive)
         for peer in sorted(without_session):
             in_config = peer in configured

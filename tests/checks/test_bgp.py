@@ -266,6 +266,58 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
     assert results[0].value == "Established"
 
 
+def test_peer_active_now_deactivated_in_baseline_with_live_session_gets_no_deactivation_row():
+    """Znovuzapnuty peer neni varovani - je to zlepseni (R-2).
+
+    Radek 4 tabulky se u podprvku neuplatnuje: peer, ktery je ted aktivni
+    v konfiguraci, zadny deaktivovany prvek nenese. Jeho stav nese normalni
+    stavovy radek (tady s bezici session), ne radek o deaktivaci.
+
+    Zabiji mutanta: volani deactivation_outcome() i pro peera, ktery je
+    aktivni v subjektu, ale deaktivovany v baselinu. S nim by kazdy
+    znovuzapnuty peer pridal WARN navic ke svemu normalnimu radku.
+    """
+    ctx = _ctx(
+        {"bgp": {"198.11.13.2": _peer(state="Established")}},
+        baseline={"bgp": {}},
+        bgp_neighbors=["198.11.13.2"],
+        bgp_neighbors_inactive=[],
+        baseline_neighbors=[],
+        baseline_neighbors_inactive=["198.11.13.2"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.PASS
+    assert "deaktivovan" not in results[0].message
+
+
+def test_peer_active_now_deactivated_in_baseline_without_session_gets_no_deactivation_row():
+    """Totez jako vyse, ale peer nema session vubec - jde do vetve 'bez
+    session', ne do vetve deaktivace.
+
+    Zabiji stejneho mutanta jako test vyse, ale pro peera bez zivych dat -
+    kdyby se deactivation_outcome() volalo i pro takove peery s
+    subject_off=False, dostal by druhy WARN radek navic k tomu, ktery uz
+    vydava vetev 'bez session'.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=["198.11.13.2"],
+        bgp_neighbors_inactive=[],
+        baseline_neighbors=[],
+        baseline_neighbors_inactive=["198.11.13.2"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "deaktivovan" not in results[0].message
+
+
 def test_state_change_to_established_is_pass_not_warn():
     """Rozhodnuti R-2: zlepseni neni varovani.
 

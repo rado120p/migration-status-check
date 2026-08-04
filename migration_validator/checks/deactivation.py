@@ -34,6 +34,13 @@ def deactivation_outcome(subject_off: bool, baseline_off: bool | None) -> Outcom
 
     Navrat `None` znamena "zadny radek nevznika" - zdravy prvek nema v bloku
     dostat radek, ktery nic nerika (R-1).
+
+    Radek 4 tabulky (`subject_off=False`, `baseline_off=True` - aktivni ted,
+    vypnuty v baselinu) patri jen sluzbe samotne. checks/routes.py a
+    checks/bgp.py volaji tuhle funkci pro podprvky vzdy s `subject_off=True`
+    - znovuzapnuta routa nebo peer zadny deaktivovany prvek nenesou a
+    zlepseni neni varovani (R-2), takze pro ne se `deactivation_outcome`
+    s `subject_off=False` vubec nevola.
     """
     if not subject_off and not baseline_off:
         return None
