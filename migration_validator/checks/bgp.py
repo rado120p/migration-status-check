@@ -13,6 +13,7 @@ import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.deactivation import deactivation_outcome
 from migration_validator.checks.ifaces import percent_change
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -123,11 +124,39 @@ class BgpSessionStateCheck(Check):
         # Deaktivovany peer, pro ktery presto prisla session, se sem
         # nedostane (filtr `peer not in peers` vys) a projde normalni vetvi -
         # je to rozpor konfigurace se stavem a ma byt videt.
+        #
+        # Radek 4 tabulky (aktivni ted, vypnuty v baselinu) se sem nedostane
+        # taky: takovy peer je v `peers` nebo v `bgp_neighbors`, ne v
+        # `inactive`. Nedostat se tam ma - znovuzapnuty peer zadny
+        # deaktivovany prvek nenese a zlepseni neni varovani (R-2).
+        baseline_inactive = (
+            ctx.baseline_scope.selectors.bgp_neighbors_inactive
+            if ctx.baseline_scope is not None
+            else []
+        )
+        baseline_active = (
+            ctx.baseline_scope.selectors.bgp_neighbors
+            if ctx.baseline_scope is not None
+            else []
+        )
         for peer in sorted(inactive):
+            if peer in baseline_inactive:
+                baseline_off = True
+            elif peer in baseline_active:
+                baseline_off = False
+            else:
+                baseline_off = None
+            outcome = deactivation_outcome(True, baseline_off)
+            message = (
+                f"peer {peer} v baseline bezel, ted je v konfiguraci "
+                "deaktivovan - migrace nedokoncena"
+                if outcome is Outcome.BROKEN
+                else f"peer {peer} je v konfiguraci deaktivovan"
+            )
             findings.append(
                 Finding(
-                    Outcome.SKIP,
-                    f"peer {peer} je v konfiguraci deaktivovan",
+                    outcome,
+                    message,
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
                     value="deaktivovan",

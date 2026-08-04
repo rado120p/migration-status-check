@@ -10,21 +10,48 @@ from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
-def _ctx(subject, baseline=None, config=None, bgp_neighbors=None, bgp_neighbors_inactive=None):
-    scope = Scope(
+def _scope_of(bgp_neighbors, bgp_neighbors_inactive):
+    return Scope(
         id="svc:L3VPN-CPE13-NNI:IPVPN",
         kind="service",
         key=ScopeKey("L3VPN-CPE13-NNI", "IPVPN", None),
         selectors=Selectors(
             interfaces=["ge-0/0/2.113"],
-            bgp_neighbors=["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
-            bgp_neighbors_inactive=bgp_neighbors_inactive or [],
+            bgp_neighbors=list(bgp_neighbors),
+            bgp_neighbors_inactive=list(bgp_neighbors_inactive),
         ),
+    )
+
+
+def _ctx(
+    subject,
+    baseline=None,
+    config=None,
+    bgp_neighbors=None,
+    bgp_neighbors_inactive=None,
+    baseline_neighbors=None,
+    baseline_neighbors_inactive=None,
+):
+    """Baseline ZAMER se predava sem, ne prirazenim po konstrukci.
+
+    CheckContext neni frozen, takze `ctx.baseline_scope = ...` by proslo, ale
+    test, ktery si context prestavuje az po sestaveni, obchazi tvar, ktery
+    engine skutecne stavi.
+    """
+    scope = _scope_of(
+        ["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
+        bgp_neighbors_inactive or [],
+    )
+    baseline_scope = (
+        _scope_of(baseline_neighbors or [], baseline_neighbors_inactive or [])
+        if baseline_neighbors is not None or baseline_neighbors_inactive is not None
+        else None
     )
     return CheckContext(
         scope=scope,
         subject=subject,
         baseline=baseline,
+        baseline_scope=baseline_scope,
         config=config or default_config(),
         failed_collectors={},
     )
@@ -109,11 +136,12 @@ def test_no_bgp_peers_skips():
     assert "BGP" in result.message
 
 
-def test_deactivated_peer_without_session_yields_skip():
-    """Deaktivovany peer bez session se v reportu objevi jako SKIP.
+def test_deactivated_peer_without_session_warns():
+    """Deaktivovany peer bez session se v reportu objevi jako WARN.
 
     Bez teto vetve by z reportu zmizel uplne a operator by nepoznal, ze
-    sluzba takoveho peera v konfiguraci vubec ma.
+    sluzba takoveho peera v konfiguraci vubec ma. Od vlny 9 uz to neni SKIP:
+    deaktivovany prvek konfigurace je sam o sobe nalez.
     """
     ctx = _ctx(
         {"bgp": {"198.11.13.2": _peer(state="Established")}},
@@ -123,11 +151,11 @@ def test_deactivated_peer_without_session_yields_skip():
     results = run_check(BgpSessionStateCheck(), ctx)
     by_label = {result.label: result for result in results}
 
-    assert by_label["BGP status (198.11.13.9)"].status is Status.SKIP
+    assert by_label["BGP status (198.11.13.9)"].status is Status.WARN
     assert by_label["BGP status (198.11.13.2)"].status is Status.PASS
 
 
-def test_service_with_only_deactivated_peers_skips_per_peer():
+def test_service_with_only_deactivated_peers_warns_per_peer():
     """Jediny peer sluzby je deaktivovany - nesmi to spadnout do 'zadny peer'.
 
     Zabiji mutanta: ponechany predcasny navrat `if not peers:`.
@@ -140,8 +168,45 @@ def test_service_with_only_deactivated_peers_skips_per_peer():
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
-    assert results[0].status is Status.SKIP
+    assert results[0].status is Status.WARN
     assert results[0].value == "deaktivovan"
+
+
+def test_peer_deactivated_in_subject_but_active_in_baseline_is_fail():
+    """V baselinu peer bezel, ted je vypnuty - migrace nedokoncena."""
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors=["198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "migrace nedokoncena" in results[0].message
+
+
+def test_peer_deactivated_in_both_snapshots_is_warn():
+    """Vypnuty i predtim - porad nalez, jen tissi.
+
+    Zabiji mutanta: navrat Outcome.OK pro tuhle dvojici. S nim by sluzba s
+    dlouhodobe vypnutym peerem byla PASS.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors_inactive=["198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.WARN
 
 
 def test_deactivated_peer_with_live_session_is_reported_normally():
