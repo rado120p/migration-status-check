@@ -1,8 +1,10 @@
 """Testy checku deaktivace.
 
-Matice je cela pointa: sluzba deaktivovana na obou stranach je PASS (stav se
-nezmenil), ne SKIP. Sluzba, ktera na starem zarizeni bezela a na novem je
-deaktivovana, je FAIL - migrace nedokoncena.
+Matice je cela pointa: deaktivovana sluzba neni nikdy PASS, ani kdyz byla
+deaktivovana i v baselinu - konfigurace by deaktivovane prvky bezne
+obsahovat nemela (rozhodnuti uzivatele z 2026-08-04). Sluzba, ktera na
+starem zarizeni bezela a na novem je deaktivovana, je FAIL - migrace
+nedokoncena.
 """
 
 from __future__ import annotations
@@ -10,7 +12,10 @@ from __future__ import annotations
 import pytest
 
 from migration_validator.checks.base import CheckContext
-from migration_validator.checks.deactivation import DeactivationStateCheck
+from migration_validator.checks.deactivation import (
+    DeactivationStateCheck,
+    deactivation_outcome,
+)
 from migration_validator.config import default_config
 from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
@@ -39,10 +44,33 @@ def _ctx(subject_off: bool, baseline_off: bool | None) -> CheckContext:
 @pytest.mark.parametrize(
     "subject_off,baseline_off,expected",
     [
-        (True, True, Outcome.OK),
+        (True, False, Outcome.BROKEN),
+        (True, True, Outcome.DEGRADED),
+        (True, None, Outcome.DEGRADED),
+        (False, True, Outcome.DEGRADED),
+        (False, False, None),
+        (False, None, None),
+    ],
+)
+def test_deactivation_outcome_table(subject_off, baseline_off, expected):
+    """Vsech sest kombinaci zvlast - aby selhani ukazalo, ktera se rozpojila.
+
+    Rozdil mezi baseline_off=False a baseline_off=None je nosny: prvni
+    znamena "v baselinu bezel", druhy "baseline neni k porovnani". Kdyby je
+    funkce splacala dohromady, radek (True, None) by dal BROKEN a bezny beh
+    bez baseline by kazdou deaktivovanou sluzbu hlasil jako nedokoncenou
+    migraci.
+    """
+    assert deactivation_outcome(subject_off, baseline_off) is expected
+
+
+@pytest.mark.parametrize(
+    "subject_off,baseline_off,expected",
+    [
+        (True, True, Outcome.DEGRADED),
         (True, False, Outcome.BROKEN),
         (False, True, Outcome.DEGRADED),
-        (True, None, Outcome.SKIP),
+        (True, None, Outcome.DEGRADED),
     ],
 )
 def test_matrix(subject_off, baseline_off, expected):

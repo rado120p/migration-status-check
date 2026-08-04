@@ -565,22 +565,23 @@ def _deactivated(snapshot):
     return snapshot
 
 
-def test_service_deactivated_on_both_sides_is_pass():
-    """Deaktivovano na obou stranach = PASS, ne SKIP - stav se nezmenil.
+def test_service_deactivated_on_both_sides_is_warn():
+    """Deaktivovano na obou stranach = WARN, ne PASS a ne SKIP.
 
-    Ostatni checky SKIPnou (AR-22), projde jen OK z deactivation_state,
-    a Status.worst z jedine ne-SKIP hodnoty da PASS.
+    Konfigurace by deaktivovane prvky bezne obsahovat nemela, takze
+    "nezmenilo se to" neni duvod mlcet - je to duvod hlasit potise
+    (rozhodnuti uzivatele z 2026-08-04).
 
-    Zabiji mutanta: vyjmuti deactivation_state ze zkratky v run_check. Pak by
-    SKIPl i on, `reported` by byl prazdny a sluzba by spadla do SKIP - tedy
-    "nic se nezmerilo" misto "je to v poradku".
+    Zabiji mutanta: navrat Outcome.OK v teto vetvi deactivation.py. S nim by
+    Status.worst z jedine ne-SKIP hodnoty dal PASS a sluzba by ve strucnem
+    vypisu zmizela mezi zdravymi.
     """
     result = api.evaluate(
         _deactivated(_new()), baseline=_deactivated(_old()), now=NOW
     )
 
     assert result.scopes
-    assert result.scopes[0].status is Status.PASS
+    assert result.scopes[0].status is Status.WARN
 
 
 def test_service_deactivated_only_in_subject_is_fail():

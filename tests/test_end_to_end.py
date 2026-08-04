@@ -56,8 +56,16 @@ def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
     for check in deactivation_checks:
         if check.status is Status.FAIL:
             assert "migrace nedokoncena" in check.message
-        elif check.status is Status.WARN:
-            assert "ted je aktivni" in check.message
+        else:
+            # Dve ruzne cesty k WARN, a splacnout je dohromady by zakrylo
+            # obracene poradi: "ted je aktivni" je zmena proti baselinu,
+            # "baseline neni k porovnani" je nesparovana sluzba, ktera je
+            # deaktivovana a porovnat se nema s cim. Od vlny 9 je i druha
+            # z nich WARN, ne SKIP.
+            assert (
+                "ted je aktivni" in check.message
+                or "baseline neni k porovnani" in check.message
+            )
 
     assert result.summary["scopes_matched"] >= 5
     assert json.loads(to_json(result))["schema_version"] == 1
