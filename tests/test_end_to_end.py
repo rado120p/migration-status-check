@@ -472,3 +472,66 @@ def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapsho
 
     assert after["PASS"] == before["PASS"] - 1
     assert after["WARN"] == before["WARN"] + 1
+
+
+def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapshot):
+    """Bod 19: peer se zivou session nesmi byt hlasen jako 'v subjektu neni'.
+
+    Blok sluzby a NEZARAZENO jsou dve nezavisle cesty. Blok jde pres
+    ctx.baseline, coz jsou fakta profiltrovana BASELINE selektory, takze
+    peera vidi. NEZARAZENO jde pres surova subject.facts['bgp'] a mnozinu
+    assigned jen ze SUBJEKTOVYCH scopu, takze ho vidi taky. Dokud blok
+    tvrdil 'v subjektu neni', rekly ty dve sekce o jednom peeru dve
+    neslucitelne veci.
+
+    Test asertuje OBE sekce v jednom behu. Kdyby asertoval jen blok, prosel
+    by i nad implementaci, ktera peera z NEZARAZENO vyhodi - a to je jina
+    varianta, kterou uzivatel vedome odmitl.
+
+    Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni'.
+
+    Aserce `peer in new.facts['bgp']` nize je POJISTKA PROTI VAKUOVOSTI a
+    nesmi se odstranit. _facts_for() (tests/conftest.py) odvozuje
+    facts['bgp'] ZE SELEKTORU, takze kdyby nekdo odebrani peera presunul
+    pred stavbu snimku, zadna session by pro nej nevznikla - peer by se do
+    NEZARAZENO nedostal a obe aserce nize by prosly, aniz by cokoli
+    dokazaly. Tahle jedina aserce ten presun odhali.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
+    target = next(
+        scope for scope in new.scopes
+        if scope.id == "svc:INTERNET-CPE13-NNI:Internet"
+    )
+    peer = "152.11.13.2"
+    assert peer in new.facts["bgp"], "fixture nema session peera, test by byl vakuovy"
+    target.selectors.bgp_neighbors = [
+        neighbor for neighbor in target.selectors.bgp_neighbors if neighbor != peer
+    ]
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+    rendered = render(result)
+
+    # Cela hlaska je v souhrnne tabulce ve sloupci NALEZ, ne v bloku: blok
+    # tiskne status/label/value/change (_block v text_report.py), message
+    # nikdy. Zmereno.
+    summary_row = next(
+        line
+        for line in rendered.splitlines()
+        if line.startswith("FAIL") and "INTERNET-CPE13-NNI" in line
+    )
+    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in summary_row
+    assert "v subjektu neni" not in rendered
+
+    # V bloku je videt `value`, a ta se meni taky.
+    block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
+    assert "BGP status (152.11.13.2)" in block
+    assert "neni ve sluzbe" in block
+
+    # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
+    # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by
+    # proslo i kdyby se sekce vubec nevytiskla (pravidlo vlny 5).
+    unassigned = rendered.split("NEZARAZENO")[-1]
+    assert peer in unassigned
