@@ -2212,7 +2212,7 @@ def retrieve_configuration(
 # ---------------------------------------------------------------------------
 
 
-INVENTORY_SCHEMA_VERSION = 4
+INVENTORY_SCHEMA_VERSION = 5
 
 
 def create_yaml_data(

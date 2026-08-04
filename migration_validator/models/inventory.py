@@ -128,7 +128,7 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 4
+INVENTORY_SCHEMA_VERSION = 5
 
 
 def load_inventory(path: str | Path) -> Inventory:

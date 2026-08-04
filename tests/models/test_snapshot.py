@@ -49,7 +49,7 @@ def test_save_and_load(tmp_path):
     save_snapshot(_snapshot(), path)
 
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert written["schema_version"] == 4
+    assert written["schema_version"] == 5
     assert written["device"]["platform"] == "junos"
 
     assert load_snapshot(path) == _snapshot()
@@ -70,6 +70,17 @@ def test_load_rejects_other_schema_version(tmp_path):
         load_snapshot(path)
 
 
+def test_snapshot_rejects_previous_schema_version():
+    """Stary snimek se musi odmitnout hlasite, ne precist s prazdnymi klici.
+
+    Vlna 8 pridala do Selectors klic bgp_neighbors_inactive. Snapshot scopy
+    vnoruje, takze stary snimek by ho precetl jako prazdny a deaktivovany
+    peer by se tise stal aktivnim - prave ta vada, kterou vlna opravuje.
+    """
+    with pytest.raises(SnapshotVersionError):
+        Snapshot.from_dict({"schema_version": 4})
+
+
 def test_snapshot_without_inventory_has_empty_ping():
     snapshot = Snapshot(
         device=DeviceMeta(address="1.2.3.4"),
@@ -81,8 +92,8 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_four():
-    assert SCHEMA_VERSION == 4
+def test_snapshot_version_is_five():
+    assert SCHEMA_VERSION == 5
 
 
 def test_old_snapshot_fails_loudly():
