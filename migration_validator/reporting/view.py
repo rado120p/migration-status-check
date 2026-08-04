@@ -10,7 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from migration_validator.models.result import CheckResult, ScopeResult, Status
+from migration_validator.models.result import (
+    CheckResult,
+    ScopeResult,
+    Severity,
+    SKIPPED_BECAUSE,
+    SKIP_DEACTIVATED,
+    Status,
+)
 
 # Poradi sekci. None jsou radky, ktere na rodine nezavisi (stav rozhrani) -
 # ty stoji hned pod hlavickou bloku a vlastni nadpis nemaji, protoze nadpis
@@ -99,6 +106,47 @@ def change_text(row: Row, has_baseline: bool) -> str:
     return f"bylo {row.baseline_value}"
 
 
+MERGED_LABEL = "Ostatni checky"
+
+
+def _merge_deactivation_skips(checks: list[CheckResult]) -> list[CheckResult]:
+    """Deaktivacni SKIPy jedne sekce nahradi jednim radkem s poctem.
+
+    Slevaji se JEN radky se znackou, ne vsechny SKIPy. Blok deaktivovane
+    sluzby umi nest i 'BGP prefixy : bez baseline', coz je SKIP z docela
+    jineho duvodu a nese informaci, kterou nic jineho nenese.
+
+    Pocet je pocet SLOUCENYCH radku, ne vsech SKIPu v sekci. Kdo napise
+    len(skips), dostane v bloku svc:et-0/0/10.0:Internet deset misto devíti.
+    """
+    marked = {
+        id(check)
+        for check in checks
+        if check.details.get(SKIPPED_BECAUSE) == SKIP_DEACTIVATED
+    }
+    if not marked:
+        return checks
+
+    # Deli se podle IDENTITY objektu, ne podle rovnosti: CheckResult je
+    # dataclass s vygenerovanym __eq__, takze dva radky se shodnymi poli by
+    # se pres `check not in marked` odstranily oba.
+    kept = [check for check in checks if id(check) not in marked]
+    return [
+        *kept,
+        CheckResult(
+            id="deactivation_skips",
+            # mode='state' schvalne: sloupec ZMENA ma u souhrnneho radku
+            # zustat prazdny, protoze zadnou baseline hodnotu nenese.
+            mode="state",
+            status=Status.SKIP,
+            severity=Severity.ADVISORY,
+            message=f"{len(marked)} dalsich checku preskoceno, sluzba je deaktivovana",
+            label=MERGED_LABEL,
+            value=f"{len(marked)} preskoceno",
+        ),
+    ]
+
+
 def _row(check: CheckResult, qualify: bool) -> Row:
     """Radek reportu.
 
@@ -138,11 +186,15 @@ def _worst_message(scope: ScopeResult) -> str:
     return ""
 
 
-def build_view(scope: ScopeResult) -> ServiceView:
+def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
     """Slozi z vysledku sluzby vse, co report vypisuje.
 
     Sekce prazdne rodiny se nevytvari - sluzba bez IPv6 nema mit prazdnou
     IPv6 sekci.
+
+    `detail` rozhoduje o slevani deaktivacnich SKIPu. Zije az tady, ne
+    v engine: sloucení je vlastnost ZOBRAZENI, ne vysledku behu, takze
+    RunResult.to_dict() vydava vsechny checky dal bez ohledu na nej.
     """
     identity = scope.identity or {}
     addresses = {4: list(identity.get("ipv4", [])), 6: list(identity.get("ipv6", []))}
@@ -156,6 +208,8 @@ def build_view(scope: ScopeResult) -> ServiceView:
         checks = [check for check in scope.checks if check.family == family]
         if not checks:
             continue
+        if not detail:
+            checks = _merge_deactivation_skips(checks)
         own = addresses.get(family, [])
         qualify = len(own) > 1
         rows: list[Row] = []

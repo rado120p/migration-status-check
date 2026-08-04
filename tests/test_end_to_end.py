@@ -535,3 +535,93 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     # proslo i kdyby se sekce vubec nevytiskla (pravidlo vlny 5).
     unassigned = rendered.split("NEZARAZENO")[-1]
     assert peer in unassigned
+
+
+def _deactivate_shared_service(old, new):
+    """Vypne tutez sluzbu v obou snimcich a vrati jeji description.
+
+    Parovani podle DVOJICE (description, service_type): samotny description
+    nestaci, fixtures nesou EVPN-VLAN-AWARE-INTERNET dvakrat - jednou jako
+    Internet a jednou jako E-LAN. Podle samotneho description by se v kazdem
+    snimku mohla vypnout jina a test by meril nesparovanou sluzbu.
+    """
+    target = ("EVPN-VLAN-AWARE-CPE13-NNI", "E-LAN")
+    hit = 0
+    for snapshot in (old, new):
+        for scope in snapshot.scopes:
+            if scope.kind != "service":
+                continue
+            if (scope.key.description, scope.key.service_type) == target:
+                scope.interface_active = False
+                hit += 1
+    assert hit == 2, "sluzba neni v obou snimcich, test by meril nesparovanou"
+    return target[0]
+
+
+def test_deactivated_service_block_has_one_skip_row_without_detail(synthetic_snapshot):
+    """Bod 18: blok deaktivovane sluzby prestane tisknout N stejnych radku.
+
+    Test jde pres api.evaluate a render, ne nad rucne slozenym ServiceView.
+    Nad ServiceView by prosel i tehdy, kdyby text_report.py build_view
+    priznak detail vubec nepredaval - a to je presne to misto, kde se
+    slevani rozhoduje.
+
+    Zabiji mutanta: `build_view(scope)` bez detail v text_report.py.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    block = _block_of(render(result), target, "E-LAN")
+
+    assert "Ostatni checky" in block
+    assert "preskoceno" in block
+    # Sedm deaktivacnich SKIPu se slilo, radek Deaktivace zustava.
+    assert block.count("interface deactivated") == 1
+    assert "Deaktivace" in block
+
+
+def test_detail_expands_the_deactivated_service_block(synthetic_snapshot):
+    """S --detail ma tyz blok vsechny puvodni radky.
+
+    Zabiji mutanta: slevani bez ohledu na priznak detail.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    block = _block_of(render(result, detail=True), target, "E-LAN")
+
+    assert "Ostatni checky" not in block
+    assert block.count("interface deactivated") > 1
+
+
+def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
+    """Slevani je vlastnost textoveho reportu, ne vysledku behu.
+
+    RunResult.to_dict() staví vystup z CheckResultu, ne z ServiceView.
+    Kdyby slevani proteklo do nej, strojovy konzument by o preskocenych
+    checkach prisel a nic by mu to nereklo.
+
+    Zabiji mutanta: slevani presunute do engine.py misto do view.py.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    payload = result.to_dict()
+    scope = next(
+        item for item in payload["scopes"]
+        if item.get("identity", {}).get("description") == target
+        and item.get("identity", {}).get("service_type") == "E-LAN"
+    )
+    labels = [check.get("label") for check in scope["checks"]]
+
+    assert "Ostatni checky" not in labels
+    assert len([label for label in labels if label]) > 2
