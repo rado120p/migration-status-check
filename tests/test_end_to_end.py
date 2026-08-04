@@ -561,12 +561,15 @@ def _deactivate_shared_service(old, new):
 def test_deactivated_service_block_has_one_skip_row_without_detail(synthetic_snapshot):
     """Bod 18: blok deaktivovane sluzby prestane tisknout N stejnych radku.
 
-    Test jde pres api.evaluate a render, ne nad rucne slozenym ServiceView.
-    Nad ServiceView by prosel i tehdy, kdyby text_report.py build_view
-    priznak detail vubec nepredaval - a to je presne to misto, kde se
-    slevani rozhoduje.
+    Test jde pres api.evaluate a render, ne nad rucne slozenym ServiceView -
+    slevani se overuje na skutecne zrenderovanem vystupu produkcni cesty,
+    ne na rucne poskladanem ServiceView.
 
-    Zabiji mutanta: `build_view(scope)` bez detail v text_report.py.
+    Zmereno: mutant `build_view(scope)` bez `detail` v text_report.py tenhle
+    test nezabiji (defaultni `detail=False` da stejny vysledek jako
+    predavany `detail=False`). Ten mutant zabiji sousedni
+    `test_detail_expands_the_deactivated_service_block`, ktery pouziva
+    `detail=True`.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
@@ -607,7 +610,10 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     Kdyby slevani proteklo do nej, strojovy konzument by o preskocenych
     checkach prisel a nic by mu to nereklo.
 
-    Zabiji mutanta: slevani presunute do engine.py misto do view.py.
+    Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
+    overene spustenim - je to vicerádkove presunuti kodu, ne jednorádkovy
+    sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
+    neobjevi a poctem checku odpovida neslevenemu stavu.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
