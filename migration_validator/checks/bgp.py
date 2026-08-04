@@ -41,6 +41,17 @@ def peer_family(peer: str) -> int | None:
         return None
 
 
+# Popisek radku je vzdycky "BGP status (adresa)", i kdyz ma sekce jedineho
+# peera a adresa je tam potreti. Podminit ho poctem peeru v sekci se
+# nabizelo - zmereno, ze v laborce je redundantni ve vsech sedmi sekcich -
+# ale `label` je identifikator radku i ve strojovem JSON vystupu. Podmineny
+# kvalifikator by znamenal, ze pribyti druheho souseda prejmenuje i radek
+# toho prvniho, takze dva behy tehoz stavu by se v diffu nesparovaly.
+#
+# Na sdilene podsiti (/29, /24 na NNI nebo zakaznicka podsit se dvema CPE)
+# je kvalifikator nutny: bez nej by dva radky "BGP status" vedle sebe
+# nerekly, ktery soused je rozbity. Fixtures tenhle tvar nemodeluji, takze
+# mereni ukazuje redundanci, ne cenu jejiho odstraneni.
 @register
 class BgpSessionStateCheck(Check):
     id = "bgp_session_state"

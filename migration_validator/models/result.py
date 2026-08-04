@@ -80,7 +80,7 @@ def derive_status(outcome: Outcome, severity: Severity) -> Status:
 
 # Klic v CheckResult.details, kterym check rekne, PROC byl preskocen.
 # Zije v models, ne v checks/ ani v reporting/: pisou ho checky a cte ho
-# renderer, a ani jeden z tech balíku nema na druhy videt.
+# renderer, a ani jeden z tech baliku nema na druhy videt.
 SKIPPED_BECAUSE = "skipped_because"
 
 # Jedina hodnota, kterou renderer sleva. Ostatni SKIPy (chybejici

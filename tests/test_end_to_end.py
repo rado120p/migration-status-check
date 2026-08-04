@@ -606,12 +606,12 @@ def test_detail_expands_the_deactivated_service_block(synthetic_snapshot):
 def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     """Slevani je vlastnost textoveho reportu, ne vysledku behu.
 
-    RunResult.to_dict() staví vystup z CheckResultu, ne z ServiceView.
+    RunResult.to_dict() stavi vystup z CheckResultu, ne z ServiceView.
     Kdyby slevani proteklo do nej, strojovy konzument by o preskocenych
     checkach prisel a nic by mu to nereklo.
 
     Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
-    overene spustenim - je to vicerádkove presunuti kodu, ne jednorádkovy
+    overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
     sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
     neobjevi a poctem checku odpovida neslevenemu stavu.
     """

@@ -117,7 +117,7 @@ def _merge_deactivation_skips(checks: list[CheckResult]) -> list[CheckResult]:
     jineho duvodu a nese informaci, kterou nic jineho nenese.
 
     Pocet je pocet SLOUCENYCH radku, ne vsech SKIPu v sekci. Kdo napise
-    len(skips), dostane v bloku svc:et-0/0/10.0:Internet deset misto devíti.
+    len(skips), dostane v bloku svc:et-0/0/10.0:Internet deset misto deviti.
     """
     marked = {
         id(check)
@@ -193,7 +193,7 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
     IPv6 sekci.
 
     `detail` rozhoduje o slevani deaktivacnich SKIPu. Zije az tady, ne
-    v engine: sloucení je vlastnost ZOBRAZENI, ne vysledku behu, takze
+    v engine: slouceni je vlastnost ZOBRAZENI, ne vysledku behu, takze
     RunResult.to_dict() vydava vsechny checky dal bez ohledu na nej.
     """
     identity = scope.identity or {}

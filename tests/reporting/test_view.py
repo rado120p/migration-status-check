@@ -397,7 +397,7 @@ def test_detail_keeps_every_deactivation_skip():
 def test_foreign_skip_is_not_collapsed():
     """SKIP z jineho duvodu zustava samostatne, i kdyz sedi mezi deaktivacnimi.
 
-    Zmereno na bloku svc:et-0/0/10.0:Internet: mezi devíti deaktivacnimi
+    Zmereno na bloku svc:et-0/0/10.0:Internet: mezi deviti deaktivacnimi
     SKIPy tam sedi 'BGP prefixy : bez baseline', coz je SKIP porovnavaciho
     checku bez baseline snapshotu. Slit ho dohromady by zahodilo informaci,
     kterou nic jineho nenese.
