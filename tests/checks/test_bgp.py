@@ -221,7 +221,8 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
 
     Zabiji mutanta: vyber `bgp` v `Scope.select()` filtrovany jen pres
     `bgp_neighbors` (bez `bgp_neighbors_inactive`). Session se pak ke checku
-    nedostane, peer propadne vetvi `inactive` a dostane SKIP 'deaktivovan'.
+    nedostane, peer propadne vetvi `inactive` a dostane WARN 'deaktivovan'
+    misto PASS - od vlny 9 uz tahle vetev nikdy nevydava SKIP.
     """
     scope = Scope(
         id="svc:L3VPN-CPE13-NNI:IPVPN",
@@ -245,7 +246,6 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
-    assert results[0].status is not Status.SKIP
     assert results[0].status is Status.PASS
     assert results[0].label == "BGP status (198.11.13.9)"
     assert results[0].value == "Established"
