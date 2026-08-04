@@ -227,6 +227,19 @@ SKIP vydává **vlastnící check**, ne `deactivation.py`:
 Zobecňovat příznak na scope by bylo špatně: to je právě ten mechanismus,
 který táhne celou službu do SKIPu.
 
+**Vědomé omezení viditelnosti — doměřeno po prvním znění specu:** nový SKIP
+řádek se v **základním** výhledu reportu neukáže. `text_report.py:390`
+rozbaluje blok služby jen když `detail or view.status is not Status.PASS`, a
+`engine.py:145` SKIPy odfiltruje před `Status.worst()`. Zdravá služba s
+jednou deaktivovanou routou tedy zůstane PASS a nerozbalí se; řádek je
+vidět pod `--detail` a v JSON.
+
+Je to důsledek platného návrhu reportu (blok se rozbaluje na stav, ne na
+obsah), ne vada téhle vlny — a **opravit to tady nejde bez toho, aby SKIP
+zase strhával službu**, čemuž se celý návrh vyhýbá. Otázka *„má se
+deaktivovaný prvek projevit i na sbaleném řádku služby?"* patří reportové
+vlně a uživateli; vlna 8 ji nechává otevřenou a zapisuje do „Co zbývá".
+
 **Vědomé omezení rozsahu:** vlna nemění, co se stane s **aktivním**
 nakonfigurovaným peerem bez session — ten je v reportu dál neviditelný,
 protože `checks/bgp.py` iteruje přes měření. Sjednotit ho se statikami (které

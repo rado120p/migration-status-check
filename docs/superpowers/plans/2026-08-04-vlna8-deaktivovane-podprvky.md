@@ -406,10 +406,36 @@ git diff --stat
 odebraných řádků. Prázdný nebo asymetrický výstup znamená, že se něco
 nepovedlo — zastav.
 
-Teď doplň příznak do konstruktoru `StaticRoute` v `_static_routes_under`.
-Najdi `routes.append(\n                    StaticRoute(` a přidej argument
-`active=not self._is_inactive(route_node),` k existujícím `rib=`, `prefix=`,
-`next_hop=`. **Ve stejném pořadí a se stejným odsazením v obou souborech.**
+Teď doplň příznak do konstruktoru `StaticRoute`. **Taky skriptem, ne ručně** —
+je to jediné místo v celé vlně, kde se mx a evo můžou tiše rozejít, a zámek
+146 by to odhalil až o krok později:
+
+```bash
+.venv/bin/python - <<'EOF'
+old = """                        next_hop=all_texts(
+                            route_node,
+                            "./*[local-name()='next-hop']/text()",
+                        ),
+                    )
+"""
+new = """                        next_hop=all_texts(
+                            route_node,
+                            "./*[local-name()='next-hop']/text()",
+                        ),
+                        active=not self._is_inactive(route_node),
+                    )
+"""
+for path in ("mx_parser.py", "evo_parser.py"):
+    t = open(path, encoding="utf-8").read()
+    assert t.count(old) == 1, (path, t.count(old))
+    open(path, "w", encoding="utf-8").write(t.replace(old, new))
+    print(path, "konstruktor ok")
+EOF
+git diff --stat
+```
+
+`git diff --stat` musí ukázat **oba** soubory se **stejnými** čísly. Když se
+liší, zastav — parsery se rozešly.
 
 - [ ] **Step 6: Spusť testy parserů**
 
@@ -1059,6 +1085,11 @@ git commit -m "feat: priznak deaktivace protece z inventory do Selectors a engin
 - Modify: `migration_validator/checks/routes.py` (`StaticRouteStatusCheck.run`, `_finding`)
 - Test: `tests/checks/test_routes.py`, `tests/reporting/` (test nad vyrenderovaným reportem)
 
+`_finding` dostane **povinný** parametr `deactivated`. Je to bezpečné:
+`grep -rn "_finding(" tests/` vrací **prázdno**, jediný volající je `run`
+ve stejné třídě. Ověřeno při psaní plánu; kdyby ti grep vrátil něco jiného,
+platí tvoje měření.
+
 **Interfaces:**
 - Consumes: `Selectors.static_routes` — položky nesou klíč `active` (úloha 2)
 - Produces: `Finding(Outcome.SKIP, …, value="deaktivovana")` pro deaktivovanou
@@ -1108,7 +1139,22 @@ přibližně a platí to, co vyrábí collector.
 
 Test nad datovou strukturou **neměří, co se vykreslí**. Vlna 5 na tenhle
 šev narazila třikrát. Proto k němu patří test nad výstupem, a hledá se
-**uvnitř sekce**, ne `"x" in output`:
+**uvnitř sekce**, ne `"x" in output`.
+
+**Proč `detail=True`, a co z toho plyne** — je to vědomé, ne z lenosti.
+Změřeno v kódu reportu: `text_report.py:390` rozbaluje blok služby jen když
+`detail or view.status is not Status.PASS`, a `engine.py:145` SKIPy
+odfiltruje před hlasováním `Status.worst()`. Zdravá služba s jednou
+deaktivovanou routou tedy zůstane **PASS a v základním výhledu se
+nerozbalí** — řádek existuje, ale operátor ho uvidí až pod `--detail` nebo v
+JSON.
+
+Není to vada téhle vlny, je to platný návrh reportu (blok se rozbaluje na
+stav, ne na obsah) a **měnit ho tady by znamenalo, že SKIP zase strhává
+službu** — přesně to, čemu se úloha vyhýbá. Zapiš to do „Co zbývá" roadmapy
+vlny 8 jako otázku pro reportovou vlnu: *má se deaktivovaný prvek nějak
+projevit i na sbaleném řádku služby?* Rozhodnutí patří uživateli, ne téhle
+vlně.
 
 ```python
 def test_deactivated_route_renders_as_skip_in_its_section():
@@ -1334,7 +1380,8 @@ def test_deactivated_peer_renders_as_skip_in_its_family_section():
     assert "deaktivovan" in section
 ```
 
-Použij tentýž pomocník `_section` jako v úloze 5.
+Použij tentýž pomocník `_section` jako v úloze 5. `detail=True` je i tady
+vědomé — důvod a jeho důsledek pro operátora viz úloha 5, Step 2.
 
 - [ ] **Step 3: Spusť a ověř, že padají**
 
