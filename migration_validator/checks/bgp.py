@@ -53,19 +53,32 @@ class BgpSessionStateCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
+        baseline_peers = (ctx.baseline or {}).get("bgp", {})
+        configured = list(ctx.scope.selectors.bgp_neighbors)
         inactive = [
             peer
             for peer in ctx.scope.selectors.bgp_neighbors_inactive
             if peer not in peers
         ]
 
-        # Poradi je soucast pozadavku: sluzba, jejiz jediny peer je
-        # deaktivovany, nesmi dostat 'nema zadne BGP peery' - to by tvrdilo,
-        # ze v konfiguraci zadny neni.
-        if not peers and not inactive:
-            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
+        # Identita peera se bere ze ZAMERU, ne z mereni. Scope.select()
+        # (models/scope.py:163) filtruje merena fakta podle clenstvi, takze
+        # nakonfigurovany peer bez session se do `peers` nedostane a dostat
+        # nemuze. Kdo by iteroval jen `peers`, napsal by vetev, ktera v
+        # provozu nikdy nic nenajde.
+        universe = (
+            set(configured)
+            | set(ctx.scope.selectors.bgp_neighbors_inactive)
+            | set(peers)
+            | set(baseline_peers)
+        )
 
-        baseline_peers = (ctx.baseline or {}).get("bgp", {})
+        # Poradi je soucast pozadavku: sluzba, jejiz jediny peer je
+        # deaktivovany nebo bez session, nesmi dostat 'nema zadne BGP peery' -
+        # to by tvrdilo, ze v konfiguraci zadny neni. Hlaska je pravdiva
+        # teprve kdyz je prazdne cele sjednoceni.
+        if not universe:
+            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
 
         findings = []
         for peer in sorted(peers):
@@ -162,6 +175,30 @@ class BgpSessionStateCheck(Check):
                     value="deaktivovan",
                 )
             )
+
+        # Peer, ktery ma byt a session pro nej neprisla. Zrcadli
+        # checks/routes.py:163-178: 'nakonfigurovana, ale neni v tabulce' vs
+        # 'v baseline byla, v subjektu neni'. Deaktivovane peery uz vyresila
+        # smycka vys, proto se odectou.
+        without_session = universe - set(peers) - set(ctx.scope.selectors.bgp_neighbors_inactive)
+        for peer in sorted(without_session):
+            in_config = peer in configured
+            findings.append(
+                Finding(
+                    Outcome.BROKEN,
+                    f"{peer}: nakonfigurovan, ale session neexistuje"
+                    if in_config
+                    else f"{peer}: v baseline byl, v subjektu neni",
+                    label=f"BGP status ({peer})",
+                    family=peer_family(peer),
+                    value="bez session" if in_config else "chybi uplne",
+                    baseline_value=(
+                        str(baseline_peers[peer].get("state", "unknown"))
+                        if peer in baseline_peers
+                        else None
+                    ),
+                )
+            )
         return findings
 
 
@@ -178,7 +215,13 @@ class BgpPrefixCountsCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
         if not peers:
-            return [Finding(Outcome.SKIP, "sluzba nema zadne BGP peery", value="zadny peer")]
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "zadna namerena BGP session, neni co porovnat",
+                    value="zadna session",
+                )
+            ]
 
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])

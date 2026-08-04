@@ -157,9 +157,9 @@ class Scope:
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
         # Deaktivovany peer patri scopu stejne jako aktivni. Kdyby se sem
-        # jeho session nedostala, check by ho videl jako bezsessioveho,
-        # dal by mu SKIP 'deaktivovan' - a rozpor 'konfigurace vypnuto,
-        # zarizeni bezi' by z reportu zmizel.
+        # jeho session nedostala, check by ho videl jako bezsessioveho a
+        # rozpor 'konfigurace vypnuto, zarizeni bezi' by z reportu zmizel
+        # (od vlny 9 uz by to nebylo SKIP, ale stejne chybny vysledek).
         bgp = {
             peer: data
             for peer, data in (facts.get("bgp") or {}).items()
