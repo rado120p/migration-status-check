@@ -1473,6 +1473,13 @@ grep -rn "schema_version" tests/fixtures/*.yml       # obojí 5
 git status --short                                   # cisty strom
 ```
 
+**Kdyby se ve stromu objevil neverzovaný `mx1-pop1.yml`:** je to únik z
+testů, které inventory zapisují do aktuálního adresáře místo do `tmp_path`.
+Při psaní tohohle plánu se objevil jednou, a to během běhu nad **rozbitými**
+parsery (mutant); nad zdravým stromem se nereprodukoval. Smaž ho, necommituj
+a **zapiš do roadmapy jako nový bod** — s vlnou 8 nesouvisí a opravovat ho
+tady by bylo šíření rozsahu.
+
 Whole-branch review má hledat právě to, co per‑úlohová review vidět nemohla.
 Dvě konkrétní věci, na které se u téhle vlny ptát:
 
