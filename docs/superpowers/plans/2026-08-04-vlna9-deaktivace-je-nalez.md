@@ -1040,25 +1040,16 @@ def test_configured_peer_without_session_takes_identity_from_selectors():
     assert results[0].label == "BGP status (198.11.13.2)"
     assert results[0].status is Status.FAIL
 
-
-def test_no_peers_anywhere_still_skips():
-    """Hlaska 'sluzba nema zadne BGP peery' zustava, ale az kdyz je pravdiva.
-
-    Prazdne musi byt sjednoceni vsech ctyr zdroju, ne jen mereni.
-    """
-    ctx = _ctx({"bgp": {}}, bgp_neighbors=[])
-
-    results = run_check(BgpSessionStateCheck(), ctx)
-
-    assert len(results) == 1
-    assert results[0].status is Status.SKIP
-    assert results[0].value == "zadny peer"
 ```
+
+Hlášku „sluzba nema zadne BGP peery" hlídá po kroku 6 přejmenovaný
+`test_service_with_no_peers_at_all_skips` — nový test na ni tady schválně
+nepřibývá, jinak by ho krok 6 zase mazal.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `.venv/bin/python -m pytest -o addopts="" tests/checks/test_bgp.py -q -k "configured_active_peer or hide_behind or measured_only_in_baseline or identity_from_selectors or no_peers_anywhere"`
-Expected: FAIL, 4 failed, 1 passed (`test_no_peers_anywhere_still_skips` projde už teď — hlídá, aby úloha hlášku nezrušila)
+Run: `.venv/bin/python -m pytest -o addopts="" tests/checks/test_bgp.py -q -k "configured_active_peer or hide_behind or measured_only_in_baseline or identity_from_selectors"`
+Expected: FAIL, 4 failed
 
 - [ ] **Step 3: Replace the iteration set**
 
@@ -1170,9 +1161,8 @@ def test_service_with_no_peers_at_all_skips():
     assert "BGP" in result.message
 ```
 
-**Pak smaž `test_no_peers_anywhere_still_skips` z kroku 1** — po téhle opravě je
-s ním shodný a dva identické testy nejsou dvojí pojistka. Očekávaný počet
-testů v kroku 8 s tím počítá.
+Tenhle přejmenovaný test je jediné, co hlášku „sluzba nema zadne BGP peery"
+hlídá — krok 1 k ní schválně žádný nový nepřidával.
 
 - [ ] **Step 7: Fix the false message in `BgpPrefixCountsCheck`**
 
@@ -1197,7 +1187,7 @@ nějaký test `BgpPrefixCountsCheck` — `grep -n "zadny peer" tests/` — a upr
 - [ ] **Step 8: Run the full suite**
 
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
-Expected: PASS, **672 passed, 0 skipped** (668 + 5 nových z kroku 1 − 1 smazaný duplicitní)
+Expected: PASS, **672 passed, 0 skipped** (668 + 4 nové z kroku 1)
 
 - [ ] **Step 9: Commit**
 
