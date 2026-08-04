@@ -475,27 +475,43 @@ def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapsho
 
 
 def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapshot):
-    """Bod 19: peer se zivou session nesmi byt hlasen jako 'v subjektu neni'.
+    """Bod 19 + oprava vlny 10, nalez 1: peer se zivou session nesmi byt
+    hlasen jako 'v subjektu neni' - ani BGP checkem, ani BFD checkem.
 
     Blok sluzby a NEZARAZENO jsou dve nezavisle cesty. Blok jde pres
     ctx.baseline, coz jsou fakta profiltrovana BASELINE selektory, takze
-    peera vidi. NEZARAZENO jde pres surova subject.facts['bgp'] a mnozinu
-    assigned jen ze SUBJEKTOVYCH scopu, takze ho vidi taky. Dokud blok
-    tvrdil 'v subjektu neni', rekly ty dve sekce o jednom peeru dve
+    peera vidi. NEZARAZENO jde pres surova subject.facts['bgp']/['bfd'] a
+    mnozinu assigned jen ze SUBJEKTOVYCH scopu, takze ho vidi taky. Dokud
+    blok tvrdil 'v subjektu neni', rekly ty dve sekce o jednom peeru dve
     neslucitelne veci.
+
+    Test modeluje UPLNY presun peera ze sluzby - peer mizi z
+    target.selectors.bgp_neighbors I z target.selectors.bfd_peers, ne jen
+    z prvniho z nich. Duvod: all_checks() radi podle `id` a
+    "bfd_session_state" je pred "bgp_session_state" abecedne
+    (bf < bg), takze _worst_message() vezme do souhrnneho radku hlasku z
+    BFD checku, kdyz jsou oba checky na stejne nejhorsim stavu. Kdyby test
+    modeloval presun jen v BGP a bfd_peers nechal na miste, BFD check by
+    zustal v jine vetvi (BGP neni Established / bez session) a souhrnny
+    radek by nesl bud BGP hlasku, nebo BFD hlasku z jine (spravne) vetve -
+    v obou pripadech by test tu vadu neuvidel, protoze puvodni vadna BFD
+    hlaska ("BFD bylo v baseline (Up), v subjektu neni nakonfigurovane")
+    by se do vystupu vubec nedostala.
 
     Test asertuje OBE sekce v jednom behu. Kdyby asertoval jen blok, prosel
     by i nad implementaci, ktera peera z NEZARAZENO vyhodi - a to je jina
     varianta, kterou uzivatel vedome odmitl.
 
-    Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni'.
+    Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni' (BGP)
+    i navrat hlasky 'BFD bylo v baseline (...), v subjektu neni
+    nakonfigurovane' (BFD).
 
     Aserce `peer in new.facts['bgp']` nize je POJISTKA PROTI VAKUOVOSTI a
     nesmi se odstranit. _facts_for() (tests/conftest.py) odvozuje
-    facts['bgp'] ZE SELEKTORU, takze kdyby nekdo odebrani peera presunul
-    pred stavbu snimku, zadna session by pro nej nevznikla - peer by se do
-    NEZARAZENO nedostal a obe aserce nize by prosly, aniz by cokoli
-    dokazaly. Tahle jedina aserce ten presun odhali.
+    facts['bgp'] (a facts['bfd']) ZE SELEKTORU, takze kdyby nekdo odebrani
+    peera presunul pred stavbu snimku, zadna session by pro nej nevznikla -
+    peer by se do NEZARAZENO nedostal a obe aserce nize by prosly, aniz by
+    cokoli dokazaly. Tahle jedina aserce ten presun odhali.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
@@ -507,8 +523,12 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     )
     peer = "152.11.13.2"
     assert peer in new.facts["bgp"], "fixture nema session peera, test by byl vakuovy"
+    assert peer in new.facts["bfd"], "fixture nema BFD session peera, test by byl vakuovy"
     target.selectors.bgp_neighbors = [
         neighbor for neighbor in target.selectors.bgp_neighbors if neighbor != peer
+    ]
+    target.selectors.bfd_peers = [
+        b for b in target.selectors.bfd_peers if b.get("peer") != peer
     ]
 
     result = api.evaluate(new, baseline=old, now=NOW)
@@ -524,11 +544,16 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     )
     assert "v baseline patril k teto sluzbe, v subjektu uz ne" in summary_row
     assert "v subjektu neni" not in rendered
+    # Puvodni (opravena) BFD hlaska tvrdila o zarizeni to, co check vi jen
+    # o sluzbe - nesmi se do souhrnneho radku vratit.
+    assert "BFD bylo v baseline" not in rendered
+    assert "neni nakonfigurovane" not in rendered
 
-    # V bloku je videt `value`, a ta se meni taky.
+    # V bloku je videt `value`, a ta se meni taky - u obou checku.
     block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
     assert "BGP status (152.11.13.2)" in block
-    assert "neni ve sluzbe" in block
+    assert "BFD (152.11.13.2)" in block
+    assert block.count("neni ve sluzbe") == 2
 
     # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
     # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by

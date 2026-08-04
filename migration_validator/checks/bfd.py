@@ -25,12 +25,15 @@ NO_INTENT = "bez konfigurace"
 
 # Dve konstanty na jeden stav "session byla v baseline, v subjektu neni",
 # stejne jako routes.py rozlisuje MISSING_FROM_TABLE a MISSING_ENTIRELY.
-# REMOVED je tvrzeni o zameru ("odstraneno z konfigurace") a to jde rict jen
-# v service scope. Device scope zadnou inventory nema, takze `configured` je
-# tam vzdy False a o konfiguraci nejde tvrdit nic (AR-17) - zbyva ciste stav
-# session. Rozdil musi byt v hodnote, ne jen v hlasce: do reportu jde sloupec
-# s hodnotou (F-7/AR-4), hlaska se v textovem vypisu neobjevi.
-REMOVED = "BFD odstraneno"
+# NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni,
+# a to jde rict jen v service scope. Peer, ktereho uz tato sluzba nenarokuje,
+# muze na zarizeni dal bezet pod jinou sluzbou - engine.py:_unassigned_bfd_sessions
+# by ho ukazal v NEZARAZENO. Device scope zadnou inventory
+# nema, takze `configured` je tam vzdy False a o konfiguraci nejde tvrdit nic
+# (AR-17) - zbyva ciste stav session. Rozdil musi byt v hodnote, ne jen v
+# hlasce: do reportu jde sloupec s hodnotou (F-7/AR-4), hlaska se v textovem
+# vypisu neobjevi.
+NOT_IN_SERVICE = "neni ve sluzbe"
 SESSION_GONE = "session zmizela"
 
 
@@ -126,14 +129,20 @@ class BfdSessionStateCheck(Check):
                     baseline=baseline,
                 )
 
-            # Session byla v baseline, v subjektu neni ani zamer.
+            # Session byla v baseline, v subjektu neni ani zamer. Tvrzeni o
+            # CLENSTVI, ne o existenci: peer, ktereho nenarokuje zadny
+            # subjektovy scope, muze mit na zarizeni zivou BFD session -
+            # engine.py:_unassigned_bfd_sessions ji ukaze v NEZARAZENO.
+            # Hlaska "v subjektu neni nakonfigurovane" by tam lhala. Nova
+            # formulace je pravdiva v obou pripadech, ktere sem spadaji
+            # (BFD ze zarizeni zmizelo i BFD preslo pod jinou sluzbu).
             # Migrace nema tise shodit ze stolu ochranu, ktera tam byla.
             return Finding(
                 Outcome.BROKEN,
-                f"{peer}: BFD bylo v baseline ({was}), v subjektu neni nakonfigurovane",
+                f"{peer}: v baseline patril k teto sluzbe, v subjektu uz ne",
                 label=label,
                 family=family,
-                value=REMOVED,
+                value=NOT_IN_SERVICE,
                 baseline_value=was,
                 baseline=baseline,
             )
