@@ -344,8 +344,9 @@ git checkout -- migration_validator/checks/bgp.py
 git status --porcelain
 ```
 
-Expected: PASS, 677 passed. `git status --porcelain` vypíše **jen**
-`?? mx1-pop1.yml` — ten tam patří a není tvůj.
+Expected: PASS, 677 passed. `git status --porcelain` po revertu **prázdný**
+(soubor `mx1-pop1.yml`, který dřív ležel netrackovaný v kořeni repa,
+uživatel mezitím smazal).
 
 ---
 
@@ -921,7 +922,8 @@ git checkout -- migration_validator/reporting/text_report.py
 git status --porcelain
 ```
 
-Expected: PASS, 683 passed. `git status --porcelain` vypíše jen `?? mx1-pop1.yml`.
+Expected: PASS, 683 passed. `git status --porcelain` po revertu **prázdný**
+(`mx1-pop1.yml` už v repu neleží — smazán mezitím).
 
 ---
 
@@ -1110,7 +1112,8 @@ diff mx_parser.py evo_parser.py | wc -l
 git status --porcelain
 ```
 
-Expected: **146** a jen `?? mx1-pop1.yml`.
+Expected: **146** a `git status --porcelain` prázdný (`mx1-pop1.yml` už
+v repu neleží).
 
 Mutant se v téhle úloze **nepouští** — nemění chování, takže by nebylo co
 zabít. Zámek parserů z kroku 5 a nezměněný počet testů z kroku 7 jsou její
@@ -1315,7 +1318,8 @@ git checkout -- tests/conftest.py
 git status --porcelain
 ```
 
-Expected: PASS, 685 passed. `git status --porcelain` jen `?? mx1-pop1.yml`.
+Expected: PASS, 685 passed. `git status --porcelain` po revertu **prázdný**
+(`mx1-pop1.yml` už v repu neleží).
 
 ---
 

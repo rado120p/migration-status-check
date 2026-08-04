@@ -1,7 +1,7 @@
 # Vlna 10 hotová — tichý blok deaktivované služby a pravdivá hláška o peeru, stav k 2026-08-04
 
 **Výchozí bod:** větev `vlna10-tichy-blok-a-pravdiva-hlaska` založená z `main`
-na commitu `ed04b4b` (merge vlny 9), všech pět úloh hotových. **685 testů
+na commitu `5f1e4d0` (merge-base main..HEAD, změřeno), všech šest úloh hotových. **685 testů
 zelených, 0 přeskočených** (výchozí stav 676). Zámek parserů drží na
 **146 řádcích**. Schema zůstalo **5** u inventory i u snapshotu.
 
@@ -89,15 +89,20 @@ git log --oneline main..HEAD
 
 ## Co vyšlo jinak, než plán čekal
 
-### 1. Nulový ripple se ve vlně potvrdil třikrát a pokaždé jako nález
+### 1. Nulový ripple se ve vlně potvrdil dvakrát a pokaždé jako nález
 
-Bod 12 (hodnoty counterů), bod 18 (vykreslený obsah bloku deaktivované
-služby) i resync fixtures prošly beze změny počtu testů, přestože
-měnily pozorovatelné chování. U prvních dvou musela vlna pokrytí
+Bod 12 (hodnoty counterů) a bod 18 (vykreslený obsah bloku deaktivované
+služby) prošly beze změny počtu testů, přestože měnily pozorovatelné
+chování. Resync fixtures nulový ripple potvrdil taky, ale je to jiný
+případ: tam šlo o potvrzení, že vlna nezavedla regresi, ne o nález (viz
+níž). U prvních dvou musela vlna pokrytí
 doplnit — bez zamykajících testů z úlohy 4 by rozrůznění counterů bylo
-dekorativní; bez tří testů úlohy 2 (sloučení přes skutečnou cestu,
-`--detail` rozepíše, cizí SKIP se neslévá) by implementace slévající
-podle `Status.SKIP` prošla tiše. U resyncu fixtures nulový ripple
+dekorativní; bez testu `test_foreign_skip_is_not_collapsed` z úlohy 2 by
+implementace slévající podle `Status.SKIP` prošla v `test_view.py` tiše
+(oprava vlny 10, nález 2: pod stejným mutantem padá i
+`test_text_report.py::test_deactivated_service_shows_the_reason_in_the_report`,
+takže `test_foreign_skip_is_not_collapsed` není jediný test, který ho
+zabíjí, jen jediný v tomto souboru). U resyncu fixtures nulový ripple
 potvrdil, že vlna nezavedla regresi — čtyři mutanty vlny nad novými
 fixtures zabíjejí přesně tytéž testy jako předtím.
 
@@ -179,6 +184,11 @@ deaktivovat qualified-next-hop individuálně **jde**, takže jedna routa může
 nést zároveň aktivní a deaktivovaný next-hop, a klíčování `(rib, prefix)`
 se pak musí navrhnout znovu.
 
+Invariant, o který se nový komentář opírá (qualified-next-hop nese buď
+adresu, nebo `interface-name`, nikdy nic jiného), necvičí žádná fixture —
+drží ho jen jednorázové měření na živé laborce 2026‑08‑04, ne regresní
+test.
+
 ### 21. Dual-homed ESI a neasertovaná DF role
 
 Nový bod, změřený při resyncu fixtures. Dual-homed ESI
@@ -228,6 +238,21 @@ mezistav (BFD Down, ESI s `interface=None`) — vypadalo to jako tři nové
 nálezy, ale po přegenerování uživatelem obojí zmizelo. Nebyla to vada
 nástroje ani nálezu hodná zápisu do „Co zbývá" — byla to past čtení
 snímku, který ještě neustálil.
+
+**Oprava hlášky na jednom checku nestačí, když souhrnný řádek vybírá podle
+pořadí checků.** Opravná vlna po vlně 10 zjistila, že `checks/bfd.py` nesl
+tutéž vadu, kterou bod 19 opravil v `checks/bgp.py`: hláška „BFD bylo
+v baseline, v subjektu není nakonfigurované" tvrdila o **zařízení** něco,
+co check ví jen o **službě** — přesně vzor, kvůli kterému bod 19 vznikl.
+Whole-branch review na konci vlny 10 to nenašla; našla ji až samostatná
+opravná vlna. Navíc `all_checks()` řadí podle `id`, a `bfd_session_state`
+jde abecedně (`bf` < `bg`) **před** `bgp_session_state` — takže
+`_worst_message()` bere do souhrnného řádku BFD hlášku, ne opravenou BGP
+hlášku, kdykoli jsou oba checky na stejně nejhorším stavu. V přesně tom
+scénáři, kvůli kterému bod 19 vznikl, tedy uživatel dál četl nepravdu i po
+opravě `bgp.py`. Poučení pro další vlny: kde souhrnný řádek vybírá hlášku
+podle pořadí checků, oprava jednoho checku nestačí — je potřeba zkontrolovat
+každý check, který se může ocitnout na stejném nejhorším stavu.
 
 ### Přenesená z vlny 9
 
