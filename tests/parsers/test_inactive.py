@@ -192,17 +192,21 @@ def test_deactivated_routing_instances_container_marks_static_routes_inactive(
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_bgp_container_drops_neighbors_and_bfd(module, parser_class):
-    """<protocols>/<bgp> pod deaktivovanou VRF nedá souseda ani BFD záměr.
+def test_deactivated_bgp_container_moves_neighbors_and_drops_bfd(module, parser_class):
+    """<protocols>/<bgp> pod deaktivovanou VRF: soused se přestěhuje, BFD zmizí.
 
     Zabíjí mutanta: dědění zavedené jen pro statiky a ne pro BGP.
     """
     services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
 
     peers = [peer for service in services for peer in service.bgp_neighbor]
+    inactive = [
+        peer for service in services for peer in service.bgp_neighbor_inactive
+    ]
     bfd = [intent for service in services for intent in service.bfd]
 
-    assert peers == [], f"deaktivovaný kontejner vyrobil BGP záměr: {peers}"
+    assert peers == [], f"deaktivovaný kontejner vyrobil živý BGP záměr: {peers}"
+    assert inactive, "deaktivovaný soused se ztratil místo aby se přestěhoval"
     assert bfd == [], f"deaktivovaný kontejner vyrobil BFD záměr: {bfd}"
 
 
@@ -312,16 +316,20 @@ def test_inactive_rib_marks_only_its_own_routes(module, parser_class):
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_inactive_bgp_group_drops_its_neighbors(module, parser_class):
-    """Deaktivovaná `group` nedá souseda.
+def test_inactive_bgp_group_moves_its_neighbors(module, parser_class):
+    """Deaktivovaná `group` nedá živého souseda, ale záměr neztratí.
 
-    Zabíjí mutanta (až po smazání guardu na group_node): `_is_inactive` bez
-    chůze po předcích. `neighbor` sám atribut nemá.
+    Zabíjí mutanta: `_is_inactive` bez chůze po předcích. `neighbor` sám
+    atribut nemá.
     """
     services = _services(module, parser_class, INACTIVE_GROUP)
     peers = [peer for service in services for peer in service.bgp_neighbor]
+    inactive = [
+        peer for service in services for peer in service.bgp_neighbor_inactive
+    ]
 
     assert peers == [], peers
+    assert inactive, "deaktivovaná group souseda ztratila místo přestěhování"
 
 
 DEACTIVATED_TOP_LEVEL_PROTOCOLS = """
@@ -374,8 +382,10 @@ def test_active_top_level_protocols_produce_intent(module, parser_class):
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_top_level_protocols_drop_neighbors_and_bfd(module, parser_class):
-    """<protocols inactive> na top-level úrovni nedá souseda ani BFD záměr.
+def test_deactivated_top_level_protocols_move_neighbors_and_drop_bfd(
+    module, parser_class
+):
+    """<protocols inactive> na top-level úrovni: soused se přestěhuje, BFD zmizí.
 
     Zabíjí mutanta: `_is_inactive` bez chůze po předcích. K top-level
     kontejneru vede jiná cesta než k tomu pod routing-instances
@@ -386,4 +396,60 @@ def test_deactivated_top_level_protocols_drop_neighbors_and_bfd(module, parser_c
     service = _by_name(services, "ge-0/0/2.13")
 
     assert service.bgp_neighbor == []
+    assert service.bgp_neighbor_inactive
     assert service.bfd == []
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_neighbor_lands_in_inactive_list(module, parser_class):
+    """Deaktivovaný soused se ze záměru neztratí, jen se přestěhuje.
+
+    Zabíjí mutanta: `bgp_neighbor_inactive` se plní z aktivních sousedů.
+    Bez téhle aserce by test, který tvrdí jen `bgp_neighbor == []`, prošel
+    i kdyby se soused vypustil úplně - tedy při starém chování.
+    """
+    services = _services(module, parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
+    service = _by_name(services, "ge-0/0/2.13")
+
+    assert service.bgp_neighbor == []
+    assert service.bgp_neighbor_inactive == ["152.11.13.2"]
+
+
+BFD_INACTIVE_OVERRIDE = """
+<configuration>
+  <protocols>
+    <bgp>
+      <group>
+        <name>G1</name>
+        <bfd-liveness-detection>
+          <minimum-interval>1000</minimum-interval>
+        </bfd-liveness-detection>
+        <neighbor>
+          <name>192.0.2.3</name>
+          <bfd-liveness-detection inactive="inactive">
+            <minimum-interval>300</minimum-interval>
+          </bfd-liveness-detection>
+        </neighbor>
+      </group>
+    </bgp>
+  </protocols>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_inactive_bfd_override_inherits_group_value(module, parser_class):
+    """Deaktivovaný override BFD dědí hodnotu ze skupiny - a je to správně.
+
+    Junosí `inactive` znamená 'příkaz se neuplatní', tedy jako by tam nebyl.
+    Skupinová hodnota se pak na souseda skutečně vztahuje a BFD na krabici
+    opravdu běží s minimum-interval 1000. Test to fixuje proto, že to na
+    první pohled vypadá jako tiché podstrčení špatné hodnoty; bez něj by to
+    někdo příští vlnu "opravil" na 300 nebo na žádné BFD.
+    """
+    parser = parser_class(etree.XML(BFD_INACTIVE_OVERRIDE.encode()))
+    parser.parse()
+    intents = parser.default_bfd
+
+    assert intents["192.0.2.3"]["minimum_interval"] == 1000
+    assert intents["192.0.2.3"]["source"] == "group"

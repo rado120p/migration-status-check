@@ -112,6 +112,11 @@ class RoutingInstance:
     evpn_service_type: str | None = None
     instance_vlan_ids: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    # Deaktivovaný soused se ze záměru nevypouští, jen se drží zvlášť.
+    # Paralelní seznam, ne mapa: `bgp_neighbors` slouží jako **selektor**
+    # (podle něj se k službě párují naměřené session), a přepis na mapu by
+    # rozbil čtyři testy členství v enginu a ve scopu bez užitku.
+    bgp_neighbors_inactive: list[str] = field(default_factory=list)
     bfd: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -163,6 +168,7 @@ class InterfaceService:
     routing_instance_active: bool = True
     interface_active: bool = True
     bgp_neighbor: list[str] = field(default_factory=list)
+    bgp_neighbor_inactive: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
 
@@ -365,6 +371,7 @@ class JunosEvoAcxServiceParser:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
+        self.default_bgp_neighbors_inactive: list[str] = []
         self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
 
@@ -477,6 +484,14 @@ class JunosEvoAcxServiceParser:
             if not instance_name:
                 continue
 
+            instance_neighbors, instance_neighbors_inactive = (
+                self._parse_bgp_neighbors(
+                    node,
+                    "./*[local-name()='protocols']"
+                    "/*[local-name()='bgp']",
+                )
+            )
+
             instance = RoutingInstance(
                 name=instance_name,
                 active=not self._is_inactive(node),
@@ -513,11 +528,8 @@ class JunosEvoAcxServiceParser:
                         "/*[local-name()='name']/text()",
                     )
                 ),
-                bgp_neighbors=self._parse_bgp_neighbors(
-                    node,
-                    "./*[local-name()='protocols']"
-                    "/*[local-name()='bgp']",
-                ),
+                bgp_neighbors=instance_neighbors,
+                bgp_neighbors_inactive=instance_neighbors_inactive,
                 bfd=self._parse_bfd(
                     node,
                     "./*[local-name()='protocols']"
@@ -599,25 +611,28 @@ class JunosEvoAcxServiceParser:
         self,
         node: etree._Element,
         bgp_xpath: str,
-    ) -> list[str]:
+    ) -> tuple[list[str], list[str]]:
         neighbors: list[str] = []
+        inactive: list[str] = []
 
         for bgp_node in node.xpath(bgp_xpath):
             for neighbor_node in bgp_node.xpath(
                 ".//*[local-name()='neighbor']"
             ):
-                if self._is_inactive(neighbor_node):
-                    continue
-
                 neighbor = first_text(
                     neighbor_node,
                     "./*[local-name()='name']/text()",
                 ) or first_text(neighbor_node, "./text()")
 
-                if neighbor:
+                if not neighbor:
+                    continue
+
+                if self._is_inactive(neighbor_node):
+                    inactive.append(neighbor)
+                else:
                     neighbors.append(neighbor)
 
-        return unique(neighbors)
+        return unique(neighbors), unique(inactive)
 
     def _parse_static_routes(self) -> list[StaticRoute]:
         """Statiky z globálních routing-options i ze všech routing-instances.
@@ -948,7 +963,10 @@ class JunosEvoAcxServiceParser:
         klasifikovanými jako Internet.
         """
 
-        self.default_bgp_neighbors = self._parse_bgp_neighbors(
+        (
+            self.default_bgp_neighbors,
+            self.default_bgp_neighbors_inactive,
+        ) = self._parse_bgp_neighbors(
             self.config_xml,
             "./*[local-name()='protocols']"
             "/*[local-name()='bgp']",
@@ -1426,9 +1444,11 @@ class JunosEvoAcxServiceParser:
                 continue
 
             candidate_neighbors: list[str] = []
+            candidate_inactive: list[str] = []
 
             if service.service_type == "Internet":
                 candidate_neighbors = self.default_bgp_neighbors
+                candidate_inactive = self.default_bgp_neighbors_inactive
             elif service.routing_instance:
                 instance = self.routing_instances.get(
                     service.routing_instance
@@ -1436,6 +1456,7 @@ class JunosEvoAcxServiceParser:
 
                 if instance:
                     candidate_neighbors = instance.bgp_neighbors
+                    candidate_inactive = instance.bgp_neighbors_inactive
 
             matched_neighbors = [
                 neighbor
@@ -1445,6 +1466,17 @@ class JunosEvoAcxServiceParser:
                     interface,
                 )
             ]
+
+            matched_inactive = [
+                neighbor
+                for neighbor in candidate_inactive
+                if self._bgp_neighbor_matches_interface(neighbor, interface)
+            ]
+
+            if matched_inactive:
+                service.bgp_neighbor_inactive = unique(
+                    service.bgp_neighbor_inactive + matched_inactive
+                )
 
             if not matched_neighbors:
                 continue
@@ -2247,6 +2279,7 @@ def clean_service_dict(
         "interface_active",
         "protocol",
         "bgp_neighbor",
+        "bgp_neighbor_inactive",
         "bridge_domain",
         "customer_vlan",
         "static_route",
