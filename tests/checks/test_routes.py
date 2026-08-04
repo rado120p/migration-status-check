@@ -465,3 +465,38 @@ def test_falsy_nonbool_active_does_not_escalate_either():
 
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.DEGRADED
+
+
+def test_deactivated_route_yields_skip_and_sibling_stays_ok():
+    """Deaktivovana routa preskoci na svem radku a sourozence nestrhne.
+
+    Tohle je vlastnost, kterou nazev 'per-radkovy SKIP' slibuje: kdyby SKIP
+    hlasoval, cela sluzba by zesedla a zdrava routa vedle by prestala byt
+    videt. `engine.py` SKIPy odfiltruje pred Status.worst(), takze staci,
+    aby check vydal SKIP jen na tom jednom nalezu.
+    """
+    scope = _scope(
+        static_routes=[
+            {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"],
+             "active": False},
+            {"rib": "inet.0", "prefix": "10.1.0.0/16", "next_hop": ["2.2.2.2"],
+             "active": True},
+        ]
+    )
+    subject_routes = {
+        "inet.0": {
+            "10.1.0.0/16": {
+                "next_hop": ["2.2.2.2"],
+                "via": ["et-0/0/8.13"],
+                "active": True,
+            }
+        }
+    }
+    findings = StaticRouteStatusCheck().run(
+        _ctx(subject_routes, scope=scope)
+    )
+    by_label = {finding.label: finding for finding in findings}
+
+    assert by_label["inet.0 10.0.0.0/8"].outcome is Outcome.SKIP
+    assert by_label["inet.0 10.0.0.0/8"].value == "deaktivovana"
+    assert by_label["inet.0 10.1.0.0/16"].outcome is Outcome.OK

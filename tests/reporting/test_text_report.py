@@ -1044,3 +1044,62 @@ def test_unassigned_survives_a_filter_that_hides_every_scope():
     """
     out = render(filter_result(_unassigned_result(), statuses={Status.FAIL}))
     assert "10.9.9.9" in out, "filtr smazal pojistku"
+
+
+def _section(output: str, title: str) -> str:
+    """Vyrizne z outputu radky mezi hlavickou skupiny/sekce `title` a dalsi
+    hlavickou. Hlavicka skupiny je '   -- {title}' bez pridavku (viz
+    text_report.py:_group_header); hlavicka sekce rodiny ma za titulem jeste
+    adresy, proto se dalsi hranice hleda obecne jako radek zacinajici '--'.
+    """
+    lines = output.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == f"-- {title}")
+    end = next(
+        (
+            i
+            for i in range(start + 1, len(lines))
+            if lines[i].strip().startswith("--") or lines[i] == ""
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def test_deactivated_route_renders_as_skip_in_its_section():
+    """Report musi SKIP ukazat, ne ho jen mit v datech.
+
+    Hleda se uvnitr sekce statickych rout, ne kdekoliv ve vystupu: retezec
+    'deaktivovana' se objevi i u deaktivovane sluzby, takze `in output` by
+    prosel i kdyby se radek routy vubec nevykreslil.
+    """
+    result = _grouped_result(
+        [
+            CheckResult(
+                id="static_route_status",
+                mode="both",
+                status=Status.SKIP,
+                severity=Severity.CRITICAL,
+                message="inet.0 10.0.0.0/8: routa je v konfiguraci deaktivovana",
+                label="inet.0 10.0.0.0/8",
+                group="Staticke routy",
+                family=4,
+                value="deaktivovana",
+            ),
+            CheckResult(
+                id="static_route_status",
+                mode="both",
+                status=Status.PASS,
+                severity=Severity.CRITICAL,
+                message="inet.0 10.1.0.0/16: 2.2.2.2",
+                label="inet.0 10.1.0.0/16",
+                group="Staticke routy",
+                family=4,
+                value="2.2.2.2",
+            ),
+        ]
+    )
+    output = render(result, detail=True)
+    section = _section(output, "Staticke routy")
+
+    assert "SKIP" in section
+    assert "deaktivovana" in section

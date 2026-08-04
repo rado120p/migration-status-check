@@ -85,6 +85,15 @@ class StaticRouteStatusCheck(Check):
             (str(route.get("rib")), str(route.get("prefix")))
             for route in ctx.scope.selectors.static_routes
         }
+        # Chybejici klic 'active' znamena zamer od parseru pred vlnou 8.
+        # Snapshot i inventory maji od te vlny schema 5, takze se takovy
+        # zamer nenacte - default je tu jen proto, aby jednotkovy test
+        # nemusel psat klic, ktery netestuje.
+        deactivated = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in ctx.scope.selectors.static_routes
+            if route.get("active", True) is False
+        }
         subject = _flatten(ctx.subject.get("routes"))
         baseline = _flatten((ctx.baseline or {}).get("routes"))
 
@@ -97,6 +106,7 @@ class StaticRouteStatusCheck(Check):
                     subject=subject.get(identity),
                     baseline=baseline.get(identity),
                     is_device=ctx.scope.is_device,
+                    deactivated=identity in deactivated,
                 )
             )
         return findings
@@ -108,12 +118,33 @@ class StaticRouteStatusCheck(Check):
         subject: dict[str, Any] | None,
         baseline: dict[str, Any] | None,
         is_device: bool,
+        deactivated: bool,
     ) -> Finding:
         rib, prefix = identity
         label = f"{rib} {prefix}"
         group = "Staticke routy"
         family = prefix_family(prefix)
         was = _next_hop_text(baseline)
+
+        if deactivated and subject is None:
+            # Deaktivovanou routu operator vedome vyradil, takze v tabulce
+            # byt nema. Bez teto vetve by spadla do 'nakonfigurovana, ale
+            # neni v routovaci tabulce' a dala tvrdy FAIL za stav, ktery je
+            # v poradku.
+            #
+            # Kdyz deaktivovana routa v tabulce presto je, sem se nedostane
+            # a nalez se chova jako dosud - to uz je skutecny rozpor
+            # konfigurace se stavem a ma byt videt.
+            return Finding(
+                Outcome.SKIP,
+                f"{rib} {prefix}: routa je v konfiguraci deaktivovana",
+                label=label,
+                group=group,
+                family=family,
+                value="deaktivovana",
+                baseline_value=was,
+                baseline=baseline,
+            )
 
         if subject is None:
             # Bez inventory neni zamer znam, takze se rozpor nehlasi
