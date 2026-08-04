@@ -967,7 +967,27 @@ je tam vždy redundantní. Podmíněný kvalifikátor by ale znamenal, že popis
 závisí na datech, a `label` je identifikátor řádku i v JSON — přibytí druhého
 peera by přejmenovalo řádek toho prvního.
 
-- [ ] **Step 1: Rename the inventory test (bod 16)**
+- [ ] **Step 1: Remove diacritics leaked in by Task 2**
+
+Nález review úlohy 2, Minor. Kód v `migration_validator/` a `tests/` je psaný
+česky **bez** diakritiky; úloha 2 do něj přes doslovné znění briefu vnesla
+šest výskytů. Oprav je — mění se **jen** písmena, ani jedno slovo:
+
+```bash
+grep -rn -P '[^\x00-\x7F]' migration_validator/models/result.py \
+    migration_validator/reporting/view.py \
+    tests/reporting/test_view.py tests/test_end_to_end.py
+```
+
+Expected před opravou: **6 zásahů** — `view.py:120` (`devíti`), `view.py:196`
+(`sloucení`), `models/result.py:83` (`balíku`), `test_view.py:400` (`devíti`),
+`test_end_to_end.py:609` (`staví`), `test_end_to_end.py:614` (`vicerádkove`
+a `jednorádkovy`). Po opravě musí týž `grep` vypsat **nic**.
+
+Ostatních souborů se nedotýkej — `mx_parser.py`, `evo_parser.py` a `docs/`
+jsou psané s diakritikou schválně a krok 3 do parserů diakritiku **přidává**.
+
+- [ ] **Step 2: Rename the inventory test (bod 16)**
 
 V `tests/models/test_inventory.py` nahraď řádky 305–307:
 
@@ -982,7 +1002,7 @@ def test_inventory_schema_version_is_five():
     assert INVENTORY_SCHEMA_VERSION == 5
 ```
 
-- [ ] **Step 2: Record why the route key is safe (bod 17)**
+- [ ] **Step 3: Record why the route key is safe (bod 17)**
 
 V `migration_validator/checks/routes.py` nahraď komentář nad `deactivated`
 (řádky 88–92, ten začínající „Chybejici klic 'active'") tímto — původní tři
@@ -1003,7 +1023,7 @@ věty zůstávají, přibývá odstavec o klíčování:
         # ne nekonzistence mezi dvema mnozinami.
 ```
 
-- [ ] **Step 3: Fix the parser comment in BOTH parsers (bod 17b)**
+- [ ] **Step 4: Fix the parser comment in BOTH parsers (bod 17b)**
 
 V `mx_parser.py` **i** `evo_parser.py` nahraď komentář na řádcích 747–752
 (uvnitř `StaticRoute(...)`, nad `next_hop=`). **Musí být v obou souborech
@@ -1026,7 +1046,7 @@ doslova stejný**, jinak se rozejde zámek parserů:
 Poznámka k diakritice: parsery jsou psané česky **s** diakritikou, na rozdíl
 od `migration_validator/`. Řiď se souborem.
 
-- [ ] **Step 4: Verify the parser lock immediately**
+- [ ] **Step 5: Verify the parser lock immediately**
 
 Run: `diff mx_parser.py evo_parser.py | wc -l`
 Expected: **146**
@@ -1034,7 +1054,7 @@ Expected: **146**
 Kdyby vyšlo jiné číslo, komentáře se v obou souborech neshodují — sjednoť je
 a opakuj. **Nepokračuj s rozejitým zámkem.**
 
-- [ ] **Step 5: Record why the BGP label qualifier is unconditional (bod 9)**
+- [ ] **Step 6: Record why the BGP label qualifier is unconditional (bod 9)**
 
 V `migration_validator/checks/bgp.py` přidej nad třídu `BgpSessionStateCheck`
 (tedy nad `@register` na řádku 44):
@@ -1053,23 +1073,25 @@ V `migration_validator/checks/bgp.py` přidej nad třídu `BgpSessionStateCheck`
 # mereni ukazuje redundanci, ne cenu jejiho odstraneni.
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 7: Run the full suite**
 
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
 Expected: PASS, **683 passed, 0 skipped** — počet se nemění, úloha jen
 přejmenovává a komentuje.
 
-- [ ] **Step 7: Verify nothing referenced the old test name**
+- [ ] **Step 8: Verify nothing referenced the old test name**
 
 Run: `grep -rn "test_inventory_rejects_schema_three" . --include=*.py --include=*.md`
 Expected: zásah **jen** v `docs/` (spec a starší roadmapy — ty se
 nepřepisují, popisují stav v době vzniku). Zásah v `tests/` nebo
 `migration_validator/` znamená, že název někdo cituje — oprav ho.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add tests/models/test_inventory.py migration_validator/checks/routes.py \
+git add migration_validator/models/result.py migration_validator/reporting/view.py \
+        tests/reporting/test_view.py tests/test_end_to_end.py \
+        tests/models/test_inventory.py migration_validator/checks/routes.py \
         migration_validator/checks/bgp.py mx_parser.py evo_parser.py
 git commit -m "docs: uzavreni bodu 16, 17 a 9 zapsanim oduvodneni
 
@@ -1081,7 +1103,7 @@ Komentar o qualified-next-hop se v obou parserech opravuje - nese bud
 adresu, nebo interface-name, takze do vyctu tvaru bez adresy nepatri."
 ```
 
-- [ ] **Step 9: Verify the parser lock over committed work**
+- [ ] **Step 10: Verify the parser lock over committed work**
 
 ```bash
 diff mx_parser.py evo_parser.py | wc -l
@@ -1091,7 +1113,7 @@ git status --porcelain
 Expected: **146** a jen `?? mx1-pop1.yml`.
 
 Mutant se v téhle úloze **nepouští** — nemění chování, takže by nebylo co
-zabít. Zámek parserů z kroku 4 a nezměněný počet testů z kroku 6 jsou její
+zabít. Zámek parserů z kroku 5 a nezměněný počet testů z kroku 7 jsou její
 důkazy.
 
 ---
