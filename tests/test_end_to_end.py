@@ -638,13 +638,25 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
     overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
     sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
-    neobjevi a poctem checku odpovida neslevenemu stavu.
+    neobjevi a poctem checku odpovida neslevenemu stavu z bezu (`scope.checks`
+    z vysledku), ne libovolne slabsi mezi.
+
+    Oprava vlny 10, nalez 3: JSON take musi nest znacku `skipped_because`
+    (klic SKIPPED_BECAUSE v CheckResult.details) - spec ji chtel propsat
+    vedome a plan slibil test, ktery to zafixuje. Bez teto aserce by
+    slouceni znacky do to_dict() proslo bez povsimnuti.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
     target = _deactivate_shared_service(old, new)
     result = api.evaluate(new, baseline=old, now=NOW)
+
+    run_scope = next(
+        scope for scope in result.scopes
+        if scope.identity.get("description") == target
+        and scope.identity.get("service_type") == "E-LAN"
+    )
 
     payload = result.to_dict()
     scope = next(
@@ -655,7 +667,17 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     labels = [check.get("label") for check in scope["checks"]]
 
     assert "Ostatni checky" not in labels
-    assert len([label for label in labels if label]) > 2
+    assert len(scope["checks"]) == len(run_scope.checks)
+
+    deactivation_check = next(
+        check for check in scope["checks"] if check.get("id") == "deactivation_state"
+    )
+    assert deactivation_check.get("details", {}).get("skipped_because") is None
+    skipped = [
+        check for check in scope["checks"]
+        if check.get("details", {}).get("skipped_because") == "service_deactivated"
+    ]
+    assert skipped, "zadny check v JSON nenese znacku skipped_because"
 
 
 def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
@@ -694,8 +716,15 @@ def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
     Kdyby se lisily mezi snimky, bgp_prefix_counts by zacal hlasit rozdil
     u kazde zdrave sluzby a fixtures by prestaly byt zdravou vychozi sadou.
 
-    Zabiji mutanta: countery odvozene z ceho jineho nez z adresy peera
-    (napr. z poradi peeru), coz by dalo jina cisla v .4 a v .5.
+    Zabiji mutanta: countery odvozene z neceho, co se mezi snimky .4 a .5
+    lisi pro TOTEZ peera (napr. z poradi peeru v ramci snimku), coz by dalo
+    jina cisla pro stejnou adresu v .4 a v .5.
+
+    Zmereno (oprava vlny 10, nalez 4): odvozeni ze `len(peer)` misto ze
+    souctu ordinalu adresy tenhle test nezabije (685 passed) - `len(peer)`
+    je porad funkce SAME adresy, takze je mezi snimky shodna. Docstring
+    puvodne tvrdil sirsi vec ("cehokoli jineho nez z adresy peera"), coz
+    tenhle test nehlida.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")

@@ -402,9 +402,13 @@ def test_foreign_skip_is_not_collapsed():
     checku bez baseline snapshotu. Slit ho dohromady by zahodilo informaci,
     kterou nic jineho nenese.
 
-    Zabiji mutanta: slevani podle Status.SKIP misto podle znacky. Predchozi
-    dva testy by pod nim zustaly zelene - tenhle je jediny, ktery ten
-    rozdil meri.
+    Zabiji mutanta: slevani podle Status.SKIP misto podle znacky. Zmereno
+    (2026-08-04, oprava vlny 10): pod timhle mutantem padne i
+    tests/reporting/test_text_report.py::test_deactivated_service_shows_the_reason_in_the_report,
+    jehoz scope nese jediny check `deactivation_state`, ktery je sam
+    Status.SKIP bez znacky - implementace slevajici podle stavu spolkne
+    prave ten radek, ktery ten test hlida. Tenhle test tedy neni jediny,
+    ktery ten rozdil meri, ale je jediny v tomhle souboru.
     """
     view = build_view(
         _scope(
