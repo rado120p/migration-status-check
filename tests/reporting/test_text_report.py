@@ -1053,7 +1053,7 @@ def _section(output: str, title: str) -> str:
     adresy, proto se dalsi hranice hleda obecne jako radek zacinajici '--'.
     """
     lines = output.splitlines()
-    start = next(i for i, line in enumerate(lines) if line.strip() == f"-- {title}")
+    start = next(i for i, line in enumerate(lines) if line.strip().startswith(f"-- {title}"))
     end = next(
         (
             i
@@ -1103,3 +1103,36 @@ def test_deactivated_route_renders_as_skip_in_its_section():
 
     assert "SKIP" in section
     assert "deaktivovana" in section
+
+
+def test_deactivated_peer_renders_as_skip_in_its_family_section():
+    """Radek deaktivovaneho peera se musi vykreslit, ne jen existovat v datech."""
+    result = _grouped_result(
+        [
+            CheckResult(
+                id="bgp_session_state",
+                mode="both",
+                status=Status.SKIP,
+                severity=Severity.CRITICAL,
+                message="peer 198.11.13.9 je v konfiguraci deaktivovan",
+                label="BGP status (198.11.13.9)",
+                family=4,
+                value="deaktivovan",
+            ),
+            CheckResult(
+                id="bgp_session_state",
+                mode="both",
+                status=Status.PASS,
+                severity=Severity.CRITICAL,
+                message="198.11.13.2: Established",
+                label="BGP status (198.11.13.2)",
+                family=4,
+                value="Established",
+            ),
+        ]
+    )
+    output = render(result, detail=True)
+    section = _section(output, "IPv4")
+
+    assert "SKIP" in section
+    assert "deaktivovan" in section
