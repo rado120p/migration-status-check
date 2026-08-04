@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from migration_validator import api
-from migration_validator.engine import _identity
+from migration_validator.engine import _identity, _unassigned_bgp_peers
 from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -216,6 +216,38 @@ def test_unassigned_bgp_peers_are_reported():
     result = api.evaluate(subject, baseline=_old(), now=NOW)
 
     assert result.unassigned["bgp_peers"][0]["peer"] == "10.9.9.9"
+
+
+def test_inactive_peer_is_assigned_not_unassigned():
+    """Ziva session deaktivovaneho peera patri sve sluzbe, ne do NEZARAZENO.
+
+    Deaktivovany peer je porad peer teto sluzby - kdyz pro nej presto prijde
+    session, je to nalez o teto sluzbe. Spadnout do NEZARAZENO by ten vztah
+    zahodilo.
+
+    Zabiji mutanta: `assigned` postavene jen z `bgp_neighbors`.
+    """
+    scope = Scope(
+        id="s1",
+        kind="service",
+        key=ScopeKey(None, "Internet"),
+        selectors=Selectors(bgp_neighbors_inactive=["198.11.13.9"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bgp": {"198.11.13.9": {"state": "Established"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bgp_peers(snapshot, [scope]) == []
 
 
 MGMT_ROUTE = {

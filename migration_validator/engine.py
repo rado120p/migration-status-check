@@ -166,7 +166,17 @@ def _match_info(pair: MatchedPair) -> MatchInfo:
 
 
 def _unassigned_bgp_peers(subject: Snapshot, scopes: list[Scope]) -> list[dict[str, Any]]:
-    assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    # Deaktivovany peer je porad peer sve sluzby. Kdyz pro nej presto prijde
+    # session, je to nalez o teto sluzbe - do NEZARAZENO patri jen peer,
+    # ktery ke zadne sluzbe nesedi.
+    assigned = {
+        peer
+        for scope in scopes
+        for peer in (
+            *scope.selectors.bgp_neighbors,
+            *scope.selectors.bgp_neighbors_inactive,
+        )
+    }
     if any(scope.is_device for scope in scopes):
         return []
     return [
@@ -220,7 +230,17 @@ def _unassigned_bfd_sessions(
     Napriklad BFD drzene jinym klientem nez BGP - parser takovy zamer
     necte, takze by session jinak nikde nefigurovala.
     """
-    assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    # Deaktivovany peer je porad peer sve sluzby. Kdyz pro nej presto prijde
+    # session, je to nalez o teto sluzbe - do NEZARAZENO patri jen peer,
+    # ktery ke zadne sluzbe nesedi.
+    assigned = {
+        peer
+        for scope in scopes
+        for peer in (
+            *scope.selectors.bgp_neighbors,
+            *scope.selectors.bgp_neighbors_inactive,
+        )
+    }
     if any(scope.is_device for scope in scopes):
         return []
     return [

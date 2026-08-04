@@ -283,6 +283,25 @@ def test_service_entry_carries_both_deactivation_flags(tmp_path):
     )
 
 
+def test_entry_reads_inactive_bgp_neighbors(tmp_path):
+    """Deaktivovany soused se cte do vlastniho seznamu, ne do zivych."""
+    path = tmp_path / "inv.yml"
+    path.write_text(
+        "schema_version: 5\n"
+        "device: dev\n"
+        "interfaces:\n"
+        "- interface: ge-0/0/2.13\n"
+        "  service_type: Internet\n"
+        "  bgp_neighbor: [198.11.13.2]\n"
+        "  bgp_neighbor_inactive: [198.11.13.9]\n",
+        encoding="utf-8",
+    )
+    entry = load_inventory(str(path)).entries[0]
+
+    assert entry.bgp_neighbor == ["198.11.13.2"]
+    assert entry.bgp_neighbor_inactive == ["198.11.13.9"]
+
+
 def test_inventory_rejects_schema_three():
     """Stara inventory se nemigruje, generuje se znovu."""
     assert INVENTORY_SCHEMA_VERSION == 5

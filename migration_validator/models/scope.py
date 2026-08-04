@@ -53,6 +53,7 @@ class Selectors:
     physical_interfaces: list[str] = field(default_factory=list)
     routing_instances: list[str] = field(default_factory=list)
     bgp_neighbors: list[str] = field(default_factory=list)
+    bgp_neighbors_inactive: list[str] = field(default_factory=list)
     local_ipv4: list[str] = field(default_factory=list)
     local_ipv6: list[str] = field(default_factory=list)
     virtual_gw_v4: list[str] = field(default_factory=list)
@@ -77,6 +78,7 @@ class Selectors:
             "physical_interfaces": list(self.physical_interfaces),
             "routing_instances": list(self.routing_instances),
             "bgp_neighbors": list(self.bgp_neighbors),
+            "bgp_neighbors_inactive": list(self.bgp_neighbors_inactive),
             "local_ipv4": list(self.local_ipv4),
             "local_ipv6": list(self.local_ipv6),
             "virtual_gw_v4": list(self.virtual_gw_v4),
