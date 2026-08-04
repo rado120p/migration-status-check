@@ -398,7 +398,11 @@ def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
     sluzba zustala PASS a text_report.py:390 jeji blok nerozbalil.
 
     Zabiji mutanta: navrat Outcome.SKIP misto DEGRADED v routes.py. Sluzba
-    by zustala PASS a blok by se nerozbalil.
+    by zustala PASS - test padne uz na `status is Status.WARN` a k asserci
+    na obsah bloku se nedostane. Ze by se blok bez PASS na Status.WARN
+    skutecne nerozbalil, overuje samostatne text_report.py:390 podminka
+    `detail or view.status is not Status.PASS` - overeno primo, mutaci te
+    podminky na `if detail`.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
