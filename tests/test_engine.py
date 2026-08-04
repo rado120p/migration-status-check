@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from migration_validator import api
-from migration_validator.engine import _identity, _unassigned_bgp_peers
+from migration_validator.engine import (
+    _identity,
+    _unassigned_bfd_sessions,
+    _unassigned_bgp_peers,
+)
 from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
@@ -248,6 +252,39 @@ def test_inactive_peer_is_assigned_not_unassigned():
     )
 
     assert _unassigned_bgp_peers(snapshot, [scope]) == []
+
+
+def test_inactive_peer_bfd_session_is_assigned_not_unassigned():
+    """Ziva BFD session deaktivovaneho peera patri sve sluzbe, ne do NEZARAZENO.
+
+    Stejny duvod jako u BGP: deaktivovany peer je porad peer teto sluzby -
+    kdyz pro nej presto prijde BFD session, je to nalez o teto sluzbe, ne
+    osamocena session bez vztahu ke scope.
+
+    Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` postavene jen
+    z `bgp_neighbors`.
+    """
+    scope = Scope(
+        id="s1",
+        kind="service",
+        key=ScopeKey(None, "Internet"),
+        selectors=Selectors(bgp_neighbors_inactive=["198.11.13.9"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bfd": {"198.11.13.9": {"state": "Up", "interface": "et-0/0/9.0"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == []
 
 
 MGMT_ROUTE = {
