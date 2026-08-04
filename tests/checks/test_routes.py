@@ -474,12 +474,22 @@ def test_deactivated_route_yields_skip_and_sibling_stays_ok():
     hlasoval, cela sluzba by zesedla a zdrava routa vedle by prestala byt
     videt. `engine.py` SKIPy odfiltruje pred Status.worst(), takze staci,
     aby check vydal SKIP jen na tom jednom nalezu.
+
+    Treti routa (aktivni, ale chybejici v tabulce) je tu schvalne: bez ni
+    by mutant `if route.get("active", True) is False:` -> `if True:` prosel
+    beze zmeny vysledku - sourozenec s daty v subjektu skonci OK porad,
+    protoze vetev SKIP pro nej neni dosazitelna (subject neni None). Treti
+    routa ma subject None, takze mutant, ktery oznaci za deaktivovanou i
+    tuhle aktivni routu, by ji misto BROKEN vratil chybne jako SKIP - a
+    tenhle test to zachyti.
     """
     scope = _scope(
         static_routes=[
             {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"],
              "active": False},
             {"rib": "inet.0", "prefix": "10.1.0.0/16", "next_hop": ["2.2.2.2"],
+             "active": True},
+            {"rib": "inet.0", "prefix": "10.2.0.0/16", "next_hop": ["3.3.3.3"],
              "active": True},
         ]
     )
@@ -500,3 +510,4 @@ def test_deactivated_route_yields_skip_and_sibling_stays_ok():
     assert by_label["inet.0 10.0.0.0/8"].outcome is Outcome.SKIP
     assert by_label["inet.0 10.0.0.0/8"].value == "deaktivovana"
     assert by_label["inet.0 10.1.0.0/16"].outcome is Outcome.OK
+    assert by_label["inet.0 10.2.0.0/16"].outcome is Outcome.BROKEN
