@@ -196,21 +196,31 @@ podpírajícího nálezu.
 **Změřený stav dnes** (blok `EVPN-VLAN-AWARE-CPE13-NNI`, `detail=False`):
 
 ```
- SKIP | BFD               : interface deactivated
- WARN | Deaktivace        : interface deactivated | bylo interface deactivated
- SKIP | EVPN ESI status   : interface deactivated
- SKIP | EVPN MAC count    : interface deactivated
- SKIP | Interface errors  : interface deactivated
- SKIP | Interface status  : interface deactivated
- SKIP | Interface traffic : interface deactivated
- SKIP | Staticka routa    : interface deactivated
+ STAV | CHECK             : POST (et-0/0/8.313)   | ZMENA PROTI ge-0/0/2.313
+ -----+-------------------+-----------------------+-------------------------
+ SKIP | BFD               : interface deactivated |
+ WARN | Deaktivace        : interface deactivated |
+ SKIP | EVPN ESI status   : interface deactivated |
+ SKIP | EVPN MAC count    : interface deactivated |
+ SKIP | Interface errors  : interface deactivated |
+ SKIP | Interface status  : interface deactivated |
+ SKIP | Interface traffic : interface deactivated |
+ SKIP | Staticka routa    : interface deactivated |
 ```
 
-**Cílový stav téhož bloku:**
+Sloupec ZMENA je u řádku `Deaktivace` prázdný, i když jde o službu vypnutou
+v obou snímcích: `value == baseline_value`, a `change_text` (`view.py:95`)
+v tom případě vrací prázdný řetězec. Zapsáno proto, že první verze tohohle
+specu tam „bylo interface deactivated" uváděla — a bylo to zrekonstruované,
+ne změřené.
+
+**Cílový stav téhož bloku** (změřeno dočasnou aplikací návrhu nad `main`):
 
 ```
- WARN | Deaktivace     : interface deactivated | bylo interface deactivated
- SKIP | Ostatni checky : 7 preskoceno
+ STAV | CHECK          : POST (et-0/0/8.313)   | ZMENA PROTI ge-0/0/2.313
+ -----+----------------+-----------------------+-------------------------
+ WARN | Deaktivace     : interface deactivated |
+ SKIP | Ostatni checky : 7 preskoceno          |
 ```
 
 **Počet ve sloučeném řádku počítá jen sloučené deaktivační SKIPy**, ne
@@ -364,9 +374,17 @@ Plus jeden test na **JSON**: `to_dict()` vydá všechny checky bez ohledu na
 
 ### Bod 12
 
-Ripple se **měří**, ne odhaduje. Než se conftest změní, plán zjistí, které
-testy na hodnotu `14` skutečně visí (`grep` na `14` dá 96 zásahů, ale většina
-jsou VLANy, `irb.14` a adresy `152.11.14.x` — hrubý `grep` tady neměří nic).
+Ripple se **měří**, ne odhaduje. Plán ho změřil: dočasně rozrůznil countery
+nad `main`, ověřil, že mutace je aktivní (peery dostaly různá čísla a report
+je vytiskl), a sada zůstala **676 passed, 0 failed**.
+
+Nula je tady **nález**: hodnoty counterů ze sdílených fixtures nehlídá žádný
+test, takže samotné rozrůznění by bylo dekorativní. K bodu 12 proto patří
+i zamykající test, jinak se vedlejší přínos („záměna peerů by byla na reportu
+vidět") neuskuteční.
+
+Totéž měření se udělalo pro bod 18 a dopadlo stejně — vykreslený obsah bloku
+deaktivované služby dnes taky nehlídá nikdo.
 
 ### Mutanti
 

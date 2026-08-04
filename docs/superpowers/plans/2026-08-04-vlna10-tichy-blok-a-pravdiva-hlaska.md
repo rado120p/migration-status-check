@@ -150,14 +150,18 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     varianta, kterou uzivatel vedome odmitl.
 
     Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni'.
+
+    Aserce `peer in new.facts['bgp']` nize je POJISTKA PROTI VAKUOVOSTI a
+    nesmi se odstranit. _facts_for() (tests/conftest.py) odvozuje
+    facts['bgp'] ZE SELEKTORU, takze kdyby nekdo odebrani peera presunul
+    pred stavbu snimku, zadna session by pro nej nevznikla - peer by se do
+    NEZARAZENO nedostal a obe aserce nize by prosly, aniz by cokoli
+    dokazaly. Tahle jedina aserce ten presun odhali.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
-    # Selektor se meni AZ NAD HOTOVYM SNIMKEM. _facts_for() odvozuje
-    # facts['bgp'] ze selektoru, takze odebrani peera pred stavbou snimku
-    # by pro nej zadnou session nevyrobilo - peer by v NEZARAZENO nebyl a
-    # test by prosel, aniz by cokoli dokazal.
+    # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
     target = next(
         scope for scope in new.scopes
         if scope.id == "svc:INTERNET-CPE13-NNI:Internet"
@@ -284,31 +288,7 @@ def test_peer_measured_only_in_baseline_is_fail():
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
 Expected: PASS, **677 passed, 0 skipped** (676 výchozích + 1 nový)
 
-- [ ] **Step 8: Prove the new test is not vacuous**
-
-Tohle **není mutant** — je to kontrola, že test měří, co slibuje. Míří proto
-do testu, ne do produkčního kódu, a nesmí se zaměnit s mutantem v kroku 10.
-
-Dočasně přesuň v novém testu odebrání peera ze selektorů **před** volání
-`synthetic_snapshot`, tedy postav snímek až z upravených selektorů:
-
-```bash
-# Rucne: v test_peer_moved_out_of_service_is_not_claimed_to_be_missing
-# presun blok `target.selectors.bgp_neighbors = [...]` tak, aby se
-# provedl pred `api.evaluate`, ale nad scopy ziskanymi PRED stavbou faktu.
-# Nejjednodussi varianta: postav `new` az po uprave inventory.
-.venv/bin/python -m pytest -o addopts="" tests/test_end_to_end.py::test_peer_moved_out_of_service_is_not_claimed_to_be_missing -q
-```
-
-Expected: FAIL na `assert peer in unassigned` — bez session peer do NEZAŘAZENO
-nespadne. Kdyby test i tak prošel, aserce na NEZAŘAZENO nic neměří —
-zastav a nahlas.
-
-Vrať test do původní podoby: `git checkout -- tests/test_end_to_end.py` je
-**zakázaný** (zahodil by celou úlohu); vrať přesun ručně a ověř
-`.venv/bin/python -m pytest -o addopts="" -q` → 677 passed.
-
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add migration_validator/checks/bgp.py tests/checks/test_bgp.py tests/test_end_to_end.py
@@ -319,7 +299,7 @@ zivou session a NEZARAZENO ji ukaze. Hlaska 'v subjektu neni' tedy
 lhala; nova formulace je pravdiva i kdyz peer jen presel jinam."
 ```
 
-- [ ] **Step 10: Run the mutant (over committed work)**
+- [ ] **Step 9: Run the mutant (over committed work)**
 
 ```bash
 sed -i 's|                    else f"{peer}: v baseline patril k teto sluzbe, v subjektu uz ne",|                    else f"{peer}: v baseline byl, v subjektu neni",  # MUTANT|' migration_validator/checks/bgp.py
@@ -335,7 +315,7 @@ Expected: FAIL — musí padnout **jak** `tests/checks/test_bgp.py::test_peer_me
 Kdyby padl jen ten jednotkový, nová sémantika není pokrytá přes skutečnou
 cestu — zastav a nahlas.
 
-- [ ] **Step 11: Revert the mutant**
+- [ ] **Step 10: Revert the mutant**
 
 ```bash
 git checkout -- migration_validator/checks/bgp.py
@@ -718,14 +698,19 @@ V `migration_validator/reporting/text_report.py` uprav řádek 347:
 
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
 
-Expected: PASS nebo FAIL — **tohle je jediné místo v plánu, kde počet není
-předem změřený.** Existující testy nad renderovanými bloky deaktivovaných
-služeb mohou očekávat jednotlivé SKIP řádky. Ať je výsledek jakýkoli,
-**zapiš jména padlých testů do zprávy a u každého rozhodni, jestli je to
-očekávání, nebo aserce**: testy, které tvrdí „blok obsahuje řádek X", se
-upraví; testy, které tvrdí něco o počtu SKIPů v souhrnu, se upravovat
-**nesmí** — ty by měly zůstat zelené, protože souhrn se nemění, a jejich pád
-je nález.
+Expected: PASS, **676 passed, 0 skipped** — ripple do existujících testů je
+změřený jako **nulový**. Změřeno při psaní tohohle plánu tím, že se kroky 3
+až 7 dočasně provedly nad `main` a zase vrátily; slučování bylo ověřeně
+aktivní (blok se opravdu zkrátil na dva řádky, viz krok 9).
+
+**Nula je tady nález, ne potvrzení.** Znamená, že vykreslený obsah bloku
+deaktivované služby dnes nehlídá **žádný** z 676 testů — právě proto k téhle
+úloze patří tři end-to-end testy z kroku 9, ne jen jednotkové z kroku 1.
+
+Kdyby cokoli spadlo, změřený předpoklad neplatí — zastav a nahlas, neopravuj
+to potichu. Zvlášť platí, že testy o počtu SKIPů v **souhrnu** spadnout
+nesmí: souhrn se bere z `result.summary`, ne z view, takže jejich pád by
+znamenal, že slučování proteklo do výsledku běhu.
 
 - [ ] **Step 9: Write the end-to-end test for the collapsed block**
 
@@ -826,6 +811,31 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
 
 Run: `.venv/bin/python -m pytest -o addopts="" tests/test_end_to_end.py -q -k "deactivated_service_block or detail_expands or json_report_keeps"`
 Expected: PASS, 3 passed
+
+**Změřený cílový výstup**, proti kterému se dá porovnat, když něco nesedí
+(pořízeno při psaní plánu dočasnou aplikací kroků 3 až 7):
+
+```
+ STAV | CHECK          : POST (et-0/0/8.313)   | ZMENA PROTI ge-0/0/2.313
+ -----+----------------+-----------------------+-------------------------
+ WARN | Deaktivace     : interface deactivated |
+ SKIP | Ostatni checky : 7 preskoceno          |
+```
+
+Sloupec ZMENA je u řádku `Deaktivace` **prázdný**, protože u služby vypnuté
+v obou snímcích je `value == baseline_value` a `change_text` (`view.py:95`)
+v tom případě vrací prázdný řetězec. Právě proto vychází
+`block.count("interface deactivated") == 1`.
+
+A blok s cizím SKIPem, změřený týmž průchodem:
+
+```
+ STAV | CHECK          : POST (et-0/0/10.0)    | ZMENA PROTI -
+ -----+----------------+-----------------------+--------------
+ SKIP | BGP prefixy    : bez baseline          |
+ WARN | Deaktivace     : interface deactivated | bez baseline
+ SKIP | Ostatni checky : 9 preskoceno          |
+```
 
 Kdyby `assert block.count("interface deactivated") == 1` selhalo na jiném
 čísle, počet checků nad tou službou se změnil — přepiš očekávání podle
@@ -1296,26 +1306,43 @@ ty soubory nikdo nečte. Do `tests/fixtures/` se promítnout **nesmí** —
 `tests/fixtures/172.20.20.{4,5}.yml` tahle úloha **nepřegenerovává**, mění
 jen kořenové soubory a RPC fixtures.
 
-- [ ] **Step 1: Ask the user for the capture**
+**Pořadí kroků 1 až 4 je dané provozem laborky, ne pohodlím.** Služby jsou
+teď aktivní na `.4`. Kdyby se `.5` četlo hned po `.4`, parser by přečetl
+krabici **bez služeb** a vydal by prázdnou inventory. Migraci mezi tím dělá
+uživatel.
 
-Napiš uživateli přesně tohle a **počkej na odpověď**:
+- [ ] **Step 1: Parse the pre-migration device (`.4`)**
 
-> Vlna 10 je hotová až na bod 2. Potřebuju capture z laborky v tomhle pořadí:
-> capture z `.4` (pre-migration), přemigrovat služby na `.5`, capture z `.5`
-> (post-migration). Až budou oba hotové, řekni mi to a přegeneruju kořenové
-> `172.20.20.{4,5}.yml` a `tests/fixtures/rpc/junos-evo/`.
-
-Bez capture **nepokračuj** a nezkoušej si ho vyrobit sám.
-
-- [ ] **Step 2: Regenerate the root inventories**
-
-Po potvrzení od uživatele. CLI obou parserů je ověřené z `--help`:
+CLI obou parserů je ověřené z `--help`:
 `mx_parser.py [--auth {key,password}] [-u USERNAME] [-o OUTPUT] hostname`,
 výchozí výstup je `<hostname>.yml`, výchozí autentizace SSH klíčem.
 
 ```bash
 eval "$(grep MIG_LAB_PASSWORD ~/.bashrc)"
 .venv/bin/python mx_parser.py 172.20.20.4 -o 172.20.20.4.yml
+head -1 172.20.20.4.yml
+```
+
+Expected: `schema_version: 5`.
+
+Kdyby v souboru nebyla jediná služba, běželo to proti špatné krabici nebo
+se migrace už stala — **zastav a zeptej se uživatele**, nepokračuj.
+
+- [ ] **Step 2: Ask the user to migrate the services**
+
+Napiš uživateli přesně tohle a **počkej na odpověď**:
+
+> Capture z `.4` je hotový (`172.20.20.4.yml`, schema 5). Můžeš teď
+> přemigrovat služby na `.5`? Až budou nahoře, řekni mi to a udělám capture
+> z `.5` a přegeneruju `tests/fixtures/rpc/junos-evo/`.
+
+Bez potvrzení **nepokračuj** a nezkoušej migraci provést sám.
+
+- [ ] **Step 3: Parse the post-migration device (`.5`)**
+
+Po potvrzení od uživatele:
+
+```bash
 .venv/bin/python evo_parser.py 172.20.20.5 -o 172.20.20.5.yml
 ```
 
@@ -1336,10 +1363,11 @@ head -1 172.20.20.4.yml 172.20.20.5.yml
 
 Expected: `schema_version: 5` u obou.
 
-- [ ] **Step 3: Refresh the junos-evo RPC fixtures**
+- [ ] **Step 4: Refresh the junos-evo RPC fixtures (post-migration)**
 
-Na to je subpříkaz `record` (`migration_validator/cli.py:258`), který ukládá
-syrové RPC XML přesně pro tenhle účel:
+**Až po migraci** — fixtures mají zachytit stav `.5` **se službami**, ne
+prázdnou krabici. Na to je subpříkaz `record` (`migration_validator/cli.py:258`),
+který ukládá syrové RPC XML přesně pro tenhle účel:
 
 Na rozdíl od parserů `record` přepínač `--password` **má**, takže ho lze
 spustit neinteraktivně:
@@ -1369,7 +1397,7 @@ zastav a nahlas, nedoplňuj ho ze starého capture.
 stojí a jejich přegenerování není součástí bodu 2. Adresář
 `tests/fixtures/rpc/junos/` (MX) taky ne — bod 2 mluví jen o `junos-evo`.
 
-- [ ] **Step 4: Measure the ripple**
+- [ ] **Step 5: Measure the ripple**
 
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
 
@@ -1379,7 +1407,7 @@ tvaru dat z laborky** (pak se upraví očekávání), nebo **odkryl skutečnou
 vadu** (pak je to nález — zastav a nahlas). Nikdy neupravuj aserci tak, aby
 přestala něco tvrdit.
 
-- [ ] **Step 5: Re-run every mutant of the wave**
+- [ ] **Step 6: Re-run every mutant of the wave**
 
 Fixtures se změnily, takže **všechny dosavadní důkazy jsou neplatné**. Pusť
 znovu, každý zvlášť, každý s `grep -n MUTANT` a každý vrácený
@@ -1410,7 +1438,7 @@ git checkout -- tests/conftest.py
 Expected: každý shodí tytéž testy jako ve své úloze. Kdyby některý po výměně
 fixtures přestal cokoli shazovat, je to nález — zastav a nahlas.
 
-- [ ] **Step 6: Verify the locks and commit**
+- [ ] **Step 7: Verify the locks and commit**
 
 ```bash
 diff mx_parser.py evo_parser.py | wc -l
@@ -1428,7 +1456,7 @@ Korenove 172.20.20.{4,5}.yml byly na schematu 4 a nastroj je odmital
 nacist. RPC fixtures junos-evo jsou z capture po migraci sluzeb na .5."
 ```
 
-Pokud krok 4 vyžádal úpravy testů, přidej je do `git add` a zmiň je ve
+Pokud krok 5 vyžádal úpravy testů, přidej je do `git add` a zmiň je ve
 zprávě.
 
 ---
@@ -1500,8 +1528,35 @@ implementeři našli:
 > nést zároveň aktivní a deaktivovaný next-hop, a klíčování `(rib, prefix)`
 > se pak musí navrhnout znovu.
 
+**Vědomě uzavřeno, znovu neotvírat** — vlastní podsekce, povinná. Bez ní
+vlna 11 tytéž věci objeví znovu a bude o nich rozhodovat podruhé:
+
+> **Statické routy se chovají stejně jako BGP a sjednocovat se nebudou.**
+> `checks/routes.py` bere `ctx.baseline["routes"]` do svého sjednocení
+> a `_unassigned_static_routes` počítá `assigned` jen ze subjektových scopů —
+> tedy týž tvar, kvůli kterému vznikl bod 19 u peerů. Varianta „sjednotit
+> i statické routy" byla uživateli 2026‑08‑04 nabídnuta a **odmítnuta**:
+> širší rozsah bez podpírajícího nálezu. Bod 19 se u BGP vyřešil
+> přeformulováním hlášky, ne změnou vlastnictví, takže u rout není co
+> dorovnávat.
+>
+> **Peer zůstává v NEZAŘAZENO i v bloku služby.** Varianty „blok mlčí"
+> a „NEZAŘAZENO mlčí" byly nabídnuty a odmítnuty. Obě sekce mluví dál,
+> každá pravdivě o něčem jiném: blok o členství ve službě, NEZAŘAZENO
+> o session, kterou si žádná služba nenárokuje.
+>
+> **Popisek `BGP status (adresa)` zůstává bezpodmínečný** (bod 9) a
+> **klíčování `(rib, prefix)` se nemění** (bod 17) — odůvodnění je zapsané
+> přímo v `checks/bgp.py` a `checks/routes.py`.
+
 **Pravidla do plánu vlny 11** — přenes ta z vlny 9, která se uplatnila, a
-přidej nová zaplacená touhle vlnou.
+přidej nová zaplacená touhle vlnou. Povinně mezi nimi:
+
+> **Nulový ripple se v této vlně potvrdil dvakrát a pokaždé jako nález.**
+> Bod 12 (hodnoty counterů) i bod 18 (vykreslený obsah bloku deaktivované
+> služby) prošly beze změny počtu testů, přestože obojí měnilo pozorovatelné
+> chování. Obojí znamenalo, že tu vlastnost nehlídal nikdo — a v obou
+> případech musela vlna pokrytí doplnit, ne se o ně opřít.
 
 - [ ] **Step 2: Commit**
 
