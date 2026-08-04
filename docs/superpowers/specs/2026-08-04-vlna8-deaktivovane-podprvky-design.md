@@ -72,6 +72,27 @@ Deaktivace na *libovolné* úrovni nad listem je tedy na listu vidět. Plný
 rozsah, který si uživatel vybral, proto **nestojí skoro nic navíc** — není
 to druhý mechanismus, je to týž predikát zavolaný o patro níž.
 
+### Nález 3 — kontejnerové guardy jsou dnes čirá redundance
+
+Změřeno zkusmým zásahem, který byl potom vrácen (strom po vrácení čistý,
+640 passed, zámek 146):
+
+| zkusmý zásah | výsledek |
+|---|---|
+| zrušit **jen** čtyři kontejnerové guardy (639, 650, 664, 719) | **640 passed, 0 ripple** |
+| zrušit navíc listový guard na `route_node` (725) | **12 failed, 628 passed** |
+| zrušit navíc oba guardy na `neighbor_node` (603, 831) | **18 failed, 622 passed** |
+
+První řádek je nález, ne potvrzení: **kontejnerové guardy dnes nic nedělají.**
+Chození po předcích znamená, že cokoliv chytí ony, chytí i listový guard o
+patro níž — jsou úplně zastíněné. Je to týž tvar, jaký vlna 4 našla u tří
+redundantních guardů v `_is_inactive`, a přenáší se z něj i závěr: guard,
+který je zastíněný, se maže bez náhrady a nic se tím nezmění.
+
+Praktický důsledek pro plán: **jejich odstranění nesmí být samostatná úloha
+s vlastním „testy zelené" kritériem** — to kritérium by splnilo i to, kdyby
+implementer neudělal nic.
+
 ---
 
 ## Návrh
@@ -94,19 +115,28 @@ jsou orientační, adresuje se vzorem):
 **Zapsat příznak na listu:**
 
 - `route_node` (725) → `StaticRoute(..., active=not self._is_inactive(route_node))`
-- `neighbor_node` v `_parse_bgp_neighbors` (603) a v `_parse_bfd` (831) →
-  soused se zařadí do paralelního seznamu neaktivních místo vypuštění
+- `neighbor_node` v `_parse_bgp_neighbors` (603) → soused se zařadí do
+  paralelního seznamu neaktivních místo vypuštění
 
-**Nesahat na `_bfd_node` (776)** — viz nález 1.
+**Nesahat na `_parse_bfd` (831) ani na `_bfd_node` (776).** BFD zůstává
+v téhle vlně netknuté, obojí ze stejného důvodu: BFD je vlastnost **relace**,
+a deaktivovaný soused žádnou relaci nemá, takže jeho BFD záměr nemá co
+popisovat. `service.bfd` tedy pro deaktivovaného souseda zůstává prázdné,
+přesně jak dnes tvrdí `tests/parsers/test_inactive.py:208`. SKIP za takového
+peera vydá `checks/bgp.py` z `bgp_neighbors_inactive`, ne BFD check.
 
 Zásah musí být **byte-identický v obou parserech**. Zámek
 `diff mx_parser.py evo_parser.py | wc -l` **zůstává na 146** a je to
 akceptační kritérium vlny, ne kontrola na konci.
 
-Vědomé rozhodnutí u řádku 650: kontejnerový `continue` na `instance` se ruší
-také, i když deaktivovanou VRF už pokrývá `routing_instance_active` na
-scopu. Uniformita je tu levnější než výjimka — výjimka by znamenala jeden
-další rozdíl mezi parsery a jedno pravidlo navíc v hlavě.
+Vědomé rozhodnutí u řádku 650, i s důsledkem nahlas: kontejnerový `continue`
+na `instance` se ruší také, i když deaktivovanou VRF už pokrývá
+`routing_instance_active` na scopu. **Na reportu to není vidět** — taková
+služba se zkratuje na `checks/base.py` přes `Scope.is_deactivated` a
+per‑řádkový SKIP se nikdy nevykreslí. Je to tedy změna *obsahu inventory*,
+ne výstupu, a nemá paritu se zbylými třemi místy. Ruší se přesto, protože po
+nálezu 3 je ten guard prokazatelně zastíněný a ponechat jediný zastíněný
+guard z původních čtyř by byla výjimka bez užitku.
 
 ### 2. Nosič příznaku: tři tvary dat, ne jeden nosič
 
@@ -154,8 +184,19 @@ Kořenové `172.20.20.{4,5}.yml` **žádný test nečte** — ověřeno grepem, 
 šest testovacích odkazů míří do `tests/fixtures/`. Zůstanou zastaralé pod
 bodem 2 („Resync"), který tahle vlna neotevírá.
 
-Snapshot schema (`models/snapshot.py`) se **nemění** — vlna sahá na záměr z
-konfigurace, ne na měření.
+**Snapshot schema se zvedá na 5 také.** První znění tohohle specu tvrdilo, že
+se nemění (odůvodněné tím, že vlna sahá na záměr, ne na měření) — a bylo to
+špatně. Ověřeno: `Snapshot` scopy **vnořuje**
+(`models/snapshot.py:108` serializuje `[scope.to_dict() ...]`,
+`:126` je rekonstruuje), a `Selectors.to_dict` nový klíč
+`bgp_neighbors_inactive` nese. Starý snímek by ho tedy četl jako prázdný —
+týž tichý default, kterým se o odstavec výš zdůvodňuje bump inventory.
+Argument platí beze zbytku i tady, takže `SCHEMA_VERSION` v
+`models/snapshot.py:17` jde ze 4 na 5.
+
+Snímky pod `runs/` tím zastarají. Je to v pořádku: `runs/` je v
+`.gitignore`, jsou to historické artefakty konkrétních běhů a nástroj na ně
+spadne hlasitě, ne tiše.
 
 ### 4. Checky: SKIP na řádku, ne na scopu
 
@@ -214,6 +255,49 @@ Navíc, protože zásah do parserů je test-only neověřitelný z opačné stra
 **tvrzení o produkčním mutantovi v diffu, který ten produkční soubor
 neobsahuje, musí změřit někdo mimo review té úlohy** (pravidlo z vln 6 a 7).
 
+### Existující testy, které stojí na starém kontraktu
+
+Devět testů (× dvě platformy = osmnáct případů) dnes tvrdí „deaktivované se
+vypustí". Vlna ten kontrakt mění, takže se musí změnit i ony — a plán je
+musí jmenovat, aby se nezměnily jen tak, aby prošly.
+
+**Šest testů o statikách — skutečně padnou** (změřeno, viz nález 3, druhý
+řádek tabulky):
+
+| soubor | test |
+|---|---|
+| `test_inactive.py` | `test_deactivated_routing_instances_container_drops_static_routes` |
+| `test_inactive.py` | `test_inactive_rib_drops_only_its_own_routes` |
+| `test_static_routes.py` | `test_deactivated_static_stanza_yields_no_route` |
+| `test_static_routes.py` | `test_deactivated_rib_yields_no_route` |
+| `test_static_routes.py` | `test_deactivated_global_routing_options_yields_no_route` |
+| `test_static_routes.py` | `test_deactivated_instance_routing_options_yields_no_route` |
+
+Přepíšou se z „routa v záměru není" na „routa v záměru **je** a nese
+`active: False`" — a přejmenují, protože `..._yields_no_route` by po změně
+lhal.
+
+**Tři testy o sousedech — nepadnou, a právě proto jsou nebezpečné:**
+`test_deactivated_bgp_container_drops_neighbors_and_bfd`,
+`test_inactive_bgp_group_drops_its_neighbors`,
+`test_deactivated_top_level_protocols_drop_neighbors_and_bfd`.
+
+V měření nálezu 3 sice padly, ale **to měření mělo jiný tvar než tenhle
+návrh**: zkusmý zásah neaktivní sousedy sypal do hlavního seznamu, kdežto
+návrh je posílá do paralelního `bgp_neighbor_inactive`. Pod návrhem tedy
+`service.bgp_neighbor == []` dál platí a testy zůstanou zelené — jen už
+netvrdí, co si jejich název myslí, protože soused nezmizel, jen se
+přestěhoval. **Tohle je předpověď, ne měření**; první krok příslušné úlohy
+v plánu je ji ověřit, a když nevyjde, platí pravidlo „měření má přednost
+před zadáním".
+
+Ať vyjde jakkoliv, ty tři testy se musí **rozšířit** o aserci, že soused
+skutečně přistál v `bgp_neighbor_inactive`. Bez toho nové chování nehlídá
+nikdo a zůstal by po nich test, jehož název slibuje víc než jeho aserce —
+přesně vada, kterou zaplatila vlna 7.
+
+### Nové testy
+
 Nové testy pokryjí nejméně:
 
 - všechny tři živé spouštěče (`route`, `neighbor`, top-level kontejner) na
@@ -225,12 +309,17 @@ Nové testy pokryjí nejméně:
   dá normální nález a nespadne do `NEZARAZENO`
 - `_bfd_node` chování se **nemění** — test, který zafixuje dědění ze skupiny
   přes deaktivovaný override, aby to příští vlna neopravovala jako vadu
+  (dnes to netvrdí nikdo ani jedním směrem, viz nález 1)
 
 ## Akceptační kritéria
 
 - `diff mx_parser.py evo_parser.py | wc -l` = **146**
 - celá sada zelená, **0 přeskočených**
-- `schema_version: 5` konzistentně v obou souborech pod `tests/fixtures/`
+- `schema_version: 5` konzistentně v obou souborech pod `tests/fixtures/`,
+  v `INVENTORY_SCHEMA_VERSION` (`mx_parser.py:2215`, `evo_parser.py` tamtéž)
+  i v `SCHEMA_VERSION` (`models/snapshot.py:17`)
+- žádný test nezůstane s názvem tvaru `..._drops_...` / `..._yields_no_...`,
+  který po změně kontraktu neplatí
 - `grep -nP '[^\x00-\x7F]'` nad soubory pod `migration_validator/` a `tests/`
   prázdný (ASCII-only je tvrdá podmínka a dokazuje se bajtovým scanem).
   **Netýká se parserů:** `mx_parser.py` a `evo_parser.py` jsou komentované
