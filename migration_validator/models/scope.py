@@ -203,10 +203,13 @@ class Scope:
         # hierarchii by se schovala pred vystupem nastroje (AR-14).
         #
         # Na rozdil od bgp vys se tady bgp_neighbors_inactive zamerne
-        # nepricita: checks/bfd.py iteruje zamer bfd_peers, ktery je pro
-        # deaktivovaneho peera prazdny, takze vybrana session by nevykreslila
-        # zadny radek. Nechava se propadnout do NEZARAZENO, kde videt je -
-        # viz _unassigned_bfd_sessions v engine.py.
+        # nepricita. checks/bfd.py o deaktivovanych peerech nevi - zamer si
+        # bere z bfd_peers, ktery pro deaktivovaneho peera prazdny je -
+        # takze vybranou session by vypsal jako WARN 'session existuje,
+        # v konfiguraci sluzby neni'. To je nepravda: v konfiguraci sluzby
+        # peer je, jen deaktivovany. BFD se na teto vlne zamerne nemenilo,
+        # takze session zustava nezarazena a videt je v NEZARAZENO - viz
+        # _unassigned_bfd_sessions v engine.py.
         bfd = {
             peer: data
             for peer, data in (facts.get("bfd") or {}).items()

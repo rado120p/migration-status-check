@@ -233,14 +233,15 @@ def _unassigned_bfd_sessions(
     # Zamerna asymetrie proti _unassigned_bgp_peers: tam se
     # bgp_neighbors_inactive do `assigned` pricita, tady ne.
     #
-    # U BGP dostane deaktivovany peer s zivou session skutecny nalez u sve
+    # U BGP dostane deaktivovany peer se zivou session skutecny nalez u sve
     # sluzby (Scope.select ho vybere, checks/bgp.py ho vypise normalni
     # vetvi), takze by se v NEZARAZENO objevil podruhe a vztah ke sluzbe by
-    # se zahodil. U BFD zadny takovy check neni - checks/bfd.py iteruje
-    # zamer bfd_peers, ktery je pro deaktivovaneho peera z principu prazdny
-    # (BFD se na teto vlne zamerne nemenilo). NEZARAZENO je tedy jedine
-    # misto, kde takova session muze zustat videt; pricist inactive by
-    # znamenalo, ze zmizi uplne.
+    # se zahodil. U BFD zadny takovy nalez nevznika: Scope.select session
+    # deaktivovaneho peera do sluzby zamerne nevybira, protoze checks/bfd.py
+    # o deaktivaci nevi a napsal by k ni nepravdive 'v konfiguraci sluzby
+    # neni' (BFD se na teto vlne zamerne nemenilo). NEZARAZENO je tedy
+    # jedine misto, kde takova session muze zustat videt; pricist inactive
+    # by znamenalo, ze zmizi uplne.
     assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
     if any(scope.is_device for scope in scopes):
         return []

@@ -217,9 +217,11 @@ def test_bgp_session_of_deactivated_peer_is_selected():
 def test_bfd_session_of_deactivated_peer_is_not_selected():
     """Protejsek predchoziho testu - u BFD se inactive zamerne nepricita.
 
-    checks/bfd.py iteruje zamer bfd_peers, ktery je pro deaktivovaneho peera
-    prazdny, takze vybrana session by nevykreslila zadny radek. Musi zustat
-    nezarazena, aby ji engine ukazal v NEZARAZENO.
+    checks/bfd.py o deaktivaci nevi: zamer si bere z bfd_peers, ktery pro
+    deaktivovaneho peera prazdny je, takze vybranou session by vypsal jako
+    WARN 'session existuje, v konfiguraci sluzby neni' - nepravda, peer
+    v konfiguraci je, jen deaktivovany. Musi zustat nezarazena, aby ji
+    engine ukazal v NEZARAZENO.
 
     Zabiji mutanta: vyber `bfd` rozsireny o `bgp_neighbors_inactive`
     (symetricky s vyberem `bgp`).
