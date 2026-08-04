@@ -631,3 +631,51 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
 
     assert "Ostatni checky" not in labels
     assert len([label for label in labels if label]) > 2
+
+
+def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
+    """Dva peery jedne sluzby musi mit ruzne countery.
+
+    Sdilene fixtures davaly kazdemu peerovi 14/14/14/3, takze zamena peeru
+    v kodu by na reportu nebyla videt vubec. Zmereno pri psani planu vlny
+    10: rozruzneni counteru neshodilo ani jeden z 676 testu, tedy jejich
+    hodnoty nehlidal nikdo. Bez teto aserce by se fixtures mohly kdykoli
+    vratit k uniformnim cislum a nic by to nevytklo.
+
+    Zabiji mutanta: navrat `_ribs_for` k `dict(_RIB_COUNTERS)`.
+    """
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    service = next(
+        scope for scope in new.scopes
+        if scope.id == "svc:L3VPN-CPE13-NNI:IPVPN"
+    )
+    peers = service.selectors.bgp_neighbors
+    assert len(peers) >= 2, "sluzba uz nema dva peery, test by byl vakuovy"
+
+    received = [
+        counters["received"]
+        for peer in peers
+        for counters in new.facts["bgp"][peer]["ribs"].values()
+    ]
+
+    assert len(set(received)) == len(received), f"countery se opakuji: {received}"
+
+
+def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
+    """Rozruznene countery musi byt v obou snimcich stejne.
+
+    Kdyby se lisily mezi snimky, bgp_prefix_counts by zacal hlasit rozdil
+    u kazde zdrave sluzby a fixtures by prestaly byt zdravou vychozi sadou.
+
+    Zabiji mutanta: countery odvozene z ceho jineho nez z adresy peera
+    (napr. z poradi peeru), coz by dalo jina cisla v .4 a v .5.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    shared = set(old.facts["bgp"]) & set(new.facts["bgp"])
+    assert shared, "snimky nemaji spolecneho peera, test by byl vakuovy"
+
+    for peer in sorted(shared):
+        assert old.facts["bgp"][peer]["ribs"] == new.facts["bgp"][peer]["ribs"], peer
