@@ -1414,11 +1414,16 @@ prázdnou krabici. Na to je subpříkaz `record` (`migration_validator/cli.py:25
 který ukládá syrové RPC XML přesně pro tenhle účel:
 
 Na rozdíl od parserů `record` přepínač `--password` **má**, takže ho lze
-spustit neinteraktivně:
+spustit neinteraktivně.
+
+**Pozor na `--output-dir`: `record` si k němu sám připojuje jméno platformy.**
+Zadat `--output-dir tests/fixtures/rpc/junos-evo` vyrobí
+`tests/fixtures/rpc/junos-evo/junos-evo/` a původní soubory nechá být — tiše,
+bez chyby. Správně je nadřazený adresář:
 
 ```bash
 .venv/bin/python -m migration_validator.cli record \
-    --device 172.20.20.5 --output-dir tests/fixtures/rpc/junos-evo \
+    --device 172.20.20.5 --output-dir tests/fixtures/rpc \
     --auth password --password "$MIG_LAB_PASSWORD"
 ```
 
