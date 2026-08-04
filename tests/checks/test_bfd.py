@@ -173,9 +173,11 @@ def test_device_scope_never_claims_anything_about_the_configuration():
     """AR-17: bez inventory nejde tvrdit, ze BFD neni nakonfigurovane.
 
     Device scope ma vzdy prazdne selektory, takze `configured` je False -
-    prave tudy se do vetve SESSION_GONE chodi. Hlaska "v subjektu neni
-    nakonfigurovane" by mluvila o konfiguraci, kterou nastroj v tomhle
-    rezimu nevidi.
+    prave tudy se do vetve SESSION_GONE chodi. Hlaska pro NOT_IN_SERVICE
+    ("v baseline patril k teto sluzbe, v subjektu uz ne") tvrdi clenstvi
+    ve sluzbe - to device scope bez inventory nevi o nic vic nez o
+    konfiguraci, takze ji tu vydat nesmi stejne jako puvodni "v subjektu
+    neni nakonfigurovane".
     Sloupec s hodnotou je to, co jde do reportu (F-7/AR-4), takze stav-only
     musi byt hodnota, ne jen hlaska.
 

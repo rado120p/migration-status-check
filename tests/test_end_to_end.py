@@ -638,8 +638,10 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
     overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
     sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
-    neobjevi a poctem checku odpovida neslevenemu stavu z bezu (`scope.checks`
-    z vysledku), ne libovolne slabsi mezi.
+    neobjevi a vsech sedm deaktivacnich SKIPu (BFD, EVPN ESI status,
+    EVPN MAC count, Interface errors, Interface status, Interface traffic,
+    Staticka routa - zmereno na tomto snimku), ktere se v textovem reportu
+    slevaji do jedineho radku, je v JSON pritomno jednotlive.
 
     Oprava vlny 10, nalez 3: JSON take musi nest znacku `skipped_because`
     (klic SKIPPED_BECAUSE v CheckResult.details) - spec ji chtel propsat
@@ -652,12 +654,6 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     target = _deactivate_shared_service(old, new)
     result = api.evaluate(new, baseline=old, now=NOW)
 
-    run_scope = next(
-        scope for scope in result.scopes
-        if scope.identity.get("description") == target
-        and scope.identity.get("service_type") == "E-LAN"
-    )
-
     payload = result.to_dict()
     scope = next(
         item for item in payload["scopes"]
@@ -667,17 +663,24 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     labels = [check.get("label") for check in scope["checks"]]
 
     assert "Ostatni checky" not in labels
-    assert len(scope["checks"]) == len(run_scope.checks)
 
     deactivation_check = next(
         check for check in scope["checks"] if check.get("id") == "deactivation_state"
     )
     assert deactivation_check.get("details", {}).get("skipped_because") is None
-    skipped = [
-        check for check in scope["checks"]
+    skipped_labels = {
+        check.get("label") for check in scope["checks"]
         if check.get("details", {}).get("skipped_because") == "service_deactivated"
-    ]
-    assert skipped, "zadny check v JSON nenese znacku skipped_because"
+    }
+    assert skipped_labels == {
+        "BFD",
+        "EVPN ESI status",
+        "EVPN MAC count",
+        "Interface errors",
+        "Interface status",
+        "Interface traffic",
+        "Staticka routa",
+    }
 
 
 def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
