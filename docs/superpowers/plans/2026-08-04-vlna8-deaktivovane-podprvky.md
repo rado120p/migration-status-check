@@ -49,7 +49,9 @@ takže sourozenec téže služby zůstane PASS.
   **640 passed**.
 - **Interpret je `.venv/bin/python`**, ne systémový `python`.
 - **Mutant se pouští nad tím stavem repa, ve kterém poběží doopravdy** — tedy
-  až po krocích téže úlohy, které mění dotčené soubory.
+  až po krocích téže úlohy, které mění dotčené soubory, a **až po commitu
+  té práce.** Revert mutanta (`git checkout -- <soubor>`) zahodí i neuložené
+  změny téže úlohy; s prací v commitu je revert bezpečný. Zaplaceno úlohou 2.
 - **Mutant se neadresuje číslem řádku.** Používej `python - <<'EOF'` s
   `str.replace` a `assert text.count(old) == 1`, ne `sed -i '194s/…/…/'`.
   Po každém mutantovi je `git diff --stat` **povinný krok**: prázdný výstup
@@ -862,6 +864,13 @@ Když ti vyjde jiné číslo, spočítej si, kolik testů jsi doopravdy přidal,
 
 - [ ] **Step 8: Pusť mutanta**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 ```bash
 .venv/bin/python - <<'EOF'
 old = """                if self._is_inactive(neighbor_node):
@@ -1070,6 +1079,13 @@ Očekávané: `647 passed` (645 + 2 nové).
 
 - [ ] **Step 9: Pusť mutanta na engine**
 
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
+
 ```bash
 .venv/bin/python - <<'EOF'
 old = """        for peer in (
@@ -1261,6 +1277,13 @@ V `_finding` přidej parametr `deactivated: bool` a **před** větev
 Očekávané: `649 passed`.
 
 - [ ] **Step 6: Pusť dva mutanty**
+
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
 
 První ověřuje, že SKIP vůbec hlídá někdo:
 
@@ -1463,6 +1486,13 @@ Stejně tak `group`: když ho aktivní peeři nesou, nastav ho i tady.
 Očekávané: `653 passed`.
 
 - [ ] **Step 6: Pusť dva mutanty**
+
+> **Nejdřív commitni, teprve pak mutuj.** Mutanti se revertují přes
+> `git checkout -- <soubor>`, což zahodí **všechny** neuložené změny v tom
+> souboru — tedy i práci téhle úlohy, pokud ještě není v commitu. Implementer
+> úlohy 2 na to najel a musel kroky 4–6 dělat znovu. Commituj práci úlohy
+> (krok „Commit" níž) **před** tímhle krokem; mutant pak běží přesně nad tím
+> stavem, ve kterém kód poběží doopravdy, a revert je bezpečný.
 
 ```bash
 .venv/bin/python - <<'EOF'
