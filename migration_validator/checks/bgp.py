@@ -41,6 +41,17 @@ def peer_family(peer: str) -> int | None:
         return None
 
 
+# Popisek radku je vzdycky "BGP status (adresa)", i kdyz ma sekce jedineho
+# peera a adresa je tam potreti. Podminit ho poctem peeru v sekci se
+# nabizelo - zmereno, ze v laborce je redundantni ve vsech sedmi sekcich -
+# ale `label` je identifikator radku i ve strojovem JSON vystupu. Podmineny
+# kvalifikator by znamenal, ze pribyti druheho souseda prejmenuje i radek
+# toho prvniho, takze dva behy tehoz stavu by se v diffu nesparovaly.
+#
+# Na sdilene podsiti (/29, /24 na NNI nebo zakaznicka podsit se dvema CPE)
+# je kvalifikator nutny: bez nej by dva radky "BGP status" vedle sebe
+# nerekly, ktery soused je rozbity. Fixtures tenhle tvar nemodeluji, takze
+# mereni ukazuje redundanci, ne cenu jejiho odstraneni.
 @register
 class BgpSessionStateCheck(Check):
     id = "bgp_session_state"
@@ -177,22 +188,30 @@ class BgpSessionStateCheck(Check):
             )
 
         # Peer, ktery ma byt a session pro nej neprisla. Zrcadli vetev
-        # `if subject is None:` v checks/routes.py (hlasky 'nakonfigurovana,
-        # ale neni v routovaci tabulce' vs 'v baseline byla, v subjektu
-        # neni'). Deaktivovane peery uz vyresila smycka vys, proto se
-        # odectou.
+        # `if subject is None:` v checks/routes.py, ale jen tvarem, ne
+        # hlaskou: routa v baseline byla a v subjektu neni, kdezto peer
+        # muze na zarizeni dal bezet - jen ho tahle sluzba uz nenarokuje.
+        # Deaktivovane peery uz vyresila smycka vys, proto se odectou.
         without_session = universe - set(peers) - set(ctx.scope.selectors.bgp_neighbors_inactive)
         for peer in sorted(without_session):
             in_config = peer in configured
             findings.append(
                 Finding(
                     Outcome.BROKEN,
+                    # Tvrzeni o CLENSTVI, ne o existenci. Peer, ktereho
+                    # nenarokuje zadny subjektovy scope, muze mit na
+                    # zarizeni zivou session - engine.py:_unassigned_bgp_peers
+                    # ji ukaze v NEZARAZENO. Hlaska "v subjektu neni" tam
+                    # tedy lhala. Nova formulace je pravdiva v obou
+                    # pripadech, ktere sem spadnou (peer ze zarizeni zmizel
+                    # i peer presel pod jinou sluzbu), takze se check nemusi
+                    # ptat na nefiltrovana fakta, ktera nema.
                     f"{peer}: nakonfigurovan, ale session neexistuje"
                     if in_config
-                    else f"{peer}: v baseline byl, v subjektu neni",
+                    else f"{peer}: v baseline patril k teto sluzbe, v subjektu uz ne",
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
-                    value="bez session" if in_config else "chybi uplne",
+                    value="bez session" if in_config else "neni ve sluzbe",
                     baseline_value=(
                         str(baseline_peers[peer].get("state", "unknown"))
                         if peer in baseline_peers

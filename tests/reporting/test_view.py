@@ -1,10 +1,23 @@
-from migration_validator.models.result import CheckResult, MatchInfo, ScopeResult, Severity, Status
+from migration_validator.models.result import (
+    CheckResult,
+    MatchInfo,
+    ScopeResult,
+    Severity,
+    SKIPPED_BECAUSE,
+    SKIP_DEACTIVATED,
+    Status,
+)
 from migration_validator.reporting.view import build_view, change_text
 
 
 def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
            mode="state", baseline_value=None, delta=None, message="msg", address=None,
-           group=None):
+           group=None, skipped_because=None):
+    details = {}
+    if address:
+        details["address"] = address
+    if skipped_because:
+        details[SKIPPED_BECAUSE] = skipped_because
     return CheckResult(
         id=check_id,
         mode=mode,
@@ -17,7 +30,7 @@ def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
         value=value,
         baseline_value=baseline_value,
         delta=delta,
-        details={"address": address} if address else {},
+        details=details,
     )
 
 
@@ -317,3 +330,101 @@ def test_groups_do_not_cross_family_sections():
     families = {section.family: section for section in view.sections}
     assert [r.label for r in families[4].groups[0].rows] == ["v4"]
     assert [r.label for r in families[6].groups[0].rows] == ["v6"]
+
+
+def _deactivation_skip(label):
+    return _check(
+        f"check_{label}",
+        label=label,
+        status=Status.SKIP,
+        value="interface deactivated",
+        message="sluzba je v konfiguraci deaktivovana (interface deactivated)",
+        skipped_because=SKIP_DEACTIVATED,
+    )
+
+
+def test_deactivation_skips_collapse_into_one_row():
+    """Bez --detail se deaktivacni SKIPy slevaji do jednoho radku s poctem.
+
+    Blok deaktivovane sluzby jich mel v laborce sedm az deset a vsechny
+    rikaly doslova totez co radek Deaktivace nad nimi.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("deactivation_state", label="Deaktivace", status=Status.WARN,
+                       value="interface deactivated"),
+                _deactivation_skip("BFD"),
+                _deactivation_skip("Interface status"),
+                _deactivation_skip("Staticka routa"),
+            ]
+        ),
+        detail=False,
+    )
+
+    labels = [row.label for row in view.sections[0].rows]
+
+    assert labels == ["Deaktivace", "Ostatni checky"]
+    assert view.sections[0].rows[1].value == "3 preskoceno"
+    assert view.sections[0].rows[1].status is Status.SKIP
+
+
+def test_detail_keeps_every_deactivation_skip():
+    """S --detail se nesleva nic - zasada 'detail rozbali vsechno'.
+
+    Zabiji mutanta: slevani bez ohledu na priznak detail. S nim by
+    --detail prestal byt uplnym vypisem a operator by se k jednotlivym
+    preskocenym checkum nedostal nikde.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("deactivation_state", label="Deaktivace", status=Status.WARN,
+                       value="interface deactivated"),
+                _deactivation_skip("BFD"),
+                _deactivation_skip("Interface status"),
+                _deactivation_skip("Staticka routa"),
+            ]
+        ),
+        detail=True,
+    )
+
+    labels = [row.label for row in view.sections[0].rows]
+
+    assert labels == ["Deaktivace", "BFD", "Interface status", "Staticka routa"]
+
+
+def test_foreign_skip_is_not_collapsed():
+    """SKIP z jineho duvodu zustava samostatne, i kdyz sedi mezi deaktivacnimi.
+
+    Zmereno na bloku svc:et-0/0/10.0:Internet: mezi deviti deaktivacnimi
+    SKIPy tam sedi 'BGP prefixy : bez baseline', coz je SKIP porovnavaciho
+    checku bez baseline snapshotu. Slit ho dohromady by zahodilo informaci,
+    kterou nic jineho nenese.
+
+    Zabiji mutanta: slevani podle Status.SKIP misto podle znacky. Zmereno
+    (2026-08-04, oprava vlny 10): pod timhle mutantem padne i
+    tests/reporting/test_text_report.py::test_deactivated_service_shows_the_reason_in_the_report,
+    jehoz scope nese jediny check `deactivation_state`, ktery je sam
+    Status.SKIP bez znacky - implementace slevajici podle stavu spolkne
+    prave ten radek, ktery ten test hlida. Tenhle test tedy neni jediny,
+    ktery ten rozdil meri, ale je jediny v tomhle souboru.
+    """
+    view = build_view(
+        _scope(
+            [
+                _check("deactivation_state", label="Deaktivace", status=Status.WARN,
+                       value="interface deactivated"),
+                _deactivation_skip("BFD"),
+                _check("bgp_prefix_counts", label="BGP prefixy", status=Status.SKIP,
+                       value="bez baseline", message="porovnavaci check bez baseline snapshotu"),
+                _deactivation_skip("Staticka routa"),
+            ]
+        ),
+        detail=False,
+    )
+
+    labels = [row.label for row in view.sections[0].rows]
+
+    assert labels == ["Deaktivace", "BGP prefixy", "Ostatni checky"]
+    assert view.sections[0].rows[2].value == "2 preskoceno"

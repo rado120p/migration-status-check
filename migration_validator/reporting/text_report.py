@@ -344,7 +344,7 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     )
     lines.append("")
 
-    views = [(scope, build_view(scope)) for scope in result.scopes]
+    views = [(scope, build_view(scope, detail=detail)) for scope in result.scopes]
 
     # Sirky sloupcu se pocitaji z realnych dat, stejne jako v _block() -
     # napevno dane sirky prekypuji na skutecnych nazvech (dlouhy nazev

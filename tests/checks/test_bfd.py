@@ -89,12 +89,21 @@ def test_missing_session_with_idle_bgp_is_skipped():
 
 
 def test_bfd_removed_since_baseline_is_broken():
+    """Hlaska tvrdi jen o clenstvi ve sluzbe, ne o existenci na zarizeni.
+
+    Peer, ktereho tato sluzba uz nenarokuje, muze mit na zarizeni dal
+    zivou BFD session pod jinou sluzbou - engine.py:_unassigned_bfd_sessions
+    by ji ukazal v NEZARAZENO. "v subjektu neni nakonfigurovane" by tam
+    lhalo, proto formulace mluvi o clenstvi ("v baseline patril k teto
+    sluzbe, v subjektu uz ne"), ne o existenci.
+    """
     findings = BfdSessionStateCheck().run(
         _ctx({}, baseline_sessions={"198.11.13.2": {"state": "Up"}}, scope=_scope(bfd_peers=[]))
     )
 
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "BFD odstraneno"
+    assert findings[0].value == "neni ve sluzbe"
+    assert findings[0].message == "198.11.13.2: v baseline patril k teto sluzbe, v subjektu uz ne"
     assert findings[0].baseline_value == "Up"
     assert findings[0].family == 4
 
@@ -121,7 +130,7 @@ def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():
     )
 
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "BFD odstraneno"
+    assert findings[0].value == "neni ve sluzbe"
 
 
 def test_session_without_intent_is_degraded():
@@ -164,8 +173,11 @@ def test_device_scope_never_claims_anything_about_the_configuration():
     """AR-17: bez inventory nejde tvrdit, ze BFD neni nakonfigurovane.
 
     Device scope ma vzdy prazdne selektory, takze `configured` je False -
-    prave tudy se do vetve REMOVED chodi. `BFD odstraneno` i jeho hlaska
-    ale mluvi o konfiguraci, kterou nastroj v tomhle rezimu nevidi.
+    prave tudy se do vetve SESSION_GONE chodi. Hlaska pro NOT_IN_SERVICE
+    ("v baseline patril k teto sluzbe, v subjektu uz ne") tvrdi clenstvi
+    ve sluzbe - to device scope bez inventory nevi o nic vic nez o
+    konfiguraci, takze ji tu vydat nesmi stejne jako puvodni "v subjektu
+    neni nakonfigurovane".
     Sloupec s hodnotou je to, co jde do reportu (F-7/AR-4), takze stav-only
     musi byt hodnota, ne jen hlaska.
 

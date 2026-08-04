@@ -401,7 +401,7 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 | session existuje, stav `Up` | `ok` | PASS | `Up` |
 | session existuje, jiný stav | `broken` | FAIL | naměřený stav (`Down`, …) |
 | session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `bez konfigurace` |
-| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `BFD odstraneno` |
+| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `neni ve sluzbe` |
 | session není, v baseline byla (device scope) — **dnes nedosažitelné, viz níž** | `broken` | FAIL | `session zmizela` |
 | záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
@@ -423,6 +423,15 @@ tohoto rozlišení u každé zmizelé session tvrdil „v subjektu není nakonfi
 o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17). Rozdíl je v **hodnotě**, ne jen
 v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku textový výpis nezobrazí. Je to
 týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
+
+**Větev „session není a není ani záměr" (service scope) tvrdí jen o CLENSTVI ve službě, ne
+o existenci na zařízení.** Peer, kterého tato služba už nenárokuje, může mít na zařízení dál
+živou BFD session pod jinou službou — `engine.py:_unassigned_bfd_sessions` ji ukáže
+v NEZAŘAZENO. Hláška „v subjektu není nakonfigurované" by tam lhala; `bez konfigurace` je navíc
+odlišná hodnota od téhle větve, takže záměna nehrozí. Formulace `v baseline patril k teto
+sluzbe, v subjektu uz ne` je pravdivá v obou případech, které do větve spadají (BFD ze zařízení
+zmizelo i BFD přešlo pod jinou službu) — stejná oprava, jakou dřív dostala analogická větev
+v `checks/bgp.py`.
 
 ---
 
@@ -455,7 +464,7 @@ Důvod deaktivace (`Scope.deactivation_reason`) je jedna ze tří hodnot: `RI de
 `interface deactivated`, `RI + interface deactivated` — podle toho, jestli je deaktivovaná
 routing instance, rozhraní, nebo obojí.
 
-**Na pořadí větví záleží:** `BFD odstraneno` se testuje **před** `BGP neni Established`.
+**Na pořadí větví záleží:** `neni ve sluzbe` se testuje **před** `BGP neni Established`.
 Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,
 a zároveň nedojelo BGP — což je přesně kombinace, kterou je potřeba vidět.
 

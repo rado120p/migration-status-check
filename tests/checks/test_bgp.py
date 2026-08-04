@@ -632,9 +632,14 @@ def test_configured_peer_without_session_does_not_hide_behind_a_sibling():
 
 
 def test_peer_measured_only_in_baseline_is_fail():
-    """Peer, ktery v baselinu bezel a v subjektu neni ani v konfiguraci.
+    """Peer, ktery v baselinu bezel a zadny subjektovy scope si ho nenarokuje.
 
-    Zrcadli routes.py: 'v baseline byla, v subjektu neni'.
+    Hlaska mluvi o CLENSTVI ve sluzbe, ne o existenci na zarizeni. Zrcadlo
+    routes.py je tu jen tvarem vetve, ne znenim: routa, ktera v subjektu
+    neni, tam opravdu neni, kdezto peer muze dal bezet a byt jen
+    v NEZARAZENO.
+
+    Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni'.
     """
     ctx = _ctx(
         {"bgp": {}},
@@ -646,7 +651,8 @@ def test_peer_measured_only_in_baseline_is_fail():
 
     assert len(results) == 1
     assert results[0].status is Status.FAIL
-    assert "v baseline byl, v subjektu neni" in results[0].message
+    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in results[0].message
+    assert results[0].value == "neni ve sluzbe"
 
 
 def test_configured_peer_without_session_takes_identity_from_selectors():

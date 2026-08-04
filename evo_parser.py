@@ -746,11 +746,17 @@ class JunosEvoAcxServiceParser:
                     StaticRoute(
                         rib=rib_name,
                         prefix=prefix,
-                        # Jen holý next-hop. discard, reject, next-table
-                        # a qualified-next-hop nemají adresu k porovnání
-                        # se subnetem rozhraní, takže se na službu
-                        # nenamapují a skončí v unassigned, pokud jsou
-                        # nainstalované. Rozhodnuto ve specu.
+                        # Jen holý next-hop. discard, reject a next-table
+                        # adresu k porovnání se subnetem rozhraní nemají,
+                        # takže se na službu nenamapují.
+                        #
+                        # qualified-next-hop ji naopak má — nese buď adresu,
+                        # nebo interface-name — a do výčtu výš nepatří.
+                        # Vynechává se vědomě a odloženě, ne proto, že by
+                        # adresu neměl: routa směrovaná výhradně přes něj
+                        # dostane prázdný next_hop, na službu se nenamapuje
+                        # a nenainstalovaná zmizí beze stopy. Zapsáno jako
+                        # otevřený bod roadmapy vlny 10.
                         next_hop=all_texts(
                             route_node,
                             "./*[local-name()='next-hop']/text()",

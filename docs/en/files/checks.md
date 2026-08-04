@@ -417,7 +417,7 @@ The check requires **two areas**: `("bfd", "bgp")`.
 | session exists, state `Up` | `ok` | PASS | `Up` |
 | session exists, any other state | `broken` | FAIL | measured state (`Down`, …) |
 | session exists but is not in the service configuration (service scope) | `degraded` | WARN | `bez konfigurace` |
-| no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `BFD odstraneno` |
+| no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `neni ve sluzbe` |
 | no session, but the baseline had one (device scope) — **currently unreachable, see below** | `broken` | FAIL | `session zmizela` |
 | intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
@@ -441,6 +441,15 @@ configured in the subject" — about a configuration it cannot see in that mode 
 The difference is in the **value**, not merely in the message: the value column is what ships in
 the report (F‑7/AR‑4), while the message never appears in the text output. It is the same
 pattern as `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` in `routes.py`.
+
+**The "no session and no intent either" branch (service scope) asserts only MEMBERSHIP in the
+service, not existence on the device.** A peer this service no longer claims can still have a
+live BFD session on the device under a different service — `engine.py:_unassigned_bfd_sessions`
+would surface it in NEZAŘAZENO. The message "is not configured in the subject" would lie there;
+`bez konfigurace` is a distinct value from this branch, so there is no risk of confusing the
+two. The wording `v baseline patril k teto sluzbe, v subjektu uz ne` is true in both cases that
+reach this branch (BFD vanished from the device, or BFD moved under a different service) — the
+same fix the analogous branch in `checks/bgp.py` received earlier.
 
 ---
 
@@ -475,7 +484,7 @@ The deactivation reason (`Scope.deactivation_reason`) is one of three values:
 `RI deactivated`, `interface deactivated`, `RI + interface deactivated` — depending on
 whether the deactivated part is the routing instance, the interface, or both.
 
-**Branch order matters:** `BFD odstraneno` is tested **before** `BGP neni Established`. The
+**Branch order matters:** `neni ve sluzbe` is tested **before** `BGP neni Established`. The
 reverse order would silently lose the case where the migration dropped protection that used
 to be there *and* BGP had not come up — which is exactly the combination worth seeing.
 

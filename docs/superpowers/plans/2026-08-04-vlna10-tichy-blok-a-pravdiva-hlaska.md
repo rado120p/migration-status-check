@@ -37,8 +37,13 @@ counterů ve fixtures a capture z laborky.
 - **Mutant se pouští až nad zacommitovanou prací.** `git checkout -- <soubor>`
   při revertu mutanta zahodí i neuložené změny téže úlohy. Pořadí v každé
   úloze je: commit → mutant → revert mutanta → hotovo.
-- **Mutant nesmí mířit do téhož souboru, proti kterému test asertuje.** Míří do
-  produkčního kódu, ne do `tests/`.
+- **Mutant nesmí mířit do téhož souboru, proti kterému test asertuje.** Smysl
+  pravidla je, aby mutant nezabil sám sebe: kdyby mířil do souboru, ve kterém
+  žije i aserce, mohl by shodit test způsobem, který o produkčním kódu nic
+  neříká. Prakticky to znamená „do produkčního kódu, ne do `tests/`" —
+  s jedinou výjimkou, kterou uživatel 2026‑08‑04 potvrdil: v **úloze 4** je
+  produkčním kódem úlohy `tests/conftest.py` a asertující testy leží
+  v `tests/test_end_to_end.py`, takže smysl pravidla porušený není.
 - **Každý mutant končí `grep -n MUTANT <soubor>`, který musí něco vypsat.**
   Když nevypíše, `sed` se neaplikoval, mutant nic neměří a je třeba ho upravit
   ručně. Nečinný mutant je horší než žádný — vypadá jako důkaz a není.
@@ -175,9 +180,21 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     result = api.evaluate(new, baseline=old, now=NOW)
     rendered = render(result)
 
+    # Cela hlaska je v souhrnne tabulce ve sloupci NALEZ, ne v bloku: blok
+    # tiskne status/label/value/change (_block v text_report.py), message
+    # nikdy. Zmereno.
+    summary_row = next(
+        line
+        for line in rendered.splitlines()
+        if line.startswith("FAIL") and "INTERNET-CPE13-NNI" in line
+    )
+    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in summary_row
+    assert "v subjektu neni" not in rendered
+
+    # V bloku je vidět `value`, a ta se meni taky.
     block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
-    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in block
-    assert "v subjektu neni" not in block
+    assert "BGP status (152.11.13.2)" in block
+    assert "neni ve sluzbe" in block
 
     # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
     # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by
@@ -315,6 +332,10 @@ Expected: FAIL — musí padnout **jak** `tests/checks/test_bgp.py::test_peer_me
 Kdyby padl jen ten jednotkový, nová sémantika není pokrytá přes skutečnou
 cestu — zastav a nahlas.
 
+Mutant mění **jen hlášku**, ne `value`, takže end-to-end test ho zabíjí
+výhradně přes aserci na souhrnný řádek. Aserce na `neni ve sluzbe` v bloku
+hlídá druhou polovinu změny; tu by zabil mutant měnící `value`.
+
 - [ ] **Step 10: Revert the mutant**
 
 ```bash
@@ -323,8 +344,9 @@ git checkout -- migration_validator/checks/bgp.py
 git status --porcelain
 ```
 
-Expected: PASS, 677 passed. `git status --porcelain` vypíše **jen**
-`?? mx1-pop1.yml` — ten tam patří a není tvůj.
+Expected: PASS, 677 passed. `git status --porcelain` po revertu **prázdný**
+(soubor `mx1-pop1.yml`, který dřív ležel netrackovaný v kořeni repa,
+uživatel mezitím smazal).
 
 ---
 
@@ -900,7 +922,8 @@ git checkout -- migration_validator/reporting/text_report.py
 git status --porcelain
 ```
 
-Expected: PASS, 683 passed. `git status --porcelain` vypíše jen `?? mx1-pop1.yml`.
+Expected: PASS, 683 passed. `git status --porcelain` po revertu **prázdný**
+(`mx1-pop1.yml` už v repu neleží — smazán mezitím).
 
 ---
 
@@ -946,7 +969,27 @@ je tam vždy redundantní. Podmíněný kvalifikátor by ale znamenal, že popis
 závisí na datech, a `label` je identifikátor řádku i v JSON — přibytí druhého
 peera by přejmenovalo řádek toho prvního.
 
-- [ ] **Step 1: Rename the inventory test (bod 16)**
+- [ ] **Step 1: Remove diacritics leaked in by Task 2**
+
+Nález review úlohy 2, Minor. Kód v `migration_validator/` a `tests/` je psaný
+česky **bez** diakritiky; úloha 2 do něj přes doslovné znění briefu vnesla
+šest výskytů. Oprav je — mění se **jen** písmena, ani jedno slovo:
+
+```bash
+grep -rn -P '[^\x00-\x7F]' migration_validator/models/result.py \
+    migration_validator/reporting/view.py \
+    tests/reporting/test_view.py tests/test_end_to_end.py
+```
+
+Expected před opravou: **6 zásahů** — `view.py:120` (`devíti`), `view.py:196`
+(`sloucení`), `models/result.py:83` (`balíku`), `test_view.py:400` (`devíti`),
+`test_end_to_end.py:609` (`staví`), `test_end_to_end.py:614` (`vicerádkove`
+a `jednorádkovy`). Po opravě musí týž `grep` vypsat **nic**.
+
+Ostatních souborů se nedotýkej — `mx_parser.py`, `evo_parser.py` a `docs/`
+jsou psané s diakritikou schválně a krok 3 do parserů diakritiku **přidává**.
+
+- [ ] **Step 2: Rename the inventory test (bod 16)**
 
 V `tests/models/test_inventory.py` nahraď řádky 305–307:
 
@@ -961,7 +1004,7 @@ def test_inventory_schema_version_is_five():
     assert INVENTORY_SCHEMA_VERSION == 5
 ```
 
-- [ ] **Step 2: Record why the route key is safe (bod 17)**
+- [ ] **Step 3: Record why the route key is safe (bod 17)**
 
 V `migration_validator/checks/routes.py` nahraď komentář nad `deactivated`
 (řádky 88–92, ten začínající „Chybejici klic 'active'") tímto — původní tři
@@ -982,7 +1025,7 @@ věty zůstávají, přibývá odstavec o klíčování:
         # ne nekonzistence mezi dvema mnozinami.
 ```
 
-- [ ] **Step 3: Fix the parser comment in BOTH parsers (bod 17b)**
+- [ ] **Step 4: Fix the parser comment in BOTH parsers (bod 17b)**
 
 V `mx_parser.py` **i** `evo_parser.py` nahraď komentář na řádcích 747–752
 (uvnitř `StaticRoute(...)`, nad `next_hop=`). **Musí být v obou souborech
@@ -1005,7 +1048,7 @@ doslova stejný**, jinak se rozejde zámek parserů:
 Poznámka k diakritice: parsery jsou psané česky **s** diakritikou, na rozdíl
 od `migration_validator/`. Řiď se souborem.
 
-- [ ] **Step 4: Verify the parser lock immediately**
+- [ ] **Step 5: Verify the parser lock immediately**
 
 Run: `diff mx_parser.py evo_parser.py | wc -l`
 Expected: **146**
@@ -1013,7 +1056,7 @@ Expected: **146**
 Kdyby vyšlo jiné číslo, komentáře se v obou souborech neshodují — sjednoť je
 a opakuj. **Nepokračuj s rozejitým zámkem.**
 
-- [ ] **Step 5: Record why the BGP label qualifier is unconditional (bod 9)**
+- [ ] **Step 6: Record why the BGP label qualifier is unconditional (bod 9)**
 
 V `migration_validator/checks/bgp.py` přidej nad třídu `BgpSessionStateCheck`
 (tedy nad `@register` na řádku 44):
@@ -1032,23 +1075,25 @@ V `migration_validator/checks/bgp.py` přidej nad třídu `BgpSessionStateCheck`
 # mereni ukazuje redundanci, ne cenu jejiho odstraneni.
 ```
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 7: Run the full suite**
 
 Run: `.venv/bin/python -m pytest -o addopts="" -q`
 Expected: PASS, **683 passed, 0 skipped** — počet se nemění, úloha jen
 přejmenovává a komentuje.
 
-- [ ] **Step 7: Verify nothing referenced the old test name**
+- [ ] **Step 8: Verify nothing referenced the old test name**
 
 Run: `grep -rn "test_inventory_rejects_schema_three" . --include=*.py --include=*.md`
 Expected: zásah **jen** v `docs/` (spec a starší roadmapy — ty se
 nepřepisují, popisují stav v době vzniku). Zásah v `tests/` nebo
 `migration_validator/` znamená, že název někdo cituje — oprav ho.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add tests/models/test_inventory.py migration_validator/checks/routes.py \
+git add migration_validator/models/result.py migration_validator/reporting/view.py \
+        tests/reporting/test_view.py tests/test_end_to_end.py \
+        tests/models/test_inventory.py migration_validator/checks/routes.py \
         migration_validator/checks/bgp.py mx_parser.py evo_parser.py
 git commit -m "docs: uzavreni bodu 16, 17 a 9 zapsanim oduvodneni
 
@@ -1060,17 +1105,18 @@ Komentar o qualified-next-hop se v obou parserech opravuje - nese bud
 adresu, nebo interface-name, takze do vyctu tvaru bez adresy nepatri."
 ```
 
-- [ ] **Step 9: Verify the parser lock over committed work**
+- [ ] **Step 10: Verify the parser lock over committed work**
 
 ```bash
 diff mx_parser.py evo_parser.py | wc -l
 git status --porcelain
 ```
 
-Expected: **146** a jen `?? mx1-pop1.yml`.
+Expected: **146** a `git status --porcelain` prázdný (`mx1-pop1.yml` už
+v repu neleží).
 
 Mutant se v téhle úloze **nepouští** — nemění chování, takže by nebylo co
-zabít. Zámek parserů z kroku 4 a nezměněný počet testů z kroku 6 jsou její
+zabít. Zámek parserů z kroku 5 a nezměněný počet testů z kroku 7 jsou její
 důkazy.
 
 ---
@@ -1133,7 +1179,8 @@ def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
     hodnoty nehlidal nikdo. Bez teto aserce by se fixtures mohly kdykoli
     vratit k uniformnim cislum a nic by to nevytklo.
 
-    Zabiji mutanta: navrat `_ribs_for` k `dict(_RIB_COUNTERS)`.
+    Zabiji mutanta: `_ribs_for` vracejici pro kazdeho peera tataz cisla
+    (napr. natvrdo 14/14/14/3) misto volani `_counters_for(peer)`.
     """
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
@@ -1271,7 +1318,8 @@ git checkout -- tests/conftest.py
 git status --porcelain
 ```
 
-Expected: PASS, 685 passed. `git status --porcelain` jen `?? mx1-pop1.yml`.
+Expected: PASS, 685 passed. `git status --porcelain` po revertu **prázdný**
+(`mx1-pop1.yml` už v repu neleží).
 
 ---
 
@@ -1370,11 +1418,16 @@ prázdnou krabici. Na to je subpříkaz `record` (`migration_validator/cli.py:25
 který ukládá syrové RPC XML přesně pro tenhle účel:
 
 Na rozdíl od parserů `record` přepínač `--password` **má**, takže ho lze
-spustit neinteraktivně:
+spustit neinteraktivně.
+
+**Pozor na `--output-dir`: `record` si k němu sám připojuje jméno platformy.**
+Zadat `--output-dir tests/fixtures/rpc/junos-evo` vyrobí
+`tests/fixtures/rpc/junos-evo/junos-evo/` a původní soubory nechá být — tiše,
+bez chyby. Správně je nadřazený adresář:
 
 ```bash
 .venv/bin/python -m migration_validator.cli record \
-    --device 172.20.20.5 --output-dir tests/fixtures/rpc/junos-evo \
+    --device 172.20.20.5 --output-dir tests/fixtures/rpc \
     --auth password --password "$MIG_LAB_PASSWORD"
 ```
 

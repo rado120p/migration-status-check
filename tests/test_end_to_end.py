@@ -472,3 +472,268 @@ def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapsho
 
     assert after["PASS"] == before["PASS"] - 1
     assert after["WARN"] == before["WARN"] + 1
+
+
+def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapshot):
+    """Bod 19 + oprava vlny 10, nalez 1: peer se zivou session nesmi byt
+    hlasen jako 'v subjektu neni' - ani BGP checkem, ani BFD checkem.
+
+    Blok sluzby a NEZARAZENO jsou dve nezavisle cesty. Blok jde pres
+    ctx.baseline, coz jsou fakta profiltrovana BASELINE selektory, takze
+    peera vidi. NEZARAZENO jde pres surova subject.facts['bgp']/['bfd'] a
+    mnozinu assigned jen ze SUBJEKTOVYCH scopu, takze ho vidi taky. Dokud
+    blok tvrdil 'v subjektu neni', rekly ty dve sekce o jednom peeru dve
+    neslucitelne veci.
+
+    Test modeluje UPLNY presun peera ze sluzby - peer mizi z
+    target.selectors.bgp_neighbors I z target.selectors.bfd_peers, ne jen
+    z prvniho z nich. Duvod: all_checks() radi podle `id` a
+    "bfd_session_state" je pred "bgp_session_state" abecedne
+    (bf < bg), takze _worst_message() vezme do souhrnneho radku hlasku z
+    BFD checku, kdyz jsou oba checky na stejne nejhorsim stavu. Kdyby test
+    modeloval presun jen v BGP a bfd_peers nechal na miste, BFD check by
+    zustal v jine vetvi (BGP neni Established / bez session) a souhrnny
+    radek by nesl bud BGP hlasku, nebo BFD hlasku z jine (spravne) vetve -
+    v obou pripadech by test tu vadu neuvidel, protoze puvodni vadna BFD
+    hlaska ("BFD bylo v baseline (Up), v subjektu neni nakonfigurovane")
+    by se do vystupu vubec nedostala.
+
+    Test asertuje OBE sekce v jednom behu. Kdyby asertoval jen blok, prosel
+    by i nad implementaci, ktera peera z NEZARAZENO vyhodi - a to je jina
+    varianta, kterou uzivatel vedome odmitl.
+
+    Zabiji mutanta: navrat hlasky 'v baseline byl, v subjektu neni' (BGP)
+    i navrat hlasky 'BFD bylo v baseline (...), v subjektu neni
+    nakonfigurovane' (BFD).
+
+    Aserce `peer in new.facts['bgp']` nize je POJISTKA PROTI VAKUOVOSTI a
+    nesmi se odstranit. _facts_for() (tests/conftest.py) odvozuje
+    facts['bgp'] (a facts['bfd']) ZE SELEKTORU, takze kdyby nekdo odebrani
+    peera presunul pred stavbu snimku, zadna session by pro nej nevznikla -
+    peer by se do NEZARAZENO nedostal a obe aserce nize by prosly, aniz by
+    cokoli dokazaly. Tahle jedina aserce ten presun odhali.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
+    target = next(
+        scope for scope in new.scopes
+        if scope.id == "svc:INTERNET-CPE13-NNI:Internet"
+    )
+    peer = "152.11.13.2"
+    assert peer in new.facts["bgp"], "fixture nema session peera, test by byl vakuovy"
+    assert peer in new.facts["bfd"], "fixture nema BFD session peera, test by byl vakuovy"
+    target.selectors.bgp_neighbors = [
+        neighbor for neighbor in target.selectors.bgp_neighbors if neighbor != peer
+    ]
+    target.selectors.bfd_peers = [
+        b for b in target.selectors.bfd_peers if b.get("peer") != peer
+    ]
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+    rendered = render(result)
+
+    # Cela hlaska je v souhrnne tabulce ve sloupci NALEZ, ne v bloku: blok
+    # tiskne status/label/value/change (_block v text_report.py), message
+    # nikdy. Zmereno.
+    summary_row = next(
+        line
+        for line in rendered.splitlines()
+        if line.startswith("FAIL") and "INTERNET-CPE13-NNI" in line
+    )
+    assert "v baseline patril k teto sluzbe, v subjektu uz ne" in summary_row
+    assert "v subjektu neni" not in rendered
+    # Puvodni (opravena) BFD hlaska tvrdila o zarizeni to, co check vi jen
+    # o sluzbe - nesmi se do souhrnneho radku vratit.
+    assert "BFD bylo v baseline" not in rendered
+    assert "neni nakonfigurovane" not in rendered
+
+    # V bloku je videt `value`, a ta se meni taky - u obou checku.
+    block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
+    assert "BGP status (152.11.13.2)" in block
+    assert "BFD (152.11.13.2)" in block
+    assert block.count("neni ve sluzbe") == 2
+
+    # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
+    # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by
+    # proslo i kdyby se sekce vubec nevytiskla (pravidlo vlny 5).
+    unassigned = rendered.split("NEZARAZENO")[-1]
+    assert peer in unassigned
+
+
+def _deactivate_shared_service(old, new):
+    """Vypne tutez sluzbu v obou snimcich a vrati jeji description.
+
+    Parovani podle DVOJICE (description, service_type): samotny description
+    nestaci, fixtures nesou EVPN-VLAN-AWARE-INTERNET dvakrat - jednou jako
+    Internet a jednou jako E-LAN. Podle samotneho description by se v kazdem
+    snimku mohla vypnout jina a test by meril nesparovanou sluzbu.
+    """
+    target = ("EVPN-VLAN-AWARE-CPE13-NNI", "E-LAN")
+    hit = 0
+    for snapshot in (old, new):
+        for scope in snapshot.scopes:
+            if scope.kind != "service":
+                continue
+            if (scope.key.description, scope.key.service_type) == target:
+                scope.interface_active = False
+                hit += 1
+    assert hit == 2, "sluzba neni v obou snimcich, test by meril nesparovanou"
+    return target[0]
+
+
+def test_deactivated_service_block_has_one_skip_row_without_detail(synthetic_snapshot):
+    """Bod 18: blok deaktivovane sluzby prestane tisknout N stejnych radku.
+
+    Test jde pres api.evaluate a render, ne nad rucne slozenym ServiceView -
+    slevani se overuje na skutecne zrenderovanem vystupu produkcni cesty,
+    ne na rucne poskladanem ServiceView.
+
+    Zmereno: mutant `build_view(scope)` bez `detail` v text_report.py tenhle
+    test nezabiji (defaultni `detail=False` da stejny vysledek jako
+    predavany `detail=False`). Ten mutant zabiji sousedni
+    `test_detail_expands_the_deactivated_service_block`, ktery pouziva
+    `detail=True`.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    block = _block_of(render(result), target, "E-LAN")
+
+    assert "Ostatni checky" in block
+    assert "preskoceno" in block
+    # Sedm deaktivacnich SKIPu se slilo, radek Deaktivace zustava.
+    assert block.count("interface deactivated") == 1
+    assert "Deaktivace" in block
+
+
+def test_detail_expands_the_deactivated_service_block(synthetic_snapshot):
+    """S --detail ma tyz blok vsechny puvodni radky.
+
+    Zabiji mutanta: slevani bez ohledu na priznak detail.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    block = _block_of(render(result, detail=True), target, "E-LAN")
+
+    assert "Ostatni checky" not in block
+    assert block.count("interface deactivated") > 1
+
+
+def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
+    """Slevani je vlastnost textoveho reportu, ne vysledku behu.
+
+    RunResult.to_dict() stavi vystup z CheckResultu, ne z ServiceView.
+    Kdyby slevani proteklo do nej, strojovy konzument by o preskocenych
+    checkach prisel a nic by mu to nereklo.
+
+    Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
+    overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
+    sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
+    neobjevi a vsech sedm deaktivacnich SKIPu (BFD, EVPN ESI status,
+    EVPN MAC count, Interface errors, Interface status, Interface traffic,
+    Staticka routa - zmereno na tomto snimku), ktere se v textovem reportu
+    slevaji do jedineho radku, je v JSON pritomno jednotlive.
+
+    Oprava vlny 10, nalez 3: JSON take musi nest znacku `skipped_because`
+    (klic SKIPPED_BECAUSE v CheckResult.details) - spec ji chtel propsat
+    vedome a plan slibil test, ktery to zafixuje. Bez teto aserce by
+    slouceni znacky do to_dict() proslo bez povsimnuti.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_service(old, new)
+    result = api.evaluate(new, baseline=old, now=NOW)
+
+    payload = result.to_dict()
+    scope = next(
+        item for item in payload["scopes"]
+        if item.get("identity", {}).get("description") == target
+        and item.get("identity", {}).get("service_type") == "E-LAN"
+    )
+    labels = [check.get("label") for check in scope["checks"]]
+
+    assert "Ostatni checky" not in labels
+
+    deactivation_check = next(
+        check for check in scope["checks"] if check.get("id") == "deactivation_state"
+    )
+    assert deactivation_check.get("details", {}).get("skipped_because") is None
+    skipped_labels = {
+        check.get("label") for check in scope["checks"]
+        if check.get("details", {}).get("skipped_because") == "service_deactivated"
+    }
+    assert skipped_labels == {
+        "BFD",
+        "EVPN ESI status",
+        "EVPN MAC count",
+        "Interface errors",
+        "Interface status",
+        "Interface traffic",
+        "Staticka routa",
+    }
+
+
+def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
+    """Dva peery jedne sluzby musi mit ruzne countery.
+
+    Sdilene fixtures davaly kazdemu peerovi 14/14/14/3, takze zamena peeru
+    v kodu by na reportu nebyla videt vubec. Zmereno pri psani planu vlny
+    10: rozruzneni counteru neshodilo ani jeden z 676 testu, tedy jejich
+    hodnoty nehlidal nikdo. Bez teto aserce by se fixtures mohly kdykoli
+    vratit k uniformnim cislum a nic by to nevytklo.
+
+    Zabiji mutanta: `_ribs_for` vracejici pro kazdeho peera tataz cisla
+    (napr. natvrdo 14/14/14/3) misto volani `_counters_for(peer)`.
+    """
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    service = next(
+        scope for scope in new.scopes
+        if scope.id == "svc:L3VPN-CPE13-NNI:IPVPN"
+    )
+    peers = service.selectors.bgp_neighbors
+    assert len(peers) >= 2, "sluzba uz nema dva peery, test by byl vakuovy"
+
+    received = [
+        counters["received"]
+        for peer in peers
+        for counters in new.facts["bgp"][peer]["ribs"].values()
+    ]
+
+    assert len(set(received)) == len(received), f"countery se opakuji: {received}"
+
+
+def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
+    """Rozruznene countery musi byt v obou snimcich stejne.
+
+    Kdyby se lisily mezi snimky, bgp_prefix_counts by zacal hlasit rozdil
+    u kazde zdrave sluzby a fixtures by prestaly byt zdravou vychozi sadou.
+
+    Zabiji mutanta: countery odvozene z neceho, co se mezi snimky .4 a .5
+    lisi pro TOTEZ peera (napr. z poradi peeru v ramci snimku), coz by dalo
+    jina cisla pro stejnou adresu v .4 a v .5.
+
+    Zmereno (oprava vlny 10, nalez 4): odvozeni ze `len(peer)` misto ze
+    souctu ordinalu adresy tenhle test nezabije (685 passed) - `len(peer)`
+    je porad funkce SAME adresy, takze je mezi snimky shodna. Docstring
+    puvodne tvrdil sirsi vec ("cehokoli jineho nez z adresy peera"), coz
+    tenhle test nehlida.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    shared = set(old.facts["bgp"]) & set(new.facts["bgp"])
+    assert shared, "snimky nemaji spolecneho peera, test by byl vakuovy"
+
+    for peer in sorted(shared):
+        assert old.facts["bgp"][peer]["ribs"] == new.facts["bgp"][peer]["ribs"], peer

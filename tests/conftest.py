@@ -60,17 +60,36 @@ def _neighbour_for(prefix: str) -> str | None:
 # inet6.0, tedy multiprotokolova session, ne fabulace.
 DUAL_RIB_PEER = "152.11.13.2"
 
-_RIB_COUNTERS = {
-    "received": 14,
-    "accepted": 14,
-    "advertised": 3,
-    "active": 14,
-    "suppressed": 0,
-}
+def _counters_for(peer: str) -> dict[str, int]:
+    """Countery odvozene z adresy peera, aby se peery na reportu odlisily.
+
+    Drive nesl kazdy peer 14/14/14/3, takze zamena peeru v kodu nebyla na
+    reportu videt vubec. Zmereno pri psani planu vlny 10: rozruzneni
+    neshodilo ani jeden ze 676 testu, tedy hodnoty counteru nehlidal nikdo -
+    proto k teto zmene patri i zamykajici test v test_end_to_end.py.
+
+    Odvozeni z ADRESY je podminka, ne styl: baseline i subject stavi tataz
+    funkce z teze adresy, takze bgp_prefix_counts porovnava shodna cisla.
+    Kdyby se cisla lisila mezi snimky, kazda zdrava sluzba by zacala svitit
+    oranzove.
+
+    Invarianty, ktere skutecny Junos drzi a fixtures je drzet musi taky:
+    accepted <= received, active == accepted, suppressed == received - accepted.
+    """
+    seed = sum(ord(character) for character in peer) % 9
+    received = 10 + seed
+    accepted = received - seed % 3
+    return {
+        "received": received,
+        "accepted": accepted,
+        "advertised": 2 + seed % 4,
+        "active": accepted,
+        "suppressed": received - accepted,
+    }
 
 # Druha RIB ma vlastni cisla, jinak by se dva bloky tehoz peera lisily jen
-# hlavickou. Nic nemeri; podstatne je, ze se lisi od 14/14/14/3 a ze
-# accepted < received.
+# hlavickou. Nic nemeri; podstatne je, ze se lisi od primarni RIB stejneho
+# peera (ta je odvozena z adresy pres _counters_for) a ze accepted < received.
 _SECOND_RIB_COUNTERS = {
     "received": 6,
     "accepted": 5,
@@ -88,7 +107,7 @@ def _ribs_for(peer: str, family: int) -> dict:
     rout ve stejne sekci, ktera inet6.0 pouzivala spravne.
     """
     primary = "inet6.0" if family == 6 else "inet.0"
-    ribs = {primary: dict(_RIB_COUNTERS)}
+    ribs = {primary: _counters_for(peer)}
     if peer == DUAL_RIB_PEER:
         secondary = "inet.0" if primary == "inet6.0" else "inet6.0"
         ribs.setdefault(secondary, dict(_SECOND_RIB_COUNTERS))

@@ -21,6 +21,8 @@ from migration_validator.models.result import (
     Finding,
     Outcome,
     Severity,
+    SKIPPED_BECAUSE,
+    SKIP_DEACTIVATED,
     derive_status,
 )
 from migration_validator.models.scope import Scope
@@ -92,13 +94,27 @@ class Check(ABC):
         }
 
 
-def _skip(check: Check, severity: Severity, message: str, value: str) -> list[CheckResult]:
+def _skip(
+    check: Check,
+    severity: Severity,
+    message: str,
+    value: str,
+    *,
+    skipped_because: str | None = None,
+) -> list[CheckResult]:
     """Skip, ktery vznikl mimo check - a presto je to plnohodnotny radek.
 
     `value` je kratky duvod do sloupce hodnot, `message` zustava celou
     vetou pro sloupec NALEZ a strojovy vystup. Drive tu obe pole chybela,
     takze renderer sahl po id checku a po cele vete; u selhaneho collectoru
     to byla veta o RPC chybe, ktera roztahla blok na 270 znaku sirky.
+
+    `skipped_because` je STRUKTURALNI znacka pro renderer. Vyplnuje ji
+    jedina vetva (deaktivovana sluzba), protoze jedine ta vyrabi N radku,
+    ktere rikaji doslova totez. Renderer podle ni sleva - ne podle
+    Status.SKIP a ne podle textu zpravy: v jednom bloku sedi vedle sebe
+    devet deaktivacnich SKIPu a jeden 'bez baseline', a ten druhy nese
+    informaci, kterou nic jineho nenese.
     """
     return [
         CheckResult(
@@ -109,6 +125,7 @@ def _skip(check: Check, severity: Severity, message: str, value: str) -> list[Ch
             message=message,
             label=check.label,
             value=value,
+            details={SKIPPED_BECAUSE: skipped_because} if skipped_because else {},
         )
     ]
 
@@ -150,6 +167,7 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
             severity,
             f"sluzba je v konfiguraci deaktivovana ({reason})",
             reason,
+            skipped_because=SKIP_DEACTIVATED,
         )
 
     for area in check.requires:

@@ -78,6 +78,17 @@ def derive_status(outcome: Outcome, severity: Severity) -> Status:
     return Status.FAIL if severity is Severity.CRITICAL else Status.WARN
 
 
+# Klic v CheckResult.details, kterym check rekne, PROC byl preskocen.
+# Zije v models, ne v checks/ ani v reporting/: pisou ho checky a cte ho
+# renderer, a ani jeden z tech baliku nema na druhy videt.
+SKIPPED_BECAUSE = "skipped_because"
+
+# Jedina hodnota, kterou renderer sleva. Ostatni SKIPy (chybejici
+# inventory, compare bez baseline, selhany collector, vyjimka v checku)
+# znacku nedostavaji, protoze kazdy z nich nese vlastni informaci.
+SKIP_DEACTIVATED = "service_deactivated"
+
+
 @dataclass
 class Finding:
     """Namereny vysledek jednoho checku pred odvozenim statusu.

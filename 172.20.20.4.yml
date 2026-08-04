@@ -1,4 +1,4 @@
-schema_version: 4
+schema_version: 5
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
@@ -14,6 +14,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -38,6 +39,7 @@ interfaces:
   - inet
   - inet6
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -58,6 +60,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -84,6 +87,7 @@ interfaces:
   - inet6
   - mpls
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -104,6 +108,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -130,6 +135,7 @@ interfaces:
   - inet6
   - mpls
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -150,6 +156,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -177,6 +184,7 @@ interfaces:
   bgp_neighbor:
   - 152.11.13.2
   - 2001:abcd:11:13::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '13'
@@ -185,14 +193,17 @@ interfaces:
     prefix: 198.62.1.0/29
     next_hop:
     - 152.11.13.2
+    active: true
   - rib: inet.0
     prefix: 198.62.2.0/24
     next_hop:
     - 152.11.13.2
+    active: true
   - rib: inet6.0
     prefix: 2001:aaaa::/64
     next_hop:
     - 2001:abcd:11:13::b
+    active: true
   bfd:
   - peer: 152.11.13.2
     minimum_interval: 3000
@@ -224,6 +235,7 @@ interfaces:
   bgp_neighbor:
   - 198.11.13.2
   - 2001:db8:11:13::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '113'
@@ -232,10 +244,12 @@ interfaces:
     prefix: 172.26.1.0/29
     next_hop:
     - 198.11.13.2
+    active: true
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
     next_hop:
     - 2001:db8:11:13::b
+    active: true
   bfd:
   - peer: 198.11.13.2
     minimum_interval: 3000
@@ -262,6 +276,7 @@ interfaces:
   - evpn
   - evpn-vpws
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '213'
@@ -286,6 +301,7 @@ interfaces:
   - evpn
   - virtual-switch
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain:
   - BD-313
   customer_vlan:
@@ -310,6 +326,7 @@ interfaces:
   - bridge
   - evpn
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '413'
@@ -328,9 +345,10 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -348,12 +366,13 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE24-UNI
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - ccc
   - evpn
   - evpn-vpws
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -374,6 +393,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -402,6 +422,7 @@ interfaces:
   bgp_neighbor:
   - 198.11.14.2
   - 2001:db8:11:14::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -423,6 +444,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -447,6 +469,7 @@ interfaces:
   - bgp
   bgp_neighbor:
   - 152.11.14.4
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -468,6 +491,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -491,6 +515,7 @@ interfaces:
   - evpn
   - virtual-switch
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain:
   - BD-4094
   customer_vlan:
@@ -514,6 +539,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -532,12 +558,13 @@ interfaces:
   - 10.40.94.1
   virtual_gw_ipv6_address: []
   routing_instance: MGMT
-  routing_instance_active: true
+  routing_instance_active: false
   interface_active: true
   protocol:
   - inet
   - vrf
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route:
@@ -545,6 +572,7 @@ interfaces:
     prefix: 10.40.95.0/24
     next_hop:
     - 10.40.94.10
+    active: false
   bfd: []
   detection_confidence: high
   detection_reason:
@@ -563,6 +591,7 @@ interfaces:
   interface_active: true
   protocol: []
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []
@@ -588,6 +617,7 @@ interfaces:
   - iso
   - inet6
   bgp_neighbor: []
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   static_route: []

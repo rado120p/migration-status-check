@@ -302,6 +302,11 @@ def test_entry_reads_inactive_bgp_neighbors(tmp_path):
     assert entry.bgp_neighbor_inactive == ["198.11.13.9"]
 
 
-def test_inventory_rejects_schema_three():
-    """Stara inventory se nemigruje, generuje se znovu."""
+def test_inventory_schema_version_is_five():
+    """Konstanta schematu je 5 - stara inventory se nemigruje, generuje se znovu.
+
+    Nazev drive sliboval odmitnuti schematu 3, ktere tenhle test nikdy
+    netestoval: telo jen asertuje hodnotu konstanty. Skutecne odmitnuti
+    stare inventory pokryva test_old_inventory_fails_loudly a ten zustava.
+    """
     assert INVENTORY_SCHEMA_VERSION == 5

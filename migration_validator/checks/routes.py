@@ -90,6 +90,14 @@ class StaticRouteStatusCheck(Check):
         # Snapshot i inventory maji od te vlny schema 5, takze se takovy
         # zamer nenacte - default je tu jen proto, aby jednotkovy test
         # nemusel psat klic, ktery netestuje.
+        #
+        # Klicovani jen dvojici (rib, prefix) je bezpecne, ne opomenuti:
+        # duplicitni identita s ruznymi priznaky by umlcela i tu aktivni
+        # routu, ale parser dva zaznamy pro tentyz prefix nevydava. Zmereno
+        # 2026-08-04 na zive laborce konfiguraci s holym next-hopem a dvema
+        # qualified-next-hopy (jeden deaktivovany): parser vydal jediny
+        # zaznam. `configured` je klicovana stejne - je to sdileny dusledek,
+        # ne nekonzistence mezi dvema mnozinami.
         deactivated = {
             (str(route.get("rib")), str(route.get("prefix")))
             for route in ctx.scope.selectors.static_routes
