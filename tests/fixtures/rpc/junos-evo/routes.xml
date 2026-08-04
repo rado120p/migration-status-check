@@ -3,7 +3,7 @@
   <route-table>
     <table-name>inet.0</table-name>
     <destination-count>28</destination-count>
-    <total-route-count>31</total-route-count>
+    <total-route-count>29</total-route-count>
     <active-route-count>28</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
@@ -15,7 +15,7 @@
         <last-active/>
         <protocol-name>Static</protocol-name>
         <preference>5</preference>
-        <age seconds="7665">02:07:45</age>
+        <age seconds="123">00:02:03</age>
         <nh>
           <selected-next-hop/>
           <to>152.11.13.2</to>
@@ -31,7 +31,7 @@
         <last-active/>
         <protocol-name>Static</protocol-name>
         <preference>5</preference>
-        <age seconds="7665">02:07:45</age>
+        <age seconds="123">00:02:03</age>
         <nh>
           <selected-next-hop/>
           <to>152.11.13.2</to>
@@ -75,7 +75,7 @@
   <route-table>
     <table-name>L3VPN-CPE13-NNI.inet.0</table-name>
     <destination-count>4</destination-count>
-    <total-route-count>5</total-route-count>
+    <total-route-count>4</total-route-count>
     <active-route-count>4</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
@@ -87,7 +87,7 @@
         <last-active/>
         <protocol-name>Static</protocol-name>
         <preference>5</preference>
-        <age seconds="7665">02:07:45</age>
+        <age seconds="123">00:02:03</age>
         <nh>
           <selected-next-hop/>
           <to>198.11.13.2</to>
@@ -98,9 +98,9 @@
   </route-table>
   <route-table>
     <table-name>L3VPN-CPE14-UNI.inet.0</table-name>
-    <destination-count>2</destination-count>
-    <total-route-count>3</total-route-count>
-    <active-route-count>2</active-route-count>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
@@ -114,16 +114,16 @@
   </route-table>
   <route-table>
     <table-name>mpls.0</table-name>
-    <destination-count>29</destination-count>
-    <total-route-count>32</total-route-count>
-    <active-route-count>29</active-route-count>
+    <destination-count>30</destination-count>
+    <total-route-count>35</total-route-count>
+    <active-route-count>30</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>bgp.l3vpn.0</table-name>
     <destination-count>2</destination-count>
-    <total-route-count>4</total-route-count>
+    <total-route-count>2</total-route-count>
     <active-route-count>2</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
@@ -143,7 +143,7 @@
         <last-active/>
         <protocol-name>Static</protocol-name>
         <preference>5</preference>
-        <age seconds="7655">02:07:35</age>
+        <age seconds="112">00:01:52</age>
         <nh>
           <selected-next-hop/>
           <to>2001:abcd:11:13::b</to>
@@ -191,7 +191,7 @@
         <last-active/>
         <protocol-name>Static</protocol-name>
         <preference>5</preference>
-        <age seconds="7652">02:07:32</age>
+        <age seconds="112">00:01:52</age>
         <nh>
           <selected-next-hop/>
           <to>2001:db8:11:13::b</to>
@@ -202,32 +202,32 @@
   </route-table>
   <route-table>
     <table-name>L3VPN-CPE14-UNI.inet6.0</table-name>
-    <destination-count>3</destination-count>
-    <total-route-count>3</total-route-count>
-    <active-route-count>3</active-route-count>
+    <destination-count>6</destination-count>
+    <total-route-count>6</total-route-count>
+    <active-route-count>6</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>bgp.rtarget.0</table-name>
-    <destination-count>8</destination-count>
-    <total-route-count>24</total-route-count>
-    <active-route-count>8</active-route-count>
+    <destination-count>9</destination-count>
+    <total-route-count>9</total-route-count>
+    <active-route-count>9</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>bgp.evpn.0</table-name>
-    <destination-count>29</destination-count>
-    <total-route-count>35</total-route-count>
-    <active-route-count>29</active-route-count>
+    <destination-count>34</destination-count>
+    <total-route-count>34</total-route-count>
+    <active-route-count>34</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>EVPN-VPWS-CPE13-NNI.evpn.0</table-name>
     <destination-count>2</destination-count>
-    <total-route-count>3</total-route-count>
+    <total-route-count>2</total-route-count>
     <active-route-count>2</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
@@ -235,24 +235,24 @@
   <route-table>
     <table-name>EVPN-VLAN-AWARE-CPE13-NNI.evpn.0</table-name>
     <destination-count>6</destination-count>
-    <total-route-count>9</total-route-count>
+    <total-route-count>6</total-route-count>
     <active-route-count>6</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
-    <table-name>EVPN-VLAN-AWARE-EX-POP1.evpn.0</table-name>
-    <destination-count>14</destination-count>
-    <total-route-count>14</total-route-count>
-    <active-route-count>14</active-route-count>
+    <table-name>EVPN-VLAN-AWARE-POP1.evpn.0</table-name>
+    <destination-count>18</destination-count>
+    <total-route-count>18</total-route-count>
+    <active-route-count>18</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>EVPN-VLAN-BASED-CPE13-NNI.evpn.0</table-name>
-    <destination-count>4</destination-count>
-    <total-route-count>6</total-route-count>
-    <active-route-count>4</active-route-count>
+    <destination-count>5</destination-count>
+    <total-route-count>5</total-route-count>
+    <active-route-count>5</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>

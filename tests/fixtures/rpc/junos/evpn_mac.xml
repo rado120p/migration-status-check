@@ -4,15 +4,15 @@
     <l2-mac-bridging-domain>BD-313</l2-mac-bridging-domain>
     <l2-bridge-vlan>313</l2-bridge-vlan>
     <l2-mac-entry>
-      <l2-mac-address>0c:00:12:2e:16:01</l2-mac-address>
-      <l2-mac-flags>DC</l2-mac-flags>
-      <l2-mac-fwd-next-hop>1048601</l2-mac-fwd-next-hop>
-      <l2-active-source>150.0.0.13</l2-active-source>
-    </l2-mac-entry>
-    <l2-mac-entry>
-      <l2-mac-address>0c:00:32:f4:d6:01</l2-mac-address>
+      <l2-mac-address>0c:00:4b:4c:4e:01</l2-mac-address>
       <l2-mac-flags>D</l2-mac-flags>
       <l2-mac-logical-interface>ge-0/0/2.313</l2-mac-logical-interface>
+    </l2-mac-entry>
+    <l2-mac-entry>
+      <l2-mac-address>0c:00:f1:be:c2:01</l2-mac-address>
+      <l2-mac-flags>DC</l2-mac-flags>
+      <l2-mac-fwd-next-hop>1048579</l2-mac-fwd-next-hop>
+      <l2-active-source>150.0.0.13</l2-active-source>
     </l2-mac-entry>
   </l2ald-mac-entry>
   <l2ald-mac-entry style="brief-rtb">
@@ -20,12 +20,12 @@
     <l2-mac-bridging-domain>BD-4094</l2-mac-bridging-domain>
     <l2-bridge-vlan>4094</l2-bridge-vlan>
     <l2-mac-entry>
-      <l2-mac-address>2c:6b:f5:e0:2e:f0</l2-mac-address>
+      <l2-mac-address>2c:6b:f5:3a:38:f0</l2-mac-address>
       <l2-mac-flags>D</l2-mac-flags>
       <l2-mac-logical-interface>ge-0/0/6.4094</l2-mac-logical-interface>
     </l2-mac-entry>
     <l2-mac-entry>
-      <l2-mac-address>2c:6b:f5:f5:f7:f0</l2-mac-address>
+      <l2-mac-address>2c:6b:f5:4c:79:f0</l2-mac-address>
       <l2-mac-flags>D</l2-mac-flags>
       <l2-mac-logical-interface>ge-0/0/6.4094</l2-mac-logical-interface>
     </l2-mac-entry>

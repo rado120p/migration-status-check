@@ -11,7 +11,7 @@
       <client-transmission-interval>3.000</client-transmission-interval>
       <client-reception-interval>3.000</client-reception-interval>
     </bfd-client>
-    <session-up-time>02:15:11</session-up-time>
+    <session-up-time>00:02:41</session-up-time>
     <local-diagnostic>None</local-diagnostic>
     <remote-diagnostic>None</remote-diagnostic>
     <session-version>1</session-version>

@@ -1,9 +1,9 @@
 <ipv6-nd-information style="normal">
   <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>2001:abcd:11:13::b</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:ef:5e:df:01</ipv6-nd-neighbor-l2-address>
-    <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>1037</ipv6-nd-expire>
+    <ipv6-nd-neighbor-l2-address>0c:00:4b:4c:4e:01</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>delay</ipv6-nd-state>
+    <ipv6-nd-expire>1</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
     <ipv6-nd-interface-name>et-0/0/8.13</ipv6-nd-interface-name>
@@ -13,23 +13,10 @@
     </ipv6-nd-table-entry-flags>
   </ipv6-nd-entry>
   <ipv6-nd-entry>
-    <ipv6-nd-neighbor-address>fe80::e00:34ff:fe45:1d02</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:34:45:1d:02</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-neighbor-address>fe80::e00:4b00:d4c:4e01</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>0c:00:4b:4c:4e:01</ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>558</ipv6-nd-expire>
-    <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
-    <ipv6-nd-issecure>no</ipv6-nd-issecure>
-    <ipv6-nd-interface-name>et-0/0/1.0</ipv6-nd-interface-name>
-    <ipv6-nd-reference-count>2</ipv6-nd-reference-count>
-    <ipv6-nd-table-entry-flags>
-      <none>true</none>
-    </ipv6-nd-table-entry-flags>
-  </ipv6-nd-entry>
-  <ipv6-nd-entry>
-    <ipv6-nd-neighbor-address>fe80::e00:ef00:d5e:df01</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:ef:5e:df:01</ipv6-nd-neighbor-l2-address>
-    <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>820</ipv6-nd-expire>
+    <ipv6-nd-expire>1162</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
     <ipv6-nd-interface-name>et-0/0/8.13</ipv6-nd-interface-name>
@@ -39,10 +26,23 @@
     </ipv6-nd-table-entry-flags>
   </ipv6-nd-entry>
   <ipv6-nd-entry>
-    <ipv6-nd-neighbor-address>fe80::5a90:a5ff:fe48:0</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>58:90:a5:48:00:00</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-neighbor-address>fe80::e00:64ff:fe21:1e02</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>0c:00:64:21:1e:02</ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>946</ipv6-nd-expire>
+    <ipv6-nd-expire>720</ipv6-nd-expire>
+    <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
+    <ipv6-nd-issecure>no</ipv6-nd-issecure>
+    <ipv6-nd-interface-name>et-0/0/1.0</ipv6-nd-interface-name>
+    <ipv6-nd-reference-count>2</ipv6-nd-reference-count>
+    <ipv6-nd-table-entry-flags>
+      <none>true</none>
+    </ipv6-nd-table-entry-flags>
+  </ipv6-nd-entry>
+  <ipv6-nd-entry>
+    <ipv6-nd-neighbor-address>fe80::12d3:ebff:fe3b:0</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>12:d3:eb:3b:00:00</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>stale</ipv6-nd-state>
+    <ipv6-nd-expire>708</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
     <ipv6-nd-interface-name>et-0/0/0.0</ipv6-nd-interface-name>
@@ -53,9 +53,9 @@
   </ipv6-nd-entry>
   <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>2001:db8:11:13::b</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:ef:5e:df:01</ipv6-nd-neighbor-l2-address>
-    <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>508</ipv6-nd-expire>
+    <ipv6-nd-neighbor-l2-address>0c:00:4b:4c:4e:01</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>reachable</ipv6-nd-state>
+    <ipv6-nd-expire>9</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
     <ipv6-nd-interface-name>et-0/0/8.113</ipv6-nd-interface-name>
@@ -65,43 +65,32 @@
     </ipv6-nd-table-entry-flags>
   </ipv6-nd-entry>
   <ipv6-nd-entry>
-    <ipv6-nd-neighbor-address>fe80::e00:ef00:715e:df01</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:ef:5e:df:01</ipv6-nd-neighbor-l2-address>
-    <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>284</ipv6-nd-expire>
-    <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
-    <ipv6-nd-issecure>no</ipv6-nd-issecure>
-    <ipv6-nd-interface-name>et-0/0/8.113</ipv6-nd-interface-name>
-    <ipv6-nd-reference-count>1</ipv6-nd-reference-count>
-    <ipv6-nd-table-entry-flags>
-      <none>true</none>
-    </ipv6-nd-table-entry-flags>
-  </ipv6-nd-entry>
-  <ipv6-nd-entry>
     <ipv6-nd-neighbor-address>2001:db8:11:14::b</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:a9:0b:e5:02</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-neighbor-l2-address>0c:00:f9:bb:ac:02</ipv6-nd-neighbor-l2-address>
     <ipv6-nd-state>reachable</ipv6-nd-state>
-    <ipv6-nd-expire>28</ipv6-nd-expire>
+    <ipv6-nd-expire>0</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
-    <ipv6-nd-interface-name>et-0/0/10.0</ipv6-nd-interface-name>
+    <ipv6-nd-interface-name>irb.15[ ae0.15 ]</ipv6-nd-interface-name>
     <ipv6-nd-reference-count>1</ipv6-nd-reference-count>
     <ipv6-nd-table-entry-flags>
-      <none>true</none>
+      <permanent>true</permanent>
+      <remotely-learnt-address>true</remotely-learnt-address>
     </ipv6-nd-table-entry-flags>
   </ipv6-nd-entry>
   <ipv6-nd-entry>
-    <ipv6-nd-neighbor-address>fe80::e00:a9ff:fe0b:e502</ipv6-nd-neighbor-address>
-    <ipv6-nd-neighbor-l2-address>0c:00:a9:0b:e5:02</ipv6-nd-neighbor-l2-address>
-    <ipv6-nd-state>stale</ipv6-nd-state>
-    <ipv6-nd-expire>413</ipv6-nd-expire>
+    <ipv6-nd-neighbor-address>fe80::e00:f9ff:febb:ac02</ipv6-nd-neighbor-address>
+    <ipv6-nd-neighbor-l2-address>0c:00:f9:bb:ac:02</ipv6-nd-neighbor-l2-address>
+    <ipv6-nd-state>reachable</ipv6-nd-state>
+    <ipv6-nd-expire>0</ipv6-nd-expire>
     <ipv6-nd-isrouter>yes</ipv6-nd-isrouter>
     <ipv6-nd-issecure>no</ipv6-nd-issecure>
-    <ipv6-nd-interface-name>et-0/0/10.0</ipv6-nd-interface-name>
+    <ipv6-nd-interface-name>irb.15[ ae0.15 ]</ipv6-nd-interface-name>
     <ipv6-nd-reference-count>1</ipv6-nd-reference-count>
     <ipv6-nd-table-entry-flags>
-      <none>true</none>
+      <permanent>true</permanent>
+      <remotely-learnt-address>true</remotely-learnt-address>
     </ipv6-nd-table-entry-flags>
   </ipv6-nd-entry>
-  <ipv6-nd-total>8</ipv6-nd-total>
+  <ipv6-nd-total>7</ipv6-nd-total>
 </ipv6-nd-information>
