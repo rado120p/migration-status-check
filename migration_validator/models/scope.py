@@ -156,10 +156,15 @@ class Scope:
             for entry in (facts.get("nd") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
+        # Deaktivovany peer patri scopu stejne jako aktivni. Kdyby se sem
+        # jeho session nedostala, check by ho videl jako bezsessioveho,
+        # dal by mu SKIP 'deaktivovan' - a rozpor 'konfigurace vypnuto,
+        # zarizeni bezi' by z reportu zmizel.
         bgp = {
             peer: data
             for peer, data in (facts.get("bgp") or {}).items()
             if peer in self.selectors.bgp_neighbors
+            or peer in self.selectors.bgp_neighbors_inactive
         }
         evpn_vpws = {
             name: data
@@ -196,6 +201,12 @@ class Scope:
         # vybiralo podle bfd_peers, session peeru, ktereho parser do
         # zameru nedoplnil, by se sem nedostala a chyba v pruchodu
         # hierarchii by se schovala pred vystupem nastroje (AR-14).
+        #
+        # Na rozdil od bgp vys se tady bgp_neighbors_inactive zamerne
+        # nepricita: checks/bfd.py iteruje zamer bfd_peers, ktery je pro
+        # deaktivovaneho peera prazdny, takze vybrana session by nevykreslila
+        # zadny radek. Nechava se propadnout do NEZARAZENO, kde videt je -
+        # viz _unassigned_bfd_sessions v engine.py.
         bfd = {
             peer: data
             for peer, data in (facts.get("bfd") or {}).items()

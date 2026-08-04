@@ -149,16 +149,41 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
 
     Symetricke se statikami: konfigurace rika 'vypnuto', tabulka rika
     'bezi', a prave to ma byt videt.
+
+    Subject se stavi pres `Scope.select()`, ne rucne. Rucne postaveny
+    subject obchazi prave to misto, kde se session ztracela, takze by test
+    prosel i nad rozbitou cestou.
+
+    Zabiji mutanta: vyber `bgp` v `Scope.select()` filtrovany jen pres
+    `bgp_neighbors` (bez `bgp_neighbors_inactive`). Session se pak ke checku
+    nedostane, peer propadne vetvi `inactive` a dostane SKIP 'deaktivovan'.
     """
-    ctx = _ctx(
-        {"bgp": {"198.11.13.9": _peer(state="Established")}},
-        bgp_neighbors=[],
-        bgp_neighbors_inactive=["198.11.13.9"],
+    scope = Scope(
+        id="svc:L3VPN-CPE13-NNI:IPVPN",
+        kind="service",
+        key=ScopeKey("L3VPN-CPE13-NNI", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.113"],
+            bgp_neighbors=[],
+            bgp_neighbors_inactive=["198.11.13.9"],
+        ),
     )
+    facts = {"bgp": {"198.11.13.9": _peer(state="Established")}}
+    ctx = CheckContext(
+        scope=scope,
+        subject=scope.select(facts),
+        baseline=None,
+        config=default_config(),
+        failed_collectors={},
+    )
+
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
     assert results[0].status is not Status.SKIP
+    assert results[0].status is Status.PASS
+    assert results[0].label == "BGP status (198.11.13.9)"
+    assert results[0].value == "Established"
 
 
 def test_state_change_to_established_is_pass_not_warn():

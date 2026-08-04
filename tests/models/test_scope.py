@@ -197,6 +197,40 @@ def test_bfd_sessions_are_selected_by_bgp_neighbors():
     assert set(selected["bfd"]) == {"152.11.13.2"}
 
 
+def test_bgp_session_of_deactivated_peer_is_selected():
+    """Deaktivovany peer se zivou session patri scopu stejne jako aktivni.
+
+    Kdyby se session nevybrala, checks/bgp.py by peera videl jako
+    bezsessioveho, dal by mu SKIP 'deaktivovan' a rozpor 'konfigurace
+    vypnuto, zarizeni bezi' by z reportu zmizel.
+
+    Zabiji mutanta: vyber `bgp` filtrovany jen pres `bgp_neighbors`
+    (bez `bgp_neighbors_inactive`).
+    """
+    scope = _scope_with(bgp_neighbors=[], bgp_neighbors_inactive=["152.11.13.2"])
+
+    selected = scope.select({"bgp": {"152.11.13.2": {"state": "Established"}}})
+
+    assert set(selected["bgp"]) == {"152.11.13.2"}
+
+
+def test_bfd_session_of_deactivated_peer_is_not_selected():
+    """Protejsek predchoziho testu - u BFD se inactive zamerne nepricita.
+
+    checks/bfd.py iteruje zamer bfd_peers, ktery je pro deaktivovaneho peera
+    prazdny, takze vybrana session by nevykreslila zadny radek. Musi zustat
+    nezarazena, aby ji engine ukazal v NEZARAZENO.
+
+    Zabiji mutanta: vyber `bfd` rozsireny o `bgp_neighbors_inactive`
+    (symetricky s vyberem `bgp`).
+    """
+    scope = _scope_with(bgp_neighbors=[], bgp_neighbors_inactive=["152.11.13.2"])
+
+    selected = scope.select({"bfd": BFD_FACTS})
+
+    assert selected["bfd"] == {}
+
+
 def test_device_scope_sees_all_routes_and_sessions():
     """Rezim bez inventory je podle AR-10 doporuceny zpusob prohlidky zarizeni."""
     selected = device_scope().select({"routes": ROUTE_FACTS, "bfd": BFD_FACTS})

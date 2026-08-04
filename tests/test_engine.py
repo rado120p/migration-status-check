@@ -254,15 +254,18 @@ def test_inactive_peer_is_assigned_not_unassigned():
     assert _unassigned_bgp_peers(snapshot, [scope]) == []
 
 
-def test_inactive_peer_bfd_session_is_assigned_not_unassigned():
-    """Ziva BFD session deaktivovaneho peera patri sve sluzbe, ne do NEZARAZENO.
+def test_inactive_peer_bfd_session_stays_visible_in_unassigned():
+    """Ziva BFD session deaktivovaneho peera musi zustat v NEZARAZENO.
 
-    Stejny duvod jako u BGP: deaktivovany peer je porad peer teto sluzby -
-    kdyz pro nej presto prijde BFD session, je to nalez o teto sluzbe, ne
-    osamocena session bez vztahu ke scope.
+    Zamerna asymetrie proti BGP: u BGP dostane deaktivovany peer se zivou
+    session skutecny nalez u sve sluzby, takze do NEZARAZENO nepatri. U BFD
+    zadny takovy check neni - checks/bfd.py iteruje zamer bfd_peers, ktery
+    je pro deaktivovaneho peera prazdny. Kdyby se session zaroven povazovala
+    za zarazenou, nevykreslila by se nikde.
 
-    Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` postavene jen
-    z `bgp_neighbors`.
+    Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` postavene jako
+    sjednoceni `bgp_neighbors` a `bgp_neighbors_inactive` (tj. symetricky
+    s `_unassigned_bgp_peers`).
     """
     scope = Scope(
         id="s1",
@@ -284,7 +287,14 @@ def test_inactive_peer_bfd_session_is_assigned_not_unassigned():
         inventory=[],
     )
 
-    assert _unassigned_bfd_sessions(snapshot, [scope]) == []
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == [
+        {
+            "peer": "198.11.13.9",
+            "interface": "et-0/0/9.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
 
 
 MGMT_ROUTE = {
@@ -407,7 +417,7 @@ def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
     Chyti implementaci, ktera by do "assigned" sjednotila i zamer
     (`{str(b.get("peer")) for scope in scopes for b in
     scope.selectors.bfd_peers}`) - presne anti-vzor, ktery AR-14 a komentar
-    u `Scope.select()` (`models/scope.py:177-181`) zakazuji. Peer je
+    u vyberu `bfd` v `Scope.select()` zakazuji. Peer je
     v zameru (`bfd_peers`), ale nikdy se nedostal do `bgp_neighbors` -
     to je zrovna ten pripad meznery v parsovani, kvuli ktere `unassigned`
     existuje. Kdyby se zamer sjednotil do "assigned", session by se tise
