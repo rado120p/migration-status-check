@@ -391,44 +391,56 @@ def _configured(parser_class, xml: str) -> set[tuple[str, str]]:
     return {(route.rib, route.prefix) for route in parser.static_routes}
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_static_stanza_yields_no_route(module, parser_class):
-    """Deaktivovany `static` nema vyrobit zivy zamer.
+def _configured_by_identity(parser_class, xml: str) -> dict[tuple[str, str], bool]:
+    """Zamer klicovany (rib, prefix) s hodnotou 'je aktivni'.
 
-    Jinak check hlasi 'FAIL ... neni v tabulce' za routu, kterou operator
-    vedome vyradil - falesny rozpor je jediny vystup, ktery podryva celou
-    pointu porovnavani konfigurace se skutecnosti.
+    Oproti _configured neztrati priznak, takze test pozna rozdil mezi
+    'routa v zameru neni' a 'routa v zameru je a je deaktivovana'.
     """
-    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
-
-    assert ("inet.0", "198.62.1.0/29") not in found
-    # Kontrola, ze guard nesebral i to, co ma zustat.
-    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") in found
+    parser = parser_class(etree.XML(xml.encode()))
+    parser.parse()
+    return {(route.rib, route.prefix): route.active for route in parser.static_routes}
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_rib_yields_no_route(module, parser_class):
-    """Deaktivovany `rib` bere s sebou i `static` pod sebou."""
-    found = _configured(parser_class, DEACTIVATED_CONTAINERS)
+def test_deactivated_static_stanza_keeps_route_as_inactive(module, parser_class):
+    """Deaktivovany `static` necha routu v zameru, ale oznaci ji.
 
-    assert ("inet6.0", "2001:aaaa::/64") not in found
+    Vypustit ji beze stopy je vada: check by pak nemel co preskocit a
+    operator by nevedel, ze routa v konfiguraci vubec je. Zaroven nesmi
+    zustat aktivni - to by dalo 'FAIL ... neni v tabulce' za routu, kterou
+    operator vedome vyradil.
+    """
+    found = _configured_by_identity(parser_class, DEACTIVATED_CONTAINERS)
+
+    assert found[("inet.0", "198.62.1.0/29")] is False
+    # Kontrola, ze priznak nesebral i to, co ma zustat zive.
+    assert found[("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29")] is True
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_global_routing_options_yields_no_route(module, parser_class):
-    """Deaktivovane globalni `routing-options` vyradi statiky default instance."""
-    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+def test_deactivated_rib_marks_its_routes_inactive(module, parser_class):
+    """Deaktivovany `rib` bere s sebou i `static` pod sebou - pres predky."""
+    found = _configured_by_identity(parser_class, DEACTIVATED_CONTAINERS)
 
-    assert ("inet.0", "198.62.1.0/29") not in found
+    assert found[("inet6.0", "2001:aaaa::/64")] is False
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_instance_routing_options_yields_no_route(module, parser_class):
-    """Deaktivovane `routing-options` uvnitr instance - druhy, samostatny guard.
+def test_deactivated_global_routing_options_marks_routes_inactive(module, parser_class):
+    """Deaktivovane globalni `routing-options` oznaci statiky default instance."""
+    found = _configured_by_identity(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+
+    assert found[("inet.0", "198.62.1.0/29")] is False
+
+
+@pytest.mark.parametrize("module,parser_class", PARSERS)
+def test_deactivated_instance_routing_options_marks_routes_inactive(module, parser_class):
+    """Deaktivovane `routing-options` uvnitr instance - druha, samostatna smycka.
 
     Jsou to dve ruzne smycky v `_parse_static_routes`, takze jeden test na
-    obe by nechal jeden z guardu nepokryty.
+    obe by nechal jednu z nich nepokrytou.
     """
-    found = _configured(parser_class, DEACTIVATED_ROUTING_OPTIONS)
+    found = _configured_by_identity(parser_class, DEACTIVATED_ROUTING_OPTIONS)
 
-    assert ("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29") not in found
+    assert found[("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29")] is False

@@ -176,21 +176,19 @@ def test_deactivated_routing_instances_container_flags_the_service(module, parse
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_routing_instances_container_drops_static_routes(module, parser_class):
-    """Statiky pod deaktivovaným kontejnerem se vypustí ze záměru.
+def test_deactivated_routing_instances_container_marks_static_routes_inactive(
+    module, parser_class
+):
+    """Deaktivovaný kontejner `routing-instances` označí statiky, nevypouští je.
 
-    Roadmapa to ověřila na `<routing-instances inactive="inactive">`: statika
-    ('L3VPN-TEST.inet.0', '10.9.9.0/24') se dnes vrací jako živá. Deaktivovaná
-    VRF žádnou routu do tabulky nedá, takže záměr z ní vzniknout nesmí -
-    jinak check hlásí FAIL za routu, kterou nikdo nechce.
-
-    Zabíjí mutanta: dědění zavedené jen pro rozhraní a ne pro statiky.
+    Zabíjí mutanta: `_is_inactive` bez chůze po předcích. Jednotlivé
+    `instance` pod deaktivovaným kontejnerem atribut nemá.
     """
     services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
-
     routes = [route for service in services for route in service.static_route]
 
-    assert routes == [], f"deaktivovaný kontejner vyrobil záměr: {routes}"
+    assert routes, "deaktivovaný kontejner nesmí routu vypustit"
+    assert all(route["active"] is False for route in routes), routes
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
@@ -303,21 +301,14 @@ INACTIVE_GROUP = """
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_inactive_rib_drops_only_its_own_routes(module, parser_class):
-    """Deaktivovaný `rib` vypustí své statiky a sousední `static` nechá být.
-
-    Zabíjí mutanta (až po smazání guardu na rib_node): `_is_inactive` bez
-    chůze po předcích. Routa uvnitř `rib` sama atribut nemá, takže bez dědění
-    unikne do záměru.
-
-    Next-hop uvnitř deaktivovaného `rib` musí ležet v subnetu rozhraní -
-    jinak ji `_assign_static_routes` ke službě nepřipne a test by prošel
-    i pod mutantem, protože by únik neviděl.
-    """
+def test_inactive_rib_marks_only_its_own_routes(module, parser_class):
+    """Deaktivovaná `rib` označí jen své routy, sousední RIB zůstane živý."""
     services = _services(module, parser_class, INACTIVE_RIB)
     routes = [route for service in services for route in service.static_route]
+    by_prefix = {route["prefix"]: route["active"] for route in routes}
 
-    assert [route["prefix"] for route in routes] == ["10.9.9.0/24"], routes
+    assert by_prefix["10.9.9.0/24"] is True
+    assert by_prefix["10.8.8.0/24"] is False
 
 
 @pytest.mark.parametrize("module,parser_class", PARSERS)

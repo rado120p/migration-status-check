@@ -140,6 +140,12 @@ class StaticRoute:
     rib: str
     prefix: str
     next_hop: list[str] = field(default_factory=list)
+    # Deaktivovaná routa se ze záměru **nevypouští**. Kdyby zmizela, check
+    # by neměl co přeskočit a operátor by z reportu nepoznal, že v
+    # konfiguraci vůbec je. Příznak se čte na listu, protože `_is_inactive`
+    # chodí po předcích — pokryje tím deaktivaci na libovolné úrovni nad
+    # routou, včetně celého `routing-options`.
+    active: bool = True
 
 
 @dataclass
@@ -636,8 +642,6 @@ class JunosEvoAcxServiceParser:
         for options_node in self.config_xml.xpath(
             "./*[local-name()='routing-options']"
         ):
-            if self._is_inactive(options_node):
-                continue
 
             routes.extend(
                 self._static_routes_under(options_node, None)
@@ -647,8 +651,6 @@ class JunosEvoAcxServiceParser:
             "./*[local-name()='routing-instances']"
             "/*[local-name()='instance']"
         ):
-            if self._is_inactive(instance_node):
-                continue
 
             instance_name = first_text(
                 instance_node,
@@ -661,8 +663,6 @@ class JunosEvoAcxServiceParser:
             for options_node in instance_node.xpath(
                 "./*[local-name()='routing-options']"
             ):
-                if self._is_inactive(options_node):
-                    continue
 
                 routes.extend(
                     self._static_routes_under(
@@ -714,16 +714,10 @@ class JunosEvoAcxServiceParser:
         routes: list[StaticRoute] = []
 
         for rib_name, static_node in containers:
-            # Jediné místo pro oba tvary: `static` přímo pod
-            # routing-options i `static` uvnitř `rib`.
-            if self._is_inactive(static_node):
-                continue
 
             for route_node in static_node.xpath(
                 "./*[local-name()='route']"
             ):
-                if self._is_inactive(route_node):
-                    continue
 
                 prefix = first_text(
                     route_node,
@@ -746,6 +740,7 @@ class JunosEvoAcxServiceParser:
                             route_node,
                             "./*[local-name()='next-hop']/text()",
                         ),
+                        active=not self._is_inactive(route_node),
                     )
                 )
 

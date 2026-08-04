@@ -279,14 +279,17 @@ interfaces:
   static_route:
   - rib: inet.0
     prefix: 198.62.1.0/29
+    active: true
     next_hop:
     - 152.11.13.2
   - rib: inet.0
     prefix: 198.62.2.0/24
+    active: true
     next_hop:
     - 152.11.13.2
   - rib: inet6.0
     prefix: 2001:aaaa::/64
+    active: true
     next_hop:
     - 2001:abcd:11:13::b
   bfd:
@@ -326,10 +329,12 @@ interfaces:
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
     prefix: 172.26.1.0/29
+    active: true
     next_hop:
     - 198.11.13.2
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
+    active: true
     next_hop:
     - 2001:db8:11:13::b
   bfd:
@@ -565,6 +570,7 @@ interfaces:
   static_route:
   - rib: MGMT.inet.0
     prefix: 10.40.95.0/24
+    active: true
     next_hop:
     - 10.40.94.10
   bfd: []
