@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from conftest import DUAL_RIB_PEER
@@ -56,8 +57,16 @@ def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
     for check in deactivation_checks:
         if check.status is Status.FAIL:
             assert "migrace nedokoncena" in check.message
-        elif check.status is Status.WARN:
-            assert "ted je aktivni" in check.message
+        else:
+            # Dve ruzne cesty k WARN, a splacnout je dohromady by zakrylo
+            # obracene poradi: "ted je aktivni" je zmena proti baselinu,
+            # "baseline neni k porovnani" je nesparovana sluzba, ktera je
+            # deaktivovana a porovnat se nema s cim. Od vlny 9 je i druha
+            # z nich WARN, ne SKIP.
+            assert (
+                "ted je aktivni" in check.message
+                or "baseline neni k porovnani" in check.message
+            )
 
     assert result.summary["scopes_matched"] >= 5
     assert json.loads(to_json(result))["schema_version"] == 1
@@ -330,3 +339,136 @@ def test_dual_rib_peer_yields_two_distinguishable_blocks(synthetic_snapshot):
     assert values_by_rib["inet.0"] != values_by_rib["inet6.0"], (
         "oba bloky DUAL_RIB_PEER nesou stejne countery - lisi se jen hlavickou"
     )
+
+
+def _deactivate_shared_route(old, new) -> str:
+    """Vypne TUTEZ routu TEZE sluzby v obou snimcich a vrati jeji popis.
+
+    Naivni "prvni scope se statickou routou v kazdem snimku" je vada: vnitrni
+    break opousti jen vnitrni smycku a poradi scopu se mezi .4 a .5 lisit
+    muze, takze by se v kazdem snimku vypnula jina sluzba. Vysledek by byl
+    "v baselinu bezela, ted je vypnuta" = FAIL, ne WARN, ktery tenhle test
+    meri - a selhani by vypadalo jako vada implementace.
+
+    Parovat se musi i konkretni routa, ne jen sluzba: dve ruzne routy tehoz
+    prefixu neexistuji, ale poradi v seznamu garantovane neni.
+
+    Odchylka od bodu z brief: samotne nastaveni "active": False v selektoru
+    nestaci. `routes.py:155` vyzaduje `deactivated and subject is None` -
+    tedy ze routa navic chybi z namerene routovaci tabulky (`facts["routes"]`
+    subjektu). `synthetic_snapshot` ale fakta pocita PRED touto mutaci a
+    napevno je oznaci jako "active": True (tests/conftest.py:174-179), takze
+    bez tohoto kroku by zadny check nikdy nehlasil zadny nalez a test by
+    tise merilo nic. Route proto mizi z faktu subjektu ("new" snimek), presne
+    jak by to udelal skutecny kolektor u vypnute konfigurace.
+
+    Fakta baselinu ("old") se schvalne nechavaji netknuta - vetev, kterou
+    tenhle test cili (`routes.py:155`), se rozhoduje jen podle `subject is
+    None` a `baseline_deactivated` (zamer ze selektoru, uz nastaveny vyse),
+    ne podle faktu baselinu. Ty ovlivnuji jen zobrazenou `baseline_value`.
+    """
+    by_description = {}
+    for snapshot, side in ((old, "old"), (new, "new")):
+        for scope in snapshot.scopes:
+            if scope.key is None or scope.key.description is None:
+                continue
+            for route in scope.selectors.static_routes:
+                key = (scope.key.description, str(route.get("rib")), str(route.get("prefix")))
+                by_description.setdefault(key, {})[side] = route
+
+    shared = sorted(key for key, sides in by_description.items() if len(sides) == 2)
+    assert shared, "fixture nema zadnou statickou routu pritomnou v obou snimcich"
+
+    target = shared[0]
+    for route in by_description[target].values():
+        route["active"] = False
+
+    _, rib, prefix = target
+    new.facts.get("routes", {}).get(rib, {}).pop(prefix, None)
+    return target[0]
+
+
+def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
+    """Bod 14: zdrava sluzba s deaktivovanou routou se rozbali i bez --detail.
+
+    Test jde pres api.evaluate a render, ne nad rucne slozenym ServiceView.
+    Test nad ServiceView by prosel i nad rozbitou cestou, protoze by
+    obesel prave to misto, kde se stav rozhoduje: engine.py:145 filtruje
+    SKIPy pred Status.worst(), takze dokud deaktivace vyrabela SKIP,
+    sluzba zustala PASS a text_report.py:390 jeji blok nerozbalil.
+
+    Zabiji mutanta: navrat Outcome.SKIP misto DEGRADED v routes.py. Sluzba
+    by zustala PASS - test padne uz na `status is Status.WARN` a k asserci
+    na obsah bloku se nedostane. Ze by se blok bez PASS na Status.WARN
+    skutecne nerozbalil, overuje samostatne text_report.py:390 podminka
+    `detail or view.status is not Status.PASS` - overeno primo, mutaci te
+    podminky na `if detail`.
+    """
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    target = _deactivate_shared_route(old, new)
+
+    result = api.evaluate(new, baseline=old, now=NOW)
+    rendered = render(result)
+
+    affected = [scope for scope in result.scopes if scope.identity.get("description") == target]
+    assert affected, f"sluzba {target} ve vysledku neni"
+    assert affected[0].status is Status.WARN
+
+    block = _block_of(rendered, target, affected[0].identity["service_type"])
+    assert "deaktivovana" in block
+
+
+def _counts_of_line(output: str, prefix: str) -> dict[str, int]:
+    """Rozebere souhrnny radek na countery.
+
+    Vlastni kopie helperu z tests/reporting/test_text_report.py - ten ho ma
+    pro synteticke RunResulty a importovat ho sem by svazalo dva testovaci
+    soubory kvuli dvema radkum.
+    """
+    line = next(l for l in output.splitlines() if l.strip().startswith(prefix))
+    return {name: int(count) for count, name in re.findall(r"(\d+) (PASS|WARN|FAIL|SKIP)", line)}
+
+
+def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapshot):
+    """Souhrn za sluzby musi deaktivovany prvek pocitat do WARN, ne do PASS.
+
+    Nalez 3 specu vlny 9: tuhle vazbu nehlidal zadny test, takze zmena
+    semantiky mohla countery rozpojit tise. Meri se na zrenderovanem radku
+    'Sluzby:', ne na result.scopes - counter je vlastnost vystupu.
+
+    Zabiji mutanta: navrat Outcome.SKIP v routes.py. Sluzba by zustala v
+    PASS a souhrn by tvrdil, ze je vsechno v poradku.
+    """
+    def snapshots():
+        return (
+            synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration"),
+            synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration"),
+        )
+
+    old, new = snapshots()
+    baseline_run = api.evaluate(new, baseline=old, now=NOW)
+    before = _counts_of_line(render(baseline_run), "Sluzby:")
+
+    # Cerstve snimky, ne ty uz vyhodnocene - deaktivace se zapisuje do
+    # zameru a sdileny objekt mezi dvema behy by meril poradi volani.
+    old, new = snapshots()
+    target = _deactivate_shared_route(old, new)
+
+    # Cil MUSI byt PASS pred zmenou, jinak aserce nize nemeri nic: sluzba,
+    # ktera uz WARN byla, se do counteru nepresune a rozdil vyjde nula.
+    target_before = [
+        scope for scope in baseline_run.scopes
+        if scope.identity.get("description") == target
+    ]
+    assert target_before, f"sluzba {target} ve vysledku neni"
+    assert target_before[0].status is Status.PASS, (
+        f"sluzba {target} nebyla pred zmenou PASS ({target_before[0].status}), "
+        "test by presun counteru nemeril"
+    )
+
+    after = _counts_of_line(render(api.evaluate(new, baseline=old, now=NOW)), "Sluzby:")
+
+    assert after["PASS"] == before["PASS"] - 1
+    assert after["WARN"] == before["WARN"] + 1

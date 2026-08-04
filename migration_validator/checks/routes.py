@@ -27,6 +27,7 @@ import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.deactivation import deactivation_outcome
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -94,6 +95,25 @@ class StaticRouteStatusCheck(Check):
             for route in ctx.scope.selectors.static_routes
             if route.get("active", True) is False
         }
+        # Baseline ZAMER, ne baseline mereni. Priznak deaktivace je v
+        # inventory, takze `ctx.baseline` (fakta) o nem nevi nic.
+        # `ctx.baseline_scope` je None v behu bez baselinu i u nesparovane
+        # sluzby - v obou pripadech je spravna odpoved "neni s cim
+        # porovnat", ne "v baselinu byla aktivni".
+        baseline_routes = (
+            ctx.baseline_scope.selectors.static_routes
+            if ctx.baseline_scope is not None
+            else []
+        )
+        baseline_deactivated = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in baseline_routes
+            if route.get("active", True) is False
+        }
+        baseline_configured = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in baseline_routes
+        }
         subject = _flatten(ctx.subject.get("routes"))
         baseline = _flatten((ctx.baseline or {}).get("routes"))
 
@@ -107,6 +127,11 @@ class StaticRouteStatusCheck(Check):
                     baseline=baseline.get(identity),
                     is_device=ctx.scope.is_device,
                     deactivated=identity in deactivated,
+                    baseline_deactivated=(
+                        identity in baseline_deactivated
+                        if identity in baseline_configured
+                        else None
+                    ),
                 )
             )
         return findings
@@ -119,6 +144,7 @@ class StaticRouteStatusCheck(Check):
         baseline: dict[str, Any] | None,
         is_device: bool,
         deactivated: bool,
+        baseline_deactivated: bool | None,
     ) -> Finding:
         rib, prefix = identity
         label = f"{rib} {prefix}"
@@ -127,17 +153,24 @@ class StaticRouteStatusCheck(Check):
         was = _next_hop_text(baseline)
 
         if deactivated and subject is None:
-            # Deaktivovanou routu operator vedome vyradil, takze v tabulce
-            # byt nema. Bez teto vetve by spadla do 'nakonfigurovana, ale
-            # neni v routovaci tabulce' a dala tvrdy FAIL za stav, ktery je
-            # v poradku.
+            # Radek 4 tabulky (aktivni ted, vypnuta v baselinu) se sem
+            # nedostane a nedostat se nema: taková routa zadny deaktivovany
+            # prvek v konfiguraci nenese a jeji stav nese normalni radek.
+            # Zlepseni neni varovani (R-2).
             #
             # Kdyz deaktivovana routa v tabulce presto je, sem se nedostane
-            # a nalez se chova jako dosud - to uz je skutecny rozpor
-            # konfigurace se stavem a ma byt videt.
+            # taky - to uz je skutecny rozpor konfigurace se stavem a chova
+            # se jako dosud.
+            outcome = deactivation_outcome(True, baseline_deactivated)
+            message = (
+                f"{rib} {prefix}: v baseline bezela, ted je v konfiguraci "
+                "deaktivovana - migrace nedokoncena"
+                if outcome is Outcome.BROKEN
+                else f"{rib} {prefix}: routa je v konfiguraci deaktivovana"
+            )
             return Finding(
-                Outcome.SKIP,
-                f"{rib} {prefix}: routa je v konfiguraci deaktivovana",
+                outcome,
+                message,
                 label=label,
                 group=group,
                 family=family,

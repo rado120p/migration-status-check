@@ -467,21 +467,20 @@ def test_falsy_nonbool_active_does_not_escalate_either():
     assert findings[0].outcome is Outcome.DEGRADED
 
 
-def test_deactivated_route_yields_skip_and_sibling_stays_ok():
-    """Deaktivovana routa preskoci na svem radku a sourozence nestrhne.
+def test_deactivated_route_warns_on_own_row_and_sibling_stays_ok():
+    """Deaktivovana routa varuje na svem radku a sourozence nestrhne.
 
-    Tohle je vlastnost, kterou nazev 'per-radkovy SKIP' slibuje: kdyby SKIP
-    hlasoval, cela sluzba by zesedla a zdrava routa vedle by prestala byt
-    videt. `engine.py` SKIPy odfiltruje pred Status.worst(), takze staci,
-    aby check vydal SKIP jen na tom jednom nalezu.
+    Od vlny 9 uz nedava SKIP: deaktivovany prvek konfigurace je sam o sobe
+    nalez, takze sluzba s nim nesmi byt PASS. Co plati dal, je granularita -
+    varovani je na jednom radku a zdrava routa vedle zustava OK.
 
     Treti routa (aktivni, ale chybejici v tabulce) je tu schvalne: bez ni
     by mutant `if route.get("active", True) is False:` -> `if True:` prosel
     beze zmeny vysledku - sourozenec s daty v subjektu skonci OK porad,
-    protoze vetev SKIP pro nej neni dosazitelna (subject neni None). Treti
-    routa ma subject None, takze mutant, ktery oznaci za deaktivovanou i
-    tuhle aktivni routu, by ji misto BROKEN vratil chybne jako SKIP - a
-    tenhle test to zachyti.
+    protoze vetev deaktivace pro nej neni dosazitelna (subject neni None).
+    Treti routa ma subject None, takze mutant, ktery oznaci za deaktivovanou
+    i tuhle aktivni routu, by ji misto BROKEN vratil chybne jako DEGRADED -
+    a tenhle test to zachyti.
     """
     scope = _scope(
         static_routes=[
@@ -507,21 +506,115 @@ def test_deactivated_route_yields_skip_and_sibling_stays_ok():
     )
     by_label = {finding.label: finding for finding in findings}
 
-    assert by_label["inet.0 10.0.0.0/8"].outcome is Outcome.SKIP
+    assert by_label["inet.0 10.0.0.0/8"].outcome is Outcome.DEGRADED
     assert by_label["inet.0 10.0.0.0/8"].value == "deaktivovana"
     assert by_label["inet.0 10.1.0.0/16"].outcome is Outcome.OK
     assert by_label["inet.0 10.2.0.0/16"].outcome is Outcome.BROKEN
 
 
-def test_deactivated_route_still_in_the_table_is_not_skipped():
-    """Deaktivovana routa, ktera v tabulce presto je, SKIP nedostane.
+def _scope_with_baseline_routes(subject_routes, baseline_routes):
+    """Dva scopy - zamer subjektu a zamer baselinu.
+
+    Baseline zamer nese `ctx.baseline_scope`, ne `ctx.baseline`: v `baseline`
+    jsou namerena fakta, priznak deaktivace je v inventory. Test, ktery by
+    priznak hledal ve faktech, by meril neco jineho, nez check cte.
+    """
+    return _scope(subject_routes), _scope(baseline_routes)
+
+
+def test_route_deactivated_in_subject_but_active_in_baseline_is_broken():
+    """V baselinu routa bezela, ted je vypnuta - migrace nedokoncena.
+
+    Tohle je jediny radek tabulky, ktery u routy dava FAIL. Bez nej by
+    nedokoncena migrace podprvku vypadala stejne jako vedomy dlouhodoby
+    stav.
+    """
+    route = {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"]}
+    scope, baseline_scope = _scope_with_baseline_routes(
+        [{**route, "active": False}], [{**route, "active": True}]
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={"routes": {}},
+        baseline={"routes": {}},
+        baseline_scope=baseline_scope,
+        config=default_config(),
+    )
+
+    findings = StaticRouteStatusCheck().run(ctx)
+    by_label = {finding.label: finding for finding in findings}
+
+    assert by_label["inet.0 10.0.0.0/8"].outcome is Outcome.BROKEN
+    assert "v baseline bezela" in by_label["inet.0 10.0.0.0/8"].message
+
+
+def test_route_deactivated_in_both_snapshots_is_degraded():
+    """Vypnuta i predtim - porad nalez, jen tissi.
+
+    Zabiji mutanta: navrat Outcome.OK pro tuhle dvojici. S nim by sluzba s
+    dlouhodobe vypnutou routou byla PASS a jeji blok by se nerozbalil.
+    """
+    route = {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"]}
+    scope, baseline_scope = _scope_with_baseline_routes(
+        [{**route, "active": False}], [{**route, "active": False}]
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={"routes": {}},
+        baseline={"routes": {}},
+        baseline_scope=baseline_scope,
+        config=default_config(),
+    )
+
+    findings = StaticRouteStatusCheck().run(ctx)
+
+    assert findings[0].outcome is Outcome.DEGRADED
+
+
+def test_route_active_now_deactivated_in_baseline_gets_no_deactivation_row():
+    """Znovuzapnuta routa neni varovani - je to zlepseni (R-2).
+
+    Radek 4 tabulky se u podprvku neuplatnuje: routa, ktera je ted aktivni,
+    zadny deaktivovany prvek v konfiguraci nema. Jeji stav nese normalni
+    stavovy radek, ne radek o deaktivaci.
+
+    Zabiji mutanta: volani deactivation_outcome() i pro routu s
+    `active is not False`. S nim by kazda znovuzapnuta routa pridala WARN na
+    zdravou sluzbu.
+    """
+    route = {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"]}
+    scope, baseline_scope = _scope_with_baseline_routes(
+        [{**route, "active": True}], [{**route, "active": False}]
+    )
+    subject_routes = {
+        "inet.0": {"10.0.0.0/8": {"next_hop": ["1.1.1.1"], "via": ["et-0/0/8.13"], "active": True}}
+    }
+    ctx = CheckContext(
+        scope=scope,
+        subject={"routes": subject_routes},
+        baseline={"routes": subject_routes},
+        baseline_scope=baseline_scope,
+        config=default_config(),
+    )
+
+    findings = StaticRouteStatusCheck().run(ctx)
+
+    assert findings[0].outcome is Outcome.OK
+    assert "deaktivovan" not in findings[0].message
+
+
+def test_deactivated_route_still_in_the_table_is_not_hidden_by_deactivation_branch():
+    """Deaktivovana routa, ktera v tabulce presto je, nespadne do vetve
+    deaktivace - jde normalni cestou a nese normalni stavovy radek.
 
     Konfigurace rika 'vypnuto', tabulka rika 'nainstalovana' - to je
-    skutecny rozpor zameru se stavem a ma zustat viditelny, ne se schovat
-    pod SKIP. Zabiji mutanta, ktery druhy konjunkt SKIP podminky vypusti:
+    skutecny rozpor zameru se stavem a ma zustat viditelny se svym
+    obvyklym stavem, ne za cenu radku 'routa je v konfiguraci deaktivovana'.
+    Zabiji mutanta, ktery druhy konjunkt vetve deaktivace vypusti:
     `if deactivated and subject is None:` -> `if deactivated:`. Bez teto
     routy (deaktivovana, ale s datmi v subjektu) by takovy mutant prosel
-    beze zmeny vysledku testu.
+    beze zmeny vysledku testu - s ni vetev deaktivace vrati DEGRADED misto
+    OK, ktere normalni cesta vydava.
     """
     scope = _scope(
         static_routes=[
@@ -542,6 +635,5 @@ def test_deactivated_route_still_in_the_table_is_not_skipped():
 
     assert len(findings) == 1
     finding = findings[0]
-    assert finding.outcome is not Outcome.SKIP
     assert finding.outcome is Outcome.OK
     assert finding.value == "4.4.4.4"

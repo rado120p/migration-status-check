@@ -565,22 +565,23 @@ def _deactivated(snapshot):
     return snapshot
 
 
-def test_service_deactivated_on_both_sides_is_pass():
-    """Deaktivovano na obou stranach = PASS, ne SKIP - stav se nezmenil.
+def test_service_deactivated_on_both_sides_is_warn():
+    """Deaktivovano na obou stranach = WARN, ne PASS a ne SKIP.
 
-    Ostatni checky SKIPnou (AR-22), projde jen OK z deactivation_state,
-    a Status.worst z jedine ne-SKIP hodnoty da PASS.
+    Konfigurace by deaktivovane prvky bezne obsahovat nemela, takze
+    "nezmenilo se to" neni duvod mlcet - je to duvod hlasit potise
+    (rozhodnuti uzivatele z 2026-08-04).
 
-    Zabiji mutanta: vyjmuti deactivation_state ze zkratky v run_check. Pak by
-    SKIPl i on, `reported` by byl prazdny a sluzba by spadla do SKIP - tedy
-    "nic se nezmerilo" misto "je to v poradku".
+    Zabiji mutanta: navrat Outcome.OK v teto vetvi deactivation.py. S nim by
+    Status.worst z jedine ne-SKIP hodnoty dal PASS a sluzba by ve strucnem
+    vypisu zmizela mezi zdravymi.
     """
     result = api.evaluate(
         _deactivated(_new()), baseline=_deactivated(_old()), now=NOW
     )
 
     assert result.scopes
-    assert result.scopes[0].status is Status.PASS
+    assert result.scopes[0].status is Status.WARN
 
 
 def test_service_deactivated_only_in_subject_is_fail():
@@ -613,9 +614,13 @@ def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snaps
     hlasuje. Chybel jen test, ktery to tvrdi.
 
     Zabiji mutanta: vypusteni `if result.status is not Status.SKIP` z
-    engine.py:145. Sourozenci ho zabijeji taky, ale oba pres jiny scenar -
-    compare-only check bez baseline a sluzba deaktivovana na obou stranach.
-    Pres static_route_status nechodi ani jeden.
+    engine.py:145. Zmereno (vlna 9, fix round 1): tenhle test ho zabije
+    primo (asserty nize) a `test_healthy_scope_without_baseline_is_pass_not_skip`
+    ho zabiji taky, pres jiny scenar - compare-only check bez baseline.
+    Sluzba deaktivovana na obou stranach uz od vlny 9 nekryje: DEGRADED
+    (WARN) vyhrava v `Status.worst()` nad SKIP i bez filtru, takze
+    `test_service_deactivated_on_both_sides_is_warn` na tenhle mutant
+    nezavisi.
     """
     subject = synthetic_snapshot(DEVICE_4, "172.20.20.4", "post-migration")
     del subject.facts["routes"]["inet.0"]["198.62.1.0/29"]["active"]

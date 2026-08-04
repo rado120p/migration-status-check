@@ -10,21 +10,48 @@ from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
-def _ctx(subject, baseline=None, config=None, bgp_neighbors=None, bgp_neighbors_inactive=None):
-    scope = Scope(
+def _scope_of(bgp_neighbors, bgp_neighbors_inactive):
+    return Scope(
         id="svc:L3VPN-CPE13-NNI:IPVPN",
         kind="service",
         key=ScopeKey("L3VPN-CPE13-NNI", "IPVPN", None),
         selectors=Selectors(
             interfaces=["ge-0/0/2.113"],
-            bgp_neighbors=["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
-            bgp_neighbors_inactive=bgp_neighbors_inactive or [],
+            bgp_neighbors=list(bgp_neighbors),
+            bgp_neighbors_inactive=list(bgp_neighbors_inactive),
         ),
+    )
+
+
+def _ctx(
+    subject,
+    baseline=None,
+    config=None,
+    bgp_neighbors=None,
+    bgp_neighbors_inactive=None,
+    baseline_neighbors=None,
+    baseline_neighbors_inactive=None,
+):
+    """Baseline ZAMER se predava sem, ne prirazenim po konstrukci.
+
+    CheckContext neni frozen, takze `ctx.baseline_scope = ...` by proslo, ale
+    test, ktery si context prestavuje az po sestaveni, obchazi tvar, ktery
+    engine skutecne stavi.
+    """
+    scope = _scope_of(
+        ["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
+        bgp_neighbors_inactive or [],
+    )
+    baseline_scope = (
+        _scope_of(baseline_neighbors or [], baseline_neighbors_inactive or [])
+        if baseline_neighbors is not None or baseline_neighbors_inactive is not None
+        else None
     )
     return CheckContext(
         scope=scope,
         subject=subject,
         baseline=baseline,
+        baseline_scope=baseline_scope,
         config=config or default_config(),
         failed_collectors={},
     )
@@ -65,6 +92,12 @@ def _by_label(results, label):
 
 
 def test_session_findings_carry_peer_family():
+    """Rodina se odvozuje z adresy peera, ne ze jmena RIB.
+
+    Argument bgp_neighbors musi odpovidat peerum v subjektu: default
+    `_ctx()` nese 198.11.13.2, ktery by od vlny 9 pridal radek
+    "nakonfigurovan, ale session neexistuje" a do tohoto testu nepatri.
+    """
     subject = {
         "bgp": {
             "152.11.13.2": _peer(),
@@ -77,7 +110,10 @@ def test_session_findings_carry_peer_family():
         }
     }
 
-    findings = run_check(BgpSessionStateCheck(), _ctx(subject))
+    findings = run_check(
+        BgpSessionStateCheck(),
+        _ctx(subject, bgp_neighbors=["152.11.13.2", "2001:abcd:11:13::b"]),
+    )
     by_family = {finding.family for finding in findings}
 
     assert by_family == {4, 6}
@@ -103,17 +139,24 @@ def test_active_state_fails():
     assert "Active" in result.message
 
 
-def test_no_bgp_peers_skips():
-    result = run_check(BgpSessionStateCheck(), _ctx({"bgp": {}}))[0]
+def test_service_with_no_peers_at_all_skips():
+    """Hlaska 'nema zadne BGP peery' plati, jen kdyz zadny peer opravdu neni.
+
+    Puvodni verze tohoto testu mela pres default `_ctx()` ve scope
+    nakonfigurovaneho peera a presto tvrdila, ze zadny neni - byla to prave
+    ta lez, kvuli ktere bod 15 vznikl.
+    """
+    result = run_check(BgpSessionStateCheck(), _ctx({"bgp": {}}, bgp_neighbors=[]))[0]
     assert result.status is Status.SKIP
     assert "BGP" in result.message
 
 
-def test_deactivated_peer_without_session_yields_skip():
-    """Deaktivovany peer bez session se v reportu objevi jako SKIP.
+def test_deactivated_peer_without_session_warns():
+    """Deaktivovany peer bez session se v reportu objevi jako WARN.
 
     Bez teto vetve by z reportu zmizel uplne a operator by nepoznal, ze
-    sluzba takoveho peera v konfiguraci vubec ma.
+    sluzba takoveho peera v konfiguraci vubec ma. Od vlny 9 uz to neni SKIP:
+    deaktivovany prvek konfigurace je sam o sobe nalez.
     """
     ctx = _ctx(
         {"bgp": {"198.11.13.2": _peer(state="Established")}},
@@ -123,11 +166,11 @@ def test_deactivated_peer_without_session_yields_skip():
     results = run_check(BgpSessionStateCheck(), ctx)
     by_label = {result.label: result for result in results}
 
-    assert by_label["BGP status (198.11.13.9)"].status is Status.SKIP
+    assert by_label["BGP status (198.11.13.9)"].status is Status.WARN
     assert by_label["BGP status (198.11.13.2)"].status is Status.PASS
 
 
-def test_service_with_only_deactivated_peers_skips_per_peer():
+def test_service_with_only_deactivated_peers_warns_per_peer():
     """Jediny peer sluzby je deaktivovany - nesmi to spadnout do 'zadny peer'.
 
     Zabiji mutanta: ponechany predcasny navrat `if not peers:`.
@@ -140,8 +183,45 @@ def test_service_with_only_deactivated_peers_skips_per_peer():
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
-    assert results[0].status is Status.SKIP
+    assert results[0].status is Status.WARN
     assert results[0].value == "deaktivovan"
+
+
+def test_peer_deactivated_in_subject_but_active_in_baseline_is_fail():
+    """V baselinu peer bezel, ted je vypnuty - migrace nedokoncena."""
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors=["198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "migrace nedokoncena" in results[0].message
+
+
+def test_peer_deactivated_in_both_snapshots_is_warn():
+    """Vypnuty i predtim - porad nalez, jen tissi.
+
+    Zabiji mutanta: navrat Outcome.OK pro tuhle dvojici. S nim by sluzba s
+    dlouhodobe vypnutym peerem byla PASS.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors_inactive=["198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.WARN
 
 
 def test_deactivated_peer_with_live_session_is_reported_normally():
@@ -156,7 +236,8 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
 
     Zabiji mutanta: vyber `bgp` v `Scope.select()` filtrovany jen pres
     `bgp_neighbors` (bez `bgp_neighbors_inactive`). Session se pak ke checku
-    nedostane, peer propadne vetvi `inactive` a dostane SKIP 'deaktivovan'.
+    nedostane, peer propadne vetvi `inactive` a dostane WARN 'deaktivovan'
+    misto PASS - od vlny 9 uz tahle vetev nikdy nevydava SKIP.
     """
     scope = Scope(
         id="svc:L3VPN-CPE13-NNI:IPVPN",
@@ -180,10 +261,61 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
-    assert results[0].status is not Status.SKIP
     assert results[0].status is Status.PASS
     assert results[0].label == "BGP status (198.11.13.9)"
     assert results[0].value == "Established"
+
+
+def test_peer_active_now_deactivated_in_baseline_with_live_session_gets_no_deactivation_row():
+    """Znovuzapnuty peer neni varovani - je to zlepseni (R-2).
+
+    Radek 4 tabulky se u podprvku neuplatnuje: peer, ktery je ted aktivni
+    v konfiguraci, zadny deaktivovany prvek nenese. Jeho stav nese normalni
+    stavovy radek (tady s bezici session), ne radek o deaktivaci.
+
+    Zabiji mutanta: volani deactivation_outcome() i pro peera, ktery je
+    aktivni v subjektu, ale deaktivovany v baselinu. S nim by kazdy
+    znovuzapnuty peer pridal WARN navic ke svemu normalnimu radku.
+    """
+    ctx = _ctx(
+        {"bgp": {"198.11.13.2": _peer(state="Established")}},
+        baseline={"bgp": {}},
+        bgp_neighbors=["198.11.13.2"],
+        bgp_neighbors_inactive=[],
+        baseline_neighbors=[],
+        baseline_neighbors_inactive=["198.11.13.2"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.PASS
+    assert "deaktivovan" not in results[0].message
+
+
+def test_peer_active_now_deactivated_in_baseline_without_session_gets_no_deactivation_row():
+    """Totez jako vyse, ale peer nema session vubec - jde do vetve 'bez
+    session', ne do vetve deaktivace.
+
+    Zabiji stejneho mutanta jako test vyse, ale pro peera bez zivych dat -
+    kdyby se deactivation_outcome() volalo i pro takove peery s
+    subject_off=False, dostal by druhy WARN radek navic k tomu, ktery uz
+    vydava vetev 'bez session'.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}},
+        bgp_neighbors=["198.11.13.2"],
+        bgp_neighbors_inactive=[],
+        baseline_neighbors=[],
+        baseline_neighbors_inactive=["198.11.13.2"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "deaktivovan" not in results[0].message
 
 
 def test_state_change_to_established_is_pass_not_warn():
@@ -461,6 +593,98 @@ def test_bgp_group_carries_peer_and_rib():
         "accepted-prefix-count",
         "advertised-prefix-count",
     }
+
+
+def test_configured_active_peer_without_session_is_fail():
+    """Nakonfigurovany peer, ktery nenavazal session, musi byt videt.
+
+    Dnes zmizi beze stopy nebo vyrobi lzivou hlasku 'sluzba nema zadne BGP
+    peery'. Zrcadli chovani checks/routes.py: 'nakonfigurovana, ale neni v
+    routovaci tabulce' je BROKEN.
+
+    Zabiji mutanta: iterace jen pres `peers` misto pres sjednoceni.
+    """
+    ctx = _ctx({"bgp": {}}, bgp_neighbors=["198.11.13.2"])
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "session neexistuje" in results[0].message
+
+
+def test_configured_peer_without_session_does_not_hide_behind_a_sibling():
+    """Sourozenec se session nesmi bezsessioveho peera prekryt.
+
+    Bez tohoto testu by mutant, ktery novou vetev spusti jen kdyz je `peers`
+    prazdne, prosel: test vys ma `peers` prazdne, takze by ho nechytil.
+    """
+    ctx = _ctx(
+        {"bgp": {"198.11.13.9": _peer(state="Established")}},
+        bgp_neighbors=["198.11.13.2", "198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+    by_label = {result.label: result for result in results}
+
+    assert by_label["BGP status (198.11.13.2)"].status is Status.FAIL
+    assert by_label["BGP status (198.11.13.9)"].status is Status.PASS
+
+
+def test_peer_measured_only_in_baseline_is_fail():
+    """Peer, ktery v baselinu bezel a v subjektu neni ani v konfiguraci.
+
+    Zrcadli routes.py: 'v baseline byla, v subjektu neni'.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {"198.11.13.5": _peer(state="Established")}},
+        bgp_neighbors=[],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].status is Status.FAIL
+    assert "v baseline byl, v subjektu neni" in results[0].message
+
+
+def test_configured_peer_without_session_takes_identity_from_selectors():
+    """Subject se stavi pres Scope.select(), ne rucne.
+
+    Scope.select filtruje MERENI podle ZAMERU, takze nakonfigurovany peer
+    bez session se do ctx.subject nedostane a dostat nemuze. Test nad rucne
+    slozenym subjektem by prosel i nad implementaci, ktera identitu bere z
+    ctx.subject - a ta by v provozu nenasla nikdy nic.
+
+    Zabiji mutanta: identita brana z `ctx.subject["bgp"]` misto ze
+    selektoru.
+    """
+    scope = Scope(
+        id="svc:L3VPN-CPE13-NNI:IPVPN",
+        kind="service",
+        key=ScopeKey("L3VPN-CPE13-NNI", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.113"],
+            bgp_neighbors=["198.11.13.2"],
+        ),
+    )
+    # Fakta zarizeni nesou session UPLNE JINEHO peera - Scope.select ji
+    # odfiltruje a subject vyjde prazdny, presne jako v provozu.
+    facts = {"bgp": {"203.0.113.7": _peer(state="Established")}}
+    ctx = CheckContext(
+        scope=scope,
+        subject=scope.select(facts),
+        baseline=None,
+        config=default_config(),
+        failed_collectors={},
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].label == "BGP status (198.11.13.2)"
+    assert results[0].status is Status.FAIL
 
 
 def test_bgp_status_label_carries_the_peer():
