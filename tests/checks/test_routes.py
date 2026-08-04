@@ -511,3 +511,37 @@ def test_deactivated_route_yields_skip_and_sibling_stays_ok():
     assert by_label["inet.0 10.0.0.0/8"].value == "deaktivovana"
     assert by_label["inet.0 10.1.0.0/16"].outcome is Outcome.OK
     assert by_label["inet.0 10.2.0.0/16"].outcome is Outcome.BROKEN
+
+
+def test_deactivated_route_still_in_the_table_is_not_skipped():
+    """Deaktivovana routa, ktera v tabulce presto je, SKIP nedostane.
+
+    Konfigurace rika 'vypnuto', tabulka rika 'nainstalovana' - to je
+    skutecny rozpor zameru se stavem a ma zustat viditelny, ne se schovat
+    pod SKIP. Zabiji mutanta, ktery druhy konjunkt SKIP podminky vypusti:
+    `if deactivated and subject is None:` -> `if deactivated:`. Bez teto
+    routy (deaktivovana, ale s datmi v subjektu) by takovy mutant prosel
+    beze zmeny vysledku testu.
+    """
+    scope = _scope(
+        static_routes=[
+            {"rib": "inet.0", "prefix": "10.3.0.0/16", "next_hop": ["4.4.4.4"],
+             "active": False},
+        ]
+    )
+    subject_routes = {
+        "inet.0": {
+            "10.3.0.0/16": {
+                "next_hop": ["4.4.4.4"],
+                "via": ["et-0/0/8.13"],
+                "active": True,
+            }
+        }
+    }
+    findings = StaticRouteStatusCheck().run(_ctx(subject_routes, scope=scope))
+
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.outcome is not Outcome.SKIP
+    assert finding.outcome is Outcome.OK
+    assert finding.value == "4.4.4.4"
