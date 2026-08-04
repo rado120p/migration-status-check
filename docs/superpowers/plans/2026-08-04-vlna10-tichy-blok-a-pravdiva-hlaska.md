@@ -1176,7 +1176,8 @@ def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
     hodnoty nehlidal nikdo. Bez teto aserce by se fixtures mohly kdykoli
     vratit k uniformnim cislum a nic by to nevytklo.
 
-    Zabiji mutanta: navrat `_ribs_for` k `dict(_RIB_COUNTERS)`.
+    Zabiji mutanta: `_ribs_for` vracejici pro kazdeho peera tataz cisla
+    (napr. natvrdo 14/14/14/3) misto volani `_counters_for(peer)`.
     """
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
