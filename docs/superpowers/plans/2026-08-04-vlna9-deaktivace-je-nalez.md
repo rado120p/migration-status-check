@@ -655,18 +655,23 @@ Expected: PASS, 666 passed. `git status --porcelain` prázdný.
 **Kontext, který implementer nemá:** `_ctx()` v `tests/checks/test_bgp.py:13`
 **nenastavuje `baseline_scope`**, takže je `None` — existující testy tedy
 spadnou do větve „baseline není k porovnání" a dostanou `DEGRADED`. Nové testy
-na `BROKEN` si `baseline_scope` musí předat samy.
+na `BROKEN` si `baseline_scope` musí předat.
+
+`CheckContext` je `@dataclass` bez `frozen=True` (`checks/base.py:35`), takže
+přiřazení po konstrukci by technicky prošlo. **Nedělej to** — protáhni
+`baseline_scope` helperem `_ctx()`, jak to už dělá
+`tests/checks/test_deactivation.py:29`. Krok 1 tuhle úpravu helperu obsahuje.
 
 **Tahle úloha sjednocení zdrojů peerů NEDĚLÁ** — to je úloha 4. Tady se mění
 jen `Outcome` u peerů, které check už dnes vidí.
 
 - [ ] **Step 1: Write the failing tests**
 
-Do `tests/checks/test_bgp.py` přidej za `test_service_with_only_deactivated_peers_skips_per_peer`:
+Nejdřív rozšiř helper `_ctx()` (`tests/checks/test_bgp.py:13-30`) o baseline
+záměr. Scope se staví stejným tvarem jako subjektový, jen z jiných seznamů:
 
 ```python
-def _baseline_scope(bgp_neighbors=(), bgp_neighbors_inactive=()):
-    """Zamer baselinu - priznak deaktivace je v inventory, ne ve faktech."""
+def _scope_of(bgp_neighbors, bgp_neighbors_inactive):
     return Scope(
         id="svc:L3VPN-CPE13-NNI:IPVPN",
         kind="service",
@@ -679,6 +684,43 @@ def _baseline_scope(bgp_neighbors=(), bgp_neighbors_inactive=()):
     )
 
 
+def _ctx(
+    subject,
+    baseline=None,
+    config=None,
+    bgp_neighbors=None,
+    bgp_neighbors_inactive=None,
+    baseline_neighbors=None,
+    baseline_neighbors_inactive=None,
+):
+    """Baseline ZAMER se predava sem, ne prirazenim po konstrukci.
+
+    CheckContext neni frozen, takze `ctx.baseline_scope = ...` by proslo, ale
+    test, ktery si context prestavuje az po sestaveni, obchazi tvar, ktery
+    engine skutecne stavi.
+    """
+    scope = _scope_of(
+        ["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
+        bgp_neighbors_inactive or [],
+    )
+    baseline_scope = (
+        _scope_of(baseline_neighbors or [], baseline_neighbors_inactive or [])
+        if baseline_neighbors is not None or baseline_neighbors_inactive is not None
+        else None
+    )
+    return CheckContext(
+        scope=scope,
+        subject=subject,
+        baseline=baseline,
+        baseline_scope=baseline_scope,
+        config=config or default_config(),
+        failed_collectors={},
+    )
+```
+
+Pak přidej za `test_service_with_only_deactivated_peers_skips_per_peer`:
+
+```python
 def test_peer_deactivated_in_subject_but_active_in_baseline_is_fail():
     """V baselinu peer bezel, ted je vypnuty - migrace nedokoncena."""
     ctx = _ctx(
@@ -686,8 +728,8 @@ def test_peer_deactivated_in_subject_but_active_in_baseline_is_fail():
         baseline={"bgp": {}},
         bgp_neighbors=[],
         bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors=["198.11.13.9"],
     )
-    ctx.baseline_scope = _baseline_scope(bgp_neighbors=["198.11.13.9"])
 
     results = run_check(BgpSessionStateCheck(), ctx)
 
@@ -707,14 +749,18 @@ def test_peer_deactivated_in_both_snapshots_is_warn():
         baseline={"bgp": {}},
         bgp_neighbors=[],
         bgp_neighbors_inactive=["198.11.13.9"],
+        baseline_neighbors_inactive=["198.11.13.9"],
     )
-    ctx.baseline_scope = _baseline_scope(bgp_neighbors_inactive=["198.11.13.9"])
 
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
     assert results[0].status is Status.WARN
 ```
+
+Ověř, že rozšíření helperu neshodilo žádný existující test v souboru —
+`_ctx()` volají desítky testů a nové parametry musí být čistě aditivní:
+`.venv/bin/python -m pytest -o addopts="" tests/checks/test_bgp.py -q`
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -1225,6 +1271,36 @@ výpis; `render(result, detail=True)` je detailní. Blok se rozbaluje podmínkou
 Do `tests/test_end_to_end.py` přidej:
 
 ```python
+def _deactivate_shared_route(old, new) -> str:
+    """Vypne TUTEZ routu TEZE sluzby v obou snimcich a vrati jeji popis.
+
+    Naivni "prvni scope se statickou routou v kazdem snimku" je vada: vnitrni
+    break opousti jen vnitrni smycku a poradi scopu se mezi .4 a .5 lisit
+    muze, takze by se v kazdem snimku vypnula jina sluzba. Vysledek by byl
+    "v baselinu bezela, ted je vypnuta" = FAIL, ne WARN, ktery tenhle test
+    meri - a selhani by vypadalo jako vada implementace.
+
+    Parovat se musi i konkretni routa, ne jen sluzba: dve ruzne routy tehoz
+    prefixu neexistuji, ale poradi v seznamu garantovane neni.
+    """
+    by_description = {}
+    for snapshot, side in ((old, "old"), (new, "new")):
+        for scope in snapshot.scopes:
+            if scope.key is None:
+                continue
+            for route in scope.selectors.static_routes:
+                key = (scope.key.description, str(route.get("rib")), str(route.get("prefix")))
+                by_description.setdefault(key, {})[side] = route
+
+    shared = sorted(key for key, sides in by_description.items() if len(sides) == 2)
+    assert shared, "fixture nema zadnou statickou routu pritomnou v obou snimcich"
+
+    target = shared[0]
+    for route in by_description[target].values():
+        route["active"] = False
+    return target[0]
+
+
 def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
     """Bod 14: zdrava sluzba s deaktivovanou routou se rozbali i bez --detail.
 
@@ -1241,17 +1317,7 @@ def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
-    # Jedna routa se deaktivuje na obou stranach - tim padne i vetev
-    # "migrace nedokoncena" a zbyde ciste to, co bod 14 resi: dlouhodobe
-    # vypnuty prvek na jinak zdrave sluzbe.
-    target = None
-    for snapshot in (old, new):
-        for scope in snapshot.scopes:
-            if scope.selectors.static_routes:
-                scope.selectors.static_routes[0]["active"] = False
-                target = scope.key.description
-                break
-    assert target, "fixture nema zadnou statickou routu k deaktivaci"
+    target = _deactivate_shared_route(old, new)
 
     result = api.evaluate(new, baseline=old, now=NOW)
     rendered = render(result)
@@ -1312,20 +1378,25 @@ def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapsho
         )
 
     old, new = snapshots()
-    before = _counts_of_line(render(api.evaluate(new, baseline=old, now=NOW)), "Sluzby:")
-    assert before["PASS"], "fixture nema zadnou PASS sluzbu, test by nic nemeril"
+    baseline_run = api.evaluate(new, baseline=old, now=NOW)
+    before = _counts_of_line(render(baseline_run), "Sluzby:")
 
     # Cerstve snimky, ne ty uz vyhodnocene - deaktivace se zapisuje do
     # zameru a sdileny objekt mezi dvema behy by meril poradi volani.
     old, new = snapshots()
-    touched = False
-    for snapshot in (old, new):
-        for scope in snapshot.scopes:
-            if scope.selectors.static_routes:
-                scope.selectors.static_routes[0]["active"] = False
-                touched = True
-                break
-    assert touched, "fixture nema zadnou statickou routu k deaktivaci"
+    target = _deactivate_shared_route(old, new)
+
+    # Cil MUSI byt PASS pred zmenou, jinak aserce nize nemeri nic: sluzba,
+    # ktera uz WARN byla, se do counteru nepresune a rozdil vyjde nula.
+    target_before = [
+        scope for scope in baseline_run.scopes
+        if scope.identity.get("description") == target
+    ]
+    assert target_before, f"sluzba {target} ve vysledku neni"
+    assert target_before[0].status is Status.PASS, (
+        f"sluzba {target} nebyla pred zmenou PASS ({target_before[0].status}), "
+        "test by presun counteru nemeril"
+    )
 
     after = _counts_of_line(render(api.evaluate(new, baseline=old, now=NOW)), "Sluzby:")
 
@@ -1340,9 +1411,11 @@ Doplň `import re` na začátek `tests/test_end_to_end.py`, pokud tam ještě ne
 Run: `.venv/bin/python -m pytest -o addopts="" tests/test_end_to_end.py -q -k moves_a_service_from_pass_to_warn`
 Expected: PASS.
 
-Pokud `before["PASS"]` vyjde 0 nebo `touched` zůstane `False`, nemá test na
-čem měřit — uprav výběr cílové služby tak, aby padl na PASS službu se
-statickou routou, a **nahlas, že fixture ten tvar sama nenabízí**.
+Pokud selže aserce `sluzba ... nebyla pred zmenou PASS`, vybral helper první
+sdílenou routu služby, která už je z jiného důvodu WARN nebo FAIL. Rozšiř
+`_deactivate_shared_route` o volitelný filtr na množinu přípustných popisů a
+předej mu popisy PASS služeb z `baseline_run` — a **nahlas, že fixture
+PASS službu se sdílenou statickou routou nenabízí zadarmo**.
 
 - [ ] **Step 5: Run the full suite and commit**
 
@@ -1366,13 +1439,15 @@ Tenhle mutant **měří rozdíl mezi vrstvami**, místo aby ho tvrdil. Vrací
 `routes.py`:
 
 ```bash
-sed -i 's/                Outcome.DEGRADED,\n/                Outcome.SKIP,\n/' migration_validator/checks/routes.py
-# Pokud sed vicerádkove nezabere, uprav rucne: v checks/routes.py ve vetvi
-# `if deactivated and subject is None:` nahrad vypocteny `outcome` za
-# natvrdo `Outcome.SKIP`.
-grep -n "Outcome.SKIP" migration_validator/checks/routes.py
+# Vraci deaktivovanou routu na SKIP - tedy presne do stavu, kdy ji
+# engine.py:145 odfiltroval pred Status.worst() a sluzba zustala PASS.
+sed -i 's/            outcome = deactivation_outcome(True, baseline_deactivated)/            outcome = Outcome.SKIP  # MUTANT/' migration_validator/checks/routes.py
+grep -n MUTANT migration_validator/checks/routes.py   # musi neco vypsat
 .venv/bin/python -m pytest -o addopts="" -q
 ```
+
+Pokud `grep` nic nevypíše, `sed` neseděl na odsazení — uprav řádek ručně.
+Mutant, který nezasáhl, nic neměří.
 
 Expected: FAIL. Musí padnout **oba** nové testy z téhle úlohy
 (`test_deactivated_route_is_visible_without_detail`,
