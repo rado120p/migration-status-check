@@ -17,6 +17,7 @@ from typing import Any
 
 from lxml import etree
 
+from migration_validator.collectors.arp import split_learned_via
 from migration_validator.collectors.base import Collector
 from migration_validator.collectors.interfaces import _text
 from migration_validator.collectors.registry import register
@@ -37,12 +38,14 @@ class NdCollector(Collector):
             interface = _text(node, "ipv6-nd-interface-name")
             if not address or not interface:
                 continue
+            interface, learned_via = split_learned_via(interface)
             entries.append(
                 {
                     "ip": address,
                     "mac": _text(node, "ipv6-nd-neighbor-l2-address"),
                     "interface": interface,
                     "state": _text(node, "ipv6-nd-state"),
+                    "learned_via": learned_via,
                 }
             )
 

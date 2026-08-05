@@ -43,6 +43,18 @@ def owning_prefix(address: str, prefixes: list[str]) -> str | None:
     return None
 
 
+def _entry_value(entry: dict[str, Any]) -> str:
+    """MAC -> IP a k tomu L2 rozhrani, pokud zaznam prislo pres IRB.
+
+    Bez toho radek u irb.14 vypada shodne se zaznamem primo na fyzickem
+    rozhrani - a prave rozliseni "pres ktery L2 port" je smysl faze 3.
+    """
+    value = f"{entry.get('mac') or '?'} -> {entry['ip']}"
+    if entry.get("learned_via"):
+        value = f"{value}  [via {entry['learned_via']}]"
+    return value
+
+
 def _family_not_configured() -> list[Finding]:
     """Rodina, kterou sluzba nema nakonfigurovanou, se nehlasi nijak.
 
@@ -95,8 +107,12 @@ class ArpPresentCheck(Check):
                 f"ARP zaznam {entry['ip']}",
                 label="ARP",
                 family=4,
-                value=f"{entry.get('mac') or '?'} -> {entry['ip']}",
-                subject={"ip": entry["ip"], "mac": entry.get("mac")},
+                value=_entry_value(entry),
+                subject={
+                    "ip": entry["ip"],
+                    "mac": entry.get("mac"),
+                    "learned_via": entry.get("learned_via"),
+                },
                 details={"address": owning_prefix(str(entry["ip"]), prefixes)},
             )
             for entry in entries
@@ -145,11 +161,12 @@ class NdPresentCheck(Check):
                 f"ND zaznam {entry['ip']}",
                 label="ND",
                 family=6,
-                value=f"{entry.get('mac') or '?'} -> {entry['ip']}",
+                value=_entry_value(entry),
                 subject={
                     "ip": entry["ip"],
                     "mac": entry.get("mac"),
                     "state": entry.get("state"),
+                    "learned_via": entry.get("learned_via"),
                 },
                 details={"address": owning_prefix(str(entry["ip"]), prefixes)},
             )

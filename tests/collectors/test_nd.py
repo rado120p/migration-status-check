@@ -16,7 +16,7 @@ def test_returns_list_of_entries(rpc_fixture, platform):
 def test_entries_have_expected_keys(rpc_fixture, platform):
     result = NdCollector().parse(rpc_fixture(platform, "nd"), platform)
     for entry in result:
-        assert set(entry) == {"ip", "mac", "interface", "state"}
+        assert set(entry) == {"ip", "mac", "interface", "state", "learned_via"}
         assert entry["ip"]
         assert entry["interface"]
 

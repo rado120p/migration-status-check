@@ -19,6 +19,20 @@ from migration_validator.collectors.interfaces import _text
 from migration_validator.collectors.registry import register
 
 
+def split_learned_via(name: str) -> tuple[str, str | None]:
+    """Rozdeli 'irb.14[ ae0.14 ]' na ('irb.14', 'ae0.14').
+
+    Junos u zaznamu naucenych pres IRB pripoji v hranate zavorce L2
+    rozhrani. Scope filtruje pres presnou shodu jmena, takze neorezany
+    tvar zaznam vyradi - v reportu pak 'zadny zaznam' u sluzby, ktera
+    ARP ma (JSON ho nese, check ho nevidi).
+    """
+    base, bracket, rest = name.partition("[")
+    if not bracket:
+        return name.strip(), None
+    return base.strip(), rest.rstrip("]").strip() or None
+
+
 @register
 class ArpCollector(Collector):
     name = "arp"
@@ -37,11 +51,13 @@ class ArpCollector(Collector):
             interface = _text(node, "interface-name")
             if not address or not interface:
                 continue
+            interface, learned_via = split_learned_via(interface)
             entries.append(
                 {
                     "ip": address,
                     "mac": _text(node, "mac-address"),
                     "interface": interface,
+                    "learned_via": learned_via,
                     "routing_instance": _text(node, "arp-table-entry-flags/routing-instance")
                     or _text(node, "routing-instance"),
                 }
