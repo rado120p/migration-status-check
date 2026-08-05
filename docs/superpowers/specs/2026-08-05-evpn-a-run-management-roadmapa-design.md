@@ -211,7 +211,10 @@ mig-validate status  --run <nazev>          # volitelne, prehled portu
 
 - `--port` omezí inventory/snapshot na služby daného portu; bez něj
   režim `all` (párování služeb pak dělá matcher přes description jako
-  dnes).
+  dnes). **Celoboxový režim zůstává plnohodnotný** — dnešní workflow
+  „snapshot celého boxu pre/post" funguje beze změny, per-port režim je
+  doplněk, ne náhrada. Obdobně `evaluate` bez `--ports` vyhodnotí
+  všechno, co v runu je.
 - `--maps-to` při post capture zapíše pár do `interface_mapping`;
   je-li pár už v run.yml, flag není potřeba.
 - `--phase rollback`: snímek starého boxu; evaluate ho páruje proti
