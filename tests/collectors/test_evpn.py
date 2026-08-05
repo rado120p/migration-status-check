@@ -238,3 +238,19 @@ def test_collector_names():
     assert EvpnVpwsCollector().name == "evpn_vpws"
     assert EvpnEsiCollector().name == "evpn_esi"
     assert EvpnMacCollector().name == "evpn_mac"
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_auto_generated_esi_are_ignored(rpc_fixture, platform):
+    result = EvpnEsiCollector().parse(rpc_fixture(platform, "evpn_esi"), platform)
+    # ESI zacinajici 05: si box sam generuje (per-IRB) a nemaji status.
+    # Nesmi se objevit v reportu.
+    assert all(not esi.startswith("05:") for esi in result)
+
+
+def test_auto_generated_esi_does_not_hide_real_esi(rpc_fixture):
+    # Junos fixture obsahuje pouze auto-generovany 05: ESI (po filtru prazdno).
+    # Junos-EVO obsahuje realne ESI (00:11:...) i auto-generovane (05:...).
+    # Test musi overit, ze skrz filtr stale prochazi skutecne ESI.
+    result = EvpnEsiCollector().parse(rpc_fixture("junos-evo", "evpn_esi"), "junos-evo")
+    assert "00:11:12:13:14:00:00:00:00:00" in result

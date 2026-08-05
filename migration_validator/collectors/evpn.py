@@ -111,6 +111,12 @@ class EvpnEsiCollector(Collector):
             if not esi:
                 continue
 
+            # ESI zacinajici 05: si box generuje sam (per-IRB). Nenesou
+            # status ani DF a v reportu by kazda L3-extended sluzba
+            # svitila radkem bez vypovedi.
+            if esi.startswith("05:"):
+                continue
+
             local = node.find("evpn-esi-local-intf-information")
             df = node.find("evpn-esi-df-information")
 
