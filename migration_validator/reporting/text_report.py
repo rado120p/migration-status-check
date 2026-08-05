@@ -26,6 +26,7 @@ SYMBOL = {
     Status.WARN: "WARN",
     Status.FAIL: "FAIL",
     Status.SKIP: "SKIP",
+    Status.INFO: "",
 }
 
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
@@ -202,7 +203,10 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     return lines
 
 
-COUNT_NAMES = (("pass", "PASS"), ("warn", "WARN"), ("fail", "FAIL"), ("skip", "SKIP"))
+# Vzdy se ukazuji vsechny stavy - i kdyz je pocet nulovy, aby byl report
+# konzistentni. INFO se vzhledem k tomu, ze je nove, prida na konec, aby
+# starsi skript nectici posledni sloupec neparazil.
+COUNT_NAMES = (("pass", "PASS"), ("warn", "WARN"), ("fail", "FAIL"), ("skip", "SKIP"), ("info", "INFO"))
 
 
 def _counts_lines(services: dict[str, int], checks: dict[str, int]) -> list[str]:
@@ -363,8 +367,8 @@ def render(result: RunResult, *, detail: bool = False) -> str:
         for _scope, view in views
     ]
 
-    # STAV je uzavrena mnozina ctyrpismennych symbolu (viz SYMBOL) - napevno
-    # dana sirka mu nikdy nemuze prerust, stejne jako sloupci STAV v _block().
+    # STAV je uzavrena mnozina symbolu (4 znaky nebo prazdny) (viz SYMBOL) -
+    # napevno dana sirka mu nikdy nemuze prerust, stejne jako sloupci STAV v _block().
     status_w = 5
     service_w = max([len(r[1]) for r in rows] + [len("SLUZBA")])
     type_w = max([len(r[2]) for r in rows] + [len("TYP")])

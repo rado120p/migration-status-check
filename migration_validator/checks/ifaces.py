@@ -29,6 +29,12 @@ def is_transit(interface: str) -> bool:
     return physical.startswith(TRANSIT_PREFIXES)
 
 
+def is_physical(interface: str) -> bool:
+    """Fyzicke rozhrani (bez unitu). Unity error countery nenesou -
+    radek 'bez chyb' na unitu tvrdi mereni, ktere neprobehlo."""
+    return "." not in interface
+
+
 def percent_change(old: float, new: float) -> float | None:
     """Zmena v procentech. None kdyz baseline byla nulova (delit nulou nelze)."""
     if not old:
@@ -115,9 +121,22 @@ class InterfaceErrorsCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
-        names = _transit_interfaces(ctx)
+        transit_names = _transit_interfaces(ctx)
+        names = [name for name in transit_names if is_physical(name)]
         if not names:
-            return [_no_transit_finding(ctx)]
+            if transit_names:
+                # Tranzitni rozhrani jsou, ale jen logicke unity - nemaji
+                # chybove countery. Nemuze se pouzit _no_transit_finding, jejiz
+                # veta "neni tranzitni rozhrani" by byla nepravda.
+                listed = ", ".join(transit_names)
+                return [Finding(
+                    outcome=Outcome.SKIP,
+                    message=f"chybove countery nese jen fyzicke rozhrani, ve scope jsou jen unity ({listed})",
+                    value="jen unity",
+                )]
+            else:
+                # Zadne tranzitni rozhrani - pouzij sdilenou zpravu od _no_transit_finding
+                return [_no_transit_finding(ctx)]
 
         findings = []
         for name in names:

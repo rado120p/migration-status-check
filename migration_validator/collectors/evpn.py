@@ -30,12 +30,12 @@ NO_DOMAIN = "-"
 
 @register
 class EvpnVpwsCollector(Collector):
-    """Stav EVPN-VPWS instanci.
+    """Stav EVPN-VPWS instanci vcetne vsech rozhrani a peeru obou SID.
 
-    local_sid a remote_sid se ctou z prvniho rozhrani instance v poradi
-    dokumentu. Instance s vice rozhranimi je v teto topologii vzacna a
-    kontrakt typuje SID jako jedno cislo; kdyby bylo potreba pokryt vic
-    rozhrani, musi se nejdriv rozsirit schema ve specu.
+    Puvodne se ctlo jen prvni rozhrani a dve cisla SID -
+    'evpn-vpws-sid-pe-status-table' (podstata checku evpn_vpws_status) se
+    ignorovala. Nove schema nese vsechna rozhrani instance a u kazdeho SID
+    seznam peeru s jejich statusem.
     """
 
     name = "evpn_vpws"
@@ -45,42 +45,50 @@ class EvpnVpwsCollector(Collector):
 
     def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
         instances: dict[str, dict[str, Any]] = {}
-
         for node in xml.iter("evpn-vpws-instance"):
             name = _text(node, "evpn-vpws-instance-name")
             if not name:
                 continue
-
-            interface = node.find(
-                "evpn-vpws-interface-status-table/evpn-vpws-interface"
-            )
-
-            instances[name] = {
-                "local_sid": _int(
-                    interface,
-                    "evpn-vpws-service-id-local-status-table/evpn-vpws-sid-local/"
-                    "evpn-vpws-sid-local-value",
-                ),
-                "remote_sid": _int(
-                    interface,
-                    "evpn-vpws-service-id-remote-status-table/evpn-vpws-sid-remote/"
-                    "evpn-vpws-sid-remote-value",
-                ),
-                "status": self._status(interface),
-            }
-
+            interfaces = [
+                self._interface(iface)
+                for iface in node.iter("evpn-vpws-interface")
+            ]
+            instances[name] = {"interfaces": interfaces}
         return instances
 
-    @staticmethod
-    def _status(interface: etree._Element | None) -> str:
-        """Stav rozhrani instance ('Up'), ne stav vzdaleneho PE ('Resolved').
+    def _interface(self, iface: etree._Element) -> dict[str, Any]:
+        return {
+            "name": _text(iface, "evpn-vpws-interface-name"),
+            "status": _text(iface, "evpn-vpws-interface-status") or "unknown",
+            "mode": _text(iface, "evpn-vpws-interface-mode"),
+            "local_sid": self._sid(
+                iface,
+                "evpn-vpws-service-id-local-status-table/evpn-vpws-sid-local",
+                "evpn-vpws-sid-local-value",
+            ),
+            "remote_sid": self._sid(
+                iface,
+                "evpn-vpws-service-id-remote-status-table/evpn-vpws-sid-remote",
+                "evpn-vpws-sid-remote-value",
+            ),
+        }
 
-        Obe hodnoty existuji a znamenaji neco jineho. Check evpn_vpws_status
-        porovnava proti 'Up', takze emitujeme tu, ktera je s nim souměřitelná.
-        """
-        if interface is None:
-            return "unknown"
-        return _text(interface, "evpn-vpws-interface-status") or "unknown"
+    @staticmethod
+    def _sid(iface: etree._Element, path: str, value_tag: str) -> dict[str, Any]:
+        sid = iface.find(path)
+        if sid is None:
+            return {"value": None, "peers": []}
+        peers = [
+            {
+                "esi": _text(peer, "evpn-vpws-sid-interface-esi"),
+                "ipaddr": _text(peer, "evpn-vpws-sid-pe-ipaddr"),
+                "mode": _text(peer, "evpn-vpws-sid-pe-mode"),
+                "role": _text(peer, "evpn-vpws-sid-pe-role"),
+                "status": _text(peer, "evpn-vpws-sid-pe-status"),
+            }
+            for peer in sid.iter("evpn-vpws-sid-pe-info")
+        ]
+        return {"value": _int(sid, value_tag), "peers": peers}
 
 
 @register
@@ -109,6 +117,12 @@ class EvpnEsiCollector(Collector):
         for node in xml.iter("evpn-esi"):
             esi = _text(node, "evpn-esi-value")
             if not esi:
+                continue
+
+            # ESI zacinajici 05: si box generuje sam (per-IRB). Nenesou
+            # status ani DF a v reportu by kazda L3-extended sluzba
+            # svitila radkem bez vypovedi.
+            if esi.startswith("05:"):
                 continue
 
             local = node.find("evpn-esi-local-intf-information")

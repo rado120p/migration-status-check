@@ -5,7 +5,7 @@ from migration_validator.checks.evpn import (
     EvpnVpwsStatusCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Status
+from migration_validator.models.result import Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -31,71 +31,107 @@ def _vpws_ctx(subject, baseline=None):
     return _ctx(subject, baseline, service_type="E-Line", subtype="vpws")
 
 
-def test_vpws_up_with_matching_sids_passes():
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 213, "remote_sid": 213, "status": "Up"}}}
-    )
-    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
-    assert result.status is Status.PASS
+def _vpws_subject(*, status="Up", mode="single-homed",
+                  local_peers=(), remote_peers=(), remote_value=2000):
+    return {"evpn_vpws": {"EVPN-VPWS-X": {"interfaces": [{
+        "name": "ge-0/0/2.213", "status": status, "mode": mode,
+        "local_sid": {"value": 1000, "peers": list(local_peers)},
+        "remote_sid": {"value": remote_value, "peers": list(remote_peers)},
+    }]}}}
 
 
-def test_vpws_down_fails():
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 213, "remote_sid": 213, "status": "Down"}}}
-    )
-    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
-    assert result.status is Status.FAIL
-    assert "Down" in result.message
+PEER_OK = {"esi": "00:00:00:00:00:00:00:00:00:00", "ipaddr": "150.0.0.14",
+           "mode": "single-homed", "role": "Primary", "status": "Resolved"}
 
 
-def test_vpws_differing_sids_pass():
-    """local a remote SID se u EVPN-VPWS zamerne lisi.
-
-    Laborka je nakonfigurovana 'local 1000; remote 2000' a sluzba je zdrava,
-    takze rovnost SID nesmi byt podminkou pro PASS.
-    """
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}}
-    )
-    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
-    assert result.status is Status.PASS
-    assert "1000" in result.message and "2000" in result.message
+def run_findings(subject):
+    return EvpnVpwsStatusCheck().run(_vpws_ctx(subject))
 
 
-def test_vpws_missing_remote_sid_fails():
-    """Chybejici remote SID znamena, ze druha strana neinzeruje sluzbu."""
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 0, "status": "Up"}}}
-    )
-    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
-    assert result.status is Status.FAIL
-    assert "remote SID" in result.message
+def _by_label(findings, label):
+    hits = [f for f in findings if f.label == label]
+    assert len(hits) == 1, f"label {label!r}: {len(hits)} radku"
+    return hits[0]
 
 
-def test_vpws_row_carries_the_previous_state_when_there_is_one():
-    """Sloupec ZMENA hlasil 'bez baseline' u kazdeho EVPN radku, i kdyz check
-    baseline mel - dohledava si ji a vozi v poli `baseline`, jen ji nikdy
-    nerozlozil na hodnotu pro sazbu. Stejna trida chyby jako F-15: sloupec
-    tvrdi neco, co neplati.
-    """
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}},
-        baseline={"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 0, "status": "Up"}}},
-    )
-
-    result = run_check(EvpnVpwsStatusCheck(), ctx)[0]
-
-    assert result.value == "Up  SID 1000 -> 2000"
-    assert result.baseline_value == "Up  SID 1000 -> -"
+def test_local_interface_status_row_renamed():
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK]))
+    row = _by_label(findings, "EVPN VPWS local interface status")
+    assert row.outcome is Outcome.OK and row.value == "Up"
 
 
-def test_vpws_row_without_baseline_leaves_the_previous_state_empty():
-    """Druha strana teze veci: bez baseline se nic vymyslet nesmi."""
-    ctx = _vpws_ctx(
-        {"evpn_vpws": {"VPWS": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}}
-    )
+def test_remote_peer_resolved_passes_per_peer():
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK]))
+    assert _by_label(findings, "EVPN VPWS SID remote PE").value == "150.0.0.14"
+    assert _by_label(findings, "EVPN VPWS SID remote status").outcome is Outcome.OK
 
-    assert run_check(EvpnVpwsStatusCheck(), ctx)[0].baseline_value is None
+
+def test_remote_peer_unresolved_fails():
+    peer = {**PEER_OK, "status": "Unresolved"}
+    findings = run_findings(_vpws_subject(remote_peers=[peer]))
+    assert _by_label(findings, "EVPN VPWS SID remote status").outcome is Outcome.BROKEN
+
+
+def test_missing_remote_peer_fails_with_unknown_peer():
+    findings = run_findings(_vpws_subject(remote_peers=[]))
+    pe = _by_label(findings, "EVPN VPWS SID remote PE")
+    assert pe.outcome is Outcome.BROKEN and pe.value == "Neznamy peer"
+    status = _by_label(findings, "EVPN VPWS SID remote status")
+    assert status.outcome is Outcome.BROKEN and status.value == "Unresolved / Chybi"
+
+
+def test_informative_rows_are_info():
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK]))
+    for label in ("EVPN VPWS SID local value", "EVPN VPWS SID remote value",
+                  "EVPN VPWS SID remote mode", "EVPN VPWS SID remote role"):
+        assert _by_label(findings, label).outcome is Outcome.INFO
+
+
+def test_two_remote_peers_two_row_sets():
+    peer2 = {**PEER_OK, "ipaddr": "150.0.0.2", "mode": "all-active",
+             "esi": "00:11:12:13:14:00:00:00:00:00"}
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK, peer2]))
+    pe_rows = [f for f in findings if f.label == "EVPN VPWS SID remote PE"]
+    assert [f.value for f in pe_rows] == ["150.0.0.14", "150.0.0.2"]
+
+
+def test_local_multihoming_peer_rows():
+    peer = {**PEER_OK, "ipaddr": "150.0.0.2", "mode": "all-active",
+            "esi": "00:11:12:13:14:00:00:00:00:00"}
+    findings = run_findings(_vpws_subject(mode="all-active", local_peers=[peer]))
+    assert _by_label(findings, "EVPN VPWS SID local peer PE").value == "150.0.0.2"
+    assert _by_label(findings, "EVPN VPWS SID local status").outcome is Outcome.OK
+
+
+def test_local_single_homed_info_note():
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK]))
+    row = _by_label(findings, "EVPN VPWS SID local mode")
+    assert row.outcome is Outcome.INFO
+    assert "multi-homing peer ve vypisu nenalezen" in row.value
+
+
+def test_interface_down_still_broken():
+    findings = run_findings(_vpws_subject(status="Down", remote_peers=[PEER_OK]))
+    row = _by_label(findings, "EVPN VPWS local interface status")
+    assert row.outcome is Outcome.BROKEN
+
+
+def test_two_interfaces_qualify_labels():
+    subject = _vpws_subject(remote_peers=[PEER_OK])
+    ifaces = subject["evpn_vpws"]["EVPN-VPWS-X"]["interfaces"]
+    ifaces.append({**ifaces[0], "name": "ae0.224"})
+    findings = run_findings(subject)
+    assert any(f.label == "EVPN VPWS local interface status (ge-0/0/2.213)"
+               for f in findings)
+
+
+def test_vpws_missing_data_skips():
+    result = run_check(EvpnVpwsStatusCheck(), _vpws_ctx({"evpn_vpws": {}}))[0]
+    assert result.status is Status.SKIP
+
+
+def test_vpws_not_run_on_elan_scope():
+    assert run_check(EvpnVpwsStatusCheck(), _ctx({"evpn_vpws": {}})) == []
 
 
 def test_esi_row_carries_the_previous_state_when_there_is_one():
@@ -108,15 +144,6 @@ def test_esi_row_carries_the_previous_state_when_there_is_one():
 
     assert result.value == "Up  DF DF"
     assert result.baseline_value == "Down  DF -"
-
-
-def test_vpws_missing_data_skips():
-    result = run_check(EvpnVpwsStatusCheck(), _vpws_ctx({"evpn_vpws": {}}))[0]
-    assert result.status is Status.SKIP
-
-
-def test_vpws_not_run_on_elan_scope():
-    assert run_check(EvpnVpwsStatusCheck(), _ctx({"evpn_vpws": {}})) == []
 
 
 def test_esi_up_passes_and_reports_df_role():

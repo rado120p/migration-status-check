@@ -34,6 +34,21 @@ def test_arp_present_passes_with_entries():
     assert "198.11.13.2" in result.message
 
 
+def test_arp_value_shows_learned_via():
+    ctx = _ctx({"arp": [{"ip": "152.11.14.4", "mac": "0c:00:ca:ea:58:03",
+                          "interface": "irb.14", "learned_via": "ae0.14"}]})
+    result = run_check(ArpPresentCheck(), ctx)[0]
+    assert result.status is Status.PASS
+    assert "[via ae0.14]" in result.value
+
+
+def test_arp_value_without_learned_via_unchanged():
+    ctx = _ctx({"arp": [{"ip": "1.2.3.4", "mac": "aa:bb", "interface": "ge-0/0/4.0",
+                          "learned_via": None}]})
+    result = run_check(ArpPresentCheck(), ctx)[0]
+    assert "[via" not in result.value
+
+
 def test_arp_empty_warns():
     result = run_check(ArpPresentCheck(), _ctx({"arp": []}))[0]
     assert result.status is Status.WARN

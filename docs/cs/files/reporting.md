@@ -101,10 +101,11 @@ profiltrovaný výsledek, takže by o filtru nevěděl ani strojový výstup.
 
 ### `SYMBOL`
 
-Symboly jsou textové, ne unicode, a všechny čtyři znaky dlouhé: `PASS`, `WARN`, `FAIL`,
+Symboly jsou textové, ne unicode, a čtyři z pěti stejně dlouhé: `PASS`, `WARN`, `FAIL`,
 `SKIP`. (Specifikace kreslila `✓ ⚠ ✗`; kód je nepoužívá.) `PASS` dřív byl `"OK "` — změnilo
-se to spolu s přepisem reportu, aby byly všechny symboly stejně dlouhé a sloupec `STAV` se
-nemusel řešit zvlášť.
+se to spolu s přepisem reportu, aby byly symboly stejně dlouhé a sloupec `STAV` se nemusel
+řešit zvlášť. `INFO` je z toho pravidla výjimka: `SYMBOL[Status.INFO]` je `""` — informativní
+řádek se do sloupce `STAV` nevypisuje vůbec, ani u souhrnné tabulky, ani v bloku služby.
 
 ### `render(result, *, detail=False)`
 
@@ -117,6 +118,11 @@ Skládá pět částí:
    počet řádků tabulky pod ním, `Checky:` je součet přes všechna měření. Šířky sloupců se
    počítají z obou řádků najednou, aby čísla stála pod sebou. Když běžel filtr, je nad
    souhrnem ještě řádek `filtr: ... -- N z M sluzeb` a věta o tom, co se nepřepočítalo.
+
+   `INFO` má v obou řádcích vlastní počet (`COUNT_NAMES` v `text_report.py` ho přidává jako
+   páté, poslední pole) — nepočítá se dohromady s `PASS`/`WARN`/`FAIL`/`SKIP`, nesčítá se do
+   nich a přidává se na konec řádku, aby starší skript, který čte jen první čtyři pole,
+   novým sloupcem neztroskotal.
 3. **Souhrnná tabulka** — jeden řádek na službu, sloupce `STAV`, `SLUZBA` (description, jinak
    scope id), `TYP`, `STARY PORT`, `NOVY PORT`, `RI`, `NALEZ` (nejhorší nález,
    `_worst_message()`; u zeleného řádku prázdný). Šířky všech sloupců **se počítají z dat**,

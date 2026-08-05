@@ -100,10 +100,10 @@ kontrolovat celou oblast.
 | oblast | tvar | filtruje se podle |
 |---|---|---|
 | `interfaces` | `{ifname: {admin_status, oper_status, input_pps, output_pps, input_errors, output_errors, framing_errors}}` | název rozhraní (logická jednotka i fyzický rodič) |
-| `arp` | `[{ip, mac, interface, routing_instance}]` | `interface` |
-| `nd` | `[{ip, mac, interface, state}]` — IPv6 protějšek `arp`, ND tabulka | `interface` |
+| `arp` | `[{ip, mac, interface, learned_via, routing_instance}]` | `interface` |
+| `nd` | `[{ip, mac, interface, state, learned_via}]` — IPv6 protějšek `arp`, ND tabulka | `interface` |
 | `bgp` | `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted, advertised, active, suppressed}}}}` — počty se drží **za každou RIB zvlášť**, nesčítají se | `peer_ip` ∈ `bgp_neighbors` |
-| `evpn_vpws` | `{routing_instance: {status, local_sid, remote_sid}}` | **klíč = routing-instance** |
+| `evpn_vpws` | `{routing_instance: {interfaces: [{name, status, mode, local_sid, remote_sid}]}}` — `local_sid`/`remote_sid` mají tvar `{value, peers}` | **klíč = routing-instance** |
 | `evpn_esi` | `{esi: {status, df_role, interface}}` | `interface` |
 | `evpn_mac` | `{routing_instance: {vlan_id: count}}` | **klíč = routing-instance**; vnitřní klíč je **VLAN id** jako string (`"313"`), u vlan-based `"-"` |
 

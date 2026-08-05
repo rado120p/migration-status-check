@@ -138,7 +138,8 @@ def test_errors_skipped_on_internal_interface():
 
 
 def test_errors_present_warns_on_transit_interface():
-    ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_errors": 3, "output_errors": 0}}})
+    # fyzicke rozhrani (bez tecky) - logicke unity nemohou mit chybove countery
+    ctx = _ctx({"interfaces": {"ge-0/0/2": {"input_errors": 3, "output_errors": 0}}})
     results = run_check(InterfaceErrorsCheck(), ctx)
     assert results[0].status is Status.WARN
     assert "3" in results[0].message
@@ -147,12 +148,13 @@ def test_errors_present_warns_on_transit_interface():
 def test_errors_rows_name_their_interface_the_same_way():
     """Modul si nesmi odporovat: kdyz stavove a datove radky nesou jmeno
     rozhrani v zavorce za popiskem, chybove countery to musi delat stejne.
-    Holy nazev rozhrani jako popisek byl presne to, co AR-4 odstranovalo."""
+    Holy nazev rozhrani jako popisek byl presne to, co AR-4 odstranovalo.
+    Fyzicke rozhrani (bez tecky) - logicke unity nemohou mit chybove countery."""
     ctx = _ctx(
         {
             "interfaces": {
                 "ge-0/0/2": {"input_errors": 0, "output_errors": 0},
-                "ge-0/0/2.113": {"input_errors": 3, "output_errors": 0},
+                "xe-1/0/0": {"input_errors": 3, "output_errors": 0},
             }
         }
     )
@@ -160,13 +162,50 @@ def test_errors_rows_name_their_interface_the_same_way():
 
     assert labels == [
         "Interface errors (ge-0/0/2)",
-        "Interface errors (ge-0/0/2.113)",
+        "Interface errors (xe-1/0/0)",
     ]
 
 
 def test_errors_zero_passes():
-    ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"input_errors": 0, "output_errors": 0}}})
+    ctx = _ctx({"interfaces": {"ge-0/0/2": {"input_errors": 0, "output_errors": 0}}})
     assert run_check(InterfaceErrorsCheck(), ctx)[0].status is Status.PASS
+
+
+def test_errors_skip_logical_units():
+    ctx = _ctx({"interfaces": {
+        "ge-0/0/4": {"input_errors": 0, "output_errors": 0},
+        "ge-0/0/4.0": {"input_errors": 7, "output_errors": 0},
+    }})
+    findings = run_check(InterfaceErrorsCheck(), ctx)
+    labels = [f.label for f in findings]
+    assert any("ge-0/0/4)" in label for label in labels)
+    assert not any("ge-0/0/4.0" in label for label in labels)
+
+
+def test_errors_only_units_present_gives_skip_with_truthful_message():
+    # scope muze nest jen unity (fyzicky rodic mimo inventory)
+    # Chybove countery nese jen fyzicke rozhrani - ale unitami jde popsat
+    # pravdu: "jsou jen unity", ne "neni tranzitni". ae0 JE tranzitni.
+    ctx = _ctx({"interfaces": {"ae0.15": {"input_errors": 0}}})
+    findings = run_check(InterfaceErrorsCheck(), ctx)
+    assert len(findings) == 1
+    assert findings[0].status is Status.SKIP
+    assert "jen unity" in findings[0].value
+    assert "chybove countery nese jen fyzicke rozhrani" in findings[0].message
+    assert "ae0.15" in findings[0].message
+
+
+def test_errors_no_transit_interfaces_uses_old_skip():
+    # Pokud nejsou zadne tranzitni rozhrani - ani fyzicka ani unity -
+    # pouzije se _no_transit_finding, stejne jako pred timto fixem.
+    ctx = _ctx(
+        {"interfaces": {"lo0.0": {"input_errors": 0}}},
+        interfaces=("lo0.0",),
+    )
+    findings = run_check(InterfaceErrorsCheck(), ctx)
+    assert len(findings) == 1
+    assert findings[0].status is Status.SKIP
+    assert "neni tranzitni rozhrani" in findings[0].message
 
 
 @pytest.mark.parametrize(
