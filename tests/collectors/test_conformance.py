@@ -187,6 +187,8 @@ def test_esi_interface_matches_a_scope(platform):
     facts = _facts_from_recorded_xml(platform)
     entries = facts["evpn_esi"]
     if not entries:
+        # Junos fixture ma pouze auto-generovany 05: ESI, ktery Task 4 filtruje.
+        # Pokryti ESI-scope konformance zalezi na junos-evo (skutecny 00:11:... ESI).
         pytest.skip(f"{platform} nema zadny ESI segment")
 
     _, inventory_path = DEVICES[platform]
