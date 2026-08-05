@@ -2,7 +2,6 @@ import pytest
 from lxml import etree
 
 from migration_validator.collectors.evpn import (
-    NO_DOMAIN,
     EvpnEsiCollector,
     EvpnMacCollector,
     EvpnVpwsCollector,
@@ -68,12 +67,56 @@ def test_esi_schema(rpc_fixture, platform):
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
-def test_mac_schema(rpc_fixture, platform):
+def test_mac_count_schema(rpc_fixture, platform):
     result = EvpnMacCollector().parse(rpc_fixture(platform, "evpn_mac"), platform)
-    assert isinstance(result, dict)
-    for instance, domains in result.items():
-        assert isinstance(domains, dict)
-        assert all(isinstance(count, int) for count in domains.values())
+    assert result, "fixture nema zadnou instanci"
+    for data in result.values():
+        assert set(data) == {"vlans", "interfaces"}
+        for vlan, entry in data["vlans"].items():
+            assert vlan.isdigit()
+            assert set(entry) == {"count", "domain"}
+        for key, entry in data["interfaces"].items():
+            assert ":" not in key
+            assert set(entry) == {"count", "name", "domain"}
+
+
+def test_mac_count_vlan_key_is_learn_vlan_even_for_vlan_based(rpc_fixture):
+    # Placeholder nazev domeny (__X__/VL-NONE) drive znamenal klic '-'.
+    # Count vypis ale nese skutecne learn-vlan na obou platformach,
+    # takze vlan-based instance se pre/post paruje pres VLAN id.
+    result = EvpnMacCollector().parse(rpc_fixture("junos", "evpn_mac.2"), "junos")
+    based = result["EVPN-VLAN-BASED-CPE13-NNI"]
+    assert based["vlans"] == {"413": {"count": 2, "domain": None}}
+
+
+def test_mac_count_interface_key_strips_vlan_suffix(rpc_fixture):
+    result = EvpnMacCollector().parse(rpc_fixture("junos", "evpn_mac"), "junos")
+    aware = result["EVPN-VLAN-AWARE-CPE13-NNI"]
+    assert aware["interfaces"] == {
+        "ge-0/0/2.313": {"count": 1, "name": "ge-0/0/2.313:313", "domain": "BD-313"}
+    }
+
+
+def test_mac_count_skips_system_instance_and_empty_entries(rpc_fixture):
+    result = EvpnMacCollector().parse(rpc_fixture("junos-evo", "evpn_mac"), "junos-evo")
+    assert "default-switch" not in result
+    # prazdne <...-if-mac-count-entry/> bloky nesmi vyrobit zaznam
+    aware = result["EVPN-VLAN-AWARE-CPE13-NNI"]
+    assert set(aware["interfaces"]) == {"et-0/0/8.313"}
+
+
+def test_mac_count_merges_domains_of_one_instance(rpc_fixture):
+    result = EvpnMacCollector().parse(rpc_fixture("junos-evo", "evpn_mac"), "junos-evo")
+    pop1 = result["EVPN-VLAN-AWARE-POP1"]
+    assert set(pop1["vlans"]) == {"14", "15", "4094"}
+    assert set(pop1["interfaces"]) == {"ae0.14", "ae0.15", "ae0.4094"}
+
+
+def test_mac_count_uses_count_kwarg():
+    # Bez count=True by RPC stahlo celou tabulku - a parser count tvaru
+    # by z ni nic neprecetl.
+    assert EvpnMacCollector().rpc_kwargs("junos") == {"count": True}
+    assert EvpnMacCollector().rpc_kwargs("junos-evo") == {"count": True}
 
 
 def test_esi_requires_extensive():
@@ -113,73 +156,6 @@ def test_esi_emits_logical_unit_as_interface():
     }
 
 
-def test_mac_counts_are_grouped_by_instance_and_vlan_on_mx():
-    xml = etree.fromstring(
-        """
-        <l2ald-rtb-macdb>
-          <l2ald-mac-entry>
-            <l2-mac-routing-instance>EVPN-AWARE</l2-mac-routing-instance>
-            <l2-mac-bridging-domain>BD-313</l2-mac-bridging-domain>
-            <l2-bridge-vlan>313</l2-bridge-vlan>
-            <l2-mac-entry><l2-mac-address>00:11:22:33:44:01</l2-mac-address></l2-mac-entry>
-            <l2-mac-entry><l2-mac-address>00:11:22:33:44:02</l2-mac-address></l2-mac-entry>
-          </l2ald-mac-entry>
-          <l2ald-mac-entry>
-            <l2-mac-routing-instance>EVPN-BASED</l2-mac-routing-instance>
-            <l2-mac-bridging-domain>__EVPN-BASED__</l2-mac-bridging-domain>
-            <l2-bridge-vlan>none</l2-bridge-vlan>
-            <l2-mac-entry><l2-mac-address>00:11:22:33:44:03</l2-mac-address></l2-mac-entry>
-          </l2ald-mac-entry>
-        </l2ald-rtb-macdb>
-        """
-    )
-
-    assert EvpnMacCollector().parse(xml, "junos") == {
-        "EVPN-AWARE": {"313": 2},
-        "EVPN-BASED": {NO_DOMAIN: 1},
-    }
-
-
-def test_mac_counts_use_same_keys_on_evo():
-    """Stejna sluzba musi mit stejne klice jako na MX, jinak nejde porovnat.
-
-    EVO pouziva jina jmena elementu (l2ng-*) a domene rika 'VL-313' misto
-    'BD-313'; vlan-based instanci navic uvadi VLAN id, i kdyz zadnou vlastni
-    domenu nema - proto se pozna podle 'VL-NONE'.
-    """
-    xml = etree.fromstring(
-        """
-        <l2ng-l2ald-rtb-macdb>
-          <l2ng-l2ald-mac-entry-vlan>
-            <l2ng-l2-mac-routing-instance>EVPN-AWARE</l2ng-l2-mac-routing-instance>
-            <l2ng-l2-vlan-id>313</l2ng-l2-vlan-id>
-            <l2ng-mac-entry>
-              <l2ng-l2-mac-vlan-name>VL-313</l2ng-l2-mac-vlan-name>
-              <l2ng-l2-mac-address>00:11:22:33:44:01</l2ng-l2-mac-address>
-            </l2ng-mac-entry>
-            <l2ng-mac-entry>
-              <l2ng-l2-mac-vlan-name>VL-313</l2ng-l2-mac-vlan-name>
-              <l2ng-l2-mac-address>00:11:22:33:44:02</l2ng-l2-mac-address>
-            </l2ng-mac-entry>
-          </l2ng-l2ald-mac-entry-vlan>
-          <l2ng-l2ald-mac-entry-vlan>
-            <l2ng-l2-mac-routing-instance>EVPN-BASED</l2ng-l2-mac-routing-instance>
-            <l2ng-l2-vlan-id>413</l2ng-l2-vlan-id>
-            <l2ng-mac-entry>
-              <l2ng-l2-mac-vlan-name>VL-NONE</l2ng-l2-mac-vlan-name>
-              <l2ng-l2-mac-address>00:11:22:33:44:03</l2ng-l2-mac-address>
-            </l2ng-mac-entry>
-          </l2ng-l2ald-mac-entry-vlan>
-        </l2ng-l2ald-rtb-macdb>
-        """
-    )
-
-    assert EvpnMacCollector().parse(xml, "junos-evo") == {
-        "EVPN-AWARE": {"313": 2},
-        "EVPN-BASED": {NO_DOMAIN: 1},
-    }
-
-
 def test_mac_merges_every_rpc_for_platform():
     """MX vidi vlan-aware jen pres bridge mac-table, vlan-based jen pres evpn."""
 
@@ -187,22 +163,44 @@ def test_mac_merges_every_rpc_for_platform():
         def get_bridge_mac_table(self, **kwargs):
             return etree.fromstring(
                 """
-                <l2ald-rtb-macdb><l2ald-mac-entry>
-                  <l2-mac-routing-instance>AWARE</l2-mac-routing-instance>
-                  <l2-bridge-vlan>313</l2-bridge-vlan>
-                  <l2-mac-entry><a/></l2-mac-entry>
-                </l2ald-mac-entry></l2ald-rtb-macdb>
+                <l2ald-rtb-mac-count><l2ald-rtb-mac-count-entry>
+                  <rtb-name>AWARE</rtb-name>
+                  <bd-name>BD-313</bd-name>
+                  <l2ald-rtb-if-mac-count>
+                    <l2ald-rtb-if-mac-count-entry>
+                      <interface-name>ge-0/0/2.313:313</interface-name>
+                      <mac-count>1</mac-count>
+                    </l2ald-rtb-if-mac-count-entry>
+                  </l2ald-rtb-if-mac-count>
+                  <l2ald-rtb-learn-vlan-mac-count>
+                    <l2ald-rtb-learn-vlan-mac-count-entry>
+                      <learn-vlan>313</learn-vlan>
+                      <mac-count>1</mac-count>
+                    </l2ald-rtb-learn-vlan-mac-count-entry>
+                  </l2ald-rtb-learn-vlan-mac-count>
+                </l2ald-rtb-mac-count-entry></l2ald-rtb-mac-count>
                 """
             )
 
         def get_evpn_mac_table(self, **kwargs):
             return etree.fromstring(
                 """
-                <l2ald-rtb-macdb><l2ald-mac-entry>
-                  <l2-mac-routing-instance>BASED</l2-mac-routing-instance>
-                  <l2-bridge-vlan>none</l2-bridge-vlan>
-                  <l2-mac-entry><a/></l2-mac-entry>
-                </l2ald-mac-entry></l2ald-rtb-macdb>
+                <l2ald-rtb-mac-count><l2ald-rtb-mac-count-entry>
+                  <rtb-name>BASED</rtb-name>
+                  <bd-name>__BASED__</bd-name>
+                  <l2ald-rtb-if-mac-count>
+                    <l2ald-rtb-if-mac-count-entry>
+                      <interface-name>ge-0/0/3.413:413</interface-name>
+                      <mac-count>1</mac-count>
+                    </l2ald-rtb-if-mac-count-entry>
+                  </l2ald-rtb-if-mac-count>
+                  <l2ald-rtb-learn-vlan-mac-count>
+                    <l2ald-rtb-learn-vlan-mac-count-entry>
+                      <learn-vlan>413</learn-vlan>
+                      <mac-count>1</mac-count>
+                    </l2ald-rtb-learn-vlan-mac-count-entry>
+                  </l2ald-rtb-learn-vlan-mac-count>
+                </l2ald-rtb-mac-count-entry></l2ald-rtb-mac-count>
                 """
             )
 
@@ -210,7 +208,28 @@ def test_mac_merges_every_rpc_for_platform():
         rpc = FakeRpc()
 
     result = EvpnMacCollector().collect(FakeDevice(), "junos")
-    assert result == {"AWARE": {"313": 1}, "BASED": {NO_DOMAIN: 1}}
+    assert result == {
+        "AWARE": {
+            "vlans": {"313": {"count": 1, "domain": "BD-313"}},
+            "interfaces": {
+                "ge-0/0/2.313": {
+                    "count": 1,
+                    "name": "ge-0/0/2.313:313",
+                    "domain": "BD-313",
+                }
+            },
+        },
+        "BASED": {
+            "vlans": {"413": {"count": 1, "domain": None}},
+            "interfaces": {
+                "ge-0/0/3.413": {
+                    "count": 1,
+                    "name": "ge-0/0/3.413:413",
+                    "domain": None,
+                }
+            },
+        },
+    }
 
 
 def test_mac_partial_rpc_failure_is_an_error():
@@ -219,7 +238,7 @@ def test_mac_partial_rpc_failure_is_an_error():
 
     class FakeRpc:
         def get_bridge_mac_table(self, **kwargs):
-            return etree.fromstring("<l2ald-rtb-macdb/>")
+            return etree.fromstring("<l2ald-rtb-mac-count/>")
 
         def get_evpn_mac_table(self, **kwargs):
             raise RuntimeError("l2-learning neni dostupne")
