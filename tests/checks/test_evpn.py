@@ -31,10 +31,10 @@ def _vpws_ctx(subject, baseline=None):
     return _ctx(subject, baseline, service_type="E-Line", subtype="vpws")
 
 
-def _vpws_subject(*, status="Up", mode="single-homed",
+def _vpws_subject(*, status="Up", mode="single-homed", iface_name="ge-0/0/2.213",
                   local_peers=(), remote_peers=(), remote_value=2000):
     return {"evpn_vpws": {"EVPN-VPWS-X": {"interfaces": [{
-        "name": "ge-0/0/2.213", "status": status, "mode": mode,
+        "name": iface_name, "status": status, "mode": mode,
         "local_sid": {"value": 1000, "peers": list(local_peers)},
         "remote_sid": {"value": remote_value, "peers": list(remote_peers)},
     }]}}}
@@ -132,6 +132,74 @@ def test_vpws_missing_data_skips():
 
 def test_vpws_not_run_on_elan_scope():
     assert run_check(EvpnVpwsStatusCheck(), _ctx({"evpn_vpws": {}})) == []
+
+
+def test_vpws_baseline_matching_values_have_empty_change():
+    # Zivy nalez: sparovana sluzba se shodnymi hodnotami pred a po migraci
+    # nesmi tisknout "bez baseline" - check musi baseline_value == value.
+    baseline = _vpws_subject(remote_peers=[PEER_OK])
+    subject = _vpws_subject(remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    for lbl in (
+        "EVPN VPWS local interface status",
+        "EVPN VPWS SID remote value",
+        "EVPN VPWS SID remote PE",
+        "EVPN VPWS SID remote status",
+        "EVPN VPWS SID remote role",
+        "EVPN VPWS SID local mode",
+    ):
+        row = _by_label(findings, lbl)
+        assert row.baseline_value == row.value, lbl
+
+
+def test_vpws_baseline_matches_by_position_despite_renamed_interface():
+    # Jmeno rozhrani se migraci meni (ge-0/0/3.0 -> ae0.224), parovani
+    # musi byt pozicni, ne podle jmena.
+    baseline = _vpws_subject(remote_peers=[PEER_OK], iface_name="ge-0/0/3.0")
+    subject = _vpws_subject(remote_peers=[PEER_OK], iface_name="ae0.224")
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    row = _by_label(findings, "EVPN VPWS local interface status")
+    assert row.baseline_value == row.value == "Up"
+
+
+def test_vpws_baseline_different_status_shows_previous_value():
+    baseline_peer = {**PEER_OK, "status": "Unresolved"}
+    baseline = _vpws_subject(remote_peers=[baseline_peer])
+    subject = _vpws_subject(remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    row = _by_label(findings, "EVPN VPWS SID remote status")
+    assert row.baseline_value == "Unresolved"
+
+
+def test_vpws_baseline_peer_missing_by_ipaddr_gives_none():
+    baseline_peer = {**PEER_OK, "ipaddr": "150.0.0.99"}
+    baseline = _vpws_subject(remote_peers=[baseline_peer])
+    subject = _vpws_subject(remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    pe = _by_label(findings, "EVPN VPWS SID remote PE")
+    status = _by_label(findings, "EVPN VPWS SID remote status")
+    assert pe.baseline_value is None
+    assert status.baseline_value is None
+
+
+def test_vpws_without_baseline_context_stays_none():
+    # Bez ctx.baseline (baseline=None) nesmi vzniknout zadna regrese.
+    subject = _vpws_subject(remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline=None))
+    for f in findings:
+        assert f.baseline_value is None
+
+
+def test_vpws_missing_remote_peer_borrows_baseline_from_first_peer():
+    # Subjekt nema remote peer vubec, ale baseline ho mel Resolved - rozdil
+    # "bylo Resolved" je presne informace, kterou operator potrebuje.
+    baseline = _vpws_subject(remote_peers=[PEER_OK])
+    subject = _vpws_subject(remote_peers=[])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    pe = _by_label(findings, "EVPN VPWS SID remote PE")
+    status = _by_label(findings, "EVPN VPWS SID remote status")
+    assert pe.baseline_value == "150.0.0.14"
+    assert status.baseline_value == "Resolved"
 
 
 def test_esi_row_carries_the_previous_state_when_there_is_one():
