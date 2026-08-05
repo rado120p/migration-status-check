@@ -121,9 +121,22 @@ class InterfaceErrorsCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
-        names = [name for name in _transit_interfaces(ctx) if is_physical(name)]
+        transit_names = _transit_interfaces(ctx)
+        names = [name for name in transit_names if is_physical(name)]
         if not names:
-            return [_no_transit_finding(ctx)]
+            if transit_names:
+                # Tranzitni rozhrani jsou, ale jen logicke unity - counter chybi
+                # skutecne, ne proto ze nejsou tranzitni. Sdilen _no_transit_finding
+                # nese nedelitelnou zpravu, takze zde popsat pravdu presmrk.
+                listed = ", ".join(transit_names)
+                return [Finding(
+                    outcome=Outcome.SKIP,
+                    message=f"chybove countery nese jen fyzicke rozhrani, ve scope jsou jen unity ({listed})",
+                    value="jen unity",
+                )]
+            else:
+                # Zadne tranzitni rozhrani - pouzij zdelenou zpravu
+                return [_no_transit_finding(ctx)]
 
         findings = []
         for name in names:

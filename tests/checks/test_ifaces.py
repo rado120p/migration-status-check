@@ -182,11 +182,30 @@ def test_errors_skip_logical_units():
     assert not any("ge-0/0/4.0" in label for label in labels)
 
 
-def test_errors_only_units_present_gives_skip():
+def test_errors_only_units_present_gives_skip_with_truthful_message():
     # scope muze nest jen unity (fyzicky rodic mimo inventory)
+    # Chybove countery nese jen fyzicke rozhrani - ale unitami jde popsat
+    # pravdu: "jsou jen unity", ne "neni tranzitni". ae0 JE tranzitni.
     ctx = _ctx({"interfaces": {"ae0.15": {"input_errors": 0}}})
     findings = run_check(InterfaceErrorsCheck(), ctx)
-    assert [f.status for f in findings] == [Status.SKIP]
+    assert len(findings) == 1
+    assert findings[0].status is Status.SKIP
+    assert "jen unity" in findings[0].value
+    assert "chybove countery nese jen fyzicke rozhrani" in findings[0].message
+    assert "ae0.15" in findings[0].message
+
+
+def test_errors_no_transit_interfaces_uses_old_skip():
+    # Pokud nejsou zadne tranzitni rozhrani - ani fyzicka ani unity -
+    # pouzije se _no_transit_finding, stejne jako pred timto fixem.
+    ctx = _ctx(
+        {"interfaces": {"lo0.0": {"input_errors": 0}}},
+        interfaces=("lo0.0",),
+    )
+    findings = run_check(InterfaceErrorsCheck(), ctx)
+    assert len(findings) == 1
+    assert findings[0].status is Status.SKIP
+    assert "neni tranzitni rozhrani" in findings[0].message
 
 
 @pytest.mark.parametrize(
