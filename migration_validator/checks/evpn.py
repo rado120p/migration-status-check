@@ -34,16 +34,31 @@ def _esi_value(data: dict[str, Any] | None) -> str | None:
     return f"{status}  DF {data.get('df_role') or '-'}"
 
 
+def _find_baseline_peer(
+    baseline_peers: list[dict[str, Any]], ipaddr: Any
+) -> dict[str, Any] | None:
+    """Najde baseline peera podle ipaddr v jiz pozicne sparovanem SID.
+
+    Jmena rozhrani se migraci meni, ale IP adresa vzdaleneho PE ne - proto
+    je ipaddr jedine spolehlive kriterium pro parovani peeru uvnitr SID.
+    """
+    for peer in baseline_peers:
+        if peer.get("ipaddr") == ipaddr:
+            return peer
+    return None
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     """Stav EVPN-VPWS per SID a peer.
 
     Stav se ted cte vyhradne z 'evpn-vpws-sid-pe-status' - drivejsi
     porovnani jen SID cisel a stavu rozhrani tuhle tabulku vubec necetlo.
-    Radky jsou STATE-tvaru (mode = Mode.BOTH zustava, ale baseline_value
-    tu nevznika - sloupec ZMENA u nich zustane prazdny, viz change_text v
-    rendereru). Drivejsi radek 'chybi remote SID' nahrazuji dva BROKEN
-    radky remote PE / remote status.
+    Mode.BOTH je opravneny: baseline_value se dopocitava pozicnim
+    parovanim rozhrani a peeru podle ipaddr (viz _find_baseline_peer),
+    takze sloupec ZMENA nese skutecny rozdil, ne trvale "bez baseline".
+    Drivejsi radek 'chybi remote SID' nahrazuji dva BROKEN radky remote
+    PE / remote status.
     """
 
     id = "evpn_vpws_status"
@@ -61,22 +76,45 @@ class EvpnVpwsStatusCheck(Check):
                 Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-vpws", value="bez dat")
             ]
 
+        # Jmeno instance (RI) migraci prezije, takze parovani baseline
+        # instance je proste podle jmena - na rozdil od rozhrani uvnitr ni.
+        baseline_instances: dict[str, Any] = (ctx.baseline or {}).get("evpn_vpws", {})
+
         findings: list[Finding] = []
         for name in sorted(instances):
             interfaces = instances[name].get("interfaces", [])
+            baseline_interfaces = baseline_instances.get(name, {}).get("interfaces", [])
             many = len(interfaces) > 1
-            for iface in interfaces:
-                findings.extend(self._interface_findings(name, iface, many))
+            for idx, iface in enumerate(interfaces):
+                # Pozicni parovani rozhrani: jmena rozhrani se migraci meni
+                # (ge-0/0/3.0 -> ae0.224), takze jmeno pro parovani s
+                # baseline pouzit nejde - stejny princip jako pozicni zip
+                # v _aligned_baseline_data (engine.py).
+                baseline_iface = (
+                    baseline_interfaces[idx] if idx < len(baseline_interfaces) else None
+                )
+                findings.extend(
+                    self._interface_findings(name, iface, baseline_iface, many)
+                )
         return findings
 
     def _interface_findings(
-        self, instance: str, iface: dict[str, Any], qualify: bool
+        self,
+        instance: str,
+        iface: dict[str, Any],
+        baseline_iface: dict[str, Any] | None,
+        qualify: bool,
     ) -> list[Finding]:
         def label(text: str) -> str:
             return qualified(text, iface["name"]) if qualify else text
 
         findings = []
         status = str(iface.get("status", "unknown"))
+        baseline_status = (
+            str(baseline_iface.get("status", "unknown"))
+            if baseline_iface is not None
+            else None
+        )
         findings.append(
             Finding(
                 Outcome.OK if _is_up(status) else Outcome.BROKEN,
@@ -84,20 +122,36 @@ class EvpnVpwsStatusCheck(Check):
                 + ("" if _is_up(status) else f", ocekavano {UP}"),
                 label=label("EVPN VPWS local interface status"),
                 value=status,
+                baseline_value=baseline_status,
                 subject={"interface": iface["name"], "status": status},
             )
         )
-        findings.extend(self._sid_findings(instance, iface, "local", label))
-        findings.extend(self._sid_findings(instance, iface, "remote", label))
+        findings.extend(self._sid_findings(instance, iface, baseline_iface, "local", label))
+        findings.extend(self._sid_findings(instance, iface, baseline_iface, "remote", label))
         return findings
 
     def _sid_findings(
-        self, instance: str, iface: dict[str, Any], side: str, label
+        self,
+        instance: str,
+        iface: dict[str, Any],
+        baseline_iface: dict[str, Any] | None,
+        side: str,
+        label,
     ) -> list[Finding]:
         sid = iface.get(f"{side}_sid") or {"value": None, "peers": []}
         value = sid.get("value")
         peers = sid.get("peers") or []
         prefix = f"EVPN VPWS SID {side}"
+
+        baseline_sid = (
+            baseline_iface.get(f"{side}_sid") if baseline_iface is not None else None
+        )
+        baseline_peers = (baseline_sid.get("peers") or []) if baseline_sid else []
+        baseline_sid_value = (
+            f"SID {baseline_sid.get('value') if baseline_sid.get('value') is not None else '?'}"
+            if baseline_sid is not None
+            else None
+        )
 
         findings = [
             Finding(
@@ -105,19 +159,29 @@ class EvpnVpwsStatusCheck(Check):
                 f"{instance}: {side} SID {value if value is not None else '?'}",
                 label=label(f"{prefix} value"),
                 value=f"SID {value if value is not None else '?'}",
+                baseline_value=baseline_sid_value,
             )
         ]
 
         if not peers:
             if side == "remote":
                 # Remote peer musi existovat vzdy - jeho absence znamena
-                # nenakonfigurovanou nebo spadlou druhou stranu.
+                # nenakonfigurovanou nebo spadlou druhou stranu. Kdyz
+                # baseline peer mela, "bylo Resolved" je presne informace,
+                # kterou operator potrebuje - proto se pujcuje z prvniho
+                # baseline peeru, i kdyz v subjektu zadny peer neni.
+                first_baseline_peer = baseline_peers[0] if baseline_peers else None
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
                         f"{instance}: remote peer chybi",
                         label=label(f"{prefix} PE"),
                         value="Neznamy peer",
+                        baseline_value=(
+                            str(first_baseline_peer.get("ipaddr") or "?")
+                            if first_baseline_peer
+                            else None
+                        ),
                     )
                 )
                 findings.append(
@@ -126,11 +190,29 @@ class EvpnVpwsStatusCheck(Check):
                         f"{instance}: remote SID nema zadny Resolved zaznam",
                         label=label(f"{prefix} status"),
                         value="Unresolved / Chybi",
+                        baseline_value=(
+                            str(first_baseline_peer.get("status") or "Unresolved / Chybi")
+                            if first_baseline_peer
+                            else None
+                        ),
                     )
                 )
             else:
                 # Local peery nese jen multihoming - u single-homed jde
-                # o ocekavany stav, ne o vadu.
+                # o ocekavany stav, ne o vadu. Baseline lze pouzit jen
+                # kdyz ma stejny tvar radku (taky bez local peeru) -
+                # kdyz baseline peery MELA, jde o jiny tvar hlasky a
+                # srovnani by nedavalo smysl, baseline_value zustava None.
+                baseline_local_mode = None
+                if (
+                    baseline_iface is not None
+                    and baseline_sid is not None
+                    and not baseline_peers
+                ):
+                    baseline_local_mode = (
+                        f"{baseline_iface.get('mode') or 'unknown'} "
+                        "(multi-homing peer ve vypisu nenalezen)"
+                    )
                 findings.append(
                     Finding(
                         Outcome.INFO,
@@ -138,12 +220,14 @@ class EvpnVpwsStatusCheck(Check):
                         label=label(f"{prefix} mode"),
                         value=f"{iface.get('mode') or 'unknown'} "
                         "(multi-homing peer ve vypisu nenalezen)",
+                        baseline_value=baseline_local_mode,
                     )
                 )
             return findings
 
         peer_label = f"{prefix} peer PE" if side == "local" else f"{prefix} PE"
         for peer in peers:
+            baseline_peer = _find_baseline_peer(baseline_peers, peer.get("ipaddr"))
             resolved = (peer.get("status") or "").strip().lower() == "resolved"
             outcome = Outcome.OK if resolved else Outcome.BROKEN
             findings.append(
@@ -152,6 +236,9 @@ class EvpnVpwsStatusCheck(Check):
                     f"{instance}: {side} peer {peer.get('ipaddr')}",
                     label=label(peer_label),
                     value=str(peer.get("ipaddr") or "?"),
+                    baseline_value=(
+                        str(baseline_peer.get("ipaddr") or "?") if baseline_peer else None
+                    ),
                     subject=dict(peer),
                 )
             )
@@ -162,6 +249,11 @@ class EvpnVpwsStatusCheck(Check):
                     f"status {peer.get('status') or 'chybi'}",
                     label=label(f"{prefix} status"),
                     value=str(peer.get("status") or "Unresolved / Chybi"),
+                    baseline_value=(
+                        str(baseline_peer.get("status") or "Unresolved / Chybi")
+                        if baseline_peer
+                        else None
+                    ),
                 )
             )
             for info_label, key in (("mode", "mode"), ("ESI", "esi"), ("role", "role")):
@@ -172,6 +264,11 @@ class EvpnVpwsStatusCheck(Check):
                             f"{instance}: {side} peer {key} {peer[key]}",
                             label=label(f"{prefix} {info_label}"),
                             value=str(peer[key]),
+                            baseline_value=(
+                                str(baseline_peer[key])
+                                if baseline_peer and baseline_peer.get(key)
+                                else None
+                            ),
                         )
                     )
         return findings
