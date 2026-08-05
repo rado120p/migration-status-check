@@ -221,7 +221,34 @@ def _facts_for(scopes, pps: int) -> dict:
             else None
         )
         if service_type == "E-Line" and instance:
-            evpn_vpws[instance] = {"local_sid": 213, "remote_sid": 213, "status": "Up"}
+            # Nove schema (Task 5): interfaces list, kazdy SID nese peers.
+            # Remote peer musi byt 'Resolved', jinak by check hlasil BROKEN
+            # a rozbil test_full_migration_run_has_no_unexplained_fail_or_warn.
+            iface_name = (
+                scope.selectors.interfaces[0] if scope.selectors.interfaces else instance
+            )
+            evpn_vpws[instance] = {
+                "interfaces": [
+                    {
+                        "name": iface_name,
+                        "status": "Up",
+                        "mode": "single-homed",
+                        "local_sid": {"value": 1000, "peers": []},
+                        "remote_sid": {
+                            "value": 2000,
+                            "peers": [
+                                {
+                                    "esi": "00:00:00:00:00:00:00:00:00:00",
+                                    "ipaddr": "150.0.0.14",
+                                    "mode": "single-homed",
+                                    "role": "Primary",
+                                    "status": "Resolved",
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
         if service_type == "E-LAN" and instance:
             evpn_esi[f"esi-{instance}"] = {
                 "status": "Up",

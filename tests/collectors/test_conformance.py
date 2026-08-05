@@ -275,6 +275,32 @@ def test_specific_check_sees_data(platform, check_id):
     )
 
 
+def test_vpws_check_really_reads_the_sid_pe_status_table():
+    """U VPWS na junos-evo "ne-SKIP" (test_specific_check_sees_data) nestaci.
+
+    evpn_vpws_status ted vyrabi radky 'EVPN VPWS SID {local,remote} value',
+    ktere jsou Outcome.INFO nezavisle na tom, jestli collector vubec precetl
+    'evpn-vpws-sid-pe-status-table' - INFO neni SKIP, takze parametrizovany
+    test by prosel i s collectorem, ktery peer tabulku vubec neparsuje.
+    Tenhle test to zamyka na PASS radku 'EVPN VPWS SID remote status', ktery
+    vznikne jen tehdy, kdyz je v tabulce skutecny 'Resolved' zaznam - presne
+    to, co Task 5 pridal a puvodni collector ignoroval.
+    """
+    result = api.evaluate(_snapshot("junos-evo"), now=NOW)
+    matching = [
+        check
+        for scope in result.scopes
+        for check in scope.checks
+        if check.id == "evpn_vpws_status" and check.label == "EVPN VPWS SID remote status"
+    ]
+
+    assert matching
+    assert any(check.status is Status.PASS for check in matching), (
+        "junos-evo: zadny remote peer nedostal PASS - check nevidi "
+        "evpn-vpws-sid-pe-status-table, jen svuj vlastni zamer"
+    )
+
+
 def test_static_route_check_really_reads_the_routing_table():
     """U statik "ne-SKIP" na sev nestaci - musi to byt PASS.
 

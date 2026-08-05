@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.ifaces import percent_change
+from migration_validator.checks.ifaces import percent_change, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -27,20 +27,6 @@ def _is_up(status: str) -> bool:
     return status.split("/", 1)[0].strip() == UP
 
 
-def _vpws_value(data: dict[str, Any] | None) -> str | None:
-    """Stav a SID do jednoho sloupce.
-
-    Tataz funkce pro subjekt i baseline: sloupec ZMENA ma porovnavat dva
-    retezce tehoz tvaru. Bez rozlozeni baseline na hodnotu hlasil sloupec
-    'bez baseline' u kazdeho EVPN radku, prestoze check baseline mel -
-    dohledaval si ji a vozil v poli `baseline`.
-    """
-    if data is None:
-        return None
-    status = str(data.get("status", "unknown"))
-    return f"{status}  SID {data.get('local_sid')} -> {data.get('remote_sid') or '-'}"
-
-
 def _esi_value(data: dict[str, Any] | None) -> str | None:
     if data is None:
         return None
@@ -50,6 +36,16 @@ def _esi_value(data: dict[str, Any] | None) -> str | None:
 
 @register
 class EvpnVpwsStatusCheck(Check):
+    """Stav EVPN-VPWS per SID a peer.
+
+    Stav se ted cte vyhradne z 'evpn-vpws-sid-pe-status' - drivejsi
+    porovnani jen SID cisel a stavu rozhrani tuhle tabulku vubec necetlo.
+    Radky jsou STATE-tvaru (mode = Mode.BOTH zustava, ale baseline_value
+    tu nevznika - sloupec ZMENA u nich zustane prazdny, viz change_text v
+    rendereru). Drivejsi radek 'chybi remote SID' nahrazuji dva BROKEN
+    radky remote PE / remote status.
+    """
+
     id = "evpn_vpws_status"
     title = "Stav EVPN-VPWS"
     label = "EVPN VPWS status"
@@ -65,59 +61,119 @@ class EvpnVpwsStatusCheck(Check):
                 Finding(Outcome.SKIP, "pro tento scope nejsou data evpn-vpws", value="bez dat")
             ]
 
-        baseline_instances = (ctx.baseline or {}).get("evpn_vpws", {})
+        findings: list[Finding] = []
+        for name in sorted(instances):
+            interfaces = instances[name].get("interfaces", [])
+            many = len(interfaces) > 1
+            for iface in interfaces:
+                findings.extend(self._interface_findings(name, iface, many))
+        return findings
+
+    def _interface_findings(
+        self, instance: str, iface: dict[str, Any], qualify: bool
+    ) -> list[Finding]:
+        def label(text: str) -> str:
+            return qualified(text, iface["name"]) if qualify else text
 
         findings = []
-        for name in sorted(instances):
-            data = instances[name]
-            status = str(data.get("status", "unknown"))
-            local = data.get("local_sid")
-            remote = data.get("remote_sid")
-            subject = {"status": status, "local_sid": local, "remote_sid": remote}
-            baseline = baseline_instances.get(name)
+        status = str(iface.get("status", "unknown"))
+        findings.append(
+            Finding(
+                Outcome.OK if _is_up(status) else Outcome.BROKEN,
+                f"{instance}: stav rozhrani {status}"
+                + ("" if _is_up(status) else f", ocekavano {UP}"),
+                label=label("EVPN VPWS local interface status"),
+                value=status,
+                subject={"interface": iface["name"], "status": status},
+            )
+        )
+        findings.extend(self._sid_findings(instance, iface, "local", label))
+        findings.extend(self._sid_findings(instance, iface, "remote", label))
+        return findings
 
-            if not _is_up(status):
+    def _sid_findings(
+        self, instance: str, iface: dict[str, Any], side: str, label
+    ) -> list[Finding]:
+        sid = iface.get(f"{side}_sid") or {"value": None, "peers": []}
+        value = sid.get("value")
+        peers = sid.get("peers") or []
+        prefix = f"EVPN VPWS SID {side}"
+
+        findings = [
+            Finding(
+                Outcome.INFO,
+                f"{instance}: {side} SID {value if value is not None else '?'}",
+                label=label(f"{prefix} value"),
+                value=f"SID {value if value is not None else '?'}",
+            )
+        ]
+
+        if not peers:
+            if side == "remote":
+                # Remote peer musi existovat vzdy - jeho absence znamena
+                # nenakonfigurovanou nebo spadlou druhou stranu.
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
-                        f"{name}: stav rozhrani {status}, ocekavano {UP}",
-                        label=name,
-                        value=_vpws_value(subject),
-                        baseline_value=_vpws_value(baseline),
-                        baseline=baseline,
-                        subject=subject,
+                        f"{instance}: remote peer chybi",
+                        label=label(f"{prefix} PE"),
+                        value="Neznamy peer",
                     )
                 )
-                continue
-
-            # local a remote SID se u EVPN-VPWS zamerne lisi - kazda strana
-            # inzeruje svoje service ID ('local 1000; remote 2000'). Rovnost
-            # tady neni invariant, chybi az kdyz remote SID vubec neprijde.
-            if not remote:
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
-                        f"{name}: chybi remote SID (local {local})",
-                        label=name,
-                        value=_vpws_value(subject),
-                        baseline_value=_vpws_value(baseline),
-                        baseline=baseline,
-                        subject=subject,
+                        f"{instance}: remote SID nema zadny Resolved zaznam",
+                        label=label(f"{prefix} status"),
+                        value="Unresolved / Chybi",
                     )
                 )
-                continue
+            else:
+                # Local peery nese jen multihoming - u single-homed jde
+                # o ocekavany stav, ne o vadu.
+                findings.append(
+                    Finding(
+                        Outcome.INFO,
+                        f"{instance}: local strana bez multi-homing peeru",
+                        label=label(f"{prefix} mode"),
+                        value=f"{iface.get('mode') or 'unknown'} "
+                        "(multi-homing peer ve vypisu nenalezen)",
+                    )
+                )
+            return findings
 
+        peer_label = f"{prefix} peer PE" if side == "local" else f"{prefix} PE"
+        for peer in peers:
+            resolved = (peer.get("status") or "").strip().lower() == "resolved"
+            outcome = Outcome.OK if resolved else Outcome.BROKEN
             findings.append(
                 Finding(
-                    Outcome.OK,
-                    f"{name}: {UP}, SID {local} -> {remote}",
-                    label=name,
-                    value=_vpws_value(subject),
-                    baseline_value=_vpws_value(baseline),
-                    baseline=baseline,
-                    subject=subject,
+                    outcome,
+                    f"{instance}: {side} peer {peer.get('ipaddr')}",
+                    label=label(peer_label),
+                    value=str(peer.get("ipaddr") or "?"),
+                    subject=dict(peer),
                 )
             )
+            findings.append(
+                Finding(
+                    outcome,
+                    f"{instance}: {side} peer {peer.get('ipaddr')} "
+                    f"status {peer.get('status') or 'chybi'}",
+                    label=label(f"{prefix} status"),
+                    value=str(peer.get("status") or "Unresolved / Chybi"),
+                )
+            )
+            for info_label, key in (("mode", "mode"), ("ESI", "esi"), ("role", "role")):
+                if peer.get(key):
+                    findings.append(
+                        Finding(
+                            Outcome.INFO,
+                            f"{instance}: {side} peer {key} {peer[key]}",
+                            label=label(f"{prefix} {info_label}"),
+                            value=str(peer[key]),
+                        )
+                    )
         return findings
 
 

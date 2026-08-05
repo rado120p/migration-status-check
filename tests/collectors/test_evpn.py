@@ -12,14 +12,51 @@ PLATFORMS = ("junos", "junos-evo")
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
-def test_vpws_schema(rpc_fixture, platform):
+def test_vpws_instances_carry_interface_list(rpc_fixture, platform):
     result = EvpnVpwsCollector().parse(rpc_fixture(platform, "evpn_vpws"), platform)
-    assert isinstance(result, dict)
-    for instance, data in result.items():
-        assert set(data) == {"local_sid", "remote_sid", "status"}
-        assert isinstance(data["status"], str)
-        assert isinstance(data["local_sid"], int)
-        assert isinstance(data["remote_sid"], int)
+    assert result, "fixture nema zadnou vpws instanci"
+    for data in result.values():
+        assert set(data) == {"interfaces"}
+        for iface in data["interfaces"]:
+            assert set(iface) == {"name", "status", "mode", "local_sid", "remote_sid"}
+            for sid in (iface["local_sid"], iface["remote_sid"]):
+                assert set(sid) == {"value", "peers"}
+                for peer in sid["peers"]:
+                    assert set(peer) == {"esi", "ipaddr", "mode", "role", "status"}
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_vpws_remote_peer_resolved_from_fixture(rpc_fixture, platform):
+    result = EvpnVpwsCollector().parse(rpc_fixture(platform, "evpn_vpws"), platform)
+    iface = next(iter(result.values()))["interfaces"][0]
+    assert iface["remote_sid"]["value"] is not None
+    assert iface["remote_sid"]["peers"], "fixture nese sid-pe-info, parser ho nevraci"
+    assert iface["remote_sid"]["peers"][0]["status"] == "Resolved"
+
+
+def test_vpws_empty_pe_table_gives_empty_peers():
+    xml = etree.fromstring(
+        """<evpn-vpws-information><evpn-vpws-instance>
+        <evpn-vpws-instance-name>X</evpn-vpws-instance-name>
+        <evpn-vpws-interface-status-table><evpn-vpws-interface>
+          <evpn-vpws-interface-name>ge-0/0/2.213</evpn-vpws-interface-name>
+          <evpn-vpws-interface-mode>single-homed</evpn-vpws-interface-mode>
+          <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+          <evpn-vpws-service-id-local-status-table><evpn-vpws-sid-local>
+            <evpn-vpws-sid-local-value>1000</evpn-vpws-sid-local-value>
+            <evpn-vpws-sid-pe-status-table/>
+          </evpn-vpws-sid-local></evpn-vpws-service-id-local-status-table>
+          <evpn-vpws-service-id-remote-status-table><evpn-vpws-sid-remote>
+            <evpn-vpws-sid-remote-value>2000</evpn-vpws-sid-remote-value>
+            <evpn-vpws-sid-pe-status-table/>
+          </evpn-vpws-sid-remote></evpn-vpws-service-id-remote-status-table>
+        </evpn-vpws-interface></evpn-vpws-interface-status-table>
+        </evpn-vpws-instance></evpn-vpws-information>"""
+    )
+    result = EvpnVpwsCollector().parse(xml, "junos")
+    iface = result["X"]["interfaces"][0]
+    assert iface["local_sid"] == {"value": 1000, "peers": []}
+    assert iface["remote_sid"] == {"value": 2000, "peers": []}
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
@@ -42,46 +79,6 @@ def test_mac_schema(rpc_fixture, platform):
 def test_esi_requires_extensive():
     """Bez 'extensive' Junos zadny ESI blok nevrati a collector by tise mlcel."""
     assert EvpnEsiCollector().rpc_kwargs("junos") == {"extensive": True}
-
-
-def test_vpws_reads_interface_status_not_pe_status():
-    """Stav rozhrani je 'Up', stav vzdaleneho PE 'Resolved'.
-
-    Check evpn_vpws_status porovnava proti 'Up', takze collector musi emitovat
-    stav rozhrani. Kdyby vratil 'Resolved', zdrava sluzba by hlasila BROKEN.
-    """
-    xml = etree.fromstring(
-        """
-        <evpn-vpws-information>
-          <evpn-vpws-instance>
-            <evpn-vpws-instance-name>VPWS-A</evpn-vpws-instance-name>
-            <evpn-vpws-interface-status-table>
-              <evpn-vpws-interface>
-                <evpn-vpws-interface-name>ge-0/0/2.213</evpn-vpws-interface-name>
-                <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
-                <evpn-vpws-service-id-local-status-table>
-                  <evpn-vpws-sid-local>
-                    <evpn-vpws-sid-local-value>1000</evpn-vpws-sid-local-value>
-                  </evpn-vpws-sid-local>
-                </evpn-vpws-service-id-local-status-table>
-                <evpn-vpws-service-id-remote-status-table>
-                  <evpn-vpws-sid-remote>
-                    <evpn-vpws-sid-remote-value>2000</evpn-vpws-sid-remote-value>
-                    <evpn-vpws-sid-pe-status-table>
-                      <evpn-vpws-sid-pe-info>
-                        <evpn-vpws-sid-pe-status>Resolved</evpn-vpws-sid-pe-status>
-                      </evpn-vpws-sid-pe-info>
-                    </evpn-vpws-sid-pe-status-table>
-                  </evpn-vpws-sid-remote>
-                </evpn-vpws-service-id-remote-status-table>
-              </evpn-vpws-interface>
-            </evpn-vpws-interface-status-table>
-          </evpn-vpws-instance>
-        </evpn-vpws-information>
-        """
-    )
-    result = EvpnVpwsCollector().parse(xml, "junos")
-    assert result == {"VPWS-A": {"local_sid": 1000, "remote_sid": 2000, "status": "Up"}}
 
 
 def test_esi_emits_logical_unit_as_interface():
