@@ -58,8 +58,8 @@ v device scope by trvale hlásila FAIL bez výpovědi. Commity `682beb6`,
 
 **Nový check `evpn_instance_status` (both, critical, jen E-LAN).** Pravidla:
 local interfaces > 0 a všechna `Up`; IRB interfaces `Up`, pokud nějaké
-existují; EVPN neighbors > 0; ESI status `resolved` (case-insensitive) — bez
-dat SKIP. S baseline navíc porovnává počty (local/IRB interfaces, neighbors)
+existují; EVPN neighbors > 0; ESI status začíná `Resolved` (case-insensitive)
+— bez dat SKIP. S baseline navíc porovnává počty (local/IRB interfaces, neighbors)
 proti subjektu — rozdíl je nález. `--detail` rozepisuje INFO řádky (`EVPN
 interface`, `IRB interface`, `EVPN neighbor`) beze změny rendereru — `_block()`
 je vypisuje jako běžné INFO řádky bloku služby. Commit `f82c976`, scope

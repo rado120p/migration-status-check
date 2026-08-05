@@ -107,7 +107,7 @@ Na EVO ověřit RPC jméno proti laborce.
 | IRB interfaces | informativní (instance IRB mít nemusí) |
 | IRB interfaces up | pokud `irb > 0`: `up == total` PASS, jinak FAIL |
 | EVPN neighbors | `> 0` PASS, jinak FAIL |
-| ESI status | `"resolved" in status` PASS, jinak FAIL; bez dat SKIP |
+| ESI status | `status začíná "Resolved"` PASS, jinak FAIL; bez dat SKIP |
 
 `--detail` rozepíše jmenovité řádky interfaců, IRB a neighborů.
 

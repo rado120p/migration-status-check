@@ -377,6 +377,15 @@ def test_instance_esi_resolved_passes_unresolved_fails():
     assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
 
 
+def test_instance_esi_unresolved_status_fails_not_substring_match():
+    # "Unresolved" obsahuje "resolved" jako podretezec - substring test by
+    # tenhle stav omylem oznacil za OK, presne obracene, nez rika status.
+    bad = _instance_findings(
+        _instance_subject(esis={"00:11:12:13:14:00:00:00:00:00": "Unresolved"})
+    )
+    assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
+
+
 def test_instance_no_esi_gives_skip_row():
     findings = _instance_findings(_instance_subject(esis={}))
     row = _by_label(findings, "ESI status")
@@ -403,6 +412,17 @@ def test_instance_esi_missing_against_baseline_fails():
     )
     row = _by_label(findings, "ESI 00:11:12:13:14:00:00:00:00:00")
     assert row.outcome is Outcome.BROKEN
+
+
+def test_instance_two_instances_qualify_labels():
+    # Dve instance ve scope musi mit odlisitelne radky - stejny princip
+    # jako test_two_interfaces_qualify_labels u VPWS checku.
+    subject = _instance_subject()
+    subject["evpn_instance"]["EVPN-B"] = subject["evpn_instance"].pop("EVPN-AWARE-CPE13")
+    subject["evpn_instance"]["EVPN-A"] = _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
+    findings = _instance_findings(subject)
+    assert any(f.label == "EVPN local interfaces (EVPN-A)" for f in findings)
+    assert any(f.label == "EVPN local interfaces (EVPN-B)" for f in findings)
 
 
 def test_instance_esi_status_text_not_compared_to_baseline():

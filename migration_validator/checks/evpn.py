@@ -554,7 +554,9 @@ class EvpnInstanceStatusCheck(Check):
                     )
                 )
                 continue
-            resolved = "resolved" in status.lower()
+            # Substring by chytl i "Unresolved" - stejny duvod, proc VPWS
+            # check (radek vyse) porovnava cele slovo, ne podretezec.
+            resolved = status.lower().startswith("resolved")
             findings.append(
                 Finding(
                     Outcome.OK if resolved else Outcome.BROKEN,
