@@ -299,6 +299,11 @@ def test_instance_irb_carries_l3_context(rpc_fixture):
     )
     pop1 = result["EVPN-VLAN-AWARE-POP1"]
     assert pop1["irb_interfaces"]["total"] == 2
+    # Delka, ne jen 'in': fixture ma i hola <irb-interface>irb.14</irb-interface>
+    # pod bridge-domain (bez jmenneho podelementu). Bez filtru na
+    # irb-interface-name by se do entries vlozil i spurious zaznam
+    # {"name": None, ...} a testy s "in" by ho tise prehledly.
+    assert len(pop1["irb_interfaces"]["entries"]) == 2
     assert {"name": "irb.14", "status": "Up", "l3_context": "master"} in (
         pop1["irb_interfaces"]["entries"]
     )
@@ -333,3 +338,46 @@ def test_instance_platform_rpc_names():
     assert collector.rpc_name("junos") == "get_evpn_instance_information"
     assert collector.rpc_name("junos-evo") == "get_mac_vrf_instance_information"
     assert collector.rpc_kwargs("junos") == {"extensive": True}
+
+
+def test_instance_totals_come_from_count_tags_not_entries():
+    # Skutecne chovani boxu: local-interfaces/-up pocitaji i '.local..NN'
+    # (viz EVO fixture), takze citaci tag a pocet <evpn-interface> zaznamu
+    # se bezne lisi. Kdyby parser pocital total/up jako len(entries), tenhle
+    # test by to odhalil - fixture data jsou sama o sobe konzistentni, takze
+    # bez tohoto testu mutant "total = len(entries)" prezije.
+    xml = etree.fromstring(
+        """
+        <evpn-instance-information>
+          <evpn-instance>
+            <evpn-instance-name>X</evpn-instance-name>
+            <local-interfaces>5</local-interfaces>
+            <local-interfaces-up>4</local-interfaces-up>
+            <evpn-interface-status-table>
+              <evpn-interface>
+                <evpn-interface-name>ae0.14</evpn-interface-name>
+                <evpn-interface-status>Up</evpn-interface-status>
+              </evpn-interface>
+            </evpn-interface-status-table>
+            <irb-interfaces>7</irb-interfaces>
+            <irb-interfaces-up>6</irb-interfaces-up>
+            <irb-interface-status-table>
+              <irb-interface>
+                <irb-interface-name>irb.14</irb-interface-name>
+                <irb-interface-status>Up</irb-interface-status>
+                <irb-interface-l3-context>master</irb-interface-l3-context>
+              </irb-interface>
+            </irb-interface-status-table>
+            <evpn-num-neighbors>0</evpn-num-neighbors>
+          </evpn-instance>
+        </evpn-instance-information>
+        """
+    )
+    result = EvpnInstanceCollector().parse(xml, "junos-evo")
+    data = result["X"]
+    assert data["local_interfaces"]["total"] == 5
+    assert data["local_interfaces"]["up"] == 4
+    assert len(data["local_interfaces"]["entries"]) == 1
+    assert data["irb_interfaces"]["total"] == 7
+    assert data["irb_interfaces"]["up"] == 6
+    assert len(data["irb_interfaces"]["entries"]) == 1
