@@ -120,12 +120,15 @@ Náhrada dnešního počítání záznamů z plné MAC tabulky:
 - EVO: `show mac-vrf forwarding mac-table count`.
 - Výstup per instance: per-VLAN počet (`learn-vlan`/`mac-count`) a
   per-interface počet (`interface-name`/`mac-count`).
-- Render: `BD-313 VLAN: 313 MAC count`, `BD-313 Interface
-  ge-0/0/2.313:313 MAC count` (vlan-based obdobně bez BD).
-- **Per-VLAN počet je porovnatelný pre/post (klíč = VLAN id, jako dnes).
-  Per-interface počet je informativní** — jména rozhraní se migrací
-  mění; na EVO navíc `interface-name` bývá prázdné, řádek se pak
-  vynechá.
+- Render: `BD-313 MAC count`, `BD-313 Interface ge-0/0/2.313:313
+  MAC count` (vlan-based obdobně bez BD).
+- **Per-VLAN i per-interface počet se porovnávají pre/post.** Per-VLAN
+  klíčem je VLAN id (jako dnes). Per-interface počet se porovnává přes
+  dvojici rozhraní spárované služby (starý port ↔ nový port ze scope
+  párování, resp. z run.yml mappingu) — jména rozhraní se migrací mění,
+  takže klíčem není jméno, ale pár. Když EVO `interface-name` nevrátí
+  (v `count` výpisu bývá prázdné), per-interface řádek se vynechá a
+  porovnává se jen per-VLAN.
 
 ### 2.4 Compare semantika
 
@@ -180,21 +183,28 @@ devices:
   EX1-POP1:  {host: 172.20.20.7, platform: junos-ex,  role: l2-switch}
 
 interface_mapping:
-  - name: et-0/0/0              # port na novem boxu
-    origins:
-      - {node: MX1-POP1, port: ge-0/0/0}
-  - name: ae0
-    origins:
-      - node: MX1-POP1
-        port: ge-0/0/1
-        l2_switch: {node: EX1-POP1, ae_port: ae0, access_port: ge-0/0/0}
+  # jeden zaznam = jeden migrovany stary port
+  - old: {node: MX1-POP1, port: ge-0/0/0}
+    new: {node: PTX1-POP1, port: et-0/0/0}
+  # vic zaznamu muze sdilet stejny novy port (LAG); EX patri pod `new`,
+  # je soucasti nove topologie (EVO -> EX -> CPE)
+  - old: {node: MX1-POP1, port: ge-0/0/1}
+    new:
+      node: PTX1-POP1
+      port: ae0
+      l2_switch: {node: EX1-POP1, ae_port: ae0, access_port: ge-0/0/0}
+  - old: {node: MX1-POP1, port: ge-0/0/2}
+    new:
+      node: PTX1-POP1
+      port: ae0
+      l2_switch: {node: EX1-POP1, ae_port: ae0, access_port: ge-0/0/1}
 
 captures:                        # vede aplikace
   - {phase: pre, device: MX1-POP1, port: ge-0/0/0,
      snapshot: snapshot_pre_MX1-POP1_ge_0_0_0.json, taken: ...}
 ```
 
-Formát `origins` jako seznam je připraven na více zdrojových boxů
+Formát old/new dvojic je připraven na více zdrojových boxů
 (2× MX → ACX) a EX řetězení; **implementace fáze 4 podporuje 1 starý +
 1 nový box**, víc boxů a `l2_switch` se aktivují později beze změny
 formátu. Evaluate ověřuje, že soubory z manifestu existují.
@@ -276,6 +286,7 @@ Fáze 5 závisí na 4 (run.yml) a využije 1.1 (learned_via) i 3 (vazby).
 - Parsery: sjednotit; generování inventory jako `--parse-services` flag
   (opt-in), ne default.
 - Rollback: třetí fáze `--phase rollback`, baseline = původní pre.
-- Párování portů: hybridní run.yml (ručně i flagy), origins seznam;
+- Párování portů: hybridní run.yml (ručně i flagy), old/new dvojice,
+  `l2_switch` pod `new` (EX je součást nové topologie);
   multi-box jen ve schématu, implementace později.
 - EX: odloženo do fáze 5, detailní design samostatně.
