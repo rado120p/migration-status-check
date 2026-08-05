@@ -15,7 +15,6 @@ from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 UP = "Up"
-NO_DOMAIN = "-"
 
 
 def _is_up(status: str) -> bool:
@@ -351,26 +350,71 @@ class EvpnMacCountCheck(Check):
 
         baseline_instances = (ctx.baseline or {}).get("evpn_mac", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
+        many = len(instances) > 1
 
         findings = []
         for instance in sorted(instances):
-            domains = instances[instance]
-            for domain in sorted(domains):
-                count = int(domains[domain])
-                label = instance if domain == NO_DOMAIN else f"{instance}/{domain}"
-                baseline_count = (
-                    baseline_instances.get(instance, {}).get(domain)
-                    if instance in baseline_instances
-                    else None
-                )
+            data = instances[instance]
+            baseline = baseline_instances.get(instance, {})
 
-                if baseline_count is None:
-                    findings.append(_mac_state_finding(label, count))
-                    continue
+            def label(text: str) -> str:
+                return qualified(text, instance) if many else text
 
-                findings.append(
-                    _mac_compare_finding(label, int(baseline_count), count, tolerance)
-                )
+            subject_vlans = data.get("vlans", {})
+            baseline_vlans = baseline.get("vlans", {})
+            # Union se baseline: count vypis mrtvou domenu vubec neuvadi,
+            # iterace jen pres subject by jeji zmizeni tise zahodila.
+            for vlan in sorted(
+                set(subject_vlans) | set(baseline_vlans),
+                key=lambda v: int(v) if v.isdigit() else 0,
+            ):
+                subject_entry = subject_vlans.get(vlan)
+                baseline_entry = baseline_vlans.get(vlan)
+                domain = (subject_entry or baseline_entry).get("domain")
+                row_label = label(f"{domain} MAC count" if domain else "MAC count")
+                if subject_entry is None:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label, int(baseline_entry["count"]), 0, tolerance
+                        )
+                    )
+                elif baseline_entry is None:
+                    findings.append(
+                        _mac_state_finding(row_label, int(subject_entry["count"]))
+                    )
+                else:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label,
+                            int(baseline_entry["count"]),
+                            int(subject_entry["count"]),
+                            tolerance,
+                        )
+                    )
+
+            baseline_interfaces = baseline.get("interfaces", {})
+            # Per-interface se iteruje jen subject: kdyz box interface-name
+            # nevrati (EVO count vypis), radek se vynechava - rozhodnuti
+            # ze specu, per-VLAN uroven je vzdy pokryta.
+            for key in sorted(data.get("interfaces", {})):
+                entry = data["interfaces"][key]
+                domain = entry.get("domain")
+                prefix = f"{domain} " if domain else ""
+                row_label = label(f"{prefix}Interface {entry['name']} MAC count")
+                baseline_entry = baseline_interfaces.get(key)
+                if baseline_entry is None:
+                    findings.append(
+                        _mac_state_finding(row_label, int(entry["count"]))
+                    )
+                else:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label,
+                            int(baseline_entry["count"]),
+                            int(entry["count"]),
+                            tolerance,
+                        )
+                    )
         return findings
 
 

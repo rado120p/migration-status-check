@@ -241,44 +241,75 @@ def test_esi_missing_data_skips():
     assert run_check(EvpnEsiStatusCheck(), _ctx({"evpn_esi": {}}))[0].status is Status.SKIP
 
 
-def test_mac_count_nonzero_passes_per_bridge_domain():
-    ctx = _ctx({"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42, "BD-314": 7}}})
-    results = run_check(EvpnMacCountCheck(), ctx)
-    assert {r.label for r in results} == {"EVPN-AWARE-CPE13/BD-313", "EVPN-AWARE-CPE13/BD-314"}
-    assert all(r.status is Status.PASS for r in results)
+def _mac_subject(count=2, *, vlan="313", domain="BD-313",
+                 iface="ge-0/0/2.313", iface_count=1):
+    return {"evpn_mac": {"EVPN-AWARE-CPE13": {
+        "vlans": {vlan: {"count": count, "domain": domain}},
+        "interfaces": {iface: {"count": iface_count,
+                               "name": f"{iface}:{vlan}", "domain": domain}},
+    }}}
 
 
-def test_mac_count_zero_warns():
-    ctx = _ctx({"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 0}}})
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.WARN
-    assert "0" in result.message
+def test_mac_count_labels_carry_domain_and_interface():
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject()))
+    assert _by_label(findings, "BD-313 MAC count").outcome is Outcome.OK
+    row = _by_label(findings, "BD-313 Interface ge-0/0/2.313:313 MAC count")
+    assert row.outcome is Outcome.OK
+    assert row.value == "1"
 
 
-def test_mac_count_drop_beyond_tolerance_warns():
-    ctx = _ctx(
-        subject={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 11}}},
-        baseline={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42}}},
+def test_mac_count_vlan_based_has_no_domain_prefix():
+    subject = _mac_subject(domain=None)
+    findings = EvpnMacCountCheck().run(_ctx(subject))
+    assert _by_label(findings, "MAC count").outcome is Outcome.OK
+    assert _by_label(findings, "Interface ge-0/0/2.313:313 MAC count")
+
+
+def test_mac_count_zero_vlan_fails():
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject(0)))
+    assert _by_label(findings, "BD-313 MAC count").outcome is Outcome.BROKEN
+
+
+def test_mac_count_compares_vlan_against_baseline_key():
+    findings = EvpnMacCountCheck().run(
+        _ctx(_mac_subject(1), baseline=_mac_subject(10))
     )
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.WARN
-    assert "42" in result.message and "11" in result.message
+    row = _by_label(findings, "BD-313 MAC count")
+    assert row.outcome is Outcome.BROKEN  # -90 % pod toleranci -60
+    assert row.baseline_value == "10"
 
 
-def test_mac_count_within_tolerance_passes():
-    ctx = _ctx(
-        subject={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 40}}},
-        baseline={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42}}},
-    )
-    assert run_check(EvpnMacCountCheck(), ctx)[0].status is Status.PASS
+def test_mac_count_vlan_missing_in_subject_fails():
+    # Count vypis mrtvou domenu vubec nevypise - kdyby check iteroval jen
+    # subject, zmizela domena by z reportu tise vypadla.
+    subject = {"evpn_mac": {"EVPN-AWARE-CPE13": {"vlans": {}, "interfaces": {}}}}
+    findings = EvpnMacCountCheck().run(_ctx(subject, baseline=_mac_subject(5)))
+    row = _by_label(findings, "BD-313 MAC count")
+    assert row.outcome is Outcome.BROKEN
+    assert row.baseline_value == "5"
 
 
-def test_mac_count_vlan_based_uses_single_placeholder_domain():
-    ctx = _ctx(
-        {"evpn_mac": {"EVPN-BASED-CPE13": {"-": 12}}},
-        service_type="E-LAN",
-        subtype="vlan-based",
-    )
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.PASS
-    assert result.label == "EVPN-BASED-CPE13"
+def test_mac_count_interface_missing_in_subject_is_omitted():
+    # EVO count vypis interface-name nekdy nevrati - per-interface radek
+    # se pak vynechava a porovnava se jen per-VLAN (rozhodnuti ze specu).
+    subject = _mac_subject()
+    del subject["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"]["ge-0/0/2.313"]
+    findings = EvpnMacCountCheck().run(_ctx(subject, baseline=_mac_subject()))
+    assert not [f for f in findings if "Interface" in (f.label or "")]
+
+
+def test_mac_count_interface_compares_via_renamed_key():
+    # Engine (Task 4) preklici baseline interfaces na jmena subjektu,
+    # check tedy najde baseline pod svym klicem.
+    baseline = _mac_subject(iface="et-0/0/8.313", iface_count=4)
+    baseline["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"] = {
+        "ge-0/0/2.313": baseline["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"].pop("et-0/0/8.313")
+    }
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject(), baseline=baseline))
+    row = _by_label(findings, "BD-313 Interface ge-0/0/2.313:313 MAC count")
+    assert row.baseline_value == "4"
+
+
+def test_mac_count_missing_data_skips():
+    findings = EvpnMacCountCheck().run(_ctx({"evpn_mac": {}}))
+    assert findings[0].outcome is Outcome.SKIP
