@@ -69,6 +69,13 @@ def _aligned_baseline_data(
     rozhrani i to fyzicke a migrace prejmenovava obe (ge-0/0/2 -> et-0/0/8);
     kdyz se preslovnovalo jen logicke, fyzicke svou baseline nenaslo a kazda
     migrovana sluzba vypsala dva trvale radky 'bez baseline'.
+
+    Stejny osud potka evpn_mac: instance nese vedle poctu MAC na VLAN i
+    per-interface rozpad (Task 2/3) a ten je klicovany jmenem rozhrani,
+    presne jako fakta v oblasti interfaces. Bez preklicovani by check z
+    Tasku 3 hledal par pod jmenem subjektu (et-0/0/8.313), ale baseline by
+    ho porad mel ulozeny pod starym jmenem (ge-0/0/2.313) - par by se
+    nikdy nenasel.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
     selectors = baseline_scope.selectors
@@ -80,6 +87,20 @@ def _aligned_baseline_data(
         data["interfaces"] = {
             rename.get(name, name): iface_data
             for name, iface_data in data.get("interfaces", {}).items()
+        }
+    if rename and data.get("evpn_mac"):
+        # Stejny pozicni princip jako u oblasti interfaces: per-interface
+        # MAC pocty se paruji pres dvojici stary <-> novy port, ne pres
+        # jmeno, ktere se migraci zmenilo.
+        data["evpn_mac"] = {
+            instance: {
+                **instance_data,
+                "interfaces": {
+                    rename.get(key, key): entry
+                    for key, entry in instance_data.get("interfaces", {}).items()
+                },
+            }
+            for instance, instance_data in data["evpn_mac"].items()
         }
     return data
 
