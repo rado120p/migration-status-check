@@ -4,6 +4,7 @@ import pytest
 
 from migration_validator import api
 from migration_validator.engine import (
+    _aligned_baseline_data,
     _identity,
     _unassigned_bfd_sessions,
     _unassigned_bgp_peers,
@@ -181,6 +182,58 @@ def test_physical_interface_finds_its_baseline_after_rename():
     ]
     assert len(physical) == 2, "fyzicke rozhrani ma mit radek pro oba smery provozu"
     assert [check.baseline_value for check in physical] == ["400 pps", "400 pps"]
+
+
+def test_aligned_baseline_renames_evpn_mac_interface_keys():
+    """Preklicovani rename mapy musi platit i pro evpn_mac interfaces.
+
+    Jmena rozhrani se migraci meni (ge-0/0/2.313 -> et-0/0/8.313); bez
+    preklicovani by per-interface MAC pocty nikdy nenasly baseline pod
+    klicem subjektu (Task 3 check hleda prave pod nim).
+    """
+    baseline_scope = Scope(
+        id="svc:EVPN-X:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-X", "E-LAN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.313"],
+            physical_interfaces=["ge-0/0/2"],
+            routing_instances=["EVPN-X"],
+        ),
+    )
+    subject_scope = Scope(
+        id="svc:EVPN-X:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-X", "E-LAN", None),
+        selectors=Selectors(
+            interfaces=["et-0/0/8.313"],
+            physical_interfaces=["et-0/0/8"],
+            routing_instances=["EVPN-X"],
+        ),
+    )
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
+        facts={
+            "evpn_mac": {
+                "EVPN-X": {
+                    "vlans": {"313": {"count": 2, "domain": "BD-313"}},
+                    "interfaces": {
+                        "ge-0/0/2.313": {
+                            "count": 2,
+                            "name": "ge-0/0/2.313:313",
+                            "domain": "BD-313",
+                        }
+                    },
+                }
+            }
+        },
+        scopes=[baseline_scope],
+    )
+
+    data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
+
+    assert set(data["evpn_mac"]["EVPN-X"]["interfaces"]) == {"et-0/0/8.313"}
 
 
 def test_traffic_drop_surfaces_as_warn_in_summary():

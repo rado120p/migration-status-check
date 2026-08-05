@@ -1,33 +1,40 @@
-<l2ald-rtb-macdb>
-  <l2ald-mac-entry style="brief-rtb">
-    <l2-mac-routing-instance>EVPN-VLAN-AWARE-CPE13-NNI</l2-mac-routing-instance>
-    <l2-mac-bridging-domain>BD-313</l2-mac-bridging-domain>
-    <l2-bridge-vlan>313</l2-bridge-vlan>
-    <l2-mac-entry>
-      <l2-mac-address>0c:00:4b:4c:4e:01</l2-mac-address>
-      <l2-mac-flags>D</l2-mac-flags>
-      <l2-mac-logical-interface>ge-0/0/2.313</l2-mac-logical-interface>
-    </l2-mac-entry>
-    <l2-mac-entry>
-      <l2-mac-address>0c:00:f1:be:c2:01</l2-mac-address>
-      <l2-mac-flags>DC</l2-mac-flags>
-      <l2-mac-fwd-next-hop>1048579</l2-mac-fwd-next-hop>
-      <l2-active-source>150.0.0.13</l2-active-source>
-    </l2-mac-entry>
-  </l2ald-mac-entry>
-  <l2ald-mac-entry style="brief-rtb">
-    <l2-mac-routing-instance>EVPN-VLAN-AWARE-POP1</l2-mac-routing-instance>
-    <l2-mac-bridging-domain>BD-4094</l2-mac-bridging-domain>
-    <l2-bridge-vlan>4094</l2-bridge-vlan>
-    <l2-mac-entry>
-      <l2-mac-address>2c:6b:f5:3a:38:f0</l2-mac-address>
-      <l2-mac-flags>D</l2-mac-flags>
-      <l2-mac-logical-interface>ge-0/0/6.4094</l2-mac-logical-interface>
-    </l2-mac-entry>
-    <l2-mac-entry>
-      <l2-mac-address>2c:6b:f5:4c:79:f0</l2-mac-address>
-      <l2-mac-flags>D</l2-mac-flags>
-      <l2-mac-logical-interface>ge-0/0/6.4094</l2-mac-logical-interface>
-    </l2-mac-entry>
-  </l2ald-mac-entry>
-</l2ald-rtb-macdb>
+<l2ald-rtb-mac-count>
+  <l2ald-rtb-mac-count-entry>
+    <rtb-mac-count>2</rtb-mac-count>
+    <rtb-name>EVPN-VLAN-AWARE-CPE13-NNI</rtb-name>
+    <bd-name>BD-313</bd-name>
+    <l2ald-rtb-if-mac-count>
+      <l2ald-rtb-if-mac-count-entry>
+</l2ald-rtb-if-mac-count-entry>
+      <l2ald-rtb-if-mac-count-entry>
+        <interface-name>ge-0/0/2.313:313</interface-name>
+        <mac-count>1</mac-count>
+      </l2ald-rtb-if-mac-count-entry>
+    </l2ald-rtb-if-mac-count>
+    <l2ald-rtb-learn-vlan-mac-count>
+      <l2ald-rtb-learn-vlan-mac-count-entry>
+        <learn-vlan>313</learn-vlan>
+        <mac-count>2</mac-count>
+        <static-mac-count>0</static-mac-count>
+      </l2ald-rtb-learn-vlan-mac-count-entry>
+    </l2ald-rtb-learn-vlan-mac-count>
+  </l2ald-rtb-mac-count-entry>
+  <l2ald-rtb-mac-count-entry>
+    <rtb-mac-count>4</rtb-mac-count>
+    <rtb-name>EVPN-VLAN-AWARE-POP1</rtb-name>
+    <bd-name>BD-4094</bd-name>
+    <l2ald-rtb-if-mac-count>
+      <l2ald-rtb-if-mac-count-entry>
+        <interface-name>ge-0/0/6.4094:4094</interface-name>
+        <mac-count>4</mac-count>
+      </l2ald-rtb-if-mac-count-entry>
+    </l2ald-rtb-if-mac-count>
+    <l2ald-rtb-learn-vlan-mac-count>
+      <l2ald-rtb-learn-vlan-mac-count-entry>
+        <learn-vlan>4094</learn-vlan>
+        <mac-count>4</mac-count>
+        <static-mac-count>0</static-mac-count>
+      </l2ald-rtb-learn-vlan-mac-count-entry>
+    </l2ald-rtb-learn-vlan-mac-count>
+  </l2ald-rtb-mac-count-entry>
+</l2ald-rtb-mac-count>

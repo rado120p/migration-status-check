@@ -1,18 +1,22 @@
-<l2ald-rtb-macdb>
-  <l2ald-mac-entry style="brief-rtb">
-    <l2-mac-routing-instance>EVPN-VLAN-BASED-CPE13-NNI</l2-mac-routing-instance>
-    <l2-mac-bridging-domain>__EVPN-VLAN-BASED-CPE13-NNI__</l2-mac-bridging-domain>
-    <l2-bridge-vlan>413</l2-bridge-vlan>
-    <l2-mac-entry>
-      <l2-mac-address>0c:00:4b:4c:4e:01</l2-mac-address>
-      <l2-mac-flags>D</l2-mac-flags>
-      <l2-mac-logical-interface>ge-0/0/2.413</l2-mac-logical-interface>
-    </l2-mac-entry>
-    <l2-mac-entry>
-      <l2-mac-address>0c:00:f1:be:c2:01</l2-mac-address>
-      <l2-mac-flags>DC</l2-mac-flags>
-      <l2-mac-fwd-next-hop>1048575</l2-mac-fwd-next-hop>
-      <l2-active-source>150.0.0.13</l2-active-source>
-    </l2-mac-entry>
-  </l2ald-mac-entry>
-</l2ald-rtb-macdb>
+<l2ald-rtb-mac-count>
+  <l2ald-rtb-mac-count-entry>
+    <rtb-mac-count>2</rtb-mac-count>
+    <rtb-name>EVPN-VLAN-BASED-CPE13-NNI</rtb-name>
+    <bd-name>__EVPN-VLAN-BASED-CPE13-NNI__</bd-name>
+    <l2ald-rtb-if-mac-count>
+      <l2ald-rtb-if-mac-count-entry>
+</l2ald-rtb-if-mac-count-entry>
+      <l2ald-rtb-if-mac-count-entry>
+        <interface-name>ge-0/0/2.413:413</interface-name>
+        <mac-count>1</mac-count>
+      </l2ald-rtb-if-mac-count-entry>
+    </l2ald-rtb-if-mac-count>
+    <l2ald-rtb-learn-vlan-mac-count>
+      <l2ald-rtb-learn-vlan-mac-count-entry>
+        <learn-vlan>413</learn-vlan>
+        <mac-count>2</mac-count>
+        <static-mac-count>0</static-mac-count>
+      </l2ald-rtb-learn-vlan-mac-count-entry>
+    </l2ald-rtb-learn-vlan-mac-count>
+  </l2ald-rtb-mac-count-entry>
+</l2ald-rtb-mac-count>

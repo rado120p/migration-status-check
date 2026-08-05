@@ -255,8 +255,19 @@ def _facts_for(scopes, pps: int) -> dict:
                 "df_role": "DF",
                 "interface": scope.selectors.interfaces[0],
             }
-            domains = scope.selectors.bridge_domains or ["-"]
-            evpn_mac[instance] = {domain: 42 for domain in domains}
+            # Nove schema (Task 2): klic je VLAN id, domena je jen popisek k
+            # rendrovani (None u vlan-based - collector taky nevraci domenu).
+            iface = scope.selectors.interfaces[0] if scope.selectors.interfaces else None
+            vlan = scope.selectors.vlans[0] if scope.selectors.vlans else "1"
+            domain = scope.selectors.bridge_domains[0] if scope.selectors.bridge_domains else None
+            evpn_mac[instance] = {
+                "vlans": {vlan: {"count": 42, "domain": domain}},
+                "interfaces": (
+                    {iface: {"count": 42, "name": f"{iface}:{vlan}", "domain": domain}}
+                    if iface
+                    else {}
+                ),
+            }
 
     return {
         "interfaces": interfaces,

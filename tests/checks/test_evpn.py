@@ -1,6 +1,7 @@
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.evpn import (
     EvpnEsiStatusCheck,
+    EvpnInstanceStatusCheck,
     EvpnMacCountCheck,
     EvpnVpwsStatusCheck,
 )
@@ -241,44 +242,219 @@ def test_esi_missing_data_skips():
     assert run_check(EvpnEsiStatusCheck(), _ctx({"evpn_esi": {}}))[0].status is Status.SKIP
 
 
-def test_mac_count_nonzero_passes_per_bridge_domain():
-    ctx = _ctx({"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42, "BD-314": 7}}})
-    results = run_check(EvpnMacCountCheck(), ctx)
-    assert {r.label for r in results} == {"EVPN-AWARE-CPE13/BD-313", "EVPN-AWARE-CPE13/BD-314"}
-    assert all(r.status is Status.PASS for r in results)
+def _mac_subject(count=2, *, vlan="313", domain="BD-313",
+                 iface="ge-0/0/2.313", iface_count=1):
+    return {"evpn_mac": {"EVPN-AWARE-CPE13": {
+        "vlans": {vlan: {"count": count, "domain": domain}},
+        "interfaces": {iface: {"count": iface_count,
+                               "name": f"{iface}:{vlan}", "domain": domain}},
+    }}}
 
 
-def test_mac_count_zero_warns():
-    ctx = _ctx({"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 0}}})
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.WARN
-    assert "0" in result.message
+def test_mac_count_labels_carry_domain_and_interface():
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject()))
+    assert _by_label(findings, "BD-313 MAC count").outcome is Outcome.OK
+    row = _by_label(findings, "BD-313 Interface ge-0/0/2.313:313 MAC count")
+    assert row.outcome is Outcome.OK
+    assert row.value == "1"
 
 
-def test_mac_count_drop_beyond_tolerance_warns():
-    ctx = _ctx(
-        subject={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 11}}},
-        baseline={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42}}},
+def test_mac_count_vlan_based_has_no_domain_prefix():
+    subject = _mac_subject(domain=None)
+    findings = EvpnMacCountCheck().run(_ctx(subject))
+    assert _by_label(findings, "MAC count").outcome is Outcome.OK
+    assert _by_label(findings, "Interface ge-0/0/2.313:313 MAC count")
+
+
+def test_mac_count_zero_vlan_fails():
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject(0)))
+    assert _by_label(findings, "BD-313 MAC count").outcome is Outcome.BROKEN
+
+
+def test_mac_count_compares_vlan_against_baseline_key():
+    findings = EvpnMacCountCheck().run(
+        _ctx(_mac_subject(1), baseline=_mac_subject(10))
     )
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.WARN
-    assert "42" in result.message and "11" in result.message
+    row = _by_label(findings, "BD-313 MAC count")
+    assert row.outcome is Outcome.BROKEN  # -90 % pod toleranci -60
+    assert row.baseline_value == "10"
 
 
-def test_mac_count_within_tolerance_passes():
-    ctx = _ctx(
-        subject={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 40}}},
-        baseline={"evpn_mac": {"EVPN-AWARE-CPE13": {"BD-313": 42}}},
+def test_mac_count_vlan_missing_in_subject_fails():
+    # Count vypis mrtvou domenu vubec nevypise - kdyby check iteroval jen
+    # subject, zmizela domena by z reportu tise vypadla.
+    subject = {"evpn_mac": {"EVPN-AWARE-CPE13": {"vlans": {}, "interfaces": {}}}}
+    findings = EvpnMacCountCheck().run(_ctx(subject, baseline=_mac_subject(5)))
+    row = _by_label(findings, "BD-313 MAC count")
+    assert row.outcome is Outcome.BROKEN
+    assert row.baseline_value == "5"
+
+
+def test_mac_count_interface_missing_in_subject_is_omitted():
+    # EVO count vypis interface-name nekdy nevrati - per-interface radek
+    # se pak vynechava a porovnava se jen per-VLAN (rozhodnuti ze specu).
+    subject = _mac_subject()
+    del subject["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"]["ge-0/0/2.313"]
+    findings = EvpnMacCountCheck().run(_ctx(subject, baseline=_mac_subject()))
+    assert not [f for f in findings if "Interface" in (f.label or "")]
+
+
+def test_mac_count_interface_compares_via_renamed_key():
+    # Engine (Task 4) preklici baseline interfaces na jmena subjektu,
+    # check tedy najde baseline pod svym klicem.
+    baseline = _mac_subject(iface="et-0/0/8.313", iface_count=4)
+    baseline["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"] = {
+        "ge-0/0/2.313": baseline["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"].pop("et-0/0/8.313")
+    }
+    findings = EvpnMacCountCheck().run(_ctx(_mac_subject(), baseline=baseline))
+    row = _by_label(findings, "BD-313 Interface ge-0/0/2.313:313 MAC count")
+    assert row.baseline_value == "4"
+
+
+def test_mac_count_missing_data_skips():
+    findings = EvpnMacCountCheck().run(_ctx({"evpn_mac": {}}))
+    assert findings[0].outcome is Outcome.SKIP
+
+
+def _instance_subject(*, total=2, up=2, irb_total=1, irb_up=1,
+                      neighbors=1, esis=None):
+    return {"evpn_instance": {"EVPN-AWARE-CPE13": {
+        "local_interfaces": {"total": total, "up": up, "entries": [
+            {"name": "ge-0/0/2.313", "status": "Up"}]},
+        "irb_interfaces": {"total": irb_total, "up": irb_up, "entries": [
+            {"name": "irb.14", "status": "Up", "l3_context": "master"}]},
+        "neighbors": {"total": neighbors, "addresses": ["150.0.0.13"]},
+        "esis": {"00:11:12:13:14:00:00:00:00:00": "Resolved by IFL ae0.14"}
+        if esis is None else esis,
+    }}}
+
+
+def _instance_findings(subject, baseline=None):
+    return EvpnInstanceStatusCheck().run(_ctx(subject, baseline))
+
+
+def test_instance_healthy_rows_pass():
+    findings = _instance_findings(_instance_subject())
+    for label in ("EVPN local interfaces", "EVPN local interfaces up",
+                  "EVPN IRB interfaces up", "EVPN neighbors"):
+        assert _by_label(findings, label).outcome in (Outcome.OK, Outcome.INFO), label
+    assert _by_label(findings, "EVPN IRB interfaces").outcome is Outcome.INFO
+
+
+def test_instance_zero_local_interfaces_fails():
+    findings = _instance_findings(_instance_subject(total=0, up=0))
+    assert _by_label(findings, "EVPN local interfaces").outcome is Outcome.BROKEN
+
+
+def test_instance_interface_down_fails_up_row():
+    findings = _instance_findings(_instance_subject(total=2, up=1))
+    row = _by_label(findings, "EVPN local interfaces up")
+    assert row.outcome is Outcome.BROKEN
+    assert row.value == "1/2"
+
+
+def test_instance_without_irb_skips_irb_up_row():
+    findings = _instance_findings(_instance_subject(irb_total=0, irb_up=0))
+    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
+
+
+def test_instance_irb_down_fails():
+    findings = _instance_findings(_instance_subject(irb_total=2, irb_up=1))
+    assert _by_label(findings, "EVPN IRB interfaces up").outcome is Outcome.BROKEN
+
+
+def test_instance_zero_neighbors_fails():
+    findings = _instance_findings(_instance_subject(neighbors=0))
+    assert _by_label(findings, "EVPN neighbors").outcome is Outcome.BROKEN
+
+
+def test_instance_esi_resolved_passes_unresolved_fails():
+    ok = _instance_findings(_instance_subject())
+    assert _by_label(ok, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.OK
+    bad = _instance_findings(
+        _instance_subject(esis={"00:11:12:13:14:00:00:00:00:00": ""})
     )
-    assert run_check(EvpnMacCountCheck(), ctx)[0].status is Status.PASS
+    assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
 
 
-def test_mac_count_vlan_based_uses_single_placeholder_domain():
-    ctx = _ctx(
-        {"evpn_mac": {"EVPN-BASED-CPE13": {"-": 12}}},
-        service_type="E-LAN",
-        subtype="vlan-based",
+def test_instance_esi_unresolved_status_fails_not_substring_match():
+    # "Unresolved" obsahuje "resolved" jako podretezec - substring test by
+    # tenhle stav omylem oznacil za OK, presne obracene, nez rika status.
+    bad = _instance_findings(
+        _instance_subject(esis={"00:11:12:13:14:00:00:00:00:00": "Unresolved"})
     )
-    result = run_check(EvpnMacCountCheck(), ctx)[0]
-    assert result.status is Status.PASS
-    assert result.label == "EVPN-BASED-CPE13"
+    assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
+
+
+def test_instance_no_esi_gives_skip_row():
+    findings = _instance_findings(_instance_subject(esis={}))
+    row = _by_label(findings, "ESI status")
+    assert row.outcome is Outcome.SKIP
+    assert row.value == "bez dat"
+
+
+def test_instance_count_differs_from_baseline_fails():
+    # 2.4: hodnoty se pre/post musi rovnat - i kdyz je stavove pravidlo
+    # samo o sobe splnene.
+    findings = _instance_findings(
+        _instance_subject(total=2, up=2),
+        baseline=_instance_subject(total=3, up=3),
+    )
+    row = _by_label(findings, "EVPN local interfaces")
+    assert row.outcome is Outcome.BROKEN
+    assert row.baseline_value == "3"
+
+
+def test_instance_esi_missing_against_baseline_fails():
+    findings = _instance_findings(
+        _instance_subject(esis={}),
+        baseline=_instance_subject(),
+    )
+    row = _by_label(findings, "ESI 00:11:12:13:14:00:00:00:00:00")
+    assert row.outcome is Outcome.BROKEN
+
+
+def test_instance_two_instances_qualify_labels():
+    # Dve instance ve scope musi mit odlisitelne radky - stejny princip
+    # jako test_two_interfaces_qualify_labels u VPWS checku.
+    subject = _instance_subject()
+    subject["evpn_instance"]["EVPN-B"] = subject["evpn_instance"].pop("EVPN-AWARE-CPE13")
+    subject["evpn_instance"]["EVPN-A"] = _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
+    findings = _instance_findings(subject)
+    assert any(f.label == "EVPN local interfaces (EVPN-A)" for f in findings)
+    assert any(f.label == "EVPN local interfaces (EVPN-B)" for f in findings)
+
+
+def test_instance_esi_status_text_not_compared_to_baseline():
+    # Text statusu nese jmeno IFL ('Resolved by IFL ae0.14'), ktere se
+    # migraci meni - rovnost textu by FAILovala kazdou migraci.
+    findings = _instance_findings(
+        _instance_subject(),
+        baseline=_instance_subject(
+            esis={"00:11:12:13:14:00:00:00:00:00": "Resolved by IFL ge-0/0/2.313"}
+        ),
+    )
+    assert _by_label(findings, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.OK
+
+
+def test_instance_info_rows_list_names():
+    findings = _instance_findings(_instance_subject())
+    values = [f.value for f in findings if f.label == "EVPN interface"]
+    assert "ge-0/0/2.313 Up" in values
+    irb_values = [f.value for f in findings if f.label == "IRB interface"]
+    assert "irb.14 Up (master)" in irb_values
+    neighbor_values = [f.value for f in findings if f.label == "EVPN neighbor"]
+    assert "150.0.0.13" in neighbor_values
+
+
+def test_instance_missing_data_skips():
+    findings = _instance_findings({"evpn_instance": {}})
+    assert findings[0].outcome is Outcome.SKIP
+
+
+def test_instance_not_run_on_eline_scope():
+    result = run_check(
+        EvpnInstanceStatusCheck(),
+        _ctx(_instance_subject(), service_type="E-Line", subtype="vpws"),
+    )
+    assert result == []

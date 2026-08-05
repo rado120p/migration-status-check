@@ -16,7 +16,6 @@ jen vlan-based. Slouceni je platformni normalizace, tedy prace collectoru.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from lxml import etree
@@ -24,8 +23,6 @@ from lxml import etree
 from migration_validator.collectors.base import Collector, CollectorError
 from migration_validator.collectors.interfaces import _int, _text
 from migration_validator.collectors.registry import register
-
-NO_DOMAIN = "-"
 
 
 @register
@@ -143,24 +140,116 @@ class EvpnEsiCollector(Collector):
 
 
 @register
+class EvpnInstanceCollector(Collector):
+    """Per-instance stav EVPN: local/IRB rozhrani, neighbors, ESI.
+
+    Tentyz extensive vypis jako EvpnEsiCollector, ale jina osa: tady je
+    jednotkou instance (RI), tam ethernet segment napric instancemi.
+    Na EVO je kanonicky prikaz 'show mac-vrf routing instance extensive'
+    (RPC get_mac_vrf_instance_information, overeno v laborce) - odpoved
+    ma shodny tvar evpn-instance-information jako MX, takze parse()
+    nepotrebuje platformni vetev.
+    """
+
+    name = "evpn_instance"
+
+    RPC_NAMES = {
+        "junos": "get_evpn_instance_information",
+        "junos-evo": "get_mac_vrf_instance_information",
+    }
+
+    # Interni instance boxu - neni sluzba, nema local interfaces a check
+    # by na ni v device scope trvale hlasil FAIL.
+    SYSTEM_INSTANCES = frozenset({"__default_evpn__"})
+
+    def rpc_name(self, platform: str) -> str:
+        return self.RPC_NAMES[platform]
+
+    def rpc_kwargs(self, platform: str) -> dict[str, Any]:
+        return {"extensive": True}
+
+    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
+        instances: dict[str, dict[str, Any]] = {}
+        for node in xml.iter("evpn-instance"):
+            name = _text(node, "evpn-instance-name")
+            if not name or name in self.SYSTEM_INSTANCES:
+                continue
+
+            esis: dict[str, str] = {}
+            for esi_node in node.iter("evpn-esi"):
+                esi = _text(esi_node, "evpn-esi-value")
+                # 05: ESI si box generuje sam - bez statusu, do reportu
+                # nepatri (stejne pravidlo jako EvpnEsiCollector).
+                if not esi or esi.startswith("05:"):
+                    continue
+                esis[esi] = _text(esi_node, "evpn-esi-status") or ""
+
+            instances[name] = {
+                "local_interfaces": {
+                    "total": _int(node, "local-interfaces") or 0,
+                    "up": _int(node, "local-interfaces-up") or 0,
+                    "entries": [
+                        {
+                            "name": _text(iface, "evpn-interface-name"),
+                            "status": _text(iface, "evpn-interface-status")
+                            or "unknown",
+                        }
+                        for iface in node.iter("evpn-interface")
+                    ],
+                },
+                "irb_interfaces": {
+                    "total": _int(node, "irb-interfaces") or 0,
+                    "up": _int(node, "irb-interfaces-up") or 0,
+                    # Filtr na irb-interface-name: vypis obsahuje i hola
+                    # <irb-interface>irb.14</irb-interface> pod bridge
+                    # domenou, ktera zadne deti nemaji.
+                    "entries": [
+                        {
+                            "name": _text(iface, "irb-interface-name"),
+                            "status": _text(iface, "irb-interface-status")
+                            or "unknown",
+                            "l3_context": _text(iface, "irb-interface-l3-context"),
+                        }
+                        for iface in node.iter("irb-interface")
+                        if iface.find("irb-interface-name") is not None
+                    ],
+                },
+                "neighbors": {
+                    "total": _int(node, "evpn-num-neighbors") or 0,
+                    "addresses": [
+                        element.text
+                        for element in node.iter("evpn-neighbor-address")
+                        if element.text
+                    ],
+                },
+                "esis": esis,
+            }
+        return instances
+
+
+@register
 class EvpnMacCollector(Collector):
-    """Pocty naucenych MAC adres na instanci a bridge domenu."""
+    """Pocty naucenych MAC adres z 'count' vypisu.
+
+    Drive se stahovala cela MAC tabulka a pocitaly zaznamy - na boxu
+    s tisici MAC to bylo drahe a per-interface pocty z toho nesly.
+    'count' varianta tychz RPC vraci hotove pocty per learn-vlan a per
+    interface.
+    """
 
     name = "evpn_mac"
 
-    # Poradi je zamerne: prvni je "hlavni" RPC, ktere pouzije `record`
-    # a `--record-raw` pri ukladani fixtures.
-    #
-    # MX potrebuje dve RPC, protoze kazde vidi jiny typ instance. EVO ma
-    # jen jedno - 'show evpn mac-table' na PTX vubec neexistuje, zatimco
-    # mac-vrf tabulka tam vraci vlan-aware i vlan-based instance zaraz.
-    # Proto se tady uvadeji jen RPC, ktera na dane platforme opravdu plati:
-    # selhani kteregokoliv z nich pak znamena skutecnou chybu, ne to, ze
-    # jsme se zeptali na neco, co ta platforma nezna.
+    # Poradi je zamerne: prvni je "hlavni" RPC pro `record`/`--record-raw`.
+    # MX potrebuje dve RPC (bridge = vlan-aware, evpn = vlan-based),
+    # EVO jedno. Uvadi se jen RPC, ktera na platforme opravdu plati.
     RPCS: dict[str, tuple[str, ...]] = {
         "junos": ("get_bridge_mac_table", "get_evpn_mac_table"),
         "junos-evo": ("get_mac_vrf_mac_table",),
     }
+
+    # Systemove instance boxu - nejsou sluzba a v device scope by kazdy
+    # beh svitily radkem bez vypovedi.
+    SYSTEM_INSTANCES = frozenset({"default-switch"})
 
     def rpc_name(self, platform: str) -> str:
         return self.RPCS[platform][0]
@@ -168,25 +257,24 @@ class EvpnMacCollector(Collector):
     def rpc_names(self, platform: str) -> tuple[str, ...]:
         return self.RPCS[platform]
 
-    def collect(self, device: Any, platform: str) -> dict[str, dict[str, int]]:
-        """Slouci vysledky vsech RPC pro danou platformu.
+    def rpc_kwargs(self, platform: str) -> dict[str, Any]:
+        return {"count": True}
 
-        Kdyz nektere RPC selze, je to chyba celeho collectoru. Vratit
-        castecna data jako 'ok' by znamenalo, ze check porovna zkraceny
-        pocet MAC adres proti plnemu baseline a vyhodnoti to jako propad.
-        Radsi SKIP nez tichy nesmysl.
-        """
+    def collect(self, device: Any, platform: str) -> dict[str, dict[str, Any]]:
+        # Stejny princip jako drive: selhani kterehokoliv RPC je chyba
+        # celeho collectoru - castecna data by check porovnal proti plne
+        # baseline a hlasil propad. Radsi SKIP nez tichy nesmysl.
         if not self.supports(platform):
             raise CollectorError(
                 f"collector '{self.name}' nepodporuje platformu '{platform}'"
             )
 
-        merged: dict[str, dict[str, int]] = {}
+        merged: dict[str, dict[str, Any]] = {}
         failures: list[str] = []
 
         for rpc_name in self.rpc_names(platform):
             try:
-                xml = getattr(device.rpc, rpc_name)()
+                xml = getattr(device.rpc, rpc_name)(**self.rpc_kwargs(platform))
             except Exception as error:  # noqa: BLE001
                 failures.append(f"{rpc_name}: {type(error).__name__}: {error}")
                 continue
@@ -197,10 +285,12 @@ class EvpnMacCollector(Collector):
                 failures.append(f"{rpc_name}: parsovani selhalo - {error}")
                 continue
 
-            for instance, domains in parsed.items():
-                target = merged.setdefault(instance, {})
-                for domain, count in domains.items():
-                    target[domain] = target.get(domain, 0) + count
+            for instance, data in parsed.items():
+                target = merged.setdefault(instance, {"vlans": {}, "interfaces": {}})
+                for area in ("vlans", "interfaces"):
+                    for key, entry in data[area].items():
+                        slot = target[area].setdefault(key, dict(entry, count=0))
+                        slot["count"] += entry["count"]
 
         if failures:
             raise CollectorError(
@@ -209,43 +299,76 @@ class EvpnMacCollector(Collector):
 
         return merged
 
-    # Tvary MAC tabulky. MX pouziva l2ald-*, EVO l2ng-l2ald-*. Prochazi se
-    # oba, takze parse() nepotrebuje vetev na platformu ani spravny platform
-    # argument - staci mu XML, coz drzi testy jednoduche.
+    # Tvary count vypisu. MX pouziva l2ald-* a domenu nazyva bd-name,
+    # EVO l2ng-l2ald-* a vlan-name. Prochazi se oba, takze parse()
+    # nepotrebuje vetev na platformu.
     #
-    # (skupina, routing-instance, vlan-id, nazev domeny, zaznam MAC)
-    SHAPES: tuple[tuple[str, str, str, str, str], ...] = (
+    # (zaznam instance+domeny, nazev domeny, per-interface zaznam,
+    #  per-vlan zaznam)
+    COUNT_SHAPES: tuple[tuple[str, str, str, str], ...] = (
         (
-            "l2ald-mac-entry",
-            "l2-mac-routing-instance",
-            "l2-bridge-vlan",
-            "l2-mac-bridging-domain",
-            "l2-mac-entry",
+            "l2ald-rtb-mac-count-entry",
+            "bd-name",
+            "l2ald-rtb-if-mac-count-entry",
+            "l2ald-rtb-learn-vlan-mac-count-entry",
         ),
         (
-            "l2ng-l2ald-mac-entry-vlan",
-            "l2ng-l2-mac-routing-instance",
-            "l2ng-l2-vlan-id",
-            "l2ng-mac-entry/l2ng-l2-mac-vlan-name",
-            "l2ng-mac-entry",
+            "l2ng-l2ald-rtb-mac-count-entry",
+            "vlan-name",
+            "l2ng-l2ald-rtb-if-mac-count-entry",
+            "l2ng-l2ald-rtb-learn-vlan-mac-count-entry",
         ),
     )
 
-    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, int]]:
-        counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
+        instances: dict[str, dict[str, Any]] = {}
 
-        for group_tag, instance_tag, vlan_tag, name_tag, entry_tag in self.SHAPES:
-            for group in xml.iter(group_tag):
-                instance = _text(group, instance_tag)
-                if not instance:
+        for entry_tag, domain_tag, if_tag, vlan_tag in self.COUNT_SHAPES:
+            for entry in xml.iter(entry_tag):
+                instance = _text(entry, "rtb-name")
+                if not instance or instance in self.SYSTEM_INSTANCES:
                     continue
 
-                domain = _normalise_domain(
-                    _text(group, vlan_tag), _text(group, name_tag)
+                # Placeholder nazev (vlan-based: '__X__' na MX, 'VL-NONE'
+                # na EVO) neni skutecna domena - klicem je vzdy learn-vlan,
+                # nazev slouzi jen renderu ('BD-313 MAC count').
+                raw_domain = _text(entry, domain_tag)
+                domain = (
+                    None
+                    if raw_domain is None or _is_no_domain(raw_domain)
+                    else raw_domain
                 )
-                counts[instance][domain] += len(group.findall(entry_tag))
 
-        return {instance: dict(domains) for instance, domains in counts.items()}
+                target = instances.setdefault(
+                    instance, {"vlans": {}, "interfaces": {}}
+                )
+
+                for vlan_entry in entry.iter(vlan_tag):
+                    vlan = _text(vlan_entry, "learn-vlan")
+                    count = _int(vlan_entry, "mac-count")
+                    if vlan is None or count is None:
+                        continue
+                    slot = target["vlans"].setdefault(
+                        vlan, {"count": 0, "domain": domain}
+                    )
+                    slot["count"] += count
+
+                for if_entry in entry.iter(if_tag):
+                    raw_name = _text(if_entry, "interface-name")
+                    count = _int(if_entry, "mac-count")
+                    # Prazdne <...-if-mac-count-entry/> bloky jsou ve
+                    # vypisu bezne.
+                    if not raw_name or count is None:
+                        continue
+                    # 'ge-0/0/2.313:313' -> klic 'ge-0/0/2.313': za
+                    # dvojteckou je VLAN a selektory scope drzi jmeno bez ni.
+                    key = raw_name.rsplit(":", 1)[0]
+                    slot = target["interfaces"].setdefault(
+                        key, {"count": 0, "name": raw_name, "domain": domain}
+                    )
+                    slot["count"] += count
+
+        return instances
 
 
 def _is_no_domain(name: str) -> bool:
@@ -256,24 +379,3 @@ def _is_no_domain(name: str) -> bool:
     """
     upper = name.strip().upper()
     return upper.startswith("__") or upper.endswith("NONE")
-
-
-def _normalise_domain(vlan: str | None, name: str | None) -> str:
-    """Klicem domeny je VLAN id, ne jeji nazev.
-
-    Nazev se pro tu samou domenu mezi platformami lisi - MX ji rika 'BD-313',
-    EVO 'VL-313'. Kdyby se klicovalo nazvem, check evpn_mac_count by po
-    migraci nenasel domenu v baseline a misto porovnani poctu MAC adres by
-    vypsal jen stav. VLAN id (313) je na obou stranach totozne.
-
-    Vlan-based instance zadnou vlastni domenu nema a kontrakt pro ni
-    predepisuje '-'. MX to prozradi tim, ze vlan hlasi jako 'none', EVO
-    tim, ze domene rika 'VL-NONE' - VLAN id ale uvede, takze podle nej
-    samotneho by vlan-based instance na obou stranach nesedely.
-    """
-    if name is not None and _is_no_domain(name):
-        return NO_DOMAIN
-    if vlan is None:
-        return NO_DOMAIN
-    vlan = vlan.strip()
-    return vlan if vlan.isdigit() else NO_DOMAIN

@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `2aa60c1`):
+Matches the output of `mig-validate checks` (as of commit `59fc550`):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -22,7 +22,8 @@ Matches the output of `mig-validate checks` (as of commit `2aa60c1`):
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active against tolerance — **per RIB** |
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
-| `evpn_mac_count` | both | advisory | E-LAN | learned MAC count > 0; with a baseline, also the drop against tolerance |
+| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline, also equal counts |
+| `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |
 | `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
@@ -220,7 +221,7 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 4`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+`schema_version: 7`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
 nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
 attempt at data migration.
 
@@ -231,6 +232,9 @@ Version history:
 | 1 → 2 | addresses split by family, the `nd` area was added |
 | 2 → 3 | the `routes` and `bfd` areas plus the `unassigned.static_routes` / `.bfd_sessions` keys were added |
 | 3 → 4 | `Scope` carries deactivation flags (`routing_instance_active`, `interface_active`) — AR-21 |
+| 4 → 5 | snapshot and inventory schema aligned at 5 — commit `d9e77bc` |
+| 5 → 6 | ARP/ND over IRB carry `learned_via`, the entry no longer escapes the scope filter — commit `6df6e1a` |
+| 6 → 7 | the `evpn_mac` collector reads the `count` RPC (per-VLAN and per-interface counts, shape `{vlans, interfaces}`); the `evpn_instance` area was added — commit `e547a24` |
 
 > **Older snapshots cannot be replayed.** The bump to 3 means `runs/ipv6/` and
 > `runs/ipv6-live-2026-07-29/` — taken with `schema_version: 2` — are now rejected by
@@ -238,10 +242,15 @@ Version history:
 > so both new checks would have nothing to read and a service with a configured but
 > uninstalled route would pass as healthy. Anyone needing such a snapshot evaluated must
 > **take a fresh `capture`**; the missing areas cannot be derived from the old file.
+>
+> The same applies to the 6 → 7 bump: `runs/mig01/pre.json` and
+> `runs/mig01/post.json` carry `schema_version: 6` and a version-7 tool
+> rejects them. They need a fresh capture (`pre` = services on the MX,
+> `post` = after migration to the EVO).
 
 ```jsonc
 {
-  "schema_version": 4,
+  "schema_version": 7,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -282,7 +291,25 @@ Version history:
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
                                    "interface": "ae0.14"}},
-    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}},
+    // Since schema 7, evpn_mac and evpn_instance both carry per-instance data
+    // from the 'count' resp. extensive output. The VLAN key is the real
+    // learn-vlan (previously "-").
+    "evpn_instance": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "local_interfaces": {"total": 2, "up": 2, "entries": [
+          {"name": "ge-0/0/2.313", "status": "Up"}]},
+        "irb_interfaces": {"total": 0, "up": 0, "entries": []},
+        "neighbors": {"total": 1, "addresses": ["150.0.0.13"]},
+        "esis": {}
+      }
+    },
+    "evpn_mac": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "vlans": {"313": {"count": 2, "domain": "BD-313"}},
+        "interfaces": {"ge-0/0/2.313": {"count": 1, "name": "ge-0/0/2.313:313",
+                                         "domain": "BD-313"}}
+      }
+    },
     // Verbatim from runs/bfd-static-2026-07-29/pre.json: on this device five
     // service statics are configured but absent from the table (their next hops
     // died when ge-0/0/2 was deactivated), and not one BFD session came up.
@@ -531,7 +558,8 @@ being believed.
 | `bgp` | `get_bgp_neighbor_information` | same | — |
 | `evpn_vpws` | `get_evpn_vpws_information` | same | — |
 | `evpn_esi` | `get_evpn_instance_information` | same | `extensive=True` |
-| `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
+| `evpn_instance` | `get_evpn_instance_information` | `get_mac_vrf_instance_information` | `extensive=True` |
+| `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | `count=True` |
 | `routes` | `get_route_information` | same | `protocol="static"` |
 | `bfd` | `get_bfd_session_information` | same | `detail=True` |
 | ping (probe) | `ping` | same | `host`, `count`, `rapid=True`, optionally `source`, `routing_instance`, `interface` (IPv6 link-local target only) |

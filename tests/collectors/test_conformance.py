@@ -25,6 +25,7 @@ from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.collectors.bgp import BgpCollector
 from migration_validator.collectors.evpn import (
     EvpnEsiCollector,
+    EvpnInstanceCollector,
     EvpnMacCollector,
     EvpnVpwsCollector,
 )
@@ -55,6 +56,7 @@ COLLECTORS = (
     EvpnVpwsCollector(),
     EvpnEsiCollector(),
     EvpnMacCollector(),
+    EvpnInstanceCollector(),
     RoutesCollector(),
     BfdCollector(),
 )

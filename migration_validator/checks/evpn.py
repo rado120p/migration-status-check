@@ -15,7 +15,6 @@ from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 UP = "Up"
-NO_DOMAIN = "-"
 
 
 def _is_up(status: str) -> bool:
@@ -330,6 +329,248 @@ class EvpnEsiStatusCheck(Check):
         return findings
 
 
+def _count_finding(
+    label: str,
+    message: str,
+    value: str,
+    baseline_value: str | None,
+    *,
+    ok: bool,
+    expectation: str,
+) -> Finding:
+    """Ciselny radek: stavove pravidlo + rovnost s baseline (spec 2.4).
+
+    Rovnost se vynucuje i kdyz je stavove pravidlo splnene: kdyz post
+    boxu ubylo rozhrani, "up == total" plati, ale sluzba prisla o port.
+    """
+    outcome = Outcome.OK if ok else Outcome.BROKEN
+    text = f"{message}: {value}" if ok else f"{message}: {value}, ocekavano {expectation}"
+    if ok and baseline_value is not None and value != baseline_value:
+        outcome = Outcome.BROKEN
+        text = f"{message}: {value}, baseline {baseline_value}"
+    return Finding(
+        outcome, text, label=label, value=value, baseline_value=baseline_value
+    )
+
+
+@register
+class EvpnInstanceStatusCheck(Check):
+    """Per-instance zdravi EVPN podle brief pravidel ze zadani.
+
+    Compare semantika (spec 2.4): ciselne hodnoty se pre/post musi
+    rovnat, jinak FAIL - s vyjimkou jmen interfacu a IRB, ktera se
+    migraci meni (INFO vycty proto baseline_value nenesou). Text ESI
+    statusu se na rovnost neporovnava, nese jmeno IFL.
+    """
+
+    id = "evpn_instance_status"
+    title = "Stav EVPN instance"
+    label = "EVPN instance"
+    mode = Mode.BOTH
+    requires = ("evpn_instance",)
+    service_types = frozenset({"E-LAN"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        instances: dict[str, Any] = ctx.subject.get("evpn_instance", {})
+        if not instances:
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "pro tento scope nejsou data evpn-instance",
+                    value="bez dat",
+                )
+            ]
+
+        baseline_instances = (ctx.baseline or {}).get("evpn_instance", {})
+        many = len(instances) > 1
+
+        findings: list[Finding] = []
+        for name in sorted(instances):
+            findings.extend(
+                self._instance_findings(
+                    name, instances[name], baseline_instances.get(name), many
+                )
+            )
+        return findings
+
+    def _instance_findings(
+        self,
+        instance: str,
+        data: dict[str, Any],
+        baseline: dict[str, Any] | None,
+        qualify: bool,
+    ) -> list[Finding]:
+        def label(text: str) -> str:
+            return qualified(text, instance) if qualify else text
+
+        baseline = baseline or {}
+        findings: list[Finding] = []
+
+        local = data.get("local_interfaces", {})
+        baseline_local = baseline.get("local_interfaces") or None
+        findings.append(
+            _count_finding(
+                label("EVPN local interfaces"),
+                f"{instance}: local interfaces",
+                str(local.get("total") or 0),
+                str(baseline_local["total"]) if baseline_local else None,
+                ok=(local.get("total") or 0) > 0,
+                expectation="> 0",
+            )
+        )
+        findings.append(
+            _count_finding(
+                label("EVPN local interfaces up"),
+                f"{instance}: local interfaces up",
+                f"{local.get('up') or 0}/{local.get('total') or 0}",
+                (
+                    f"{baseline_local.get('up') or 0}/{baseline_local.get('total') or 0}"
+                    if baseline_local
+                    else None
+                ),
+                ok=(local.get("up") or 0) == (local.get("total") or 0),
+                expectation="vsechna up",
+            )
+        )
+
+        irb = data.get("irb_interfaces", {})
+        baseline_irb = baseline.get("irb_interfaces") or None
+        # Instance IRB mit nemusi (ciste L2 sluzba) - pocet je informace,
+        # ne pravidlo.
+        findings.append(
+            Finding(
+                Outcome.INFO,
+                f"{instance}: IRB interfaces {irb.get('total') or 0}",
+                label=label("EVPN IRB interfaces"),
+                value=str(irb.get("total") or 0),
+                baseline_value=(
+                    str(baseline_irb["total"]) if baseline_irb else None
+                ),
+            )
+        )
+        if (irb.get("total") or 0) > 0:
+            findings.append(
+                _count_finding(
+                    label("EVPN IRB interfaces up"),
+                    f"{instance}: IRB interfaces up",
+                    f"{irb.get('up') or 0}/{irb.get('total') or 0}",
+                    (
+                        f"{baseline_irb.get('up') or 0}/{baseline_irb.get('total') or 0}"
+                        if baseline_irb
+                        else None
+                    ),
+                    ok=(irb.get("up") or 0) == (irb.get("total") or 0),
+                    expectation="vsechna up",
+                )
+            )
+
+        neighbors = data.get("neighbors", {})
+        baseline_neighbors = baseline.get("neighbors") or None
+        findings.append(
+            _count_finding(
+                label("EVPN neighbors"),
+                f"{instance}: EVPN neighbors",
+                str(neighbors.get("total") or 0),
+                (
+                    str(baseline_neighbors["total"])
+                    if baseline_neighbors
+                    else None
+                ),
+                ok=(neighbors.get("total") or 0) > 0,
+                expectation="> 0",
+            )
+        )
+
+        findings.extend(self._esi_findings(instance, data, baseline, label))
+
+        for entry in local.get("entries", []):
+            findings.append(
+                Finding(
+                    Outcome.INFO,
+                    f"{instance}: interface {entry['name']} {entry['status']}",
+                    label=label("EVPN interface"),
+                    value=f"{entry['name']} {entry['status']}",
+                )
+            )
+        for entry in irb.get("entries", []):
+            context = entry.get("l3_context")
+            value = f"{entry['name']} {entry['status']}"
+            if context:
+                value += f" ({context})"
+            findings.append(
+                Finding(
+                    Outcome.INFO,
+                    f"{instance}: IRB {value}",
+                    label=label("IRB interface"),
+                    value=value,
+                )
+            )
+        for address in neighbors.get("addresses", []):
+            findings.append(
+                Finding(
+                    Outcome.INFO,
+                    f"{instance}: neighbor {address}",
+                    label=label("EVPN neighbor"),
+                    value=address,
+                )
+            )
+        return findings
+
+    def _esi_findings(
+        self,
+        instance: str,
+        data: dict[str, Any],
+        baseline: dict[str, Any],
+        label,
+    ) -> list[Finding]:
+        esis: dict[str, str] = data.get("esis", {})
+        baseline_esis: dict[str, str] = baseline.get("esis", {}) if baseline else {}
+
+        if not esis and not baseline_esis:
+            # Single-homed instance zadne konfigurovane ESI nema - bez dat
+            # je vysledek SKIP, ne chyba (spec 2.2).
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    f"{instance}: zadne ESI ve vypisu",
+                    label=label("ESI status"),
+                    value="bez dat",
+                )
+            ]
+
+        findings = []
+        for esi in sorted(set(esis) | set(baseline_esis)):
+            status = esis.get(esi)
+            baseline_status = baseline_esis.get(esi)
+            if status is None:
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{instance}: ESI {esi} v baseline bylo, ted chybi",
+                        label=label(f"ESI {esi}"),
+                        value="chybi",
+                        baseline_value=baseline_status,
+                    )
+                )
+                continue
+            # Substring by chytl i "Unresolved" - stejny duvod, proc VPWS
+            # check (radek vyse) porovnava cele slovo, ne podretezec.
+            resolved = status.lower().startswith("resolved")
+            findings.append(
+                Finding(
+                    Outcome.OK if resolved else Outcome.BROKEN,
+                    f"{instance}: ESI {esi} {status or 'bez statusu'}",
+                    label=label(f"ESI {esi}"),
+                    value=status or "bez statusu",
+                    # Text nese jmeno IFL, ktere se migraci meni - baseline
+                    # se ukazuje, ale na rovnost se neporovnava.
+                    baseline_value=baseline_status,
+                )
+            )
+        return findings
+
+
 @register
 class EvpnMacCountCheck(Check):
     id = "evpn_mac_count"
@@ -351,26 +592,71 @@ class EvpnMacCountCheck(Check):
 
         baseline_instances = (ctx.baseline or {}).get("evpn_mac", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
+        many = len(instances) > 1
 
         findings = []
         for instance in sorted(instances):
-            domains = instances[instance]
-            for domain in sorted(domains):
-                count = int(domains[domain])
-                label = instance if domain == NO_DOMAIN else f"{instance}/{domain}"
-                baseline_count = (
-                    baseline_instances.get(instance, {}).get(domain)
-                    if instance in baseline_instances
-                    else None
-                )
+            data = instances[instance]
+            baseline = baseline_instances.get(instance, {})
 
-                if baseline_count is None:
-                    findings.append(_mac_state_finding(label, count))
-                    continue
+            def label(text: str) -> str:
+                return qualified(text, instance) if many else text
 
-                findings.append(
-                    _mac_compare_finding(label, int(baseline_count), count, tolerance)
-                )
+            subject_vlans = data.get("vlans", {})
+            baseline_vlans = baseline.get("vlans", {})
+            # Union se baseline: count vypis mrtvou domenu vubec neuvadi,
+            # iterace jen pres subject by jeji zmizeni tise zahodila.
+            for vlan in sorted(
+                set(subject_vlans) | set(baseline_vlans),
+                key=lambda v: int(v) if v.isdigit() else 0,
+            ):
+                subject_entry = subject_vlans.get(vlan)
+                baseline_entry = baseline_vlans.get(vlan)
+                domain = (subject_entry or baseline_entry).get("domain")
+                row_label = label(f"{domain} MAC count" if domain else "MAC count")
+                if subject_entry is None:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label, int(baseline_entry["count"]), 0, tolerance
+                        )
+                    )
+                elif baseline_entry is None:
+                    findings.append(
+                        _mac_state_finding(row_label, int(subject_entry["count"]))
+                    )
+                else:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label,
+                            int(baseline_entry["count"]),
+                            int(subject_entry["count"]),
+                            tolerance,
+                        )
+                    )
+
+            baseline_interfaces = baseline.get("interfaces", {})
+            # Per-interface se iteruje jen subject: kdyz box interface-name
+            # nevrati (EVO count vypis), radek se vynechava - rozhodnuti
+            # ze specu, per-VLAN uroven je vzdy pokryta.
+            for key in sorted(data.get("interfaces", {})):
+                entry = data["interfaces"][key]
+                domain = entry.get("domain")
+                prefix = f"{domain} " if domain else ""
+                row_label = label(f"{prefix}Interface {entry['name']} MAC count")
+                baseline_entry = baseline_interfaces.get(key)
+                if baseline_entry is None:
+                    findings.append(
+                        _mac_state_finding(row_label, int(entry["count"]))
+                    )
+                else:
+                    findings.append(
+                        _mac_compare_finding(
+                            row_label,
+                            int(baseline_entry["count"]),
+                            int(entry["count"]),
+                            tolerance,
+                        )
+                    )
         return findings
 
 
