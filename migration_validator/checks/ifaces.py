@@ -125,9 +125,9 @@ class InterfaceErrorsCheck(Check):
         names = [name for name in transit_names if is_physical(name)]
         if not names:
             if transit_names:
-                # Tranzitni rozhrani jsou, ale jen logicke unity - counter chybi
-                # skutecne, ne proto ze nejsou tranzitni. Sdilen _no_transit_finding
-                # nese nedelitelnou zpravu, takze zde popsat pravdu presmrk.
+                # Tranzitni rozhrani jsou, ale jen logicke unity - nemaji
+                # chybove countery. Nemuze se pouzit _no_transit_finding, jejiz
+                # veta "neni tranzitni rozhrani" by byla nepravda.
                 listed = ", ".join(transit_names)
                 return [Finding(
                     outcome=Outcome.SKIP,
@@ -135,7 +135,7 @@ class InterfaceErrorsCheck(Check):
                     value="jen unity",
                 )]
             else:
-                # Zadne tranzitni rozhrani - pouzij zdelenou zpravu
+                # Zadne tranzitni rozhrani - pouzij sdilenou zpravu od _no_transit_finding
                 return [_no_transit_finding(ctx)]
 
         findings = []
