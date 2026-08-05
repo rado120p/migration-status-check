@@ -51,9 +51,10 @@ obě vrací shodný tvar `evpn-instance-information`, takže `parse()`
 nepotřebuje platformní větev. Extrahuje per-instanci: local interfaces
 (total/up/entries), IRB interfaces (total/up/entries vč. `l3_context`),
 neighbors (total/addresses) a ESI mapu (bez `05:` — ty si box generuje sám a
-nenesou status). Systémové instance `default-switch` a `__default_evpn__` se
-přeskakují — nejsou služba a v device scope by trvale hlásily FAIL bez
-výpovědi. Commity `682beb6`, `96ba8dc`.
+nenesou status). Systémová instance `__default_evpn__`
+(`EvpnInstanceCollector.SYSTEM_INSTANCES`) se přeskakuje — není služba a
+v device scope by trvale hlásila FAIL bez výpovědi. Commity `682beb6`,
+`96ba8dc`.
 
 **Nový check `evpn_instance_status` (both, critical, jen E-LAN).** Pravidla:
 local interfaces > 0 a všechna `Up`; IRB interfaces `Up`, pokud nějaké
@@ -201,9 +202,13 @@ scope explicitně omezil na `reference.md` (cs/en) a tento roadmap dokument;
 - **vlan-based MAC klíč `"-"` → skutečné `learn-vlan`** — ověřeno na obou
   platformách v laborce; dřív všechny domény jedné vlan-based instance
   splývaly pod jeden placeholder klíč.
-- **`default-switch` a `__default_evpn__` se přeskakují** v obou nových
-  collectorech (`evpn_mac`, `evpn_instance`) — systémové instance, ne
-  služba; bez přeskočení by v device scope trvale hlásily nesmyslný nález.
+- **Každý nový collector přeskakuje svou vlastní systémovou instanci** —
+  `EvpnMacCollector` přeskakuje `default-switch`
+  (`SYSTEM_INSTANCES = {"default-switch"}`), `EvpnInstanceCollector`
+  přeskakuje `__default_evpn__` (`SYSTEM_INSTANCES = {"__default_evpn__"}`).
+  Ne obě jména v obou collectorech — každé jméno se objevuje jen ve výpisu
+  vlastního RPC. Bez přeskočení by v device scope trvale hlásily nesmyslný
+  nález.
 
 ---
 

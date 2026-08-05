@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `2aa60c1`):
+Matches the output of `mig-validate checks` (as of commit `59fc550`):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|

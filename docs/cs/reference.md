@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav ke commitu `2aa60c1`):
+Výpis odpovídá `mig-validate checks` (stav ke commitu `59fc550`):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
