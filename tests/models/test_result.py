@@ -120,3 +120,22 @@ def test_scope_result_serialises_identity():
     )
 
     assert scope.to_dict()["identity"]["ipv4"] == ["152.11.13.1/30"]
+
+
+def test_info_outcome_derives_info_status_for_both_severities():
+    from migration_validator.models.result import count_statuses
+    assert derive_status(Outcome.INFO, Severity.CRITICAL) is Status.INFO
+    assert derive_status(Outcome.INFO, Severity.ADVISORY) is Status.INFO
+
+
+def test_info_never_wins_worst():
+    # INFO radek nesmi zhorsit (ani "vylepsit") stav sluzby.
+    assert Status.worst([Status.PASS, Status.INFO]) is Status.PASS
+    assert Status.worst([Status.INFO, Status.FAIL]) is Status.FAIL
+
+
+def test_count_statuses_counts_info_separately():
+    from migration_validator.models.result import count_statuses
+    counts = count_statuses([Status.PASS, Status.INFO, Status.INFO])
+    assert counts["pass"] == 1
+    assert counts["info"] == 2

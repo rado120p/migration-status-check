@@ -14,6 +14,7 @@ class Status(str, Enum):
     SKIP = "SKIP"
     WARN = "WARN"
     FAIL = "FAIL"
+    INFO = "INFO"
 
     @property
     def rank(self) -> int:
@@ -35,13 +36,14 @@ def count_statuses(statuses: Iterable[Status]) -> dict[str, int]:
     i souhrn za sluzby - prave rozdil mezi temi dvema jednotkami byl v
     reportu neoznaceny a operator si odnasel cislo, na ktere se nedival.
     """
-    counts = {"pass": 0, "warn": 0, "fail": 0, "skip": 0}
+    counts = {"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0}
     for status in statuses:
         counts[status.value.lower()] += 1
     return counts
 
 
 _STATUS_RANK: dict[Status, int] = {
+    Status.INFO: -1,
     Status.PASS: 0,
     Status.SKIP: 1,
     Status.WARN: 2,
@@ -58,6 +60,7 @@ class Outcome(str, Enum):
     """Co check nameri - status z toho odvodi framework."""
 
     OK = "ok"
+    INFO = "info"
     DEGRADED = "degraded"
     BROKEN = "broken"
     SKIP = "skip"
@@ -71,6 +74,8 @@ def derive_status(outcome: Outcome, severity: Severity) -> Status:
     """
     if outcome is Outcome.OK:
         return Status.PASS
+    if outcome is Outcome.INFO:
+        return Status.INFO
     if outcome is Outcome.SKIP:
         return Status.SKIP
     if outcome is Outcome.DEGRADED:

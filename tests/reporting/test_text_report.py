@@ -1136,3 +1136,31 @@ def test_deactivated_peer_renders_as_skip_in_its_family_section():
 
     assert "SKIP" in section
     assert "deaktivovan" in section
+
+
+def test_info_row_has_blank_status_column():
+    """Radek se vytiskne, ale sloupec STAV je prazdny.
+
+    INFO radek nese hodnotu bez hodnoceni - nema byt v STAV sloupci znak,
+    jen prazdny symbol (seznam SYMBOL ma Status.INFO mappovany na "").
+    """
+    result = _grouped_result(
+        [
+            CheckResult(
+                id="evpn_vpws_sid_local",
+                mode="state",
+                status=Status.INFO,
+                severity=Severity.ADVISORY,
+                message="EVPN VPWS SID local value",
+                label="EVPN VPWS SID local value",
+                family=4,
+                value="10001",
+            ),
+        ]
+    )
+    rendered = render(result, detail=True)
+
+    assert "EVPN VPWS SID local value" in rendered
+    line = next(l for l in rendered.splitlines() if "SID local value" in l)
+    assert "INFO" not in line
+    assert line.lstrip().startswith("|")

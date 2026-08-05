@@ -26,6 +26,7 @@ SYMBOL = {
     Status.WARN: "WARN",
     Status.FAIL: "FAIL",
     Status.SKIP: "SKIP",
+    Status.INFO: "",
 }
 
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
