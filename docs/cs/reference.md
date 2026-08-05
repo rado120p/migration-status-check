@@ -22,7 +22,8 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `2aa60c1`):
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť** |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
-| `evpn_mac_count` | both | advisory | E-LAN | počet naučených MAC > 0; s baseline navíc pokles proti toleranci |
+| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline navíc rovnost počtů |
+| `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
 | `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |
 | `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
@@ -213,7 +214,7 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 4`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 7`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -224,6 +225,9 @@ Historie verzí:
 | 1 → 2 | adresy rozdělené na rodiny, přibyla oblast `nd` |
 | 2 → 3 | přibyly oblasti `routes` a `bfd` a klíče `unassigned.static_routes` / `.bfd_sessions` |
 | 3 → 4 | `Scope` nese příznaky deaktivace (`routing_instance_active`, `interface_active`) — AR-21 |
+| 4 → 5 | snapshot i inventory schema srovnány na 5 — commit `d9e77bc` |
+| 5 → 6 | ARP/ND přes IRB nesou `learned_via`, záznam už neutíká scope filtru — commit `6df6e1a` |
+| 6 → 7 | `evpn_mac` collector čte `count` RPC (per-VLAN a per-interface počty, tvar `{vlans, interfaces}`); přibyla oblast `evpn_instance` — commit `e547a24` |
 
 > **Starší snímky nejdou přehrát.** Zvýšení na 3 znamená, že `runs/ipv6/`
 > a `runs/ipv6-live-2026-07-29/` — pořízené se `schema_version: 2` — už `evaluate` odmítne.
@@ -231,10 +235,14 @@ Historie verzí:
 > checky neměly co číst a služba s nakonfigurovanou, ale neinstalovanou routou by prošla
 > jako zdravá. Kdo takový snímek potřebuje vyhodnotit, musí **pořídit nový `capture`**;
 > dopočítat chybějící oblasti ze starého souboru nejde.
+>
+> Totéž platí pro bump 6 → 7: `runs/mig01/pre.json` a `runs/mig01/post.json`
+> mají `schema_version: 6` a nástroj verze 7 je odmítne. Je potřeba je
+> znovu nasnímat (`pre` = služby na MX, `post` = po migraci na EVO).
 
 ```jsonc
 {
-  "schema_version": 4,
+  "schema_version": 7,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -275,7 +283,24 @@ Historie verzí:
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
     "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
                                    "interface": "ae0.14"}},
-    "evpn_mac":  {"EVPN-VLAN-AWARE-CPE13-NNI": {"313": 42}},
+    // Od schema 7 ctou evpn_mac i evpn_instance per-instance data z 'count'
+    // resp. extensive vypisu. VLAN klic je skutecny learn-vlan (drive "-").
+    "evpn_instance": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "local_interfaces": {"total": 2, "up": 2, "entries": [
+          {"name": "ge-0/0/2.313", "status": "Up"}]},
+        "irb_interfaces": {"total": 0, "up": 0, "entries": []},
+        "neighbors": {"total": 1, "addresses": ["150.0.0.13"]},
+        "esis": {}
+      }
+    },
+    "evpn_mac": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "vlans": {"313": {"count": 2, "domain": "BD-313"}},
+        "interfaces": {"ge-0/0/2.313": {"count": 1, "name": "ge-0/0/2.313:313",
+                                         "domain": "BD-313"}}
+      }
+    },
     // Doslovne z runs/bfd-static-2026-07-29/pre.json: na tomhle zarizeni je
     // pet servisnich statik nakonfigurovanych, ale v tabulce nejsou (next-hop
     // zesel po deaktivaci ge-0/0/2), a BFD session nevznikla ani jedna.
@@ -519,7 +544,8 @@ WARN sám o sobě návratový kód nemění — jinak by CI padalo pořád a př
 | `bgp` | `get_bgp_neighbor_information` | totéž | — |
 | `evpn_vpws` | `get_evpn_vpws_information` | totéž | — |
 | `evpn_esi` | `get_evpn_instance_information` | totéž | `extensive=True` |
-| `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | — |
+| `evpn_instance` | `get_evpn_instance_information` | `get_mac_vrf_instance_information` | `extensive=True` |
+| `evpn_mac` | `get_bridge_mac_table` + `get_evpn_mac_table` | `get_mac_vrf_mac_table` | `count=True` |
 | `routes` | `get_route_information` | totéž | `protocol="static"` |
 | `bfd` | `get_bfd_session_information` | totéž | `detail=True` |
 | ping (probe) | `ping` | totéž | `host`, `count`, `rapid=True`, volitelně `source`, `routing_instance`, `interface` (jen IPv6 link-local cíl) |
