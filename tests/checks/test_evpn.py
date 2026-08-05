@@ -152,6 +152,17 @@ def test_vpws_baseline_matching_values_have_empty_change():
         assert row.baseline_value == row.value, lbl
 
 
+def test_vpws_baseline_different_local_mode_is_plain_mode():
+    # Zavorka "(multi-homing peer ve vypisu nenalezen)" popisuje subjekt,
+    # ne baseline - pri rozdilnem modu ma sloupec ZMENA nest jen
+    # "bylo single-homed" bez ni.
+    baseline = _vpws_subject(mode="single-homed", remote_peers=[PEER_OK])
+    subject = _vpws_subject(mode="all-active", remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    row = _by_label(findings, "EVPN VPWS SID local mode")
+    assert row.baseline_value == "single-homed"
+
+
 def test_vpws_baseline_matches_by_position_despite_renamed_interface():
     # Jmeno rozhrani se migraci meni (ge-0/0/3.0 -> ae0.224), parovani
     # musi byt pozicni, ne podle jmena.

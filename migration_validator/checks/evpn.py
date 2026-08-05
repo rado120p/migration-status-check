@@ -203,23 +203,30 @@ class EvpnVpwsStatusCheck(Check):
                 # kdyz ma stejny tvar radku (taky bez local peeru) -
                 # kdyz baseline peery MELA, jde o jiny tvar hlasky a
                 # srovnani by nedavalo smysl, baseline_value zustava None.
+                subject_mode = iface.get("mode") or "unknown"
+                value = f"{subject_mode} (multi-homing peer ve vypisu nenalezen)"
                 baseline_local_mode = None
                 if (
                     baseline_iface is not None
                     and baseline_sid is not None
                     and not baseline_peers
                 ):
+                    baseline_mode = baseline_iface.get("mode") or "unknown"
+                    # Pri shode modu jde do baseline_value cela hodnota
+                    # radku, aby change_text poznal rovnost a nechal ZMENU
+                    # prazdnou. Pri rozdilu jde jen cisty mod - zavorka o
+                    # nenalezenem peeru popisuje subjekt, ne baseline, a
+                    # "bylo single-homed (multi-homing peer...)" by tvrdila
+                    # o baseline vic, nez check vi.
                     baseline_local_mode = (
-                        f"{baseline_iface.get('mode') or 'unknown'} "
-                        "(multi-homing peer ve vypisu nenalezen)"
+                        value if baseline_mode == subject_mode else baseline_mode
                     )
                 findings.append(
                     Finding(
                         Outcome.INFO,
                         f"{instance}: local strana bez multi-homing peeru",
                         label=label(f"{prefix} mode"),
-                        value=f"{iface.get('mode') or 'unknown'} "
-                        "(multi-homing peer ve vypisu nenalezen)",
+                        value=value,
                         baseline_value=baseline_local_mode,
                     )
                 )
