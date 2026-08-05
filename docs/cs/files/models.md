@@ -260,6 +260,7 @@ odkud vzít data.
 `filter_result()`. `to_dict()` ho v prvním případě do JSON vůbec nedá, takže nefiltrovaný
 výstup má přesně ten tvar, jaký měl dřív.
 
-`count_statuses(statuses)` rozpadá libovolné stavy na čtyři countery. Bere stavy, ne checky,
+`count_statuses(statuses)` rozpadá libovolné stavy na pět counterů (`pass`, `warn`, `fail`,
+`skip`, `info`). Bere stavy, ne checky,
 právě proto, aby ji mohl použít souhrn za checky (engine, filtr) i souhrn za služby
 (renderer) — a rozdíl mezi těmi dvěma jednotkami byl v reportu neoznačený.

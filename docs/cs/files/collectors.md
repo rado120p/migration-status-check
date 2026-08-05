@@ -92,8 +92,8 @@ collectory. `_int()` snese i desetinný zápis a při nesmyslu vrátí 0.
 
 RPC: `get_arp_table_information` s `no_resolve=True`.
 
-Výstup: `[{ip, mac, interface, routing_instance}]`. Záznamy bez IP nebo bez rozhraní se
-zahazují.
+Výstup: `[{ip, mac, interface, learned_via, routing_instance}]`. Záznamy bez IP nebo bez
+rozhraní se zahazují.
 
 ARP je **zároveň producent dat pro ping probe** — z něj se při `capture` odvozují cíle.
 
