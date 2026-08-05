@@ -140,6 +140,94 @@ class EvpnEsiCollector(Collector):
 
 
 @register
+class EvpnInstanceCollector(Collector):
+    """Per-instance stav EVPN: local/IRB rozhrani, neighbors, ESI.
+
+    Tentyz extensive vypis jako EvpnEsiCollector, ale jina osa: tady je
+    jednotkou instance (RI), tam ethernet segment napric instancemi.
+    Na EVO je kanonicky prikaz 'show mac-vrf routing instance extensive'
+    (RPC get_mac_vrf_instance_information, overeno v laborce) - odpoved
+    ma shodny tvar evpn-instance-information jako MX, takze parse()
+    nepotrebuje platformni vetev.
+    """
+
+    name = "evpn_instance"
+
+    RPC_NAMES = {
+        "junos": "get_evpn_instance_information",
+        "junos-evo": "get_mac_vrf_instance_information",
+    }
+
+    # Interni instance boxu - neni sluzba, nema local interfaces a check
+    # by na ni v device scope trvale hlasil FAIL.
+    SYSTEM_INSTANCES = frozenset({"__default_evpn__"})
+
+    def rpc_name(self, platform: str) -> str:
+        return self.RPC_NAMES[platform]
+
+    def rpc_kwargs(self, platform: str) -> dict[str, Any]:
+        return {"extensive": True}
+
+    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
+        instances: dict[str, dict[str, Any]] = {}
+        for node in xml.iter("evpn-instance"):
+            name = _text(node, "evpn-instance-name")
+            if not name or name in self.SYSTEM_INSTANCES:
+                continue
+
+            esis: dict[str, str] = {}
+            for esi_node in node.iter("evpn-esi"):
+                esi = _text(esi_node, "evpn-esi-value")
+                # 05: ESI si box generuje sam - bez statusu, do reportu
+                # nepatri (stejne pravidlo jako EvpnEsiCollector).
+                if not esi or esi.startswith("05:"):
+                    continue
+                esis[esi] = _text(esi_node, "evpn-esi-status") or ""
+
+            instances[name] = {
+                "local_interfaces": {
+                    "total": _int(node, "local-interfaces") or 0,
+                    "up": _int(node, "local-interfaces-up") or 0,
+                    "entries": [
+                        {
+                            "name": _text(iface, "evpn-interface-name"),
+                            "status": _text(iface, "evpn-interface-status")
+                            or "unknown",
+                        }
+                        for iface in node.iter("evpn-interface")
+                    ],
+                },
+                "irb_interfaces": {
+                    "total": _int(node, "irb-interfaces") or 0,
+                    "up": _int(node, "irb-interfaces-up") or 0,
+                    # Filtr na irb-interface-name: vypis obsahuje i hola
+                    # <irb-interface>irb.14</irb-interface> pod bridge
+                    # domenou, ktera zadne deti nemaji.
+                    "entries": [
+                        {
+                            "name": _text(iface, "irb-interface-name"),
+                            "status": _text(iface, "irb-interface-status")
+                            or "unknown",
+                            "l3_context": _text(iface, "irb-interface-l3-context"),
+                        }
+                        for iface in node.iter("irb-interface")
+                        if iface.find("irb-interface-name") is not None
+                    ],
+                },
+                "neighbors": {
+                    "total": _int(node, "evpn-num-neighbors") or 0,
+                    "addresses": [
+                        element.text
+                        for element in node.iter("evpn-neighbor-address")
+                        if element.text
+                    ],
+                },
+                "esis": esis,
+            }
+        return instances
+
+
+@register
 class EvpnMacCollector(Collector):
     """Pocty naucenych MAC adres z 'count' vypisu.
 
