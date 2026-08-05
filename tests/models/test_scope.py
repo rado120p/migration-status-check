@@ -86,6 +86,21 @@ def test_select_filters_evpn_by_routing_instance_and_interface():
     assert selected["evpn_vpws"] == {}
 
 
+def test_select_evpn_instance_by_routing_instance():
+    scope = Scope(
+        id="svc:X:E-LAN", kind="service",
+        key=ScopeKey("X", "E-LAN", "vlan-aware"),
+        selectors=Selectors(routing_instances=["EVPN-A"]),
+    )
+    facts = {"evpn_instance": {"EVPN-A": {"neighbors": {}}, "EVPN-B": {}}}
+    assert set(scope.select(facts)["evpn_instance"]) == {"EVPN-A"}
+
+
+def test_device_scope_passes_evpn_instance():
+    facts = {"evpn_instance": {"EVPN-A": {}}}
+    assert device_scope().select(facts)["evpn_instance"] == {"EVPN-A": {}}
+
+
 def test_select_filters_ping_by_scope_id():
     selected = _service_scope().select(FACTS, PROBES)
     assert [probe["target"] for probe in selected["ping"]] == ["198.11.13.2"]

@@ -19,6 +19,7 @@ FACT_AREAS = (
     "bgp",
     "evpn_vpws",
     "evpn_esi",
+    "evpn_instance",
     "evpn_mac",
     "routes",
     "bfd",
@@ -176,6 +177,11 @@ class Scope:
             for esi, data in (facts.get("evpn_esi") or {}).items()
             if self.selectors.matches_interface(str(data.get("interface", "")))
         }
+        evpn_instance = {
+            name: data
+            for name, data in (facts.get("evpn_instance") or {}).items()
+            if name in self.selectors.routing_instances
+        }
         evpn_mac = {
             name: data
             for name, data in (facts.get("evpn_mac") or {}).items()
@@ -225,6 +231,7 @@ class Scope:
             "bgp": bgp,
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
+            "evpn_instance": evpn_instance,
             "evpn_mac": evpn_mac,
             "routes": routes,
             "bfd": bfd,
