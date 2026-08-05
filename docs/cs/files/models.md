@@ -177,6 +177,12 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
+Aktuální `SCHEMA_VERSION = 6` (`models/snapshot.py`). Zvýšení z 5 nese normalizaci ARP/ND
+záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
+]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
+`peers` místo plochého `status`/`local_sid`/`remote_sid`). Stará snapshot data se proto musí
+znovu nasbírat, ne doupravit.
+
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje
 `tests/test_capture.py::test_snapshot_round_trips_to_disk`.
@@ -187,31 +193,35 @@ a zakládají cílový adresář. Round-trip přes disk ověřuje
 
 ### `Status` a `Severity`
 
-`Status`: `PASS` / `SKIP` / `WARN` / `FAIL`, s pořadím pro `worst()`:
+`Status`: `PASS` / `SKIP` / `WARN` / `FAIL` / `INFO`, s pořadím pro `worst()`:
 
 ```
-PASS (0)  <  SKIP (1)  <  WARN (2)  <  FAIL (3)
+INFO (-1)  <  PASS (0)  <  SKIP (1)  <  WARN (2)  <  FAIL (3)
 ```
 
-`SKIP` je tedy „horší" než `PASS` — nezměřeno není v pořádku. `Status.worst()` prázdné sady
-vrací `SKIP`.
+`SKIP` je tedy „horší" než `PASS` — nezměřeno není v pořádku. `INFO` je naopak nejnižší
+rank ze všech: informativní řádek nikdy nepřebije skutečný nález, i kdyby ve stejné sadě
+byl PASS. `Status.worst()` prázdné sady vrací `SKIP`.
 
 `Severity`: `critical` | `advisory`.
 
 ### `Outcome` a `derive_status()`
 
-`Outcome` je to, co **naměří check**: `ok` / `degraded` / `broken` / `skip`.
+`Outcome` je to, co **naměří check**: `ok` / `info` / `degraded` / `broken` / `skip`.
 `derive_status(outcome, severity)` z toho udělá `Status`:
 
 | outcome | critical | advisory |
 |---|---|---|
 | `ok` | PASS | PASS |
+| `info` | INFO | INFO |
 | `degraded` | **WARN** | **WARN** |
 | `broken` | FAIL | WARN |
 | `skip` | SKIP | SKIP |
 
 `degraded` je WARN **vždy**, i při severity `critical`. Pravidlo „částečný úspěch = WARN"
-je tím zapsané jednou na jednom místě.
+je tím zapsané jednou na jednom místě. `info` je na severity nezávislé stejně jako `skip` —
+je to řádek, který nic nehodnotí, jen nese hodnotu k nahlédnutí (např. číslo SID
+u `evpn_vpws_status`).
 
 ### `Finding` → `CheckResult`
 

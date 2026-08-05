@@ -136,10 +136,17 @@ stav s velkým první písmenem (`Up`, `Down`).
 
 ### `interface_errors` (state, advisory)
 
-Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Jen tranzitní rozhraní.
-Jeden Finding na rozhraní (label `Interface errors (<jméno>)`) — countery se do zprávy sesypou
-dohromady (`input_errors=3`), na rozdíl od `interface_state`/`interface_traffic` se nerozpadají
-na samostatné řádky.
+Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Běží jen na
+**tranzitních fyzických** rozhraních (`is_physical()` — bez tečky v názvu): logická
+jednotka vlastní chybové countery na žádné z platforem nemá, plní se nulami
+(`collectors/interfaces.py`), takže řádek „bez chyb" na unitu by tvrdil měření, které
+neproběhlo. Jeden Finding na rozhraní (label `Interface errors (<jméno>)`) — countery se
+do zprávy sesypou dohromady (`input_errors=3`), na rozdíl od
+`interface_state`/`interface_traffic` se nerozpadají na samostatné řádky.
+
+Když scope obsahuje jen tranzitní unity, žádné fyzické rozhraní ne, dostane `SKIP` se
+zprávou, že countery nese jen fyzické rozhraní — ne zavádějící `SKIP` ze sdílené větve
+„není tranzitní rozhraní", protože tranzitní rozhraní tu jsou, jen bez counterů.
 
 ### `interface_traffic` (both, advisory)
 
@@ -223,10 +230,23 @@ označilo za rozbité.
 
 ### `evpn_vpws_status` (both, critical, jen E-Line)
 
-- stav rozhraní musí být `Up`,
-- **musí přijít remote SID**. Local a remote SID se u EVPN-VPWS záměrně **liší** — každá
-  strana inzeruje svoje service ID (`local 1000; remote 2000`), takže rovnost není invariant.
-  FAIL nastane, až když remote SID vůbec nepřijde.
+Vyhodnocuje se **per SID a per peer**, ne jen podle stavu rozhraní a shody dvou čísel SID
+jako dřív — stav se teď čte výhradně z `evpn-vpws-sid-pe-status` (`collectors/evpn.py`,
+`EvpnVpwsCollector`). Na rozhraní s víc než jednou instancí se popisek kvalifikuje jménem
+rozhraní (`qualified()`), aby řádky obou instancí nesplynuly.
+
+Na jedno rozhraní vzniká postupně:
+
+- **stav rozhraní** (`Up` → OK, jinak BROKEN),
+- **local i remote SID** — hodnota SID jde jako `INFO` řádek (nese číslo, ne stav, nemá
+  proti čemu být PASS/FAIL) a nemá `baseline_value`, takže sloupec `ZMENA` u ní zůstává
+  prázdný,
+- **peer local strany** — bez peerů je to očekávaný stav u single-homed rozhraní (`INFO`,
+  ne chyba); u multi-homed přijde `INFO` navíc s módem, ESI a rolí,
+- **peer remote strany** — remote peer musí existovat vždy; jeho absence je `BROKEN` na
+  dvou řádcích (`... PE` a `... status`), protože chybějící druhá strana SID znamená
+  nenakonfigurovaný nebo spadlý remote PE. `status == "resolved"` (case-insensitive) je OK,
+  cokoliv jiného BROKEN.
 
 ### `evpn_esi_status` (both, critical, jen E-LAN)
 

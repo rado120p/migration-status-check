@@ -102,15 +102,22 @@ Poznámka ke `routing_instance`: ani MX, ani EVO ho v odpovědi neuvádějí
 schématu je záměrně — kontrakt ho předepisuje a scope filtruje ARP podle `interface`,
 ne podle instance.
 
+Junos u záznamů naučených přes IRB připojí k názvu rozhraní v hranaté závorce L2
+rozhraní, přes které se soused naučil (`irb.14[ ae0.14 ]`). `split_learned_via()`
+(sdílená s `nd.py`) tenhle tvar rozdělí na `interface` (`irb.14`) a `learned_via`
+(`ae0.14`) — neořezaný tvar by scope, který filtruje přes přesnou shodu jména,
+vyřadil úplně a v reportu by u služby, která ARP má, stálo „žádný záznam".
+
 ## `nd.py` — ND tabulka (IPv6 sousedé)
 
 RPC: `get_ipv6_nd_information`. Dvojče `arp.py` — z ND se stejně jako z ARP odvozují cíle
 pingu, jen pro rodinu IPv6.
 
-Výstup: `[{ip, mac, interface, state}]`. Záznamy bez IP nebo bez rozhraní se zahazují.
-Na rozdíl od `probes/ping.py` collector **záznamy nefiltruje** — link-local sousedé i
-záznamy bez MAC se vrátí všechny; rozhodnutí, co je použitelný cíl pingu, patří probe,
-protože závisí na konfiguraci služby, kterou collector nezná.
+Výstup: `[{ip, mac, interface, state, learned_via}]`. Záznamy bez IP nebo bez rozhraní se
+zahazují. Na rozdíl od `probes/ping.py` collector **záznamy nefiltruje** — link-local
+sousedé i záznamy bez MAC se vrátí všechny; rozhodnutí, co je použitelný cíl pingu, patří
+probe, protože závisí na konfiguraci služby, kterou collector nezná. `interface`/
+`learned_via` se rozdělují stejným `split_learned_via()` jako v `arp.py`.
 
 Ověřeno proti laborce: RPC i jména elementů jsou shodná na vMX i na EVO. MX obaluje texty
 novými řádky, EVO ne — `_text()` (sdílené s `arp.py`/`interfaces.py`) to řeší stripováním.
@@ -148,16 +155,18 @@ ta níže, ověřená přes `| display xml rpc`.
 
 ### `EvpnVpwsCollector` (`evpn_vpws`)
 
-RPC: `get_evpn_vpws_information`. Výstup `{routing_instance: {status, local_sid, remote_sid}}`.
+RPC: `get_evpn_vpws_information`. Výstup
+`{routing_instance: {interfaces: [{name, status, mode, local_sid, remote_sid}]}}`.
 
 - **Klíčem je název instance, ne rozhraní** — název instance je při migraci stabilní,
-  název portu ne.
-- `status` je **stav rozhraní instance** (`Up`), ne stav vzdáleného PE (`Resolved`). Obě
-  hodnoty v odpovědi existují a znamenají něco jiného; check porovnává proti `Up`, takže se
-  emituje ta souměřitelná.
-- `local_sid` / `remote_sid` se čtou z **prvního rozhraní instance** v pořadí dokumentu.
-  Instance s víc rozhraními je v této topologii vzácná a kontrakt typuje SID jako jedno
-  číslo; pokrytí víc rozhraní by nejdřív vyžadovalo rozšířit schéma.
+  název portu ne. Collector nese **všechna** rozhraní instance, ne jen první.
+- `status` u rozhraní je **stav rozhraní instance** (`Up`), ne stav vzdáleného PE
+  (`Resolved`). Obě hodnoty v odpovědi existují a znamenají něco jiného; check porovnává
+  proti `Up`, takže se emituje ta souměřitelná.
+- `local_sid` i `remote_sid` mají tvar `{value, peers}`. `value` je číslo SID; `peers` je
+  seznam `{esi, ipaddr, mode, role, status}` čtený z `evpn-vpws-sid-pe-status-table` —
+  tuhle tabulku dřívější schéma vůbec nečetlo, takže `evpn_vpws_status` neuměl rozlišit
+  konkrétního peera od druhé strany SID.
 
 ### `EvpnEsiCollector` (`evpn_esi`)
 
@@ -166,6 +175,9 @@ RPC: `get_evpn_instance_information` s **`extensive=True`**. Bez `extensive` vr�
 
 Výstup `{esi: {status, df_role, interface}}`.
 
+- **ESI začínající `05:` se ignoruje.** Box si ho generuje sám (per-IRB, auto-derived) a
+  nenese ani status, ani DF — v reportu by u každé L3-extended služby přibyl řádek bez
+  vypovědní hodnoty.
 - `status` je `evpn-esi-local-intf-status` (`Up/Forwarding`) — `evpn-esi-status` je proti
   tomu popisný text (`Resolved by IFL ae0.14`), který se nedá porovnávat.
 - `df_role` je **IP adresa zvoleného DF**, ne role tohohle boxu. Určit „jsem DF?" by
