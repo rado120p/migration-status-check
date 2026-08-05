@@ -7,6 +7,7 @@ from migration_validator.models.result import (
     ScopeResult,
     Severity,
     Status,
+    count_statuses,
     derive_status,
 )
 
@@ -123,7 +124,6 @@ def test_scope_result_serialises_identity():
 
 
 def test_info_outcome_derives_info_status_for_both_severities():
-    from migration_validator.models.result import count_statuses
     assert derive_status(Outcome.INFO, Severity.CRITICAL) is Status.INFO
     assert derive_status(Outcome.INFO, Severity.ADVISORY) is Status.INFO
 
@@ -135,7 +135,6 @@ def test_info_never_wins_worst():
 
 
 def test_count_statuses_counts_info_separately():
-    from migration_validator.models.result import count_statuses
     counts = count_statuses([Status.PASS, Status.INFO, Status.INFO])
     assert counts["pass"] == 1
     assert counts["info"] == 2

@@ -30,7 +30,7 @@ class Status(str, Enum):
 
 
 def count_statuses(statuses: Iterable[Status]) -> dict[str, int]:
-    """Rozpad stavu na ctyri countery.
+    """Rozpad stavu na pet counteru.
 
     Bere libovolne stavy, aby stejnou funkci mohl pouzit souhrn za checky
     i souhrn za sluzby - prave rozdil mezi temi dvema jednotkami byl v

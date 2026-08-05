@@ -29,7 +29,7 @@ def _legacy_result() -> RunResult:
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
         summary={
-            "pass": 3, "warn": 1, "fail": 1, "skip": 0,
+            "pass": 3, "warn": 1, "fail": 1, "skip": 0, "info": 0,
             "scopes_matched": 2, "unmatched_baseline": 1, "unmatched_subject": 1,
         },
         scopes=[
@@ -370,7 +370,7 @@ def _result(scopes, *, baseline=True) -> RunResult:
             if baseline
             else None
         ),
-        summary={"pass": 1, "warn": 1, "fail": 0, "skip": 0,
+        summary={"pass": 1, "warn": 1, "fail": 0, "skip": 0, "info": 0,
                  "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0},
         scopes=scopes,
     )
@@ -707,7 +707,7 @@ def test_deactivated_service_shows_the_reason_in_the_report():
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline=None,
         summary={
-            "pass": 0, "warn": 0, "fail": 0, "skip": 1,
+            "pass": 0, "warn": 0, "fail": 0, "skip": 1, "info": 0,
             "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0,
         },
         scopes=[
@@ -787,7 +787,7 @@ def _grouped_result(checks) -> RunResult:
         subject={"address": "172.20.20.5", "phase": "post-migration"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration"},
         summary={
-            "pass": 1, "warn": 0, "fail": 0, "skip": 0,
+            "pass": 1, "warn": 0, "fail": 0, "skip": 0, "info": 0,
             "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0,
         },
         scopes=[
@@ -1143,9 +1143,21 @@ def test_info_row_has_blank_status_column():
 
     INFO radek nese hodnotu bez hodnoceni - nema byt v STAV sloupci znak,
     jen prazdny symbol (seznam SYMBOL ma Status.INFO mappovany na "").
+    Padding v STAV sloupci musi zustat konzistentni - sloupec STAV se musi
+    po zarovnani na stejne miste, aby se nezhroutila zarovnani sloupcu.
     """
     result = _grouped_result(
         [
+            CheckResult(
+                id="interface_state",
+                mode="state",
+                status=Status.PASS,
+                severity=Severity.ADVISORY,
+                message="up/up",
+                label="Interface admin status",
+                family=4,
+                value="Up",
+            ),
             CheckResult(
                 id="evpn_vpws_sid_local",
                 mode="state",
@@ -1161,6 +1173,16 @@ def test_info_row_has_blank_status_column():
     rendered = render(result, detail=True)
 
     assert "EVPN VPWS SID local value" in rendered
-    line = next(l for l in rendered.splitlines() if "SID local value" in l)
-    assert "INFO" not in line
-    assert line.lstrip().startswith("|")
+    assert "Interface admin status" in rendered
+
+    lines = rendered.splitlines()
+    pass_line = next(l for l in lines if "Interface admin status" in l)
+    info_line = next(l for l in lines if "SID local value" in l)
+
+    # INFO radek nema obsahovat slovo INFO
+    assert "INFO" not in info_line
+
+    # Hranicni pozice | musi byt na stejnem miste u obou radku -
+    # to je jedinym zpusobem, jak overit ze zarovnani se nezhroutilo
+    # a STAV sloupec se doplnil mezerami miste symbolu.
+    assert pass_line.index(" | ") == info_line.index(" | ")
