@@ -22,7 +22,7 @@ Matches the output of `mig-validate checks` (as of commit `59fc550`):
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active against tolerance — **per RIB** |
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
-| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline, also equal counts |
+| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration) |
 | `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |

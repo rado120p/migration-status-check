@@ -22,7 +22,7 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `59fc550`):
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť** |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
-| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline navíc rovnost počtů |
+| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline: pokles EVPN neighbors = WARN, počty local/IRB interfaců se na rovnost neporovnávají (rozdíl ukazuje sloupec ZMENA — konsolidace do jedné mac-vrf instance je při migraci mění) |
 | `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
 | `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |

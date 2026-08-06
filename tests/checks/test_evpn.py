@@ -393,16 +393,65 @@ def test_instance_no_esi_gives_skip_row():
     assert row.value == "bez dat"
 
 
-def test_instance_count_differs_from_baseline_fails():
-    # 2.4: hodnoty se pre/post musi rovnat - i kdyz je stavove pravidlo
-    # samo o sobe splnene.
+def test_instance_local_count_differs_from_baseline_is_not_a_finding():
+    # Revize spec 2.4 (overeno v laborce 2026-08-06): migrace konsoliduje
+    # sluzby do jedne mac-vrf instance, takze pocty local/IRB interfacu se
+    # meni pri kazde migraci. Rozdil nese sloupec ZMENA (baseline_value),
+    # stav zustava podle stavoveho pravidla.
     findings = _instance_findings(
         _instance_subject(total=2, up=2),
         baseline=_instance_subject(total=3, up=3),
     )
     row = _by_label(findings, "EVPN local interfaces")
-    assert row.outcome is Outcome.BROKEN
+    assert row.outcome is Outcome.OK
     assert row.baseline_value == "3"
+    up_row = _by_label(findings, "EVPN local interfaces up")
+    assert up_row.outcome is Outcome.OK
+    assert up_row.baseline_value == "3/3"
+
+
+def test_instance_irb_up_count_differs_from_baseline_is_not_a_finding():
+    findings = _instance_findings(
+        _instance_subject(irb_total=3, irb_up=3),
+        baseline=_instance_subject(irb_total=1, irb_up=1),
+    )
+    row = _by_label(findings, "EVPN IRB interfaces up")
+    assert row.outcome is Outcome.OK
+    assert row.baseline_value == "1/1"
+
+
+def test_instance_neighbors_below_baseline_degrades():
+    # Ubytek EVPN sousedu proti baseline je podezrely (ztraceny peer),
+    # ale ne tvrdy FAIL - u ciste L2 vlan-aware sluzby po migraci
+    # legitimne ubyde puvodni MX.
+    findings = _instance_findings(
+        _instance_subject(neighbors=1),
+        baseline=_instance_subject(neighbors=2),
+    )
+    row = _by_label(findings, "EVPN neighbors")
+    assert row.outcome is Outcome.DEGRADED
+    assert row.baseline_value == "2"
+    assert "baseline 2" in row.message
+
+
+def test_instance_neighbors_at_or_above_baseline_ok():
+    same = _instance_findings(
+        _instance_subject(neighbors=2), baseline=_instance_subject(neighbors=2)
+    )
+    assert _by_label(same, "EVPN neighbors").outcome is Outcome.OK
+    more = _instance_findings(
+        _instance_subject(neighbors=3), baseline=_instance_subject(neighbors=2)
+    )
+    assert _by_label(more, "EVPN neighbors").outcome is Outcome.OK
+
+
+def test_instance_zero_neighbors_fails_even_with_baseline():
+    # Stavove pravidlo (> 0) ma prednost pred poklesem: nula sousedu je
+    # FAIL, ne WARN.
+    findings = _instance_findings(
+        _instance_subject(neighbors=0), baseline=_instance_subject(neighbors=2)
+    )
+    assert _by_label(findings, "EVPN neighbors").outcome is Outcome.BROKEN
 
 
 def test_instance_esi_missing_against_baseline_fails():

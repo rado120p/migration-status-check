@@ -337,16 +337,27 @@ def _count_finding(
     *,
     ok: bool,
     expectation: str,
+    warn_below_baseline: bool = False,
 ) -> Finding:
-    """Ciselny radek: stavove pravidlo + rovnost s baseline (spec 2.4).
+    """Ciselny radek: stavove pravidlo; rozdil proti baseline nese ZMENA.
 
-    Rovnost se vynucuje i kdyz je stavove pravidlo splnene: kdyz post
-    boxu ubylo rozhrani, "up == total" plati, ale sluzba prisla o port.
+    Rovnost s baseline se nevynucuje (revize spec 2.4 po overeni v laborce
+    2026-08-06): migrace konsoliduje sluzby do jedne mac-vrf instance,
+    takze pocty local/IRB interfacu se meni pri kazde migraci a rovnost by
+    FAILovala trvale. Vyjimkou jsou EVPN neighbors (warn_below_baseline):
+    pokles pod baseline je DEGRADED - ztraceny peer stoji za pozornost,
+    ale u ciste L2 vlan-aware sluzby po migraci legitimne ubyde puvodni
+    box, takze to neni tvrdy FAIL.
     """
     outcome = Outcome.OK if ok else Outcome.BROKEN
     text = f"{message}: {value}" if ok else f"{message}: {value}, ocekavano {expectation}"
-    if ok and baseline_value is not None and value != baseline_value:
-        outcome = Outcome.BROKEN
+    if (
+        ok
+        and warn_below_baseline
+        and baseline_value is not None
+        and int(value) < int(baseline_value)
+    ):
+        outcome = Outcome.DEGRADED
         text = f"{message}: {value}, baseline {baseline_value}"
     return Finding(
         outcome, text, label=label, value=value, baseline_value=baseline_value
@@ -357,10 +368,11 @@ def _count_finding(
 class EvpnInstanceStatusCheck(Check):
     """Per-instance zdravi EVPN podle brief pravidel ze zadani.
 
-    Compare semantika (spec 2.4): ciselne hodnoty se pre/post musi
-    rovnat, jinak FAIL - s vyjimkou jmen interfacu a IRB, ktera se
-    migraci meni (INFO vycty proto baseline_value nenesou). Text ESI
-    statusu se na rovnost neporovnava, nese jmeno IFL.
+    Compare semantika (revize spec 2.4, 2026-08-06): pocty local/IRB
+    interfacu se s baseline neporovnavaji na rovnost - rozdil je videt ve
+    sloupci ZMENA, stav urcuji jen stavova pravidla. EVPN neighbors pod
+    baseline jsou DEGRADED (viz _count_finding). Text ESI statusu se na
+    rovnost neporovnava, nese jmeno IFL.
     """
 
     id = "evpn_instance_status"
@@ -479,6 +491,7 @@ class EvpnInstanceStatusCheck(Check):
                 ),
                 ok=(neighbors.get("total") or 0) > 0,
                 expectation="> 0",
+                warn_below_baseline=True,
             )
         )
 
