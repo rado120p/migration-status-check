@@ -342,6 +342,100 @@ def test_capture_run_second_capture_replaces_record(tmp_path, monkeypatch):
     assert len(manifest.captures) == 1
 
 
+def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    _fake_capture(monkeypatch)
+
+    calls = {}
+
+    @contextmanager
+    def fake_connect(options):
+        yield object()
+
+    def fake_detect_platform(device):
+        return "junos"
+
+    def fake_generate_inventory(device, platform, output_path, port):
+        calls["platform"] = platform
+        calls["output_path"] = output_path
+        calls["port"] = port
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("schema_version: 5\ndevice: x\ninterfaces: []\n")
+
+    monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
+    monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
+    monkeypatch.setattr("migration_validator.cli.generate_inventory", fake_generate_inventory)
+
+    code = main(
+        [
+            "capture",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--device", "172.20.20.4",
+            "--phase", "pre",
+            "--port", "ge-0/0/0",
+            "--parse-services",
+        ]
+    )
+
+    assert code == 0
+    assert calls["platform"] == "junos"
+    assert calls["port"] == "ge-0/0/0"
+    assert calls["output_path"] == tmp_path / "mig01" / "inventory_172.20.20.4_ge_0_0_0.yml"
+    assert calls["output_path"].exists()
+
+
+def test_parse_services_requires_run(monkeypatch, capsys):
+    _refuse_capture(monkeypatch)
+
+    code = main(
+        [
+            "capture",
+            "--device", "172.20.20.4",
+            "--phase", "pre",
+            "--output", "y.json",
+            "--parse-services",
+        ]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "--parse-services" in err
+    assert "--run" in err
+
+
+def test_capture_run_parse_services_skips_existing_inventory(tmp_path, monkeypatch, capsys):
+    _fake_capture(monkeypatch)
+
+    store = RunStore(tmp_path, "mig01")
+    inventory_path = store.inventory_path("172.20.20.4", "ge-0/0/0")
+    inventory_path.parent.mkdir(parents=True, exist_ok=True)
+    inventory_path.write_text("schema_version: 5\ndevice: x\ninterfaces: []\n")
+
+    def fail_generate_inventory(*args, **kwargs):
+        raise AssertionError("generate_inventory nemel byt volan, inventory uz existuje")
+
+    monkeypatch.setattr(
+        "migration_validator.cli.generate_inventory", fail_generate_inventory
+    )
+
+    code = main(
+        [
+            "capture",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--device", "172.20.20.4",
+            "--phase", "pre",
+            "--port", "ge-0/0/0",
+            "--parse-services",
+        ]
+    )
+
+    assert code == 0
+    assert "jiz existuje" in capsys.readouterr().err
+
+
 def test_capture_run_resolves_existing_node_name(tmp_path, monkeypatch):
     # run.yml uz zna 172.20.20.4 pod uzlem "MX1-POP1" (jmeno z parseru
     # konfigurace, ne IP) - capture ho musi dohledat pres node_for_host

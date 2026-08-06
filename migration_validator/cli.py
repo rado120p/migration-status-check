@@ -33,6 +33,7 @@ from migration_validator.runs.manifest import (
     MappingEndpoint,
     RunDevice,
 )
+from migration_validator.runs.services import generate_inventory
 from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import empty_mapping, load_mapping
 from migration_validator.scoping.matcher import match_scopes
@@ -167,6 +168,9 @@ def _cmd_capture(args: argparse.Namespace) -> int:
             raise ToolError("--run a --output se vzajemne vylucuji")
         return _capture_into_run(args)
 
+    if args.parse_services:
+        raise ToolError("--parse-services vyzaduje --run")
+
     if args.port is not None:
         raise ToolError(
             "--port je jen pro --run rezim, SSH port zadej pres --ssh-port"
@@ -199,6 +203,23 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None:
+    """Vyrobi inventory pro --parse-services v samostatnem kratkem spojeni.
+
+    api.capture se nemeni - konfigurace pro inventory se stahne pred
+    samotnym capture spojenim, ne v nem.
+    """
+
+    try:
+        with connect(_connection_options(args)) as device:
+            platform = detect_platform(device)
+            generate_inventory(device, platform, inventory_path, args.port)
+    except JunosConnectionError as error:
+        raise ToolError(str(error)) from error
+
+    print(f"inventory vyrobena: {inventory_path}")
+
+
 def _capture_into_run(args: argparse.Namespace) -> int:
     from migration_validator.models.snapshot import save_snapshot
 
@@ -222,8 +243,17 @@ def _capture_into_run(args: argparse.Namespace) -> int:
         if not inventory_path.exists():
             inventory_path = store.inventory_path(node, None)
         if not inventory_path.exists():
-            raise ToolError(
-                "inventory nenalezena - spust s --parse-services"
+            if not args.parse_services:
+                raise ToolError(
+                    "inventory nenalezena - spust s --parse-services"
+                )
+            inventory_path = store.inventory_path(node, args.port)
+            _parse_services_into(args, inventory_path)
+        elif args.parse_services:
+            # Existujici soubor ma prednost - zadne tiche prepsani.
+            print(
+                f"inventory jiz existuje, generovani se preskakuje: {inventory_path}",
+                file=sys.stderr,
             )
 
     try:
@@ -371,6 +401,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     capture.add_argument(
         "--maps-to", help="parovani portu ve tvaru NODE:PORT (jen s --run a --port)"
+    )
+    capture.add_argument(
+        "--parse-services",
+        action="store_true",
+        help="chybejici inventory pro --run vyrob z konfigurace (samostatne spojeni)",
     )
     _add_auth_arguments(capture, port_flag="--ssh-port", port_dest="ssh_port")
     capture.set_defaults(func=_cmd_capture)
