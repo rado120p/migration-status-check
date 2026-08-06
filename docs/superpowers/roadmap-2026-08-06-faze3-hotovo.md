@@ -115,6 +115,50 @@ Přesně jak uvádí brief úlohy 5, sekce „Mimo rozsah fáze 3 (vědomě)":
   z fáze 2.
 - **Ověření proti laborce** (capture na 172.20.20.4/5) — proběhne po
   dokončení implementace jako samostatný krok, není součástí tasků 1–5.
+  **Proběhlo 2026-08-06 po merge, viz sekce níže.**
+
+---
+
+## Ověření proti laborce (2026-08-06, po merge `5f7ae57`)
+
+Capture spuštěn proti oběma zařízením (uživatel `admin`, heslo
+z `MIG_LAB_PASSWORD`), snapshoty mimo repo ve scratchpadu úlohy.
+
+**MX (172.20.20.4) — vazba L2+L3 se vytvořila a renderuje přesně podle
+mockupu.** Instance `EVPN-VLAN-AWARE-POP1` nese `irb.4094` s
+`l3-context: MGMT`; linker spároval L3 scope `svc:irb.4094:IPVPN`
+(RI `MGMT`) s L2 scopem `MGMT-VLAN` (E-LAN, `ge-0/0/6.4094`). Z
+`evaluate --detail`:
+
+```
+ PASS  svc:irb.4094:IPVPN   IPVPN   irb.4094   RI: MGMT
+ L2 cast: ge-0/0/6.4094 v EVPN-VLAN-AWARE-POP1 (blok nize)
+...
+      | Interface errors / traffic              : mereno na L2 (ge-0/0/6.4094) - viz blok nize
+...
+ FAIL  MGMT-VLAN   E-LAN (L2 cast)   ge-0/0/6.4094   RI: EVPN-VLAN-AWARE-POP1
+ L3 cast: irb.4094 v MGMT (blok vyse)
+```
+
+L2 blok následuje bezprostředně za L3 blokem a nese měření errors/traffic
+na `ge-0/0/6` i `ge-0/0/6.4094`; v L3 bloku zůstal admin/oper stav IRB.
+FAIL na `EVPN neighbors: 0` je pravdivý nález laborky (protistrana na EVO
+neběží), ne vada nástroje. Souhrnná tabulka ukazuje typ `E-LAN (L2 cast)`.
+Ověřeno i párové chování z opravné vlny finálního review: bez `--detail`
+FAIL L2 blok vytáhl svůj PASS L3 protějšek (oba odkazy vypsané) a
+`evaluate --status fail` zachoval partnera přes filtr — žádný visící
+odkaz. Hlavička L3 bloku ukazuje `svc:irb.4094:IPVPN`, protože `irb.4094`
+nemá description — korektní fallback na scope id.
+
+**EVO (172.20.20.5) — vazbu zatím ověřit nelze, správné chování bez dat.**
+`get_mac_vrf_instance_information` vrací prázdný výsledek
+(`facts["evpn_instance"] == {}`, collector `ok`), `evpn_mac` hlásí
+očekávané „the l2-learning subsystem is not running" — konfigurace služeb
+na EVO existuje (inventory je vidí aktivní), ale control plane v tomto
+stavu laborky neběží. Žádná vazba se nevytvořila (správně — není z čeho),
+report bez visících odkazů. **Ověření EVO strany (cílový scénář
+`irb.15 ↔ ae0.15` v `EVPN-VLAN-AWARE-…`) čeká na migraci služeb na
+PTX** — pak stačí nový capture a `evaluate --detail`.
 
 Menší nálezy odložené v průběhu tasků (`.superpowers/sdd/2026-08-06-faze3-vazba-l2-l3/progress.md`),
 všechny potvrzené jako neškodné nebo netestovatelné v praxi:
