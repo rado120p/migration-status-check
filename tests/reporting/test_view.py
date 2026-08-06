@@ -37,7 +37,7 @@ def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
 _UNSET = object()
 
 
-def _scope(checks, match=_UNSET) -> ScopeResult:
+def _scope(checks, match=_UNSET, link=None) -> ScopeResult:
     return ScopeResult(
         scope_id="svc:INTERNET-CPE13-NNI:Internet",
         key={"description": "INTERNET-CPE13-NNI", "service_type": "Internet"},
@@ -63,6 +63,7 @@ def _scope(checks, match=_UNSET) -> ScopeResult:
             "virtual_gw_v4": [],
             "virtual_gw_v6": [],
         },
+        link=link,
     )
 
 
@@ -428,3 +429,41 @@ def test_foreign_skip_is_not_collapsed():
 
     assert labels == ["Deaktivace", "BGP prefixy", "Ostatni checky"]
     assert view.sections[0].rows[2].value == "2 preskoceno"
+
+
+def test_l3_link_note_points_below():
+    scope = _scope(
+        [_check("interface_state")],
+        link={
+            "role": "l3",
+            "peer_scope_id": "svc:X:E-LAN",
+            "peer_interface": "ae0.15",
+            "peer_instance": "EVPN-VLAN-AWARE-POP1",
+        },
+    )
+    view = build_view(scope)
+    assert view.link_role == "l3"
+    assert view.link_note == "L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)"
+    assert "(L2 cast)" not in view.service_type
+
+
+def test_l2_link_note_points_above_and_marks_type():
+    scope = _scope(
+        [_check("interface_state")],
+        link={
+            "role": "l2",
+            "peer_scope_id": "svc:X:IPVPN",
+            "peer_interface": "irb.15",
+            "peer_instance": "L3VPN-CPE14-UNI",
+        },
+    )
+    view = build_view(scope)
+    assert view.link_role == "l2"
+    assert view.link_note == "L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)"
+    assert view.service_type.endswith(" (L2 cast)")
+
+
+def test_no_link_leaves_view_unchanged():
+    view = build_view(_scope([_check("interface_state")]))
+    assert view.link_role is None
+    assert view.link_note is None

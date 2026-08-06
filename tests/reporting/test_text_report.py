@@ -376,6 +376,83 @@ def _result(scopes, *, baseline=True) -> RunResult:
     )
 
 
+def _linked_pair(l3_status=Status.WARN, l2_status=Status.PASS):
+    l3 = ScopeResult(
+        scope_id="svc:L3VPN-CPE14-UNI:IPVPN",
+        key={},
+        status=l3_status,
+        match=None,
+        checks=[_check("interface_state", l3_status, "x", label="Interface admin status (irb.15)", value="Up")],
+        identity={
+            "description": "L3VPN-CPE14-UNI",
+            "service_type": "IPVPN",
+            "routing_instance": "L3VPN-CPE14-UNI",
+            "interfaces": ["irb.15"],
+            "ipv4": [], "ipv6": [], "virtual_gw_v4": [], "virtual_gw_v6": [],
+        },
+        link={
+            "role": "l3",
+            "peer_scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+            "peer_interface": "ae0.15",
+            "peer_instance": "EVPN-VLAN-AWARE-POP1",
+        },
+    )
+    l2 = ScopeResult(
+        scope_id="svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+        key={},
+        status=l2_status,
+        match=None,
+        checks=[_check("interface_state", l2_status, "x", label="Interface admin status (ae0.15)", value="Up")],
+        identity={
+            "description": "EVPN-VLAN-AWARE-CPE14",
+            "service_type": "E-LAN",
+            "routing_instance": "EVPN-VLAN-AWARE-POP1",
+            "interfaces": ["ae0.15"],
+            "ipv4": [], "ipv6": [], "virtual_gw_v4": [], "virtual_gw_v6": [],
+        },
+        link={
+            "role": "l2",
+            "peer_scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
+            "peer_interface": "irb.15",
+            "peer_instance": "L3VPN-CPE14-UNI",
+        },
+    )
+    return [l3, l2]
+
+
+def test_link_notes_render_inside_block_frames():
+    output = render(_result(_linked_pair(), baseline=False))
+    assert " L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)" in output
+    assert " L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)" in output
+    assert "E-LAN (L2 cast)" in output
+
+
+def test_pass_l2_block_renders_when_l3_partner_renders():
+    # L2 blok je PASS a bez --detail by se sam nevypsal; vazba ho vytahne
+    output = render(_result(_linked_pair(l3_status=Status.WARN, l2_status=Status.PASS)))
+    assert "L3 cast: irb.15" in output
+
+
+def test_pass_l3_block_renders_when_l2_partner_renders():
+    output = render(_result(_linked_pair(l3_status=Status.PASS, l2_status=Status.FAIL)))
+    assert "L2 cast: ae0.15" in output
+
+
+def test_both_pass_blocks_stay_collapsed_without_detail():
+    # "L2 cast:" (s dvojteckou) je link_note z bloku - service_type suffix
+    # "(L2 cast)" v souhrnne tabulce se vypisuje vzdy a s tim se nekrizi.
+    output = render(_result(_linked_pair(l3_status=Status.PASS, l2_status=Status.PASS)))
+    assert "L2 cast:" not in output
+
+
+def test_link_note_counts_into_frame_width():
+    # dlouhy nazev instance v odkazu nesmi prerust "=" ramec
+    pair = _linked_pair()
+    pair[0].link["peer_instance"] = "EVPN-VLAN-AWARE-VELMI-DLOUHE-JMENO-INSTANCE-POP1"
+    output = render(_result(pair, baseline=False))
+    _assert_frame_wraps_block(output)
+
+
 def test_ipv4_section_comes_before_ipv6():
     output = render(_result([_dual_stack_scope()]))
 

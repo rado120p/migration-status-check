@@ -167,18 +167,20 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     group_titles = [
         _group_header(group) for section in view.sections for group in section.groups
     ]
+    note_line = f" {view.link_note}" if view.link_note else None
+
     width = max(
         [table_width, len(header_line)]
+        + ([len(note_line)] if note_line else [])
         + [len(text) for text in headers]
         + [len(text) for text in group_titles]
     )
 
-    lines = [
-        "=" * width,
-        header_line,
-        "=" * width,
-        line("STAV", label_title, value_title, change_title),
-    ]
+    lines = ["=" * width, header_line]
+    if note_line:
+        lines.append(note_line)
+    lines.append("=" * width)
+    lines.append(line("STAV", label_title, value_title, change_title))
     separator = f" {'-'*4}-+-{'-'*label_width}-+-{'-'*value_width}"
     if has_baseline:
         separator += f"-+-{'-'*change_width}"
@@ -388,10 +390,20 @@ def render(result: RunResult, *, detail: bool = False) -> str:
         )
     lines.append("")
 
-    # Rozbaluje stav, ne interaktivita: v terminalu se neklikne, ale detail
-    # je potreba prave tam, kde je neco rozbite. --detail rozbali i PASS.
-    for _scope, view in views:
-        if detail or view.status is not Status.PASS:
+    # Rozbaluje stav, ne interaktivita: --detail rozbali i PASS. Vazba L2+L3
+    # drzi dvojici pohromade - kdyz se vypisuje jeden z bloku, vypise se i
+    # jeho partner, jinak by odkaz "blok nize/vyse" ukazoval do prazdna.
+    shown = {
+        scope.scope_id
+        for scope, view in views
+        if detail or view.status is not Status.PASS
+    }
+    for scope, _view in views:
+        link = scope.link
+        if link and link["peer_scope_id"] in shown:
+            shown.add(scope.scope_id)
+    for scope, view in views:
+        if scope.scope_id in shown:
             lines.extend(_block(view, has_baseline))
 
     lines.append("NESPAROVANO")

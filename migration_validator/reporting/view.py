@@ -79,6 +79,8 @@ class ServiceView:
     subject_interfaces: list[str] = field(default_factory=list)
     worst_message: str = ""
     sections: list[Section] = field(default_factory=list)
+    link_role: str | None = None
+    link_note: str | None = None
 
 
 def change_text(row: Row, has_baseline: bool) -> str:
@@ -236,11 +238,30 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
             )
         )
 
+    link = scope.link
+    link_role = link.get("role") if link else None
+    link_note = None
+    if link is not None:
+        if link_role == "l3":
+            link_note = (
+                f"L2 cast: {link['peer_interface']} v {link['peer_instance']} (blok nize)"
+            )
+        else:
+            link_note = (
+                f"L3 cast: {link['peer_interface']} v {link['peer_instance']} (blok vyse)"
+            )
+
+    service_type = identity.get("service_type") or "-"
+    if link_role == "l2":
+        # L2 blok je technicky doplnek sluzby z bloku nad nim - typ to ma
+        # rict i v souhrnne tabulce, ne jen v hlavicce bloku.
+        service_type = f"{service_type} (L2 cast)"
+
     match = scope.match
     return ServiceView(
         status=scope.status,
         description=identity.get("description") or scope.scope_id,
-        service_type=identity.get("service_type") or "-",
+        service_type=service_type,
         routing_instance=identity.get("routing_instance"),
         baseline_interfaces=list(match.baseline_interfaces) if match else [],
         # Bez match (beh bez baseline, nesparovana sluzba) porty nese identity.
@@ -250,4 +271,6 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
         ),
         worst_message=_worst_message(scope),
         sections=sections,
+        link_role=link_role,
+        link_note=link_note,
     )
