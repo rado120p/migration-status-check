@@ -4,6 +4,6 @@ __pycache__/
 pyats-venv/
 *.egg-info/
 .pytest_cache/
-runs/
+/runs/
 .superpowers/
 .claude/worktrees/
