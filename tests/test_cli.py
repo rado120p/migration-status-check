@@ -12,7 +12,8 @@ from migration_validator.models.snapshot import (
     load_snapshot,
     save_snapshot,
 )
-from migration_validator.runs.manifest import load_manifest
+from migration_validator.runs.manifest import RunDevice, RunManifest, load_manifest
+from migration_validator.runs.store import RunStore
 
 NOW = "2026-07-24T11:40:02Z"
 
@@ -339,3 +340,45 @@ def test_capture_run_second_capture_replaces_record(tmp_path, monkeypatch):
 
     manifest = load_manifest(tmp_path / "mig01" / "run.yml")
     assert len(manifest.captures) == 1
+
+
+def test_capture_run_resolves_existing_node_name(tmp_path, monkeypatch):
+    # run.yml uz zna 172.20.20.4 pod uzlem "MX1-POP1" (jmeno z parseru
+    # konfigurace, ne IP) - capture ho musi dohledat pres node_for_host
+    # a pouzit "MX1-POP1" vsude (soubory, CaptureRecord.device), ne IP.
+    store = RunStore(tmp_path, "mig01")
+    manifest = RunManifest(
+        devices={
+            "MX1-POP1": RunDevice(host="172.20.20.4", platform="junos", role="old")
+        }
+    )
+    store.save(manifest)
+
+    _fake_capture(monkeypatch)
+
+    code = main(
+        [
+            "capture",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--device", "172.20.20.4",
+            "--phase", "pre",
+            "--port", "ge-0/0/0",
+            "--inventory", "tests/fixtures/172.20.20.4.yml",
+        ]
+    )
+
+    assert code == 0
+
+    manifest = load_manifest(tmp_path / "mig01" / "run.yml")
+
+    # zadny novy zaznam keyed IP adresou - jen puvodni "MX1-POP1"
+    assert list(manifest.devices.keys()) == ["MX1-POP1"]
+    assert "172.20.20.4" not in manifest.devices
+
+    record = manifest.find_capture("pre", "MX1-POP1", "ge-0/0/0")
+    assert record is not None
+    assert record.snapshot == "snapshot_pre_MX1-POP1_ge_0_0_0.json"
+
+    snapshot_path = tmp_path / "mig01" / "snapshot_pre_MX1-POP1_ge_0_0_0.json"
+    assert snapshot_path.exists()
