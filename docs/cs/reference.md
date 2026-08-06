@@ -68,6 +68,13 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
 - **`bfd_session_state` čeká na BGP.** Dokud peer není `Established`, vrací `SKIP`
   s hodnotou `BGP neni Established` místo FAILu. BFD nemůže naběhnout bez BGP a dva červené
   řádky za jednu příčinu jsou důvod, proč operátoři výpisy přeskakují.
+- **`interface_errors`/`interface_traffic` na L3 části vázané služby (IRB spárovaný s L2
+  přes `scopes[].link`, scope sám nemá tranzitní rozhraní) neměří IRB.** Počítadla nese
+  fyzicky L2 tranzit. `interface_errors` vrátí jeden `INFO` řádek s popiskem
+  „Interface errors / traffic" a hodnotou `mereno na L2 (<L2 rozhraní>) - viz blok nize`
+  místo obvyklého SKIP/OK; `interface_traffic` pro tu samou službu nevrátí vůbec žádný
+  nález (aby se INFO odkaz nezdvojil). Podrobnosti a ukázka reportu: „Vazba L2+L3"
+  v kapitole 5.
 
 ### Klasifikace rozhraní
 
@@ -517,6 +524,53 @@ Vlastnosti:
   jiného než `NESPAROVANO`, která vypisuje `unmatched`. Sekce `NEZARAZENO` se vypisuje vždy,
   i prázdná (`(nic)`), a filtrování se na ni nevztahuje.
 - `message` je česky (bez diakritiky), konzistentně se zbytkem nástroje.
+- **`scopes[].link` je volitelný klíč** — nese vazbu L3 (IRB) ↔ L2 (E-LAN tranzit) v téže
+  EVPN instanci, viz „Vazba L2+L3" níže. Bez vazby klíč u scope chybí úplně (aditivní klíč,
+  stejné pravidlo jako u ostatních volitelných polí v tomto formátu).
+
+### Vazba L2+L3
+
+Služba typu Internet/IPVPN, jejíž L3 rozhraní je IRB v EVPN mac-vrf instanci, má v konfiguraci
+dvě části: L3 (IRB, RI služby) a L2 (E-LAN, tranzitní rozhraní téže mac-vrf instance). Engine
+tuhle dvojici pozná a spáruje.
+
+Zdroj vazby: `l3_context` IRB rozhraní z `show evpn instance extensive` / `show mac-vrf routing
+instance extensive` (fakt `evpn_instance`, fáze 2.1) + shoda VLAN/unitu v téže instanci;
+`master` znamená inet.0 (Internet scope bez RI). Párování je 1:1 — víc kandidátů vazbu
+nevytvoří (raději žádný odkaz než špatný).
+
+**V textovém reportu** (`render`) se L2 blok (`E-LAN (L2 cast)`) vypíše hned za L3 blokem
+spárované služby a oba nesou v hlavičce vzájemný odkaz:
+
+```
+L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
+```
+```
+L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
+```
+
+Pokud se s `--filter`/`--status` zobrazí jeden z páru, vypíše se i druhý — jinak by odkaz
+„blok nize/vyse" ukazoval do prázdna.
+
+Errors/traffic se u L3 části neměří přímo (IRB sám o sobě není tranzitní rozhraní) — L3 blok
+místo toho nese jeden INFO řádek `mereno na L2 (ae0.15) - viz blok nize`; skutečné počítadlo
+je v L2 bloku. Podrobnosti viz katalog checků výše.
+
+**Strukturovaný výsledek** (`evaluate --format json`) nese totéž jako volitelný klíč
+`scopes[].link`:
+
+```jsonc
+"link": {
+  "role": "l3",
+  "peer_scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
+  "peer_interface": "ae0.15",
+  "peer_instance": "EVPN-VLAN-AWARE-POP1"
+}
+```
+
+`role` je `"l3"` na IRB straně scope a `"l2"` na E-LAN straně; `peer_scope_id`,
+`peer_interface` a `peer_instance` popisují protistranu vazby. Bez vazby klíč `link`
+u scope chybí úplně.
 
 ---
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from conftest import DUAL_RIB_PEER
 from migration_validator import api
+from migration_validator.engine import evaluate_snapshots
 from migration_validator.models.result import Status
 from migration_validator.reporting.json_report import to_json
 from migration_validator.reporting.text_report import filter_result, render
@@ -739,3 +740,51 @@ def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
 
     for peer in sorted(shared):
         assert old.facts["bgp"][peer]["ribs"] == new.facts["bgp"][peer]["ribs"], peer
+
+
+def test_l2_l3_link_renders_paired_blocks(synthetic_snapshot):
+    snapshot = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post")
+    snapshot.facts["evpn_instance"] = {
+        "EVPN-VLAN-AWARE-POP1": {
+            "local_interfaces": {
+                "total": 1,
+                "up": 1,
+                "entries": [{"name": "ae0.15", "status": "Up"}],
+            },
+            "irb_interfaces": {
+                "total": 1,
+                "up": 1,
+                "entries": [
+                    {"name": "irb.15", "status": "Up", "l3_context": "L3VPN-CPE14-UNI"}
+                ],
+            },
+            "neighbors": {"total": 1, "addresses": ["10.255.0.1"]},
+            "esis": {},
+        }
+    }
+    result = evaluate_snapshots(snapshot)
+
+    by_id = {scope.scope_id: scope for scope in result.scopes}
+    l3_scope = next(
+        scope for scope in result.scopes
+        if scope.link and scope.link["role"] == "l3"
+    )
+    l2_scope = by_id[l3_scope.link["peer_scope_id"]]
+    assert "irb.15" in l3_scope.identity["interfaces"]
+    assert l2_scope.identity["interfaces"] == ["ae0.15"]
+
+    # L2 blok hned za L3 blokem
+    ids = [scope.scope_id for scope in result.scopes]
+    assert ids.index(l2_scope.scope_id) == ids.index(l3_scope.scope_id) + 1
+
+    # errors/traffic v L3 bloku odkazuji na L2
+    labels = {check.label: check for check in l3_scope.checks}
+    pointer = labels["Interface errors / traffic"]
+    assert pointer.value == "mereno na L2 (ae0.15) - viz blok nize"
+    assert not any(
+        check.id == "interface_traffic" for check in l3_scope.checks
+    )
+
+    output = render(result, detail=True)
+    assert "L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)" in output
+    assert "L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)" in output

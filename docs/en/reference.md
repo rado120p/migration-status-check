@@ -71,6 +71,13 @@ Per-check behaviour: [files/checks.md](files/checks.md).
 - **`bfd_session_state` waits for BGP.** While the peer is not `Established` it returns
   `SKIP` with the value `BGP neni Established` instead of a FAIL. BFD cannot come up without
   BGP, and two red rows for one cause are why operators learn to skim past listings.
+- **`interface_errors`/`interface_traffic` on the L3 part of a linked service (an IRB paired
+  with an L2 scope via `scopes[].link`, itself with no transit interface) don't measure the
+  IRB.** Counters physically live on the L2 transit. `interface_errors` returns a single
+  `INFO` finding labelled "Interface errors / traffic" with value
+  `mereno na L2 (<L2 interface>) - viz blok nize` instead of the usual SKIP/OK;
+  `interface_traffic` returns no finding at all for that same service (so the INFO pointer
+  isn't duplicated). Details and a report example: "L2+L3 linking" in chapter 5.
 
 ### Interface classification
 
@@ -530,6 +537,56 @@ Properties:
   a different thing than `NESPAROVANO`, which prints `unmatched`. The `NEZARAZENO` section is
   always printed, even when empty (`(nic)`), and filtering does not apply to it.
 - `message` is in Czech (without diacritics), consistently with the rest of the tool.
+- **`scopes[].link` is an optional key** — it carries the L3 (IRB) <-> L2 (E-LAN transit) link
+  within the same EVPN instance, see "L2+L3 linking" below. Without a link, the key is absent
+  from the scope entirely (an additive key, same rule as the other optional fields in this
+  format).
+
+### L2+L3 linking
+
+A service of type Internet/IPVPN whose L3 interface is an IRB in an EVPN mac-vrf instance has
+two parts in the configuration: an L3 part (the IRB, the service's RI) and an L2 part (E-LAN,
+the transit interface of the same mac-vrf instance). The engine recognizes this pair and links
+them.
+
+Source of the link: the IRB interface's `l3_context` from `show evpn instance extensive` /
+`show mac-vrf routing instance extensive` (fact `evpn_instance`, phase 2.1), plus a matching
+VLAN/unit within the same instance; `master` means inet.0 (an Internet scope with no RI).
+Pairing is 1:1 — multiple candidates produce no link at all (no link beats a wrong one).
+
+**In the text report** (`render`), the L2 block (`E-LAN (L2 cast)`) is printed immediately
+after the L3 block of a linked service, and both carry a mutual pointer in their headers:
+
+```
+L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
+```
+```
+L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
+```
+
+If `--filter`/`--status` shows one side of the pair, the other is printed too — otherwise the
+"blok nize/vyse" pointer would point at nothing.
+
+Errors/traffic are not measured directly on the L3 part (the IRB itself is not a transit
+interface) — the L3 block instead carries a single INFO row
+`mereno na L2 (ae0.15) - viz blok nize`; the actual counter lives in the L2 block. See the
+check catalogue above for details.
+
+**The structured result** (`evaluate --format json`) carries the same information as the
+optional key `scopes[].link`:
+
+```jsonc
+"link": {
+  "role": "l3",
+  "peer_scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
+  "peer_interface": "ae0.15",
+  "peer_instance": "EVPN-VLAN-AWARE-POP1"
+}
+```
+
+`role` is `"l3"` on the IRB side of the scope and `"l2"` on the E-LAN side; `peer_scope_id`,
+`peer_interface` and `peer_instance` describe the other side of the link. Without a link, the
+`link` key is absent from the scope entirely.
 
 ---
 
