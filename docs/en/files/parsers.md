@@ -1,7 +1,6 @@
 # `mx_parser.py` and `evo_parser.py` — configuration parsers
 
-Two standalone scripts in the repository root. **They are not part of the
-`migration_validator` package** and are run directly:
+Two thin scripts in the repository root, run directly:
 
 ```bash
 .venv/bin/python mx_parser.py  172.20.20.4 -o 172.20.20.4.yml
@@ -18,15 +17,32 @@ them. The validator consumes it via `--inventory` and stores it inside the snaps
 
 ---
 
-## Relationship to the validator (AR‑8)
+## Relationship to the validator (AR‑8, unified as of phase 4)
 
-The parsers stay **unchanged for now** and the validator merely consumes their output. The two
-files are ~90 % identical and refactoring them into a shared package would make sense, but
-that is a separate decision — the inventory model is defined as a dataclass inside the
-validator (`models/inventory.py`), so integrating later means only rewiring the output.
+**The implementation moved into the package** — it now lives in
+`migration_validator/parsers/`:
 
-In practice this means: **the validator has no runtime dependency on the parsers.** It consumes
-only a YAML file. The inventory can just as well be written by hand.
+| file | contents |
+|---|---|
+| `parsers/core.py` | shared core: data models, XML helpers, CLI, connection, YAML output, `main()` |
+| `parsers/mx.py` | `JunosServiceParser` — MX specifics |
+| `parsers/evo.py` | `JunosEvoAcxServiceParser` — ACX/PTX specifics |
+| `parsers/__init__.py` | `parser_for_platform(platform)` — returns the parser **class** for `junos`/`junos-evo` |
+
+`mx_parser.py` and `evo_parser.py` in the repository root are now **thin wrappers** — they
+just import `main()` and the matching class and call `main(parser_cls=...)`. **The CLI, its
+flags, the output format and the exit codes are unchanged** — anyone who invoked the scripts
+before can keep doing so without modification.
+
+The new consumer of the unified parsers is `mig-validate capture --run ... --parse-services`
+— instead of running `mx_parser.py`/`evo_parser.py` by hand and passing `--inventory`,
+`capture` in `--run` mode can build the inventory itself. It calls `parser_for_platform()`
+based on the platform detected on connect and writes straight to the path
+`RunStore.inventory_path()` expects (`runs/<name>/inventory_<node>_<port>.yml`).
+
+In practice this means: **the validator has no runtime dependency on the parsers** outside of
+`--parse-services` — `--inventory` just reads a finished YAML file, and the inventory can just
+as well be written by hand.
 
 ---
 

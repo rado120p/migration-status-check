@@ -287,7 +287,7 @@ vylučují jako dosud, ať jsou zdrojem baseline nebo vlastní tabulky.
 
 | přepínač | význam |
 |---|---|
-| `--run` | název run adresáře; vzájemně vylučné s `--snapshot` |
+| `--run` | název run adresáře; vzájemně vylučné s `--snapshot` i s `--output` |
 | `--run-root` | kořen run adresářů, výchozí `runs` |
 | `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí |
 

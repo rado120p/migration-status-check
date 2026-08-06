@@ -657,7 +657,7 @@ text, viz [oddíl 4](#4-formát-snapshotu) — pole `capture.phase` ve snapshotu
 
 | přepínač | výchozí | poznámka |
 |---|---|---|
-| `--run` | — | vzájemně vylučné s `--snapshot`; vyhodnotí sparovane snimky z manifestu |
+| `--run` | — | vzájemně vylučné s `--snapshot` i s `--output`; vyhodnotí sparovane snimky z manifestu |
 | `--run-root` | `runs` | kořen run adresářů |
 | `--ports` | — | čárkou oddělený filtr portů pro `--run` režim |
 

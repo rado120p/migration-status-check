@@ -62,12 +62,13 @@ The essential property: **`evaluate` has no way to reach the network.** It recei
 
 ## `cli.py` — the terminal interface
 
-A thin wrapper over `api.py`, not an alternative implementation. It defines five subcommands:
+A thin wrapper over `api.py`, not an alternative implementation. It defines six subcommands:
 
 | subcommand | function | what it does |
 |---|---|---|
-| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, warnings about failed collectors on stderr |
-| `evaluate` | `_cmd_evaluate` | loads snapshots, mapping and config, calls `api.evaluate()`, filters and renders |
+| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, warnings about failed collectors on stderr; with `--run` also writes into the run manifest (`_capture_into_run`) |
+| `evaluate` | `_cmd_evaluate` | loads snapshots, mapping and config, calls `api.evaluate()`, filters and renders; with `--run` evaluates every paired snapshot from the manifest (`_evaluate_run`) |
+| `status` | `_cmd_status` | overview of old↔new port pairing and captured phases for a given run directory |
 | `match` | `_cmd_match` | `match_scopes()` only — for debugging `mapping.yml` without a full validation |
 | `checks` | `_cmd_checks` | prints the check registry, text or JSON |
 | `record` | `_cmd_record` | stores every collector's raw RPC XML as fixtures |
@@ -83,8 +84,11 @@ Other notable parts of the file:
   error.
 - **`_add_auth_arguments()`** — shared authentication flags for `capture` and `record`, a
   convention inherited from the parsers: `--username` (default `ansible`),
-  `--auth key|password`, `--key-file` (default `~/.ssh/id_rsa`), `--password`, `--port`,
-  `--timeout`.
+  `--auth key|password`, `--key-file` (default `~/.ssh/id_rsa`), `--password`, `--timeout`,
+  and the SSH port. The SSH-port flag name is parameterized (`port_flag`/`port_dest`):
+  `record` calls it with the default `--port`, `capture` calls it with `--ssh-port` — under
+  `capture`, `--port` means the network port (`ge-0/0/0`) in `--run` mode, not SSH, so both
+  had to be selectable at the same time.
 - **`_parse_statuses()`** turns `--status pass,warn` into a set of `Status`.
 
 Two things worth watching:
