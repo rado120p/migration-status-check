@@ -32,7 +32,9 @@ from migration_validator.runs.manifest import (
     CaptureRecord,
     MappingEndpoint,
     RunDevice,
+    RunManifest,
 )
+from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.services import generate_inventory
 from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import empty_mapping, load_mapping
@@ -69,6 +71,13 @@ def _parse_statuses(value: str | None) -> set[Status] | None:
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
+    if args.run and args.snapshot:
+        raise ToolError("--run a --snapshot se vzajemne vylucuji")
+    if args.run:
+        return _evaluate_run(args)
+    if not args.snapshot:
+        raise ToolError("--snapshot je povinny, pokud nepouzivas --run")
+
     subject = _load_snapshot(args.snapshot)
     baseline = _load_snapshot(args.baseline) if args.baseline else None
     mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
@@ -92,6 +101,110 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         return EXIT_FAILED_CHECKS
     if args.warn_as_error and result.summary["warn"]:
         return EXIT_FAILED_CHECKS
+    return EXIT_OK
+
+
+def _evaluate_run(args: argparse.Namespace) -> int:
+    if args.output:
+        raise ToolError("--run a --output se vzajemne vylucuji")
+
+    store = RunStore(args.run_root, args.run)
+    manifest = store.load()
+
+    missing = store.missing_snapshots(manifest)
+    if missing:
+        raise ToolError(
+            "chybejici soubory snimku: " + ", ".join(sorted(missing))
+        )
+
+    ports = [p.strip() for p in args.ports.split(",") if p.strip()] if args.ports else None
+    evaluations = plan_evaluations(manifest, ports)
+
+    mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
+    config = load_config(args.config) if args.config else default_config()
+    statuses = _parse_statuses(args.status)
+
+    exit_code = EXIT_OK
+    for evaluation in evaluations:
+        subject = _load_snapshot(str(store.dir / evaluation.subject.snapshot))
+        baseline = None
+        baseline_label = "bez baseline"
+        if evaluation.baseline is not None:
+            baseline = _load_snapshot(str(store.dir / evaluation.baseline.snapshot))
+            baseline_label = evaluation.baseline.snapshot
+        elif evaluation.reason:
+            print(f"varovani: {evaluation.reason}", file=sys.stderr)
+
+        print(f"=== {evaluation.subject.snapshot} vs {baseline_label} ===")
+
+        result = api.evaluate(subject, baseline=baseline, mapping=mapping, config=config)
+        shown = filter_result(result, text=args.filter, statuses=statuses)
+
+        if args.format == "json":
+            print(to_json(shown))
+        else:
+            print(render(shown, detail=args.detail), end="")
+
+        if result.summary["fail"]:
+            exit_code = EXIT_FAILED_CHECKS
+        elif args.warn_as_error and result.summary["warn"] and exit_code == EXIT_OK:
+            exit_code = EXIT_FAILED_CHECKS
+
+    return exit_code
+
+
+def _status_rows(
+    manifest: RunManifest,
+) -> list[tuple[str, str, bool, bool, bool]]:
+    """Radky pro status --run: (old label, new label, pre, post, rollback)."""
+    rows: list[tuple[str, str, bool, bool, bool]] = []
+
+    for mapping in manifest.interface_mapping:
+        old, new = mapping.old, mapping.new
+        rows.append(
+            (
+                f"{old.node}:{old.port}",
+                f"{new.node}:{new.port}",
+                manifest.find_capture("pre", old.node, old.port) is not None,
+                manifest.find_capture("post", new.node, new.port) is not None,
+                manifest.find_capture("rollback", old.node, old.port) is not None,
+            )
+        )
+
+    seen_devices: set[str] = set()
+    for capture in manifest.captures:
+        if capture.port is not None or capture.device in seen_devices:
+            continue
+        seen_devices.add(capture.device)
+
+        device = manifest.devices.get(capture.device)
+        label = f"{capture.device}:all"
+        pre_ok = manifest.find_capture("pre", capture.device, None) is not None
+        post_ok = manifest.find_capture("post", capture.device, None) is not None
+        rollback_ok = manifest.find_capture("rollback", capture.device, None) is not None
+
+        if device is not None and device.role == "new":
+            rows.append(("-", label, pre_ok, post_ok, rollback_ok))
+        else:
+            rows.append((label, "-", pre_ok, post_ok, rollback_ok))
+
+    return rows
+
+
+def _cmd_status(args: argparse.Namespace) -> int:
+    store = RunStore(args.run_root, args.run)
+    manifest = store.load()
+
+    def mark(ok: bool) -> str:
+        return "ano" if ok else "-"
+
+    print(f"{'OLD':<28} {'NEW':<28} {'PRE':<5} {'POST':<5} {'ROLLBACK':<8}")
+    for old_label, new_label, pre_ok, post_ok, rollback_ok in _status_rows(manifest):
+        print(
+            f"{old_label:<28} {new_label:<28} "
+            f"{mark(pre_ok):<5} {mark(post_ok):<5} {mark(rollback_ok):<8}"
+        )
+
     return EXIT_OK
 
 
@@ -358,8 +471,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     evaluate = sub.add_parser("evaluate", help="vyhodnoti snapshot, volitelne proti baseline")
-    evaluate.add_argument("--snapshot", required=True)
+    evaluate.add_argument("--snapshot", help="vzajemne vylucne s --run")
     evaluate.add_argument("--baseline")
+    evaluate.add_argument("--run", help="nazev run adresare, vyhodnoti sparovane snimky")
+    evaluate.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    evaluate.add_argument(
+        "--ports", help="carkou oddeleny seznam portu, filtr pro --run rezim"
+    )
     evaluate.add_argument("--mapping")
     evaluate.add_argument("--config")
     evaluate.add_argument("--format", choices=("text", "json"), default="text")
@@ -373,6 +493,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument("--warn-as-error", action="store_true")
     evaluate.set_defaults(func=_cmd_evaluate)
+
+    status = sub.add_parser("status", help="prehled parovani a stavu snimku v run adresari")
+    status.add_argument("--run", required=True)
+    status.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    status.set_defaults(func=_cmd_status)
 
     match = sub.add_parser("match", help="jen parovani sluzeb, pro ladeni mapping.yml")
     match.add_argument("--baseline", required=True)

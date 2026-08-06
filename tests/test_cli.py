@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from migration_validator.cli import main
+from migration_validator.cli import EXIT_FAILED_CHECKS, EXIT_OK, EXIT_TOOL_ERROR, main
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import (
     SCHEMA_VERSION,
@@ -12,7 +12,14 @@ from migration_validator.models.snapshot import (
     load_snapshot,
     save_snapshot,
 )
-from migration_validator.runs.manifest import RunDevice, RunManifest, load_manifest
+from migration_validator.runs.manifest import (
+    CaptureRecord,
+    InterfaceMapping,
+    MappingEndpoint,
+    RunDevice,
+    RunManifest,
+    load_manifest,
+)
 from migration_validator.runs.store import RunStore
 
 NOW = "2026-07-24T11:40:02Z"
@@ -45,6 +52,38 @@ def _write(tmp_path, name, address, interface, *, oper="up", pps=400):
         inventory=[],
     )
     path = tmp_path / f"{name}.json"
+    save_snapshot(snapshot, path)
+    return path
+
+
+def _write_run_snapshot(store, phase, node, port, address, interface, *, oper="up", pps=400):
+    """Ulozi snapshot na misto, kde ho ceka RunStore, a vrati jeho cestu."""
+    scope = Scope(
+        id="svc:L3VPN:IPVPN",
+        kind="service",
+        key=ScopeKey("L3VPN", "IPVPN", None),
+        selectors=Selectors(interfaces=[interface]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(
+            started_at=NOW, finished_at=NOW, phase=phase,
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={
+            "interfaces": {
+                interface: {
+                    "admin_status": "up", "oper_status": oper,
+                    "input_pps": pps, "output_pps": pps,
+                    "input_errors": 0, "output_errors": 0,
+                }
+            }
+        },
+        probes={"ping": []},
+        scopes=[scope],
+        inventory=[],
+    )
+    path = store.snapshot_path(phase, node, port)
     save_snapshot(snapshot, path)
     return path
 
@@ -476,3 +515,225 @@ def test_capture_run_resolves_existing_node_name(tmp_path, monkeypatch):
 
     snapshot_path = tmp_path / "mig01" / "snapshot_pre_MX1-POP1_ge_0_0_0.json"
     assert snapshot_path.exists()
+
+
+def _base_run_manifest():
+    return RunManifest(
+        devices={
+            "MX1-POP1": RunDevice(host="172.20.20.4", platform="junos", role="old"),
+            "PTX1-POP1": RunDevice(
+                host="172.20.20.5", platform="junos-evo", role="new"
+            ),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1-POP1", port="ge-0/0/0"),
+                new=MappingEndpoint(node="PTX1-POP1", port="et-0/0/0"),
+            )
+        ],
+    )
+
+
+def test_evaluate_run_pairs_and_exit_code(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+
+    pre_path = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/0", "172.20.20.4", "ge-0/0/0.113"
+    )
+    post_path = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", pre_path.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1-POP1", "et-0/0/0", post_path.name, NOW)
+    )
+    store.save(manifest)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    output = capsys.readouterr().out
+    assert f"=== {post_path.name} vs {pre_path.name} ===" in output
+    # oba snimky maji sluzbu ve stejnem stavu (up) -> sluzba PASS -> exit 0
+    assert code == EXIT_OK
+
+
+def test_evaluate_run_exit_code_is_worst_across_evaluations(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+    manifest.add_mapping(
+        MappingEndpoint(node="MX1-POP1", port="ge-0/0/1"),
+        MappingEndpoint(node="PTX1-POP1", port="et-0/0/1"),
+    )
+
+    pre_ok = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/0", "172.20.20.4", "ge-0/0/0.113"
+    )
+    post_ok = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    pre_down = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/1", "172.20.20.4", "ge-0/0/1.114", oper="up"
+    )
+    post_down = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/1", "172.20.20.5", "et-0/0/1.114",
+        oper="down",
+    )
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", pre_ok.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1-POP1", "et-0/0/0", post_ok.name, NOW))
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/1", pre_down.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1-POP1", "et-0/0/1", post_down.name, NOW))
+    store.save(manifest)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    output = capsys.readouterr().out
+    # obe evaluace se skutecne provedly - hlavicky obou jsou ve vystupu
+    assert f"=== {post_ok.name} vs {pre_ok.name} ===" in output
+    assert f"=== {post_down.name} vs {pre_down.name} ===" in output
+    # jedna sluzba spadla (down interface) -> nejhorsi kod vyhrava, druha
+    # zdrava evaluace ho neprebiji zpatky na OK
+    assert code == EXIT_FAILED_CHECKS
+
+
+def test_evaluate_run_without_baseline_still_runs_and_warns(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+
+    post_path = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1-POP1", "et-0/0/0", post_path.name, NOW)
+    )
+    store.save(manifest)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert f"=== {post_path.name} vs bez baseline ===" in captured.out
+    assert "chybi pre snimek stareho boxu" in captured.err
+    # subject se sam o sobe vyhodnoti (bez baseline porovnani neni fail)
+    assert code == EXIT_OK
+    assert "L3VPN" in captured.out
+
+
+def test_evaluate_run_missing_file_lists_names(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "snapshot_pre_MX1-POP1_ge_0_0_0.json", NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord(
+            "post", "PTX1-POP1", "et-0/0/0", "snapshot_post_PTX1-POP1_et_0_0_0.json", NOW
+        )
+    )
+    store.save(manifest)
+    # zadny snapshot soubor neni na disku
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    assert code == EXIT_TOOL_ERROR
+    err = capsys.readouterr().err
+    assert "snapshot_pre_MX1-POP1_ge_0_0_0.json" in err
+    assert "snapshot_post_PTX1-POP1_et_0_0_0.json" in err
+
+
+def test_evaluate_run_ports_filter(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+    manifest.add_mapping(
+        MappingEndpoint(node="MX1-POP1", port="ge-0/0/1"),
+        MappingEndpoint(node="PTX1-POP1", port="et-0/0/1"),
+    )
+
+    pre0 = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/0", "172.20.20.4", "ge-0/0/0.113"
+    )
+    post0 = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    pre1 = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/1", "172.20.20.4", "ge-0/0/1.113"
+    )
+    post1 = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/1", "172.20.20.5", "et-0/0/1.113"
+    )
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", pre0.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1-POP1", "et-0/0/0", post0.name, NOW))
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/1", pre1.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1-POP1", "et-0/0/1", post1.name, NOW))
+    store.save(manifest)
+
+    code = main(
+        [
+            "evaluate", "--run", "mig01", "--run-root", str(tmp_path),
+            "--ports", "et-0/0/1",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert post1.name in output
+    assert post0.name not in output
+    # oba pary maji shodny stav (up) na obou stranach -> PASS -> exit 0
+    assert code == EXIT_OK
+
+
+def test_evaluate_run_rejects_snapshot_combo(tmp_path):
+    code = main(
+        [
+            "evaluate",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--snapshot", "x.json",
+        ]
+    )
+    assert code == EXIT_TOOL_ERROR
+
+
+def test_status_run_overview(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "snapshot_pre_MX1-POP1_ge_0_0_0.json", NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord(
+            "post", "PTX1-POP1", "et-0/0/0", "snapshot_post_PTX1-POP1_et_0_0_0.json", NOW
+        )
+    )
+    # celoboxove capturey - MX1-POP1 (old) a PTX1-POP1 (new)
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", None, "snapshot_pre_MX1-POP1_all.json", NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1-POP1", None, "snapshot_post_PTX1-POP1_all.json", NOW)
+    )
+    store.save(manifest)
+
+    code = main(["status", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    assert code == EXIT_OK
+    lines = capsys.readouterr().out.splitlines()
+
+    def find_line(fragment):
+        matches = [line for line in lines if fragment in line]
+        assert len(matches) == 1, f"ocekavan jeden radek s '{fragment}', nalezeno {matches}"
+        return matches[0]
+
+    mapping_row = find_line("MX1-POP1:ge-0/0/0")
+    assert "PTX1-POP1:et-0/0/0" in mapping_row
+    # sloupce v poradi PRE POST ROLLBACK: pre a post jsou zaznamenane, rollback ne
+    columns = mapping_row.split()
+    assert columns[-3:] == ["ano", "ano", "-"]
+
+    old_whole_box_row = find_line("MX1-POP1:all")
+    assert old_whole_box_row.split()[0] == "MX1-POP1:all"
+    assert old_whole_box_row.split()[1] == "-"  # old box nema new sloupec
+
+    new_whole_box_row = find_line("PTX1-POP1:all")
+    assert new_whole_box_row.split()[0] == "-"  # new box nema old sloupec
+    assert "PTX1-POP1:all" in new_whole_box_row
