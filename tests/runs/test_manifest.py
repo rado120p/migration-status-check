@@ -85,11 +85,59 @@ def test_load_rejects_unknown_role(tmp_path):
         load_manifest(path)
 
 
+def test_load_rejects_unknown_role_error_has_path_and_node(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: modern}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"X") as excinfo:
+        load_manifest(path)
+    assert str(path) in str(excinfo.value)
+
+
+def test_load_missing_sections_default_to_empty(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "devices:\n"
+        "  MX1-POP1: {host: 172.20.20.4, platform: junos, role: old}\n",
+        encoding="utf-8",
+    )
+    manifest = load_manifest(path)
+    assert manifest.interface_mapping == []
+    assert manifest.captures == []
+
+
+def test_save_manifest_puts_schema_version_first(tmp_path):
+    path = tmp_path / "run.yml"
+    save_manifest(_manifest(), path)
+    first_line = path.read_text(encoding="utf-8").splitlines()[0]
+    assert first_line == "schema_version: 1"
+
+
+def test_save_manifest_omits_l2_switch_when_none(tmp_path):
+    path = tmp_path / "run.yml"
+    save_manifest(_manifest(), path)
+    assert "l2_switch" not in path.read_text(encoding="utf-8")
+
+
+def test_save_manifest_creates_parent_directories(tmp_path):
+    path = tmp_path / "a" / "b" / "run.yml"
+    save_manifest(_manifest(), path)
+    assert path.exists()
+    assert load_manifest(path) == _manifest()
+
+
 def test_node_for_host_and_roles():
     manifest = _manifest()
     assert manifest.node_for_host("172.20.20.4") == "MX1-POP1"
     assert manifest.node_for_host("1.1.1.1") is None
-    assert manifest.device_with_role("old")[0] == "MX1-POP1"
+    node, device = manifest.device_with_role("old")
+    assert node == "MX1-POP1"
+    assert device == RunDevice(host="172.20.20.4", platform="junos", role="old")
     assert manifest.device_with_role("l2-switch") is None
 
 

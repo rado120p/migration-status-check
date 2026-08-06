@@ -168,9 +168,12 @@ def load_manifest(path: Path) -> RunManifest:
             f"ocekavano {RUN_SCHEMA_VERSION}"
         )
 
-    devices = {
-        node: _load_device(data) for node, data in (raw.get("devices") or {}).items()
-    }
+    devices = {}
+    for node, data in (raw.get("devices") or {}).items():
+        try:
+            devices[node] = _load_device(data)
+        except ValueError as exc:
+            raise ValueError(f"{path}: zarizeni '{node}': {exc}") from exc
     interface_mapping = [
         InterfaceMapping(
             old=_load_endpoint(entry["old"]), new=_load_endpoint(entry["new"])
