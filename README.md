@@ -15,6 +15,19 @@ mig-validate capture  --device 172.20.20.4 --inventory 172.20.20.4.yml \
 mig-validate evaluate --snapshot runs/mig01/post.json --baseline runs/mig01/pre.json
 ```
 
+For migrations that go port by port and span several capture steps (`pre` / `post` /
+`rollback`), `mig-validate capture --run <name> ...` / `evaluate --run <name>` / `status
+--run <name>` track devices, old↔new port pairing and captured snapshots in a
+`runs/<name>/run.yml` manifest instead of explicit `--output`/`--snapshot`/`--baseline`
+paths. The explicit workflow above keeps working unchanged; see [docs/cs/README.md kap.
+3a](docs/cs/README.md#3a-run-management---run) (Czech) for the full walkthrough.
+
+Pro migrace po portech a přes víc kroků (`pre`/`post`/`rollback`) existuje vedle výše
+uvedeného ruční cesty i `mig-validate capture --run <nazev> ...` / `evaluate --run <nazev>` /
+`status --run <nazev>` — párování starý↔nový port a přehled pořízených snímků si drží
+`runs/<nazev>/run.yml`. Ruční workflow beze změny funguje dál; podrobný postup je
+v [docs/cs/README.md, kap. 3a](docs/cs/README.md#3a-run-management---run).
+
 ## Documentation / Dokumentace
 
 | | |

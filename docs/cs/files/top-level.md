@@ -61,12 +61,13 @@ credentials — jen hotové snapshoty.
 
 ## `cli.py` — terminálové rozhraní
 
-Tenký obal nad `api.py`, ne alternativní implementace. Definuje pět podpříkazů:
+Tenký obal nad `api.py`, ne alternativní implementace. Definuje šest podpříkazů:
 
 | podpříkaz | funkce | co dělá |
 |---|---|---|
-| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, varování o selhaných collectorech na stderr |
-| `evaluate` | `_cmd_evaluate` | načte snapshoty, mapping a config, `api.evaluate()`, filtruje a vykreslí |
+| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, varování o selhaných collectorech na stderr; s `--run` navíc zápis do run manifestu (`_capture_into_run`) |
+| `evaluate` | `_cmd_evaluate` | načte snapshoty, mapping a config, `api.evaluate()`, filtruje a vykreslí; s `--run` vyhodnotí všechny sparovane snimky z manifestu (`_evaluate_run`) |
+| `status` | `_cmd_status` | přehled párování starý↔nový port a pořízených fází pro daný run adresář, viz [reference.md](../reference.md#8-run-management---run-fáze-4) |
 | `match` | `_cmd_match` | jen `match_scopes()` — ladění `mapping.yml` bez celé validace |
 | `checks` | `_cmd_checks` | výpis registru checků, text nebo JSON |
 | `record` | `_cmd_record` | uloží syrové RPC XML všech collectorů jako fixtures |
@@ -81,7 +82,10 @@ Další podstatné části souboru:
   hláškou. Rozbitý snapshot tak nikdy neskončí traceback, ale čitelnou chybou.
 - **`_add_auth_arguments()`** — sdílené přihlašovací přepínače pro `capture` i `record`,
   konvence převzatá z parserů: `--username` (default `ansible`), `--auth key|password`,
-  `--key-file` (default `~/.ssh/id_rsa`), `--password`, `--port`, `--timeout`.
+  `--key-file` (default `~/.ssh/id_rsa`), `--password`, `--timeout` a SSH port. Jméno SSH
+  portu je parametrizované (`port_flag`/`port_dest`): `record` ho volá s výchozím `--port`,
+  `capture` s `--ssh-port` — u `capture` totiž `--port` v `--run` režimu znamená síťový port
+  (`ge-0/0/0`), ne SSH, a obě věci musí jít zadat současně.
 - **`_parse_statuses()`** rozloží `--status pass,warn` na množinu `Status`.
 
 Dvě věci, které stojí za pozor:

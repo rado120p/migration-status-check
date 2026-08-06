@@ -619,3 +619,88 @@ Dva argumenty, které vypadají jako kosmetika a nejsou:
 
 `extensive` u `evpn_esi` není kosmetika: bez něj `show evpn instance` vrátí souhrn bez
 jediného ESI a collector by tiše vracel prázdno.
+
+---
+
+## 8. Run management (`--run`, fáze 4)
+
+Provozní návod se stromem, hybridním `run.yml` a odvozeným příkladem je v
+[README.md kap. 3a](README.md#3a-run-management---run). Tady jen suché tabulky.
+
+### `run.yml` (`schema_version: 1`)
+
+| sekce | klíče | poznámka |
+|---|---|---|
+| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`; fáze 4 podporuje jednoho `old` a jednoho `new` |
+| `interface_mapping` | seznam `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | páruje logické jednotky (`ge-0/0/0`), stejný tvar jako `mapping.yml` selektor `interface` |
+| `captures` | seznam `{phase, device, port, snapshot, taken}` | `port: all` v souboru odpovídá `port: null` v modelu (celoboxová capture); vede ji aplikace, ne operátor |
+
+Soubory v `runs/<nazev>/` normalizují port náhradou `-`/`/` za `_`
+(`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,
+`snapshot_<pre|post|rollback>_<node>_<port|all>.json`.
+
+### Nové přepínače `capture`
+
+| přepínač | výchozí | poznámka |
+|---|---|---|
+| `--run` | — | vzájemně vylučné s `--output` |
+| `--run-root` | `runs` | kořen run adresářů |
+| `--port` | — | logická/fyzická jednotka pro `--run` režim (`ge-0/0/0`); **jen s `--run`** — bez něj `--port` hlásí chybu, protože mimo `--run` je `--port` u `capture` přejmenován na `--ssh-port` |
+| `--maps-to` | — | `NODE:PORT`, vyžaduje `--port`; zapíše pár do `interface_mapping` jako protistranu téhle capture |
+| `--parse-services` | — | vyžaduje `--run`; chybějící inventory vyrobí z konfigurace, existující soubor nikdy nepřepíše |
+| `--ssh-port` | `22` | **přejmenováno z `--port`**, aby `--port` mohlo znamenat síťový port v `--run` režimu. `record` si ponechává původní `--port` pro SSH — kolize u něj nehrozí |
+
+`--phase` v `--run` režimu je uzavřený výčet `pre`/`post`/`rollback` (mimo `--run` je to volný
+text, viz [oddíl 4](#4-formát-snapshotu) — pole `capture.phase` ve snapshotu).
+
+### Nové přepínače `evaluate`
+
+| přepínač | výchozí | poznámka |
+|---|---|---|
+| `--run` | — | vzájemně vylučné s `--snapshot`; vyhodnotí sparovane snimky z manifestu |
+| `--run-root` | `runs` | kořen run adresářů |
+| `--ports` | — | čárkou oddělený filtr portů pro `--run` režim |
+
+`evaluate --run` nejdřív ověří, že soubory všech `captures` z manifestu existují
+(`RunStore.missing_snapshots`) — chybí-li jeden, skončí chybou a nevyhodnotí nic.
+
+### Subcommand `status`
+
+```
+mig-validate status --run <nazev> [--run-root runs]
+```
+
+Tabulka `OLD | NEW | PRE | POST | ROLLBACK` — jeden řádek na pár z `interface_mapping` (plus
+řádek na každé celoboxové zařízení bez portu), `ano`/`-` podle toho, jestli `find_capture()`
+pro danou fázi/uzel/port najde záznam. Čistě přehledový příkaz — nečte snapshoty, jen
+manifest.
+
+### Pravidla párování `evaluate --run`
+
+Jedna evaluace na každou `post`/`rollback` capture; `pre` capture je jen zdroj baseline a
+evaluaci sama netvoří.
+
+| fáze subjektu | baseline (v pořadí, první nalezená vyhrává) | když nic nevyjde |
+|---|---|---|
+| `post` | 1. `pre` starého portu spárovaného přes `interface_mapping` 2. `pre` celého starého boxu (capture bez portu) | vyhodnotí se bez baseline, stderr: `chybi pre snimek stareho boxu` |
+| `rollback` | `pre` **téhož** zařízení a **téhož** portu | vyhodnotí se bez baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
+
+Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
+baseline"> ===`. Návratový kód `evaluate --run` je nejhorší napříč všemi evaluacemi
+(`EXIT_FAILED_CHECKS`, jakmile má FAIL kterákoliv z nich).
+
+### Ping z baseline při `--phase post`
+
+Doplňuje [oddíl 4](#4-formát-snapshotu), pole `probes.ping[].resolved_from`.
+
+| `resolved_from` | zdroj cíle | kdy se použije |
+|---|---|---|
+| `baseline-arp` | IPv4 ARP z `pre` snímku spárovaného starého portu | `--phase post` uvnitř `--run`, pár existuje a jeho `pre` snímek je na disku |
+| `baseline-nd` | IPv6 ND z téhož `pre` snímku | totéž, rodina IPv6 |
+| `arp` / `nd` | vlastní ARP/ND nového zařízení | baseline nedostupná (chybí pár, chybí `pre` snímek, nebo capture běží mimo `--run`) |
+| `subnet-fallback` | první volná adresa ze subnetu služby | ani vlastní ARP/ND nic nevrátily |
+
+Baseline záznamy se mapují na scope přes **shodu IP se subnetem rozhraní**, ne přes jméno
+portu — jména rozhraní starého boxu na novém neexistují. Link-local ND záznamy z baseline se
+vždy vylučují (nejsou přenositelné mezi boxy) a vlastní adresy/virtual-gateway se z cílů
+vylučují stejně jako u dnešního odvozování z vlastní ARP.

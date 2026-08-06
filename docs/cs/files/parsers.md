@@ -1,7 +1,6 @@
 # `mx_parser.py` a `evo_parser.py` — parsery konfigurace
 
-Dva samostatné skripty v kořeni repozitáře. **Nejsou součástí balíčku `migration_validator`**
-a spouští se přímo:
+Dva tenké skripty v kořeni repozitáře, spouští se přímo:
 
 ```bash
 .venv/bin/python mx_parser.py  172.20.20.4 -o 172.20.20.4.yml
@@ -18,15 +17,32 @@ konzumuje přes `--inventory` a uloží si ho do snapshotu.
 
 ---
 
-## Vztah k validatoru (AR‑8)
+## Vztah k validatoru (AR‑8, sjednoceno ve fázi 4)
 
-Parsery zůstávají zatím **beze změny** a validator jen konzumuje jejich výstup. Oba soubory
-jsou z ~90 % identické a refaktoring do sdíleného balíčku by dával smysl, ale je to
-samostatné rozhodnutí — inventory model je ve validatoru definovaný jako dataclass
-(`models/inventory.py`), takže případná integrace znamená jen přepojení výstupu.
+**Implementace se od fáze 4 přestěhovala do balíčku** — žije v
+`migration_validator/parsers/`:
 
-Prakticky to znamená: **validator na parsery nezávisí za běhu.** Konzumuje jen YAML soubor.
-Inventory se dá klidně napsat i ručně.
+| soubor | co v něm je |
+|---|---|
+| `parsers/core.py` | sdílené jádro: datové modely, XML pomocné funkce, CLI, připojení, zápis YAML, `main()` |
+| `parsers/mx.py` | `JunosServiceParser` — specifika MX |
+| `parsers/evo.py` | `JunosEvoAcxServiceParser` — specifika ACX/PTX |
+| `parsers/__init__.py` | `parser_for_platform(platform)` — vrátí **třídu** parseru pro `junos`/`junos-evo` |
+
+`mx_parser.py` a `evo_parser.py` v kořeni repozitáře jsou teď **tenké wrappery** — jen
+naimportují `main()` a příslušnou třídu a zavolají `main(parser_cls=...)`. **CLI, přepínače,
+výstupní formát i návratové kódy se nezměnily** — kdo skripty volal předtím, může beze změny
+dál (viz [`CLI parserů`](#cli-parserů) níže).
+
+Nový spotřebitel sjednocených parserů je `mig-validate capture --run ... --parse-services` —
+místo ručního spuštění `mx_parser.py`/`evo_parser.py` a `--inventory` si `capture` v `--run`
+režimu umí inventory vyrobit samo. Volá `parser_for_platform()` podle platformy zjištěné při
+připojení a rovnou zapíše výsledek na místo, kde ho čeká `RunStore.inventory_path()`
+(`runs/<nazev>/inventory_<node>_<port>.yml`). Detaily CLI a pravidla, kdy se generuje a kdy
+ne (existující soubor se nikdy nepřepisuje), jsou v [../README.md](../README.md#3a-run-management---run).
+
+Prakticky to znamená: **validator na parsery nezávisí za běhu** mimo `--parse-services` —
+`--inventory` čte jen hotový YAML soubor a ten se dá klidně napsat i ručně.
 
 ---
 

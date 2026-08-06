@@ -64,6 +64,13 @@ opakovat kolikrát chcete — nezatěžuje produkci a vrací pokaždé identick�
 | 5 | sběr na **novém** zařízení, po migraci | `mig-validate capture --phase post-migration` |
 | 6 | validace nového + porovnání proti starému | `mig-validate evaluate --snapshot post.json --baseline pre.json` |
 
+Tenhle postup pokrývá **jeden pár zařízení a explicitní soubory** (`--output`,
+`--snapshot`/`--baseline`) — pořád plně funguje a je nejjednodušší cesta pro jednorázové
+ověření. Pro migraci, která se dělá po portech, přes víc kroků (`pre`/`post`/**`rollback`**)
+nebo kde se má párování starý↔nový port pamatovat samo, existuje od fáze 4 druhá cesta —
+`--run <nazev>` — popsaná v kapitole [3a](#3a-run-management---run). Obě cesty vedou na
+stejný `capture`/`evaluate` a dají se i kombinovat (`--run` jen zjednodušuje účetnictví okolo).
+
 ### Krok 1 — inventory ze zařízení
 
 Inventory je YAML se seznamem rozhraní a služeb, které na nich běží. Vyrábějí ho dva
@@ -110,10 +117,14 @@ source adresa).
 | `--auth key\|password` | výchozí `key` |
 | `--key-file` | výchozí `~/.ssh/id_rsa` |
 | `--password` | jen pro `--auth password` |
-| `--port` / `--timeout` | výchozí 22 / 30 s |
+| `--ssh-port` / `--timeout` | výchozí 22 / 30 s |
 
 Platforma (`junos` vs `junos-evo`) se **detekuje automaticky** a podle ní se vyberou správná
 RPC. Zadávat ji nemusíte.
+
+`--ssh-port` je u `capture` úmyslně jiné jméno než u `record` (ten má `--port`) — v `--run`
+režimu `capture` totiž `--port` používá pro síťový port (`ge-0/0/0`), takže jméno pro SSH port
+muselo ustoupit, aby obě věci šly zadat současně.
 
 Selhání jednoho collectoru sběr nezruší — zapíše se do snapshotu, na stderr se vypíše
 varování a checky, které tu oblast potřebují, později dostanou `SKIP`, nikdy `PASS`.
@@ -150,6 +161,173 @@ Porovnávací checky vrátí `SKIP` s důvodem `porovnavaci check bez baseline s
 | `--status` | čárkou oddělený seznam: `pass,warn,fail,skip` |
 | `--detail` | rozbalí plný blok i u služeb se stavem PASS (WARN/FAIL se rozbalují vždy) |
 | `--warn-as-error` | WARN pak také vrací návratový kód 1 |
+
+---
+
+## 3a. Run management (`--run`)
+
+Od fáze 4 existuje vedle ručních `--output`/`--snapshot`/`--baseline` druhá cesta: pojmenovaný
+**run adresář**, který si sám pamatuje, která zařízení do migrace patří, jak se párují jejich
+porty a které snímky už byly pořízeny. Hodí se pro migraci po jednotlivých portech (LAG po
+LAGu, zákazník po zákazníkovi), pro víc kroků (`pre` → `post`, případně `rollback`, když se
+migrace vrací) a všude tam, kde by ruční hlídání souborů `pre.json`/`post.json` po chvíli
+přestalo být přehledné.
+
+### Struktura `runs/<nazev>/`
+
+```
+runs/mig01/
+├── run.yml
+├── inventory_MX1-POP1_ge_0_0_0.yml
+├── inventory_PTX1-POP1_et_0_0_0.yml
+├── snapshot_pre_MX1-POP1_ge_0_0_0.json
+├── snapshot_post_PTX1-POP1_et_0_0_0.json
+└── snapshot_rollback_MX1-POP1_ge_0_0_0.json
+```
+
+Jména souborů nesou fázi (`pre`/`post`/`rollback`), **node** (jméno zařízení z `run.yml`, ne
+IP) a port — normalizovaný náhradou `-` a `/` za `_` (`ge-0/0/0` → `ge_0_0_0`). Capture bez
+`--port` (celoboxový režim) používá `all` místo jména portu.
+
+### `run.yml` — hybridní manifest
+
+Je to **jediný zdroj pravdy o migraci** a dá se naplnit dvěma způsoby, které vedou ke
+stejnému souboru:
+
+- **napsat ho ručně předem**, jako migrační plán — `mig-validate` ho pak jen čte a doplňuje
+  sekci `captures`;
+- **nechat ho vzniknout postupně** voláním `mig-validate capture --run ...` — první capture
+  na daném zařízení založí i záznam v `devices`, `--maps-to` doplní `interface_mapping`.
+
+Obě cesty se dají kombinovat — typicky se `devices` a `interface_mapping` sepíší předem podle
+migračního plánu a `captures` pak plní samotné běhy `capture`.
+
+```yaml
+schema_version: 1
+
+devices:
+  MX1-POP1:  {host: 172.20.20.4, platform: junos,     role: old}
+  PTX1-POP1: {host: 172.20.20.5, platform: junos-evo, role: new}
+
+interface_mapping:
+  # jeden zaznam = jeden migrovany stary port
+  - old: {node: MX1-POP1, port: ge-0/0/0}
+    new: {node: PTX1-POP1, port: et-0/0/0}
+  # vic zaznamu muze sdilet stejny novy port (LAG); l2_switch popisuje
+  # pripadny EX mezi EVO a CPE (faze 5, formu uz nese)
+  - old: {node: MX1-POP1, port: ge-0/0/1}
+    new:
+      node: PTX1-POP1
+      port: ae0
+      l2_switch: {node: EX1-POP1, ae_port: ae0, access_port: ge-0/0/0}
+
+captures:                          # tuhle sekci si vede aplikace sama
+  - phase: pre
+    device: MX1-POP1
+    port: ge-0/0/0
+    snapshot: snapshot_pre_MX1-POP1_ge_0_0_0.json
+    taken: "2026-08-06T09:12:03Z"
+```
+
+`role` je `old` / `new` / `l2-switch`. Fáze 4 podporuje jeden box role `old` a jeden role
+`new` — víc boxů a `l2_switch` (EX mezi EVO a CPE) formát manifestu už nese, ale zapojí je až
+fáze 5. `interface_mapping` páruje **logické jednotky** (`ge-0/0/0`), stejně jako
+`mapping.yml` výš.
+
+### Sběr do runu (`capture --run`)
+
+```bash
+.venv/bin/mig-validate capture --run mig01 \
+    --device 172.20.20.4 --phase pre --port ge-0/0/0
+```
+
+| přepínač | význam |
+|---|---|
+| `--run` | název run adresáře (`runs/<nazev>/`); vzájemně vylučné s `--output` |
+| `--run-root` | kořen run adresářů, výchozí `runs` |
+| `--phase` | `pre`, `post` nebo `rollback` — v `--run` režimu je to uzavřený výčet, ne volný text |
+| `--port` | logická/fyzická jednotka, na kterou se capture omezí, např. `ge-0/0/0`; bez něj celoboxový režim (`all`) |
+| `--maps-to NODE:PORT` | zapíše pár do `interface_mapping`; jen s `--port`. `NODE:PORT` je vždy **protistrana** téhle capture — u `pre`/`rollback` (role `old`) se zapíše jako `old: <tahle capture>, new: NODE:PORT`, u `post` (role `new`) obráceně. Je-li pár v `run.yml` už zapsaný, flag není potřeba |
+| `--parse-services` | chybějící inventory pro `--run` vyrobí z konfigurace (samostatné krátké spojení) místo hlášky „spusť s --parse-services" |
+
+**Zjištění node.** `--device` je IP/hostname, které se přihlašuje; `run.yml` k němu hledá node
+podle `devices[*].host`. Najde-li shodu, použije se jméno node (`MX1-POP1`) ve jménech
+souborů; nenajde-li, použije se přímo hodnota `--device`. Role node podle fáze: `pre` a
+`rollback` čekají zařízení s rolí `old`, `post` s rolí `new` — capture samo `devices` doplní,
+pokud tam node ještě není.
+
+**Odkud se vezme inventory** (v tomhle pořadí, první, co vyjde, vyhrává):
+
+1. `--inventory <soubor>` — explicitně zadaný soubor jako mimo `--run` režim;
+2. `runs/<nazev>/inventory_<node>_<port>.yml` — per-port soubor, pokud existuje;
+3. `runs/<nazev>/inventory_<node>_all.yml` — celoboxový soubor, pokud existuje;
+4. bez shody: chyba `inventory nenalezena - spust s --parse-services`, pokud navíc nebyl
+   zadaný `--parse-services`.
+
+**`--parse-services`** stáhne konfiguraci **samostatným krátkým spojením** (odděleně od
+capture spojení, které sbírá operační stav) a vyrobí inventory na místo podle pravidla 2 výš.
+Existující soubor má vždy přednost — `--parse-services` ho **nikdy nepřepíše**, jen na stderr
+oznámí, že generování přeskočil.
+
+**Ping při `--phase post`.** Cíle pingu se odvodí z ARP/ND záznamů **`pre` snímku
+spárovaného starého portu** (dohledaného přes `interface_mapping`) místo z vlastního ARP
+nového zařízení — čerstvě přepojený box ARP tabulku ještě nemá naplněnou, zvlášť u větších
+/24 rozsahů s mnoha hosty. Ve výsledném snapshotu má takový cíl `resolved_from: baseline-arp`
+(IPv4) nebo `baseline-nd` (IPv6), na rozdíl od běžného `arp`/`nd`. Když `pre` snímek
+spárovaného portu neexistuje (nebo capture běží mimo `--run`), spadne se na dnešní chování —
+vlastní ARP/ND nového zařízení, případně `subnet-fallback` — a na stderr se vypíše `pre
+snimek nenalezen, ping cile z vlastni ARP`. Vlastní adresy a virtual-gateway se z cílů
+vylučují jako dosud, ať jsou zdrojem baseline nebo vlastní tabulky.
+
+### Vyhodnocení runu (`evaluate --run`)
+
+```bash
+.venv/bin/mig-validate evaluate --run mig01
+```
+
+| přepínač | význam |
+|---|---|
+| `--run` | název run adresáře; vzájemně vylučné s `--snapshot` |
+| `--run-root` | kořen run adresářů, výchozí `runs` |
+| `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí |
+
+Než začne párovat, `evaluate --run` ověří, že **soubory ze všech záznamů `captures`
+v manifestu existují** — chybí-li nějaký, skončí chybou `chybejici soubory snimku: ...` a
+nevyhodnotí nic (radši žádný výsledek než výsledek nad neúplnou sadou).
+
+**Párování je jedna evaluace na každou `post`/`rollback` capture** (`pre` capture sama o sobě
+evaluaci netvoří, je jen zdroj baseline):
+
+- **`post`** — baseline je `pre` snímek **starého portu spárovaného přes
+  `interface_mapping`**. Není-li capture vázaná na port, nebo pár v mapování chybí, spadne se
+  na `pre` **celého starého boxu** (capture bez portu). Nenajde-li se ani ten, capture se
+  vyhodnotí **bez baseline** (jen stavové checky) a na stderr jde důvod `chybi pre snimek
+  stareho boxu`.
+- **`rollback`** — baseline je `pre` snímek **téhož zařízení a téhož portu** (rollback se
+  porovnává sám se sebou před migrací, ne s protějškem na druhé straně). Chybí-li, stejně tak
+  se vyhodnotí bez baseline s důvodem `chybi puvodni pre snimek stejneho zarizeni a portu`.
+
+Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
+baseline"> ===` a pod ním normální výstup `evaluate` (text nebo `--format json`, `--filter`,
+`--status`, `--detail`, `--mapping`, `--config` fungují stejně jako mimo `--run`). Návratový
+kód je **nejhorší ze všech evaluací** — jeden FAIL v kterékoliv z nich vrátí kód 1, i když
+zbytek runu prošel.
+
+### Přehled runu (`status`)
+
+```bash
+.venv/bin/mig-validate status --run mig01
+```
+
+Vypíše tabulku párů starý↔nový port (z `interface_mapping`, plus řádek na celoboxové capture
+bez portu) a tři sloupce `PRE`/`POST`/`ROLLBACK` s `ano`/`-` podle toho, jestli pro danou
+dvojici a fázi existuje záznam v `captures`. Slouží jako rychlá kontrola před `evaluate --run`
+— vidět, co ještě chybí nasnímat, bez nutnosti procházet `run.yml` ručně.
+
+| přepínač | význam |
+|---|---|
+| `--run` | název run adresáře (povinné) |
+| `--run-root` | kořen run adresářů, výchozí `runs` |
 
 ---
 

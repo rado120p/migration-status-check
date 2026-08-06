@@ -116,7 +116,7 @@ at all (neither the target nor the source address is known).
 | `--auth key\|password` | default `key` |
 | `--key-file` | default `~/.ssh/id_rsa` |
 | `--password` | only with `--auth password` |
-| `--port` / `--timeout` | default 22 / 30 s |
+| `--ssh-port` / `--timeout` | default 22 / 30 s |
 
 The platform (`junos` vs `junos-evo`) is **detected automatically** and drives the choice of
 RPCs. You never specify it.
