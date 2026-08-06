@@ -239,14 +239,14 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
         )
 
     link = scope.link
-    link_role = link.get("role") if link else None
+    link_role = link["role"] if link else None
     link_note = None
     if link is not None:
         if link_role == "l3":
             link_note = (
                 f"L2 cast: {link['peer_interface']} v {link['peer_instance']} (blok nize)"
             )
-        else:
+        elif link_role == "l2":
             link_note = (
                 f"L3 cast: {link['peer_interface']} v {link['peer_instance']} (blok vyse)"
             )

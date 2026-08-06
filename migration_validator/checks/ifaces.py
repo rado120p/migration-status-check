@@ -77,7 +77,7 @@ def _l3_link_without_transit(ctx: CheckContext) -> dict[str, Any] | None:
     v L2 bloku a report na nej ma ukazat, ne tvrdit, ze neni co merit.
     """
     link = ctx.link
-    if link and link.get("role") == "l3" and not _transit_interfaces(ctx):
+    if link and link["role"] == "l3" and not _transit_interfaces(ctx):
         return link
     return None
 

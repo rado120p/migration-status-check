@@ -216,6 +216,38 @@ def test_result_without_a_filter_carries_no_record():
     assert filter_result(result).filtered is None
 
 
+def test_filter_by_status_keeps_the_link_partner_too():
+    """Dokumentace slibuje, ze --status ponecha i partnera vazby - jinak
+    hlavicka FAIL bloku odkazuje 'blok vyse'/'blok nize' do prazdna, protoze
+    partner byl smazan filtrem drive, nez se blok vubec vykresli."""
+    pair = _linked_pair(l3_status=Status.PASS, l2_status=Status.FAIL)
+    filtered = filter_result(_result(pair, baseline=False), statuses={Status.FAIL})
+
+    assert {scope.scope_id for scope in filtered.scopes} == {
+        "svc:L3VPN-CPE14-UNI:IPVPN",
+        "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+    }
+
+    output = render(filtered)
+    assert "L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)" in output
+    assert "L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)" in output
+
+
+def test_filter_matching_neither_side_of_a_pair_keeps_neither():
+    pair = _linked_pair(l3_status=Status.PASS, l2_status=Status.PASS)
+    filtered = filter_result(_result(pair, baseline=False), statuses={Status.FAIL})
+
+    assert filtered.scopes == []
+
+
+def test_filter_does_not_pull_in_unlinked_scopes():
+    filtered = filter_result(_legacy_result(), statuses={Status.FAIL})
+
+    assert {scope.scope_id for scope in filtered.scopes} == {
+        "svc:EVPN-VPWS-CPE13-NNI:E-Line"
+    }
+
+
 def test_render_says_which_filter_ran_and_kolik_z_kolika():
     """Prepoctena cisla bez teto vety by byla druha podoba teze chyby:
     hlavicka by rikala 1 PASS, zatimco beh jich mel 3, a nic by to nepriznalo.

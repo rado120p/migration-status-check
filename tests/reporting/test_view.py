@@ -463,6 +463,24 @@ def test_l2_link_note_points_above_and_marks_type():
     assert view.service_type.endswith(" (L2 cast)")
 
 
+def test_unexpected_link_role_produces_no_note():
+    # Jen "l3"/"l2" jsou platne role; jina hodnota nesmi vyrobit odkaz, ktery
+    # by tvrdil neco, co engine nikdy nenaplnil.
+    scope = _scope(
+        [_check("interface_state")],
+        link={
+            "role": "neco-jineho",
+            "peer_scope_id": "svc:X:E-LAN",
+            "peer_interface": "ae0.15",
+            "peer_instance": "EVPN-VLAN-AWARE-POP1",
+        },
+    )
+    view = build_view(scope)
+    assert view.link_role == "neco-jineho"
+    assert view.link_note is None
+    assert "(L2 cast)" not in view.service_type
+
+
 def test_no_link_leaves_view_unchanged():
     view = build_view(_scope([_check("interface_state")]))
     assert view.link_role is None

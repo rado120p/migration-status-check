@@ -743,7 +743,7 @@ def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
 
 
 def test_l2_l3_link_renders_paired_blocks(synthetic_snapshot):
-    snapshot = synthetic_snapshot("172.20.20.5.yml", "172.20.20.5", "post")
+    snapshot = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post")
     snapshot.facts["evpn_instance"] = {
         "EVPN-VLAN-AWARE-POP1": {
             "local_interfaces": {

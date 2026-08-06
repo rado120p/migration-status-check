@@ -135,6 +135,25 @@ def test_device_scope_is_ignored():
     assert len(links) == 1
 
 
+def test_l2_interface_reports_the_interface_whose_unit_matched():
+    # L2 scope ma dve rozhrani, shoda unit-cisla je na druhem (ae0.15), ne
+    # na prvnim (ae0.14) - vazba musi ukazovat na to, ktere skutecne nese
+    # tranzit, ne na interfaces[0].
+    l2 = Scope(
+        id="svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-VLAN-AWARE-CPE14", "E-LAN", "vlan-aware"),
+        selectors=Selectors(
+            interfaces=["ae0.14", "ae0.15"],
+            routing_instances=["EVPN-VLAN-AWARE-POP1"],
+        ),
+    )
+    l3 = _l3_scope()
+    links = link_scopes([l3, l2], _facts())
+    assert len(links) == 1
+    assert links[0].l2_interface == "ae0.15"
+
+
 def test_each_scope_links_at_most_once():
     # jedna instance se dvema IRB, ale jen jeden L2 scope - druha vazba nevznikne
     facts = _facts()

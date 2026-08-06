@@ -39,10 +39,18 @@ def _unit(name: str) -> str | None:
     return name.split(".", 1)[1]
 
 
+def _matching_interface(scope: Scope, unit: str) -> str | None:
+    """Rozhrani L2 scopu, jehoz unit-cislo sedi na IRB. None, kdyz shoda
+    prisla jen pres selectors.vlans (trunk bez odpovidajiciho unitu)."""
+    return next(
+        (iface for iface in scope.selectors.interfaces if _unit(iface) == unit), None
+    )
+
+
 def _carries_unit(scope: Scope, unit: str) -> bool:
     if unit in scope.selectors.vlans:
         return True
-    return any(_unit(iface) == unit for iface in scope.selectors.interfaces)
+    return _matching_interface(scope, unit) is not None
 
 
 def _context_matches(scope: Scope, context: str) -> bool:
@@ -70,6 +78,8 @@ def link_scopes(
             continue
         if not scope.selectors.routing_instances or not scope.selectors.interfaces:
             continue
+        # [0]: builder emituje nejvyse jednu RI na scope, takze tenhle index
+        # nikdy neztrati kandidaty - neni to vyber "prvni z vice moznych".
         instance = scope.selectors.routing_instances[0]
         data = evpn_instance.get(instance)
         if not data:
@@ -92,12 +102,15 @@ def link_scopes(
                 continue
             linked_l3.add(l3_scope.id)
             linked_l2.add(scope.id)
+            l2_interface = (
+                _matching_interface(scope, unit) or scope.selectors.interfaces[0]
+            )
             links.append(
                 ScopeLink(
                     l3_scope_id=l3_scope.id,
                     l2_scope_id=scope.id,
                     irb_interface=irb_name,
-                    l2_interface=scope.selectors.interfaces[0],
+                    l2_interface=l2_interface,
                     l3_context=context,
                     l2_instance=instance,
                 )

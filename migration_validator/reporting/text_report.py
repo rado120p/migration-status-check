@@ -67,6 +67,22 @@ def filter_result(
     if statuses:
         scopes = [scope for scope in scopes if scope.status in statuses]
 
+    # Vazba L2+L3: partner (druha polovina paru) jede s vybranym scopem dal,
+    # i kdyz sam kriteriu neodpovida - jinak by hlavicka odkazovala "blok
+    # vyse/nize" na scope, ktery filtr uz smazal. Partner se pocita jen z
+    # toho, co uz proslo textem i statusem, ne z puvodni mnoziny - jinak by
+    # obe kriteria drzela pri sobe kazdou spojenou dvojici bez ohledu na to,
+    # jestli aspon jedna strana skutecne sedi.
+    kept_ids = {scope.scope_id for scope in scopes}
+    if kept_ids:
+        scopes = list(result.scopes)
+        scopes = [
+            scope
+            for scope in scopes
+            if scope.scope_id in kept_ids
+            or (scope.link and scope.link["peer_scope_id"] in kept_ids)
+        ]
+
     summary = {
         **result.summary,
         **count_statuses(check.status for scope in scopes for check in scope.checks),
