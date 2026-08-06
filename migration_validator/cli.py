@@ -28,8 +28,16 @@ from migration_validator.models.snapshot import (
 )
 from migration_validator.reporting.json_report import to_json, write_json
 from migration_validator.reporting.text_report import filter_result, render
+from migration_validator.runs.manifest import (
+    CaptureRecord,
+    MappingEndpoint,
+    RunDevice,
+)
+from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import empty_mapping, load_mapping
 from migration_validator.scoping.matcher import match_scopes
+
+_PHASE_TO_ROLE = {"pre": "old", "rollback": "old", "post": "new"}
 
 EXIT_OK = 0
 EXIT_FAILED_CHECKS = 1
@@ -125,28 +133,47 @@ def _cmd_checks(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _add_auth_arguments(parser: argparse.ArgumentParser) -> None:
+def _add_auth_arguments(
+    parser: argparse.ArgumentParser, *, port_flag: str = "--port", port_dest: str = "port"
+) -> None:
     parser.add_argument("--username", default="ansible")
     parser.add_argument("--auth", choices=("key", "password"), default="key")
     parser.add_argument("--key-file", default=str(Path.home() / ".ssh" / "id_rsa"))
     parser.add_argument("--password")
-    parser.add_argument("--port", type=int, default=22)
+    parser.add_argument(port_flag, dest=port_dest, type=int, default=22)
     parser.add_argument("--timeout", type=int, default=30)
 
 
 def _connection_options(args: argparse.Namespace) -> ConnectionOptions:
+    # capture ma --ssh-port (dest "ssh_port"), protoze --port u nej znamena
+    # cislo/jmeno sitoveho portu v run rezimu; record pouziva puvodni --port.
+    ssh_port = getattr(args, "ssh_port", None)
+    if ssh_port is None:
+        ssh_port = args.port
     return ConnectionOptions(
         host=args.device,
         username=args.username,
         auth_type=args.auth,
         key_file=args.key_file,
         password=args.password,
-        port=args.port,
+        port=ssh_port,
         timeout=args.timeout,
     )
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
+    if args.run:
+        if args.output:
+            raise ToolError("--run a --output se vzajemne vylucuji")
+        return _capture_into_run(args)
+
+    if args.port is not None:
+        raise ToolError(
+            "--port je jen pro --run rezim, SSH port zadej pres --ssh-port"
+        )
+    if not args.output:
+        raise ToolError("--output je povinny mimo --run rezim")
+
     from migration_validator.models.snapshot import save_snapshot
 
     try:
@@ -165,6 +192,89 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     save_snapshot(snapshot, args.output)
     print(f"snapshot ulozen: {args.output}")
 
+    failed = snapshot.capture.failed_collectors()
+    for name, message in failed.items():
+        print(f"  varovani: collector '{name}' selhal - {message}", file=sys.stderr)
+
+    return EXIT_OK
+
+
+def _capture_into_run(args: argparse.Namespace) -> int:
+    from migration_validator.models.snapshot import save_snapshot
+
+    phase = args.phase
+    if phase not in _PHASE_TO_ROLE:
+        raise ToolError(
+            f"neznama faze '{phase}', ocekavano jedno z {sorted(_PHASE_TO_ROLE)}"
+        )
+    if args.maps_to and not args.port:
+        raise ToolError("--maps-to vyzaduje --port (parovani je vzdy per-port)")
+
+    store = RunStore(args.run_root, args.run)
+    manifest = store.load()
+
+    node = manifest.node_for_host(args.device) or args.device
+
+    if args.inventory:
+        inventory_path = Path(args.inventory)
+    else:
+        inventory_path = store.inventory_path(node, args.port)
+        if not inventory_path.exists():
+            inventory_path = store.inventory_path(node, None)
+        if not inventory_path.exists():
+            raise ToolError(
+                "inventory nenalezena - spust s --parse-services"
+            )
+
+    try:
+        snapshot = api.capture(
+            args.device,
+            inventory=str(inventory_path),
+            options=_connection_options(args),
+            collectors=args.collectors.split(",") if args.collectors else None,
+            phase=phase,
+            ping_count=args.ping_count,
+            record_raw=args.record_raw,
+        )
+    except JunosConnectionError as error:
+        raise ToolError(str(error)) from error
+
+    if node not in manifest.devices:
+        manifest.devices[node] = RunDevice(
+            host=args.device,
+            platform=snapshot.device.platform,
+            role=_PHASE_TO_ROLE[phase],
+        )
+
+    snapshot_path = store.snapshot_path(phase, node, args.port)
+    save_snapshot(snapshot, snapshot_path)
+    manifest.record_capture(
+        CaptureRecord(
+            phase=phase,
+            device=node,
+            port=args.port,
+            snapshot=store.snapshot_name(phase, node, args.port),
+            taken=snapshot.capture.started_at,
+        )
+    )
+
+    if args.maps_to:
+        try:
+            other_node, other_port = args.maps_to.rsplit(":", 1)
+        except ValueError as error:
+            raise ToolError(
+                f"nevalidni --maps-to '{args.maps_to}', ocekavano NODE:PORT"
+            ) from error
+        here = MappingEndpoint(node=node, port=args.port)
+        there = MappingEndpoint(node=other_node, port=other_port)
+        if phase == "post":
+            manifest.add_mapping(old=there, new=here)
+        else:
+            manifest.add_mapping(old=here, new=there)
+
+    store.save(manifest)
+
+    print(f"snapshot ulozen: {snapshot_path}")
     failed = snapshot.capture.failed_collectors()
     for name, message in failed.items():
         print(f"  varovani: collector '{name}' selhal - {message}", file=sys.stderr)
@@ -248,11 +358,21 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--device", required=True)
     capture.add_argument("--inventory")
     capture.add_argument("--phase")
-    capture.add_argument("--output", required=True)
+    capture.add_argument("--output")
     capture.add_argument("--collectors", help="carkou oddeleny seznam")
     capture.add_argument("--ping-count", type=int, default=5)
     capture.add_argument("--record-raw")
-    _add_auth_arguments(capture)
+    capture.add_argument("--run", help="nazev run adresare (runs/<nazev>/)")
+    capture.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    capture.add_argument(
+        "--port", help="cislo/jmeno sitoveho portu pro --run rezim, napr. ge-0/0/0"
+    )
+    capture.add_argument(
+        "--maps-to", help="parovani portu ve tvaru NODE:PORT (jen s --run a --port)"
+    )
+    _add_auth_arguments(capture, port_flag="--ssh-port", port_dest="ssh_port")
     capture.set_defaults(func=_cmd_capture)
 
     record = sub.add_parser(
