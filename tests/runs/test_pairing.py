@@ -7,7 +7,7 @@ from migration_validator.runs.manifest import (
     RunDevice,
     RunManifest,
 )
-from migration_validator.runs.pairing import plan_evaluations
+from migration_validator.runs.pairing import find_pre_baseline, plan_evaluations
 
 
 def _manifest():
@@ -119,3 +119,29 @@ def test_pre_only_manifest_produces_empty_plan():
     manifest.captures = [CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "pre.json", "T1")]
 
     assert plan_evaluations(manifest) == []
+
+
+# --- find_pre_baseline (sdilena logika s cli._capture_into_run) -----------
+
+
+def test_find_pre_baseline_uses_per_port_pairing():
+    manifest = _manifest()
+    pre = CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "pre.json", "T1")
+    manifest.captures = [pre]
+
+    assert find_pre_baseline(manifest, "PTX1-POP1", "et-0/0/0") == pre
+
+
+def test_find_pre_baseline_falls_back_to_whole_box():
+    manifest = _manifest()
+    pre_all = CaptureRecord("pre", "MX1-POP1", None, "pre_all.json", "T1")
+    manifest.captures = [pre_all]
+
+    assert find_pre_baseline(manifest, "PTX1-POP1", "et-0/0/0") == pre_all
+
+
+def test_find_pre_baseline_none_when_missing():
+    manifest = _manifest()
+    manifest.captures = []
+
+    assert find_pre_baseline(manifest, "PTX1-POP1", "et-0/0/0") is None

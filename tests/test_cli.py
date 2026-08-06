@@ -866,3 +866,77 @@ def test_status_run_overview(tmp_path, capsys):
     new_whole_box_row = find_line("PTX1-POP1:all")
     assert new_whole_box_row.split()[0] == "-"  # new box nema old sloupec
     assert "PTX1-POP1:all" in new_whole_box_row
+
+
+# --- final review fixes (faze 4, fix-wave) ---------------------------------
+
+
+def test_evaluate_run_nonexistent_run_is_tool_error(tmp_path, capsys):
+    code = main(["evaluate", "--run", "neexistuje", "--run-root", str(tmp_path)])
+
+    assert code == EXIT_TOOL_ERROR
+    err = capsys.readouterr().err
+    assert "run 'neexistuje' neexistuje" in err
+    assert "run.yml" in err
+
+
+def test_status_run_nonexistent_run_is_tool_error(tmp_path, capsys):
+    code = main(["status", "--run", "typo01", "--run-root", str(tmp_path)])
+
+    assert code == EXIT_TOOL_ERROR
+    err = capsys.readouterr().err
+    assert "run 'typo01' neexistuje" in err
+    assert "run.yml" in err
+
+
+def test_evaluate_run_with_manifest_but_no_evaluations_prints_info(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+    # jen pre capture - plan_evaluations nevyrobi zadnou evaluaci
+    pre_path = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/0", "172.20.20.4", "ge-0/0/0.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", pre_path.name, NOW)
+    )
+    store.save(manifest)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    assert code == EXIT_OK
+    err = capsys.readouterr().err
+    assert "zadne snimky k vyhodnoceni" in err
+
+
+def test_evaluate_run_rejects_baseline_combo(tmp_path):
+    store = RunStore(tmp_path, "mig01")
+    store.save(_base_run_manifest())
+
+    code = main(
+        [
+            "evaluate",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--baseline", "x.json",
+        ]
+    )
+    assert code == EXIT_TOOL_ERROR
+
+
+def test_capture_maps_to_outside_run_is_tool_error(monkeypatch, capsys):
+    _refuse_capture(monkeypatch)
+
+    code = main(
+        [
+            "capture",
+            "--device", "172.20.20.4",
+            "--phase", "pre",
+            "--output", "y.json",
+            "--maps-to", "172.20.20.5:et-0/0/0",
+        ]
+    )
+
+    assert code == EXIT_TOOL_ERROR
+    err = capsys.readouterr().err
+    assert "--maps-to" in err
+    assert "--run" in err

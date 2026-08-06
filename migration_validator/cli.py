@@ -34,7 +34,7 @@ from migration_validator.runs.manifest import (
     RunDevice,
     RunManifest,
 )
-from migration_validator.runs.pairing import plan_evaluations
+from migration_validator.runs.pairing import find_pre_baseline, plan_evaluations
 from migration_validator.runs.services import generate_inventory
 from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import empty_mapping, load_mapping
@@ -104,12 +104,28 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _require_run_manifest(store: RunStore, run: str) -> RunManifest:
+    """Nacte manifest existujiciho runu, nebo shodi ToolError.
+
+    RunStore.load() vraci prazdny manifest pro chybejici run.yml - to je
+    spravne pro capture (bootstrapuje run), ale pro evaluate/status by to
+    tise predstiralo, ze run bez zaznamu existuje.
+    """
+    if not store.manifest_path.exists():
+        raise ToolError(
+            f"run '{run}' neexistuje ({store.manifest_path} nenalezen)"
+        )
+    return store.load()
+
+
 def _evaluate_run(args: argparse.Namespace) -> int:
     if args.output:
         raise ToolError("--run a --output se vzajemne vylucuji")
+    if args.baseline:
+        raise ToolError("--run a --baseline se vzajemne vylucuji")
 
     store = RunStore(args.run_root, args.run)
-    manifest = store.load()
+    manifest = _require_run_manifest(store, args.run)
 
     missing = store.missing_snapshots(manifest)
     if missing:
@@ -119,6 +135,10 @@ def _evaluate_run(args: argparse.Namespace) -> int:
 
     ports = [p.strip() for p in args.ports.split(",") if p.strip()] if args.ports else None
     evaluations = plan_evaluations(manifest, ports)
+
+    if not evaluations:
+        print("zadne snimky k vyhodnoceni", file=sys.stderr)
+        return EXIT_OK
 
     mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
     config = load_config(args.config) if args.config else default_config()
@@ -193,7 +213,7 @@ def _status_rows(
 
 def _cmd_status(args: argparse.Namespace) -> int:
     store = RunStore(args.run_root, args.run)
-    manifest = store.load()
+    manifest = _require_run_manifest(store, args.run)
 
     def mark(ok: bool) -> str:
         return "ano" if ok else "-"
@@ -288,6 +308,8 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         raise ToolError(
             "--port je jen pro --run rezim, SSH port zadej pres --ssh-port"
         )
+    if args.maps_to:
+        raise ToolError("--maps-to je jen pro --run rezim")
     if not args.output:
         raise ToolError("--output je povinny mimo --run rezim")
 
@@ -371,16 +393,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
 
     baseline = None
     if phase == "post":
-        baseline_record = None
-        if args.port:
-            paired = manifest.paired_old(node, args.port)
-            if paired is not None:
-                baseline_record = manifest.find_capture("pre", paired.node, paired.port)
-        if baseline_record is None:
-            old_role = manifest.device_with_role("old")
-            if old_role is not None:
-                old_node, _ = old_role
-                baseline_record = manifest.find_capture("pre", old_node, None)
+        baseline_record = find_pre_baseline(manifest, node, args.port)
         if baseline_record is not None:
             baseline = _load_snapshot(str(store.dir / baseline_record.snapshot))
         else:

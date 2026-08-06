@@ -25,11 +25,20 @@ def _passes_port_filter(port: str | None, ports: list[str] | None) -> bool:
     return port in ports
 
 
-def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
+def find_pre_baseline(
+    manifest: RunManifest, node: str, port: str | None
+) -> CaptureRecord | None:
+    """Najde pre snimek stareho boxu pro dany node/port.
+
+    Nejdriv zkusi per-port parovani pres interface_mapping, pak spadne na
+    celoboxovy pre snimek stareho boxu (role "old"). Sdileno mezi
+    plan_evaluations (evaluate --run) a cli._capture_into_run (baseline pro
+    ping cile pri post capture).
+    """
     baseline: CaptureRecord | None = None
 
-    if subject.port is not None:
-        old_endpoint = manifest.paired_old(subject.device, subject.port)
+    if port is not None:
+        old_endpoint = manifest.paired_old(node, port)
         if old_endpoint is not None:
             baseline = manifest.find_capture("pre", old_endpoint.node, old_endpoint.port)
 
@@ -38,6 +47,12 @@ def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
         if old is not None:
             old_node, _ = old
             baseline = manifest.find_capture("pre", old_node, None)
+
+    return baseline
+
+
+def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
+    baseline = find_pre_baseline(manifest, subject.device, subject.port)
 
     if baseline is None:
         return Evaluation(
