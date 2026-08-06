@@ -160,6 +160,30 @@ report bez visících odkazů. **Ověření EVO strany (cílový scénář
 `irb.15 ↔ ae0.15` v `EVPN-VLAN-AWARE-…`) čeká na migraci služeb na
 PTX** — pak stačí nový capture a `evaluate --detail`.
 
+### Doplněk: EVO strana po migraci služeb (2026-08-06 odpoledne)
+
+Uživatel zmigroval služby na PTX a přegenerovala se obě inventory
+(`mx_parser.py` / `evo_parser.py` proti živým boxům — CPE14 UNI má nově
+adresaci `/29`+`/64` a peery `.4`/`::4`). Po novém capture 172.20.20.5:
+
+- **Všechny tři vazby se vytvořily**: `irb.14 ↔ ae0.14` (Internet,
+  kontext `master` → hlavička `L3 cast: irb.14 v inet.0`), cílový
+  `irb.15 ↔ ae0.15` (IPVPN `L3VPN-CPE14-UNI`) i `irb.4094 ↔ ae0.4094`
+  (MGMT). Bloky dvojic pod sebou, INFO odkaz `mereno na L2 (...)`,
+  v L2 blocích ESI `Resolved by IFL`, MAC county per VL i per interface,
+  errors/traffic na `ae0` + unitu. ARP/ND v L3 blocích nesou
+  `[via ae0.15]` (learned_via z fáze 1).
+- **Párové vyhodnocení `--baseline` MX-pre → EVO-post**: matcher spároval
+  čisté L3 na UNI se svým IRB přes description (`ge-0/0/4.0 → irb.15`,
+  `ge-0/0/5.0 → irb.14`), nové L2 scopy correctly `nova sluzba, chybi
+  baseline` a přesto se renderují jako `(L2 cast)` partner bloky —
+  přesně chování ze spec fáze 3.
+- Pravdivé nálezy laborky v tomto stavu: `EVPN neighbors: 0` (MX strana
+  EVPN po migraci už neběží), BFD `Down` na CPE14 peerech, CPE13
+  `session Down`, a compare nález `local interfaces: 4, baseline 2`
+  u MGMT-VLAN (instance na EVO nese všechny tři ae unity proti dvěma
+  na MX) — fáze 2 sémantika rovnosti počtů.
+
 Menší nálezy odložené v průběhu tasků (`.superpowers/sdd/2026-08-06-faze3-vazba-l2-l3/progress.md`),
 všechny potvrzené jako neškodné nebo netestovatelné v praxi:
 
