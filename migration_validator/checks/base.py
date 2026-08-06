@@ -44,6 +44,7 @@ class CheckContext:
     # Priznak deaktivace lezi na scopu, ne ve faktech, takze bez baseline
     # scopu nejde porovnat "deaktivovano i drive" proti "deaktivovano az ted".
     baseline_scope: Scope | None = None
+    link: dict[str, Any] | None = None
 
     @property
     def has_baseline(self) -> bool:

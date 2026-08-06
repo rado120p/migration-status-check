@@ -187,9 +187,10 @@ class ScopeResult:
     match: MatchInfo | None
     checks: list[CheckResult] = field(default_factory=list)
     identity: dict[str, Any] = field(default_factory=dict)
+    link: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "scope_id": self.scope_id,
             "key": self.key,
             "identity": self.identity,
@@ -197,6 +198,10 @@ class ScopeResult:
             "match": self.match.to_dict() if self.match else None,
             "checks": [check.to_dict() for check in self.checks],
         }
+        # Aditivni klic: bez vazby zustava tvar presne ten, ktery uz cte okoli.
+        if self.link is not None:
+            payload["link"] = self.link
+        return payload
 
 
 @dataclass

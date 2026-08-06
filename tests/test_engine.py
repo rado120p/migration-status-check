@@ -8,6 +8,7 @@ from migration_validator.engine import (
     _identity,
     _unassigned_bfd_sessions,
     _unassigned_bgp_peers,
+    evaluate_snapshots,
 )
 from migration_validator.models.result import Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
@@ -692,3 +693,128 @@ def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snaps
     assert Status.PASS in statuses
 
     assert scope.status is Status.PASS
+
+
+def _linked_snapshot():
+    """Snapshot se dvojici irb.15 (IPVPN) + ae0.15 (E-LAN) v jedne instanci."""
+    l3 = Scope(
+        id="svc:L3VPN-CPE14-UNI:IPVPN",
+        kind="service",
+        key=ScopeKey("L3VPN-CPE14-UNI", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["irb.15"], routing_instances=["L3VPN-CPE14-UNI"]
+        ),
+    )
+    l2 = Scope(
+        id="svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-VLAN-AWARE-CPE14", "E-LAN", "vlan-aware"),
+        selectors=Selectors(
+            interfaces=["ae0.15"],
+            routing_instances=["EVPN-VLAN-AWARE-POP1"],
+            vlans=["15"],
+        ),
+    )
+    # dalsi nesouvisejici scope, aby bylo videt razeni
+    other = Scope(
+        id="svc:OTHER:Internet",
+        kind="service",
+        key=ScopeKey("OTHER", "Internet", None),
+        selectors=Selectors(interfaces=["ge-0/0/1.0"]),
+    )
+    facts = {
+        "interfaces": {
+            "irb.15": {"admin_status": "up", "oper_status": "up"},
+            "ae0.15": {
+                "admin_status": "up",
+                "oper_status": "up",
+                "input_pps": 10,
+                "output_pps": 10,
+            },
+            "ge-0/0/1.0": {
+                "admin_status": "up",
+                "oper_status": "up",
+                "input_pps": 10,
+                "output_pps": 10,
+            },
+        },
+        "evpn_instance": {
+            "EVPN-VLAN-AWARE-POP1": {
+                "local_interfaces": {
+                    "total": 1,
+                    "up": 1,
+                    "entries": [{"name": "ae0.15", "status": "Up"}],
+                },
+                "irb_interfaces": {
+                    "total": 1,
+                    "up": 1,
+                    "entries": [
+                        {
+                            "name": "irb.15",
+                            "status": "Up",
+                            "l3_context": "L3VPN-CPE14-UNI",
+                        }
+                    ],
+                },
+                "neighbors": {"total": 1, "addresses": ["10.0.0.1"]},
+                "esis": {},
+            }
+        },
+    }
+    return Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, finished_at=NOW, phase="pre-migration"),
+        facts=facts,
+        scopes=[l3, other, l2],
+        inventory=[],
+    )
+
+
+def test_linked_scopes_carry_link_payload():
+    result = evaluate_snapshots(_linked_snapshot())
+    by_id = {scope.scope_id: scope for scope in result.scopes}
+    l3 = by_id["svc:L3VPN-CPE14-UNI:IPVPN"]
+    l2 = by_id["svc:EVPN-VLAN-AWARE-CPE14:E-LAN"]
+    assert l3.link == {
+        "role": "l3",
+        "peer_scope_id": l2.scope_id,
+        "peer_interface": "ae0.15",
+        "peer_instance": "EVPN-VLAN-AWARE-POP1",
+    }
+    assert l2.link == {
+        "role": "l2",
+        "peer_scope_id": l3.scope_id,
+        "peer_interface": "irb.15",
+        "peer_instance": "L3VPN-CPE14-UNI",
+    }
+    assert by_id["svc:OTHER:Internet"].link is None
+
+
+def test_linked_l2_scope_follows_its_l3_scope():
+    result = evaluate_snapshots(_linked_snapshot())
+    ids = [scope.scope_id for scope in result.scopes]
+    l3_index = ids.index("svc:L3VPN-CPE14-UNI:IPVPN")
+    assert ids[l3_index + 1] == "svc:EVPN-VLAN-AWARE-CPE14:E-LAN"
+
+
+def test_link_serialized_only_when_present():
+    result = evaluate_snapshots(_linked_snapshot())
+    payloads = {scope["scope_id"]: scope for scope in result.to_dict()["scopes"]}
+    assert payloads["svc:L3VPN-CPE14-UNI:IPVPN"]["link"]["role"] == "l3"
+    assert "link" not in payloads["svc:OTHER:Internet"]
+
+
+def test_master_context_link_shows_inet0():
+    snapshot = _linked_snapshot()
+    # prepni kontext na master a odeber RI z L3 scopu
+    facts_irb = snapshot.facts["evpn_instance"]["EVPN-VLAN-AWARE-POP1"][
+        "irb_interfaces"
+    ]["entries"][0]
+    facts_irb["l3_context"] = "master"
+    for scope in snapshot.scopes:
+        if scope.id == "svc:L3VPN-CPE14-UNI:IPVPN":
+            scope.selectors.routing_instances = []
+            scope.key = ScopeKey("L3VPN-CPE14-UNI", "Internet", None)
+    result = evaluate_snapshots(snapshot)
+    by_id = {scope.scope_id: scope for scope in result.scopes}
+    assert by_id["svc:EVPN-VLAN-AWARE-CPE14:E-LAN"].link["peer_instance"] == "inet.0"

@@ -21,6 +21,7 @@ from migration_validator.models.result import (
 )
 from migration_validator.models.scope import Scope, device_scope
 from migration_validator.models.snapshot import Snapshot
+from migration_validator.scoping.linker import ScopeLink, link_scopes
 from migration_validator.scoping.mapping import Mapping, empty_mapping
 from migration_validator.scoping.matcher import MatchedPair, match_scopes
 
@@ -132,6 +133,51 @@ def _identity(scope: Scope) -> dict[str, Any]:
     }
 
 
+def _link_payloads(links: list[ScopeLink]) -> dict[str, dict[str, Any]]:
+    """Slovnik scope_id -> vazba, jak ji ctou checky a renderer.
+
+    U L2 strany se "master" prepisuje na "inet.0" - hlavicka bloku ma
+    ukazovat routing tabulku, ne interni oznaceni z RPC vypisu.
+    """
+    payloads: dict[str, dict[str, Any]] = {}
+    for link in links:
+        l3_instance = "inet.0" if link.l3_context == "master" else link.l3_context
+        payloads[link.l3_scope_id] = {
+            "role": "l3",
+            "peer_scope_id": link.l2_scope_id,
+            "peer_interface": link.l2_interface,
+            "peer_instance": link.l2_instance,
+        }
+        payloads[link.l2_scope_id] = {
+            "role": "l2",
+            "peer_scope_id": link.l3_scope_id,
+            "peer_interface": link.irb_interface,
+            "peer_instance": l3_instance,
+        }
+    return payloads
+
+
+def _reorder_linked(results: list[ScopeResult]) -> list[ScopeResult]:
+    """L2 blok patri hned za svuj L3 blok - jinak razeni z matcheru."""
+    l2_after: dict[str, ScopeResult] = {}
+    l2_ids: set[str] = set()
+    ids = {result.scope_id for result in results}
+    for result in results:
+        link = result.link
+        if link and link["role"] == "l2" and link["peer_scope_id"] in ids:
+            l2_after[link["peer_scope_id"]] = result
+            l2_ids.add(result.scope_id)
+    ordered: list[ScopeResult] = []
+    for result in results:
+        if result.scope_id in l2_ids:
+            continue
+        ordered.append(result)
+        partner = l2_after.get(result.scope_id)
+        if partner is not None:
+            ordered.append(partner)
+    return ordered
+
+
 def _run_scope(
     scope: Scope,
     subject: Snapshot,
@@ -139,6 +185,7 @@ def _run_scope(
     baseline: Snapshot | None,
     config: CheckConfig,
     match: MatchInfo | None,
+    link: dict[str, Any] | None = None,
 ) -> ScopeResult:
     subject_data = scope.select(subject.facts, subject.probes)
     baseline_data = (
@@ -153,6 +200,7 @@ def _run_scope(
         config=config,
         failed_collectors=subject.capture.failed_collectors(),
         baseline_scope=baseline_scope,
+        link=link,
     )
 
     results = []
@@ -173,6 +221,7 @@ def _run_scope(
         match=match,
         checks=results,
         identity=_identity(scope),
+        link=link,
     )
 
 
@@ -289,13 +338,20 @@ def evaluate_snapshots(
     mapping = mapping or empty_mapping()
 
     subject_scopes = _scopes_of(subject)
+    link_payloads = _link_payloads(
+        link_scopes(subject_scopes, subject.facts.get("evpn_instance") or {})
+    )
     scope_results: list[ScopeResult] = []
     unmatched: dict[str, list[dict[str, Any]]] = {"baseline": [], "subject": []}
     matched_count = 0
 
     if baseline is None:
         for scope in subject_scopes:
-            scope_results.append(_run_scope(scope, subject, None, None, config, None))
+            scope_results.append(
+                _run_scope(
+                    scope, subject, None, None, config, None, link=link_payloads.get(scope.id)
+                )
+            )
     else:
         matches = match_scopes(_scopes_of(baseline), subject_scopes, mapping)
         matched_count = len(matches.pairs)
@@ -303,7 +359,13 @@ def evaluate_snapshots(
         for pair in matches.pairs:
             scope_results.append(
                 _run_scope(
-                    pair.subject, subject, pair.baseline, baseline, config, _match_info(pair)
+                    pair.subject,
+                    subject,
+                    pair.baseline,
+                    baseline,
+                    config,
+                    _match_info(pair),
+                    link=link_payloads.get(pair.subject.id),
                 )
             )
 
@@ -320,12 +382,15 @@ def evaluate_snapshots(
                         reason=item.reason,
                         subject_interfaces=list(item.scope.selectors.interfaces),
                     ),
+                    link=link_payloads.get(item.scope.id),
                 )
             )
             unmatched["subject"].append(_unmatched_entry(item.scope, item.reason))
 
         for item in matches.unmatched_baseline:
             unmatched["baseline"].append(_unmatched_entry(item.scope, item.reason))
+
+    scope_results = _reorder_linked(scope_results)
 
     summary = {
         **count_statuses(
