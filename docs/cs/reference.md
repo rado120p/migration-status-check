@@ -549,8 +549,14 @@ L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
 L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
 ```
 
-Pokud se s `--filter`/`--status` zobrazí jeden z páru, vypíše se i druhý — jinak by odkaz
-„blok nize/vyse" ukazoval do prázdna.
+Pokud `--filter`/`--status` vybere jeden z páru, filtr ponechá i druhého partnera, i když sám
+kritériu neodpovídá — jinak by odkaz „blok nize/vyse" ukazoval do prázdna. Partner se počítá až
+z výsledku obou kritérií (`--filter` i `--status` dohromady), ne z každého zvlášť, takže dvojici
+drží pohromadě jen tehdy, když aspoň jedna strana skutečně sedí — pár, kde nesedí ani L3, ani
+L2, filtr smaže celý. Partnerovy checky se počítají i do přepočítaného souhrnu ve `filtered` -
+je zobrazený stejně jako kterýkoli jiný vybraný scope. Bez `--detail` navíc platí obvyklé
+PASS-collapse pravidlo: partner s PASS se v tabulce objeví, ale jeho blok se rozbalí, jen když
+se ukazuje (FAIL/WARN nebo `--detail`).
 
 Errors/traffic se u L3 části neměří přímo (IRB sám o sobě není tranzitní rozhraní) — L3 blok
 místo toho nese jeden INFO řádek `mereno na L2 (ae0.15) - viz blok nize`; skutečné počítadlo

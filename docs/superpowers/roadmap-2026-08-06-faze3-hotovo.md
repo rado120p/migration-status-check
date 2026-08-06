@@ -55,10 +55,18 @@ commit `74a6298`).** `reporting/view.py` doplňuje do hlavičky bloku
 `L3 cast: <irb> v <RI> (blok vyse)` na E-LAN straně a
 `L2 cast: <iface> v <instance> (blok nize)` na L3 straně. E-LAN blok
 vázané služby se v textu podepisuje jako „E-LAN (L2 cast)". V
-`text_report.py` (`render`) se množina zobrazených scopů rozšiřuje o
-partnera vazby, kdykoli je partner viditelný — jinak by odkaz „blok
-nize/vyse" u filtrovaného (`--filter`/`--status`) výstupu ukazoval do
-prázdna.
+`text_report.py` (`render`) se množina zobrazených bloků rozšiřuje o
+partnera vazby, kdykoli je partner viditelný v beze-filtru výstupu.
+
+**Oprava z finálního review (bez nového commit hashe v tomto zápisu, viz
+`git log`): `filter_result` (stejný soubor) samotné scopy mazal drív, než
+se k tomuto rozšiřování vůbec dostalo — `--filter`/`--status` tak partnera
+smazaly úplně a odkaz „blok nize/vyse" ukazoval do prázdna i přesto, co
+tenhle odstavec tvrdil. `filter_result` teď po výběru podle textu i statusu
+ponechá i scope, jehož `link["peer_scope_id"]` je mezi vybranými - dvojice
+tak filtr přežije spolu, pokud sedí aspoň jedna strana; nesedí-li ani L3,
+ani L2, zmizí celá. Partnerovy checky se počítají i do přepočítaného
+souhrnu ve `filtered`.
 
 **End-to-end test a dokumentace (Task 5, commit `bbf0bfc`).**
 `test_l2_l3_link_renders_paired_blocks` v `tests/test_end_to_end.py`

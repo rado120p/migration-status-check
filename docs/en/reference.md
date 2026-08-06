@@ -564,8 +564,15 @@ L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
 L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
 ```
 
-If `--filter`/`--status` shows one side of the pair, the other is printed too — otherwise the
-"blok nize/vyse" pointer would point at nothing.
+If `--filter`/`--status` selects one side of the pair, the filter keeps the other partner too,
+even though it doesn't match the criteria itself — otherwise the "blok nize/vyse" pointer would
+point at nothing. The partner is computed from the combined result of both criteria (`--filter`
+and `--status` together), not from each separately, so a pair only stays together when at least
+one side actually matches — a pair where neither the L3 nor the L2 side matches is dropped
+entirely. The partner's checks also count into the recomputed summary in `filtered` — it IS
+shown, same as any other selected scope. Without `--detail`, the usual PASS-collapse rule still
+applies: a PASS partner shows up in the summary table, but its block only expands when it is
+shown (FAIL/WARN, or `--detail`).
 
 Errors/traffic are not measured directly on the L3 part (the IRB itself is not a transit
 interface) — the L3 block instead carries a single INFO row
