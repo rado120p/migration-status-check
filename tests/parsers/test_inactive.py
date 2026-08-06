@@ -9,31 +9,15 @@ ge-0/0/2, ge-0/0/4 a ge-0/0/5, na 172.20.20.5 pak et-0/0/10.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 from lxml import etree
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def _load(module_name: str, filename: str):
-    """Parsery jsou skripty v kořeni repozitáře, ne balíček - načteme je podle cesty."""
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-evo = _load("evo_parser_inactive_test", "evo_parser.py")
-mx = _load("mx_parser_inactive_test", "mx_parser.py")
+from migration_validator.parsers.evo import JunosEvoAcxServiceParser
+from migration_validator.parsers.mx import JunosServiceParser
 
 PARSERS = (
-    pytest.param(evo, evo.JunosEvoAcxServiceParser, id="evo"),
-    pytest.param(mx, mx.JunosServiceParser, id="mx"),
+    pytest.param(JunosEvoAcxServiceParser, id="evo"),
+    pytest.param(JunosServiceParser, id="mx"),
 )
 
 DEACTIVATED_INTERFACE = """
@@ -64,7 +48,7 @@ DEACTIVATED_INTERFACE = """
 """
 
 
-def _services(module, parser_class, xml_text):
+def _services(parser_class, xml_text):
     return parser_class(etree.fromstring(xml_text.encode())).parse()
 
 
@@ -74,39 +58,39 @@ def _by_name(services, name):
     return found[0]
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_interface_stays_in_inventory(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_interface_stays_in_inventory(parser_class):
     """Deaktivované rozhraní se z inventory nevypouští - jen se označí.
 
     Zabíjí mutanta: `continue` na deaktivovaném rozhraní v _parse_interfaces.
     Dočasně deaktivovaná služba se pořád musí zmigrovat, takže vypustit ji
     z inventory je chyba, ne oprava.
     """
-    services = _services(module, parser_class, DEACTIVATED_INTERFACE)
+    services = _services(parser_class, DEACTIVATED_INTERFACE)
 
     assert _by_name(services, "ge-0/0/4.0")
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_interface_is_flagged(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_interface_is_flagged(parser_class):
     """interface_active je False u fyzického rozhraní i u jeho jednotky.
 
     Zabíjí mutanta: `interface_active=True` natvrdo v _classify_interface.
     Jednotka atribut inactive sama nemá - dědí ho po fyzickém rodiči.
     """
-    services = _services(module, parser_class, DEACTIVATED_INTERFACE)
+    services = _services(parser_class, DEACTIVATED_INTERFACE)
 
     assert _by_name(services, "ge-0/0/4").interface_active is False
     assert _by_name(services, "ge-0/0/4.0").interface_active is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_interface_does_not_touch_routing_instance_flag(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_interface_does_not_touch_routing_instance_flag(parser_class):
     """Zdroje deaktivace se nemíchají - RI je tu živá.
 
     Zabíjí mutanta: naplnění obou polí z téhož zdroje.
     """
-    services = _services(module, parser_class, DEACTIVATED_INTERFACE)
+    services = _services(parser_class, DEACTIVATED_INTERFACE)
 
     assert _by_name(services, "ge-0/0/4.0").routing_instance_active is True
 
@@ -154,50 +138,50 @@ DEACTIVATED_CONTAINERS = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_interfaces_container_flags_every_interface(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_interfaces_container_flags_every_interface(parser_class):
     """<interfaces inactive> označí všechna rozhraní pod sebou.
 
     Zabíjí mutanta: _is_inactive, které se dívá jen na uzel a ne na předky.
     Bez dědění vrátí interface_active=True, protože samo <interface>
     atribut nemá.
     """
-    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+    services = _services(parser_class, DEACTIVATED_CONTAINERS)
 
     assert _by_name(services, "ge-0/0/2.113").interface_active is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_routing_instances_container_flags_the_service(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_routing_instances_container_flags_the_service(parser_class):
     """<routing-instances inactive> označí služby všech VRF pod sebou."""
-    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+    services = _services(parser_class, DEACTIVATED_CONTAINERS)
 
     assert _by_name(services, "ge-0/0/2.113").routing_instance_active is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_deactivated_routing_instances_container_marks_static_routes_inactive(
-    module, parser_class
+    parser_class
 ):
     """Deaktivovaný kontejner `routing-instances` označí statiky, nevypouští je.
 
     Zabíjí mutanta: `_is_inactive` bez chůze po předcích. Jednotlivé
     `instance` pod deaktivovaným kontejnerem atribut nemá.
     """
-    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+    services = _services(parser_class, DEACTIVATED_CONTAINERS)
     routes = [route for service in services for route in service.static_route]
 
     assert routes, "deaktivovaný kontejner nesmí routu vypustit"
     assert all(route["active"] is False for route in routes), routes
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_bgp_container_moves_neighbors_and_drops_bfd(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_bgp_container_moves_neighbors_and_drops_bfd(parser_class):
     """<protocols>/<bgp> pod deaktivovanou VRF: soused se přestěhuje, BFD zmizí.
 
     Zabíjí mutanta: dědění zavedené jen pro statiky a ne pro BGP.
     """
-    services = _services(module, parser_class, DEACTIVATED_CONTAINERS)
+    services = _services(parser_class, DEACTIVATED_CONTAINERS)
 
     peers = [peer for service in services for peer in service.bgp_neighbor]
     inactive = [
@@ -231,8 +215,8 @@ DEACTIVATED_UNIT_ONLY = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_unit_under_active_interface_is_flagged(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_unit_under_active_interface_is_flagged(parser_class):
     """Deaktivace jednotky nesmí spadnout ani nahoru, ani na sousední jednotku.
 
     Zabíjí mutanta: `active=not physical_inactive` v _parse_interfaces, tedy
@@ -240,7 +224,7 @@ def test_deactivated_unit_under_active_interface_is_flagged(module, parser_class
     ostatní fixtures deaktivují až fyzické rozhraní, takže se zděděná
     a vlastní deaktivace nedají rozlišit.
     """
-    services = _services(module, parser_class, DEACTIVATED_UNIT_ONLY)
+    services = _services(parser_class, DEACTIVATED_UNIT_ONLY)
 
     assert _by_name(services, "ge-0/0/2").interface_active is True
     assert _by_name(services, "ge-0/0/2.113").interface_active is False
@@ -304,10 +288,10 @@ INACTIVE_GROUP = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_inactive_rib_marks_only_its_own_routes(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_inactive_rib_marks_only_its_own_routes(parser_class):
     """Deaktivovaná `rib` označí jen své routy, sousední RIB zůstane živý."""
-    services = _services(module, parser_class, INACTIVE_RIB)
+    services = _services(parser_class, INACTIVE_RIB)
     routes = [route for service in services for route in service.static_route]
     by_prefix = {route["prefix"]: route["active"] for route in routes}
 
@@ -315,14 +299,14 @@ def test_inactive_rib_marks_only_its_own_routes(module, parser_class):
     assert by_prefix["10.8.8.0/24"] is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_inactive_bgp_group_moves_its_neighbors(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_inactive_bgp_group_moves_its_neighbors(parser_class):
     """Deaktivovaná `group` nedá živého souseda, ale záměr neztratí.
 
     Zabíjí mutanta: `_is_inactive` bez chůze po předcích. `neighbor` sám
     atribut nemá.
     """
-    services = _services(module, parser_class, INACTIVE_GROUP)
+    services = _services(parser_class, INACTIVE_GROUP)
     peers = [peer for service in services for peer in service.bgp_neighbor]
     inactive = [
         peer for service in services for peer in service.bgp_neighbor_inactive
@@ -366,24 +350,24 @@ ACTIVE_TOP_LEVEL_PROTOCOLS = DEACTIVATED_TOP_LEVEL_PROTOCOLS.replace(
 )
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_active_top_level_protocols_produce_intent(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_active_top_level_protocols_produce_intent(parser_class):
     """Kontrolní test: bez něj by test níž mohl měřit prázdnou fixture.
 
     Zabíjí mutanta: `self.default_bfd = {}` v _parse_default_bgp_neighbors.
     Služba bez routing-instance sahá do default_bgp_neighbors a default_bfd -
     kdyby se neplnily, byl by test na deaktivaci zelený z nesprávného důvodu.
     """
-    services = _services(module, parser_class, ACTIVE_TOP_LEVEL_PROTOCOLS)
+    services = _services(parser_class, ACTIVE_TOP_LEVEL_PROTOCOLS)
     service = _by_name(services, "ge-0/0/2.13")
 
     assert service.bgp_neighbor == ["152.11.13.2"]
     assert service.bfd
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_deactivated_top_level_protocols_move_neighbors_and_drop_bfd(
-    module, parser_class
+    parser_class
 ):
     """<protocols inactive> na top-level úrovni: soused se přestěhuje, BFD zmizí.
 
@@ -392,7 +376,7 @@ def test_deactivated_top_level_protocols_move_neighbors_and_drop_bfd(
     (_parse_default_bgp_neighbors), takže existující testy tenhle mutant
     na téhle cestě nechytí.
     """
-    services = _services(module, parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
+    services = _services(parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
     service = _by_name(services, "ge-0/0/2.13")
 
     assert service.bgp_neighbor == []
@@ -400,15 +384,15 @@ def test_deactivated_top_level_protocols_move_neighbors_and_drop_bfd(
     assert service.bfd == []
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_neighbor_lands_in_inactive_list(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_neighbor_lands_in_inactive_list(parser_class):
     """Deaktivovaný soused se ze záměru neztratí, jen se přestěhuje.
 
     Zabíjí mutanta: `bgp_neighbor_inactive` se plní z aktivních sousedů.
     Bez téhle aserce by test, který tvrdí jen `bgp_neighbor == []`, prošel
     i kdyby se soused vypustil úplně - tedy při starém chování.
     """
-    services = _services(module, parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
+    services = _services(parser_class, DEACTIVATED_TOP_LEVEL_PROTOCOLS)
     service = _by_name(services, "ge-0/0/2.13")
 
     assert service.bgp_neighbor == []
@@ -437,8 +421,8 @@ BFD_INACTIVE_OVERRIDE = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_inactive_bfd_override_inherits_group_value(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_inactive_bfd_override_inherits_group_value(parser_class):
     """Deaktivovaný override BFD dědí hodnotu ze skupiny - a je to správně.
 
     Junosí `inactive` znamená 'příkaz se neuplatní', tedy jako by tam nebyl.

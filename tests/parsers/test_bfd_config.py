@@ -11,30 +11,15 @@ Oba parsery se meni v zamku, takze kazdy test bezi proti obema.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 from lxml import etree
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def _load(module_name: str, filename: str):
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-evo = _load("evo_parser_bfd_test", "evo_parser.py")
-mx = _load("mx_parser_bfd_test", "mx_parser.py")
+from migration_validator.parsers.evo import JunosEvoAcxServiceParser
+from migration_validator.parsers.mx import JunosServiceParser
 
 PARSERS = (
-    pytest.param(evo, evo.JunosEvoAcxServiceParser, id="evo"),
-    pytest.param(mx, mx.JunosServiceParser, id="mx"),
+    pytest.param(JunosEvoAcxServiceParser, id="evo"),
+    pytest.param(JunosServiceParser, id="mx"),
 )
 
 INTERFACES = """
@@ -271,7 +256,7 @@ DEACTIVATED_NEIGHBOR_BFD = f"""
 """
 
 
-def _bfd_by_peer(module, parser_class, xml: str) -> dict[str, dict]:
+def _bfd_by_peer(parser_class, xml: str) -> dict[str, dict]:
     services = parser_class(etree.XML(xml.encode())).parse()
     return {
         intent["peer"]: intent
@@ -280,10 +265,10 @@ def _bfd_by_peer(module, parser_class, xml: str) -> dict[str, dict]:
     }
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_group_level_bfd_reaches_every_neighbor_in_group(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_group_level_bfd_reaches_every_neighbor_in_group(parser_class):
     """Vcetne IPv6 souseda - skupinove pravidlo neni na rodinu vazane."""
-    intents = _bfd_by_peer(module, parser_class, GROUP_LEVEL)
+    intents = _bfd_by_peer(parser_class, GROUP_LEVEL)
 
     assert set(intents) == {"198.11.14.2", "2001:db8:11:14::b"}
     for peer in intents:
@@ -292,10 +277,10 @@ def test_group_level_bfd_reaches_every_neighbor_in_group(module, parser_class):
         assert intents[peer]["source"] == "group"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_neighbor_level_overrides_group_level(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_neighbor_level_overrides_group_level(parser_class):
     """Specifictejsi uroven prepisuje obecnejsi, a to celou hodnotou."""
-    intents = _bfd_by_peer(module, parser_class, NEIGHBOR_OVERRIDES_GROUP)
+    intents = _bfd_by_peer(parser_class, NEIGHBOR_OVERRIDES_GROUP)
 
     assert intents["152.11.13.2"]["minimum_interval"] == 300
     assert intents["152.11.13.2"]["multiplier"] == 5
@@ -305,9 +290,9 @@ def test_neighbor_level_overrides_group_level(module, parser_class):
     assert intents["2001:abcd:11:13::b"]["source"] == "group"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_partial_override_of_group_does_not_inherit_the_missing_field(
-    module, parser_class
+    parser_class
 ):
     """Tohle je ta veta AR-13: nese se CELA hodnota, ne polozka po polozce.
 
@@ -319,7 +304,7 @@ def test_partial_override_of_group_does_not_inherit_the_missing_field(
     jeho soused nese oba udaje, takze prepis celou hodnotou i slevani po
     polozkach daji stejny vysledek.
     """
-    intents = _bfd_by_peer(module, parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_GROUP)
+    intents = _bfd_by_peer(parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_GROUP)
 
     assert set(intents) == {"152.11.13.2"}
     assert intents["152.11.13.2"]["minimum_interval"] == 300
@@ -327,9 +312,9 @@ def test_partial_override_of_group_does_not_inherit_the_missing_field(
     assert intents["152.11.13.2"]["source"] == "neighbor"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_partial_override_of_bgp_level_does_not_inherit_the_missing_field(
-    module, parser_class
+    parser_class
 ):
     """Tentyz castecny prepis u souseda viseciho primo pod protocols bgp.
 
@@ -338,7 +323,7 @@ def test_partial_override_of_bgp_level_does_not_inherit_the_missing_field(
     podstatny: kdyby se peer na zadnou sluzbu nenamapoval, _bfd_by_peer by
     vratil prazdny slovnik a test by prosel, aniz by cokoli overil.
     """
-    intents = _bfd_by_peer(module, parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_BGP)
+    intents = _bfd_by_peer(parser_class, NEIGHBOR_PARTIAL_OVERRIDE_OF_BGP)
 
     assert set(intents) == {"152.11.13.2"}
     assert intents["152.11.13.2"]["minimum_interval"] == 300
@@ -346,9 +331,9 @@ def test_partial_override_of_bgp_level_does_not_inherit_the_missing_field(
     assert intents["152.11.13.2"]["source"] == "neighbor"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_partial_override_of_bgp_level_by_the_group_does_not_inherit_the_missing_field(
-    module, parser_class
+    parser_class
 ):
     """AR-13 na druhem spoji hierarchie: group > protocols bgp.
 
@@ -362,7 +347,7 @@ def test_partial_override_of_bgp_level_by_the_group_does_not_inherit_the_missing
     `source` musi byt "group", ne "bgp" - hodnota pochazi ze skupiny, i kdyz
     je nekompletni.
     """
-    intents = _bfd_by_peer(module, parser_class, GROUP_PARTIAL_OVERRIDE_OF_BGP)
+    intents = _bfd_by_peer(parser_class, GROUP_PARTIAL_OVERRIDE_OF_BGP)
 
     assert set(intents) == {"152.11.13.2"}
     assert intents["152.11.13.2"]["minimum_interval"] == 3000
@@ -370,43 +355,43 @@ def test_partial_override_of_bgp_level_by_the_group_does_not_inherit_the_missing
     assert intents["152.11.13.2"]["source"] == "group"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_protocol_level_bfd_reaches_neighbor_through_group(module, parser_class):
-    intents = _bfd_by_peer(module, parser_class, PROTOCOL_LEVEL)
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_protocol_level_bfd_reaches_neighbor_through_group(parser_class):
+    intents = _bfd_by_peer(parser_class, PROTOCOL_LEVEL)
 
     assert intents["152.11.13.2"]["minimum_interval"] == 1000
     assert intents["152.11.13.2"]["source"] == "bgp"
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_no_bfd_means_no_intent(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_no_bfd_means_no_intent(parser_class):
     """Sluzba bez BFD nema v inventory prazdny zaznam, ma prazdny seznam."""
-    intents = _bfd_by_peer(module, parser_class, NO_BFD)
+    intents = _bfd_by_peer(parser_class, NO_BFD)
 
     assert intents == {}
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_bfd_stanza_yields_no_intent(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_bfd_stanza_yields_no_intent(parser_class):
     """Deaktivovana stanza je totez, jako kdyby tam nebyla.
 
     `deactivate` je standardni idiom pro vyrazeni konfigurace pri migraci.
     Kdyby z nej vznikl zivy zamer, check by hlasil 'FAIL ... bez session'
     za ochranu, kterou operator vedome vypnul.
     """
-    intents = _bfd_by_peer(module, parser_class, DEACTIVATED_GROUP_BFD)
+    intents = _bfd_by_peer(parser_class, DEACTIVATED_GROUP_BFD)
 
     assert intents == {}
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_neighbor_bfd_falls_back_to_group(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_neighbor_bfd_falls_back_to_group(parser_class):
     """Deaktivovana uroven neprepisuje, jen zmizi - dedeni pokracuje vys.
 
     Presne to udela i Junos: soused, kterym je bfd-liveness-detection
     vyrazene, spada pod pravidlo skupiny.
     """
-    intents = _bfd_by_peer(module, parser_class, DEACTIVATED_NEIGHBOR_BFD)
+    intents = _bfd_by_peer(parser_class, DEACTIVATED_NEIGHBOR_BFD)
 
     assert set(intents) == {"152.11.13.2"}
     assert intents["152.11.13.2"]["minimum_interval"] == 3000

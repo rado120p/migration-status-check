@@ -10,31 +10,16 @@ uvnitr routing-instance.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 from lxml import etree
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def _load(module_name: str, filename: str):
-    """Parsery jsou skripty v korenu repozitare, ne balicek - nacteme je podle cesty."""
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-evo = _load("evo_parser_static_test", "evo_parser.py")
-mx = _load("mx_parser_static_test", "mx_parser.py")
+from migration_validator.parsers import core
+from migration_validator.parsers.evo import JunosEvoAcxServiceParser
+from migration_validator.parsers.mx import JunosServiceParser
 
 PARSERS = (
-    pytest.param(evo, evo.JunosEvoAcxServiceParser, id="evo"),
-    pytest.param(mx, mx.JunosServiceParser, id="mx"),
+    pytest.param(JunosEvoAcxServiceParser, id="evo"),
+    pytest.param(JunosServiceParser, id="mx"),
 )
 
 BOTH_FAMILIES = """
@@ -105,12 +90,12 @@ BOTH_FAMILIES = """
 """
 
 
-def _parse(module, parser_class, xml: str):
+def _parse(parser_class, xml: str):
     return parser_class(etree.XML(xml.encode())).parse()
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_rib_names_match_what_show_route_returns(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_rib_names_match_what_show_route_returns(parser_class):
     """Obe konfiguracni podoby se normalizuji na jmeno tabulky z RPC.
 
     Naivni //static/route by nasel oboji, ale ztratil by prislusnost k RIB -
@@ -128,14 +113,14 @@ def test_rib_names_match_what_show_route_returns(module, parser_class):
     }
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_rib_instance_maps_global_tables_to_none(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_rib_instance_maps_global_tables_to_none(parser_class):
     """Globalni tabulky patri default instanci, kterou inventory zapisuje jako None."""
-    assert module.rib_instance("inet.0") is None
-    assert module.rib_instance("inet6.0") is None
-    assert module.rib_instance("L3VPN-CPE13-NNI.inet.0") == "L3VPN-CPE13-NNI"
-    assert module.rib_instance("L3VPN-CPE13-NNI.inet6.0") == "L3VPN-CPE13-NNI"
-    assert module.rib_instance("mgmt_junos.inet6.0") == "mgmt_junos"
+    assert core.rib_instance("inet.0") is None
+    assert core.rib_instance("inet6.0") is None
+    assert core.rib_instance("L3VPN-CPE13-NNI.inet.0") == "L3VPN-CPE13-NNI"
+    assert core.rib_instance("L3VPN-CPE13-NNI.inet6.0") == "L3VPN-CPE13-NNI"
+    assert core.rib_instance("mgmt_junos.inet6.0") == "mgmt_junos"
 
 
 UNMAPPABLE = """
@@ -227,9 +212,9 @@ WRONG_VRF = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_route_lands_on_service_whose_subnet_contains_next_hop(module, parser_class):
-    services = _parse(module, parser_class, BOTH_FAMILIES)
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_route_lands_on_service_whose_subnet_contains_next_hop(parser_class):
+    services = _parse(parser_class, BOTH_FAMILIES)
     by_interface = {service.interface: service for service in services}
 
     assert {
@@ -241,9 +226,9 @@ def test_route_lands_on_service_whose_subnet_contains_next_hop(module, parser_cl
     }
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_next_hop_is_carried_as_value(module, parser_class):
-    services = _parse(module, parser_class, BOTH_FAMILIES)
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_next_hop_is_carried_as_value(parser_class):
+    services = _parse(parser_class, BOTH_FAMILIES)
     by_interface = {service.interface: service for service in services}
 
     routes = {
@@ -254,14 +239,14 @@ def test_next_hop_is_carried_as_value(module, parser_class):
     assert routes["2001:eeee::/64"] == ["2001:db8:11:13::b"]
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_management_route_lands_on_no_service(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_management_route_lands_on_no_service(parser_class):
     """Statika v mgmt_junos padne na fxp0.0, ze ktere se scope nikdy nestane.
 
     Do inventory se nedostane. Kdyz je nainstalovana, chyti ji
     RunResult.unassigned z routovaci tabulky - viz Task 9.
     """
-    services = _parse(module, parser_class, UNMAPPABLE)
+    services = _parse(parser_class, UNMAPPABLE)
 
     assert all(
         route["prefix"] != "0.0.0.0/0"
@@ -270,14 +255,14 @@ def test_management_route_lands_on_no_service(module, parser_class):
     )
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_next_hop_in_foreign_vrf_does_not_match(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_next_hop_in_foreign_vrf_does_not_match(parser_class):
     """Shoda subnetu sama nestaci - musi sedet i routing-instance.
 
     Next-hop 198.11.13.2 padne do subnetu et-0/0/8.113, ale routa lezi
     v L3VPN-JINA. Bez podminky na instanci by sedla na spatnou sluzbu.
     """
-    services = _parse(module, parser_class, WRONG_VRF)
+    services = _parse(parser_class, WRONG_VRF)
 
     assert all(not service.static_route for service in services)
 
@@ -402,8 +387,8 @@ def _configured_by_identity(parser_class, xml: str) -> dict[tuple[str, str], boo
     return {(route.rib, route.prefix): route.active for route in parser.static_routes}
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_static_stanza_keeps_route_as_inactive(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_static_stanza_keeps_route_as_inactive(parser_class):
     """Deaktivovany `static` necha routu v zameru, ale oznaci ji.
 
     Vypustit ji beze stopy je vada: check by pak nemel co preskocit a
@@ -418,24 +403,24 @@ def test_deactivated_static_stanza_keeps_route_as_inactive(module, parser_class)
     assert found[("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29")] is True
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_rib_marks_its_routes_inactive(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_rib_marks_its_routes_inactive(parser_class):
     """Deaktivovany `rib` bere s sebou i `static` pod sebou - pres predky."""
     found = _configured_by_identity(parser_class, DEACTIVATED_CONTAINERS)
 
     assert found[("inet6.0", "2001:aaaa::/64")] is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_global_routing_options_marks_routes_inactive(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_global_routing_options_marks_routes_inactive(parser_class):
     """Deaktivovane globalni `routing-options` oznaci statiky default instance."""
     found = _configured_by_identity(parser_class, DEACTIVATED_ROUTING_OPTIONS)
 
     assert found[("inet.0", "198.62.1.0/29")] is False
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_deactivated_instance_routing_options_marks_routes_inactive(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_deactivated_instance_routing_options_marks_routes_inactive(parser_class):
     """Deaktivovane `routing-options` uvnitr instance - druha, samostatna smycka.
 
     Jsou to dve ruzne smycky v `_parse_static_routes`, takze jeden test na

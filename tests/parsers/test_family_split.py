@@ -5,34 +5,15 @@ Oba parsery se meni v zamku, takze kazdy test bezi proti obema.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
 from lxml import etree
 
-ROOT = Path(__file__).resolve().parents[2]
-
-
-def _load(module_name: str, filename: str):
-    """Parsery jsou skripty v korenu repozitare, ne balicek - nacteme je podle cesty."""
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / filename)
-    module = importlib.util.module_from_spec(spec)
-    # dataclasses vyhledavaji svuj modul v sys.modules (kvuli resolvingu
-    # typovych anotaci) - bez registrace pred exec_module to padne na
-    # AttributeError: 'NoneType' object has no attribute '__dict__'.
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-evo = _load("evo_parser_under_test", "evo_parser.py")
-mx = _load("mx_parser_under_test", "mx_parser.py")
+from migration_validator.parsers.evo import JunosEvoAcxServiceParser
+from migration_validator.parsers.mx import JunosServiceParser
 
 PARSERS = (
-    pytest.param(evo, evo.JunosEvoAcxServiceParser, id="evo"),
-    pytest.param(mx, mx.JunosServiceParser, id="mx"),
+    pytest.param(JunosEvoAcxServiceParser, id="evo"),
+    pytest.param(JunosServiceParser, id="mx"),
 )
 
 DUAL_STACK = """
@@ -58,8 +39,8 @@ DUAL_STACK = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_families_are_separate_fields(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_families_are_separate_fields(parser_class):
     services = parser_class(etree.fromstring(DUAL_STACK)).parse()
     unit = next(s for s in services if s.interface == "ge-0/0/2.13")
 
@@ -67,8 +48,8 @@ def test_families_are_separate_fields(module, parser_class):
     assert unit.ipv6_address == ["2001:abcd:11:13::a/127"]
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_merged_field_is_gone(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_merged_field_is_gone(parser_class):
     """Slite pole nesmi prezit - jinak by se na nej necekane navazalo."""
     services = parser_class(etree.fromstring(DUAL_STACK)).parse()
     unit = next(s for s in services if s.interface == "ge-0/0/2.13")
@@ -109,16 +90,16 @@ DUAL_STACK_BGP = """
 """
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_bgp_neighbors_of_both_families_map_to_service(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_bgp_neighbors_of_both_families_map_to_service(parser_class):
     services = parser_class(etree.fromstring(DUAL_STACK_BGP)).parse()
     unit = next(s for s in services if s.interface == "ge-0/0/2.13")
 
     assert set(unit.bgp_neighbor) == {"152.11.13.2", "2001:abcd:11:13::b"}
 
 
-@pytest.mark.parametrize("module,parser_class", PARSERS)
-def test_neighbor_outside_subnet_does_not_map(module, parser_class):
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_neighbor_outside_subnet_does_not_map(parser_class):
     """Cizi soused se nesmi prilepit ke sluzbe jen proto, ze je stejne rodiny."""
     config = DUAL_STACK_BGP.replace(
         "<neighbor><name>152.11.13.2</name></neighbor>",
