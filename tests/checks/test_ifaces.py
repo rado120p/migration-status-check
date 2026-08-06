@@ -9,7 +9,7 @@ from migration_validator.checks.ifaces import (
     percent_change,
 )
 from migration_validator.config import CheckConfig, default_config
-from migration_validator.models.result import Status
+from migration_validator.models.result import Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -33,7 +33,7 @@ def test_is_transit(interface, expected):
     assert is_transit(interface) is expected
 
 
-def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None):
+def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None, link=None):
     scope = Scope(
         id="svc:X:Internet",
         kind="service",
@@ -46,6 +46,7 @@ def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None):
         baseline=baseline,
         config=config or default_config(),
         failed_collectors={},
+        link=link,
     )
 
 
@@ -321,22 +322,25 @@ def test_traffic_skipped_on_internal_interface():
 from migration_validator.checks.ifaces import TrafficCeasedCheck
 
 
-def _ceased_ctx(subject_pps, baseline_pps, config=None):
+def _ceased_ctx(subject_pps, baseline_pps, config=None, link=None, interfaces=("ge-0/0/2.113",)):
     from migration_validator.config import CheckConfig
 
     config = config or CheckConfig({"traffic_ceased": {"enabled": True}})
+    interface = interfaces[0] if interfaces else "ge-0/0/2.113"
     return _ctx(
         subject={
             "interfaces": {
-                "ge-0/0/2.113": {"input_pps": subject_pps, "output_pps": subject_pps}
+                interface: {"input_pps": subject_pps, "output_pps": subject_pps}
             }
         },
         baseline={
             "interfaces": {
-                "ge-0/0/2.113": {"input_pps": baseline_pps, "output_pps": baseline_pps}
+                interface: {"input_pps": baseline_pps, "output_pps": baseline_pps}
             }
         },
         config=config,
+        link=link,
+        interfaces=interfaces,
     )
 
 
@@ -400,3 +404,83 @@ def test_traffic_ceased_skips_when_baseline_had_no_traffic():
     result = run_check(TrafficCeasedCheck(), _ceased_ctx(0, 0))[0]
     assert result.status is Status.SKIP
     assert "baseline" in result.message
+
+
+L3_LINK = {
+    "role": "l3",
+    "peer_scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+    "peer_interface": "ae0.15",
+    "peer_instance": "EVPN-VLAN-AWARE-POP1",
+}
+
+
+def test_errors_on_linked_l3_scope_point_to_l2_block():
+    ctx = _ctx(
+        {"interfaces": {"irb.15": {"admin_status": "up", "oper_status": "up"}}},
+        interfaces=("irb.15",),
+        link=L3_LINK,
+    )
+    findings = InterfaceErrorsCheck().run(ctx)
+    assert len(findings) == 1
+    finding = findings[0]
+    assert finding.outcome is Outcome.INFO
+    assert finding.label == "Interface errors / traffic"
+    assert finding.value == "mereno na L2 (ae0.15) - viz blok nize"
+
+
+def test_traffic_on_linked_l3_scope_emits_nothing():
+    ctx = _ctx(
+        {"interfaces": {"irb.15": {"admin_status": "up", "oper_status": "up"}}},
+        interfaces=("irb.15",),
+        link=L3_LINK,
+    )
+    assert InterfaceTrafficCheck().run(ctx) == []
+
+
+def test_linked_l3_scope_with_transit_keeps_measuring():
+    # ochrana: kdyby L3 scope tranzit mel, vazba mereni nesmi vypnout
+    ctx = _ctx(
+        {
+            "interfaces": {
+                "ge-0/0/4.0": {
+                    "admin_status": "up",
+                    "oper_status": "up",
+                    "input_pps": 5,
+                    "output_pps": 5,
+                }
+            }
+        },
+        interfaces=("ge-0/0/4.0",),
+        link=L3_LINK,
+    )
+    findings = InterfaceTrafficCheck().run(ctx)
+    assert len(findings) == 2
+
+
+def test_l2_side_of_link_measures_as_before():
+    l2_link = {
+        "role": "l2",
+        "peer_scope_id": "svc:X:IPVPN",
+        "peer_interface": "irb.15",
+        "peer_instance": "L3VPN-CPE14-UNI",
+    }
+    ctx = _ctx(
+        {
+            "interfaces": {
+                "ae0.15": {
+                    "admin_status": "up",
+                    "oper_status": "up",
+                    "input_pps": 5,
+                    "output_pps": 5,
+                }
+            }
+        },
+        interfaces=("ae0.15",),
+        link=l2_link,
+    )
+    assert len(InterfaceTrafficCheck().run(ctx)) == 2
+
+
+def test_traffic_ceased_with_l3_link_emits_nothing():
+    ctx = _ceased_ctx(0, 400, link=L3_LINK, interfaces=("irb.15",))
+    assert TrafficCeasedCheck().run(ctx) == []

@@ -70,6 +70,18 @@ def _no_transit_finding(ctx: CheckContext) -> Finding:
     )
 
 
+def _l3_link_without_transit(ctx: CheckContext) -> dict[str, Any] | None:
+    """Vazba na L2 cast, kdyz scope sam tranzit nema.
+
+    Counter checky se u takove sluzby nestehuji do SKIPu - mereni probiha
+    v L2 bloku a report na nej ma ukazat, ne tvrdit, ze neni co merit.
+    """
+    link = ctx.link
+    if link and link.get("role") == "l3" and not _transit_interfaces(ctx):
+        return link
+    return None
+
+
 @register
 class InterfaceStateCheck(Check):
     id = "interface_state"
@@ -121,6 +133,18 @@ class InterfaceErrorsCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        link = _l3_link_without_transit(ctx)
+        if link is not None:
+            peer = link["peer_interface"]
+            return [
+                Finding(
+                    outcome=Outcome.INFO,
+                    message=f"errors/traffic se meri na L2 casti ({peer})",
+                    label="Interface errors / traffic",
+                    value=f"mereno na L2 ({peer}) - viz blok nize",
+                )
+            ]
+
         transit_names = _transit_interfaces(ctx)
         names = [name for name in transit_names if is_physical(name)]
         if not names:
@@ -182,6 +206,10 @@ class InterfaceTrafficCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        if _l3_link_without_transit(ctx) is not None:
+            # radek by duplikoval INFO odkaz z interface_errors
+            return []
+
         names = _transit_interfaces(ctx)
         if not names:
             return [_no_transit_finding(ctx)]
@@ -282,6 +310,10 @@ class TrafficCeasedCheck(Check):
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        if _l3_link_without_transit(ctx) is not None:
+            # radek by duplikoval INFO odkaz z interface_errors
+            return []
+
         names = _transit_interfaces(ctx)
         if not names:
             return [_no_transit_finding(ctx)]
