@@ -251,6 +251,37 @@ def test_phase_is_recorded():
     assert snapshot.capture.phase == "pre-migration"
 
 
+def test_capture_device_passes_baseline_facts_to_resolve_targets(monkeypatch):
+    from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
+
+    captured_kwargs = {}
+
+    def fake_resolve_targets(scopes, arp, nd, **kwargs):
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr(
+        "migration_validator.capture.resolve_targets", fake_resolve_targets
+    )
+
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, finished_at=NOW, phase="pre", collectors={}),
+        facts={"arp": [{"ip": "1.2.3.4", "interface": "ge-0/0/0.0"}], "nd": []},
+        probes={"ping": []},
+        scopes=[],
+        inventory=[],
+    )
+
+    inventory = load_inventory(INVENTORY_4)
+    capture_device(
+        FakeDevice(), "172.20.20.4", inventory=inventory, now=NOW, baseline=baseline
+    )
+
+    assert captured_kwargs["baseline_arp"] == [{"ip": "1.2.3.4", "interface": "ge-0/0/0.0"}]
+    assert captured_kwargs["baseline_nd"] == []
+
+
 def test_evo_platform_selects_evo_rpcs():
     """Detekce platformy musi vybrat mac-vrf variantu, ne bridge table."""
 

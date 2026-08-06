@@ -28,7 +28,7 @@ class PingTarget:
     target: str
     source: str | None
     routing_instance: str | None
-    resolved_from: str  # arp | nd | subnet-fallback
+    resolved_from: str  # arp | nd | subnet-fallback | baseline-arp | baseline-nd
     family: int
     interface: str | None = None
 
@@ -117,10 +117,65 @@ def _usable_nd(entry: dict[str, Any]) -> bool:
     return bool(mac) and mac != "none" and state not in ("unreachable", "incomplete")
 
 
+def _networks_for(local: list[str]) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Site scope, do kterych muze padnout baseline zaznam.
+
+    Baseline je ze stareho boxu - jeho rozhrani se na novem nedaji dohledat
+    jmenem, takze prislusnost ke scope se pozna jen pres IP subnet.
+    """
+    networks = []
+    for address in local:
+        try:
+            networks.append(ipaddress.ip_interface(address).network)
+        except ValueError:
+            continue
+    return networks
+
+
+def _baseline_addresses(
+    entries: list[dict[str, Any]],
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+    family: int,
+    *,
+    nd: bool,
+) -> list[str]:
+    """Adresy z baseline (pre snimku stareho boxu), ktere padnou do site scope.
+
+    Link-local ND zaznamy se vylucuji vzdy - nejsou prenositelne mezi boxy
+    (fe80 je per-link, ne globalni identita souseda).
+    """
+    if not networks:
+        return []
+
+    result = []
+    for entry in entries:
+        ip = entry.get("ip")
+        if not ip:
+            continue
+        ip = str(ip)
+        if is_link_local(ip):
+            continue
+        if nd and not _usable_nd(entry):
+            continue
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if address.version != family:
+            continue
+        if not any(address in network for network in networks):
+            continue
+        result.append(ip)
+    return result
+
+
 def resolve_targets(
     scopes: list[Scope],
     arp_entries: list[dict[str, Any]],
     nd_entries: list[dict[str, Any]] | None = None,
+    *,
+    baseline_arp: list[dict[str, Any]] | None = None,
+    baseline_nd: list[dict[str, Any]] | None = None,
 ) -> list[PingTarget]:
     """Odvodi cile pingu ze scopu, ARP tabulky (IPv4) a ND tabulky (IPv6).
 
@@ -128,8 +183,14 @@ def resolve_targets(
     poradi neplati (je to scopeA-v4, scopeA-v6, scopeB-v4, ...). Na poradi
     stejne nic nezavisi, checky rodinu ctou z pole `family`, ne z pozice
     v seznamu.
+
+    `baseline_arp`/`baseline_nd` jsou ARP/ND z pre snimku stareho boxu -
+    pouziva se pri --phase post, kdy novy box jeste nema vlastni ARP/ND
+    napliene (cutover cerstvy). Maji prednost pred vlastnimi cili.
     """
     nd_entries = nd_entries or []
+    baseline_arp = baseline_arp or []
+    baseline_nd = baseline_nd or []
     targets: list[PingTarget] = []
 
     for scope in scopes:
@@ -147,6 +208,43 @@ def resolve_targets(
             source = source_address(scope, family)
 
             if family == 4:
+                local = scope.selectors.local_ipv4
+                owned = scope.selectors.virtual_gw_v4
+                baseline_entries = baseline_arp
+                baseline_is_nd = False
+            else:
+                local = scope.selectors.local_ipv6
+                owned = scope.selectors.virtual_gw_v6
+                baseline_entries = baseline_nd
+                baseline_is_nd = True
+
+            # Vlastni adresy, ktere se nikdy nesmi vratit jako cil - i kdyz
+            # je baseline (stary box) videl v ARP/ND, na novem boxu je to
+            # nase vlastni IP. Parsuje se na ipaddress objekty, aby textova
+            # varianta zapisu (napr. zkracene IPv6) nerozbila porovnani.
+            own_addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+            for addr in (*local, *owned):
+                try:
+                    own_addresses.add(ipaddress.ip_interface(addr).ip)
+                except ValueError:
+                    continue
+
+            baseline_addresses = [
+                address
+                for address in _baseline_addresses(
+                    baseline_entries, _networks_for(local), family, nd=baseline_is_nd
+                )
+                if address != source and ipaddress.ip_address(address) not in own_addresses
+            ]
+            if baseline_addresses:
+                origin = "baseline-nd" if baseline_is_nd else "baseline-arp"
+                targets.extend(
+                    PingTarget(scope.id, address, source, instance, origin, family)
+                    for address in baseline_addresses
+                )
+                continue
+
+            if family == 4:
                 addresses = [
                     (str(entry["ip"]), None)
                     for entry in arp_entries
@@ -154,8 +252,6 @@ def resolve_targets(
                     and entry.get("ip")
                 ]
                 origin = "arp"
-                local = scope.selectors.local_ipv4
-                owned = scope.selectors.virtual_gw_v4
             else:
                 addresses = [
                     (
@@ -170,8 +266,6 @@ def resolve_targets(
                     and (keep_link_local or not is_link_local(str(entry["ip"])))
                 ]
                 origin = "nd"
-                local = scope.selectors.local_ipv6
-                owned = scope.selectors.virtual_gw_v6
 
             if addresses:
                 targets.extend(

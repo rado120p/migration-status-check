@@ -450,6 +450,123 @@ def test_targets_are_ordered_ipv4_before_ipv6():
     assert [t.family for t in targets] == [4, 6]
 
 
+def test_baseline_arp_wins_over_own_arp():
+    scope = _scope(addresses=("192.0.2.1/24",))
+    baseline_arp = [{"ip": "192.0.2.50", "interface": "ge-0/0/0.100"}]
+
+    targets = resolve_targets([scope], [], baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["192.0.2.50"]
+    assert targets[0].resolved_from == "baseline-arp"
+    assert targets[0].interface is None
+
+    own_arp = [{"ip": "192.0.2.60", "interface": "ge-0/0/2.113"}]
+    targets_with_own = resolve_targets([scope], own_arp, baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets_with_own] == ["192.0.2.50"]
+    assert targets_with_own[0].resolved_from == "baseline-arp"
+
+
+def test_baseline_filters_by_scope_subnet():
+    scope = _scope(addresses=("192.0.2.1/24",))
+    baseline_arp = [{"ip": "10.9.9.9", "interface": "ge-0/0/0.100"}]
+    own_arp = [{"ip": "192.0.2.60", "interface": "ge-0/0/2.113"}]
+
+    targets = resolve_targets([scope], own_arp, baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["192.0.2.60"]
+    assert targets[0].resolved_from == "arp"
+
+
+def test_baseline_excludes_own_and_vgw():
+    """Filtr musi vyradit presne source a VGW a nechat platneho souseda byt.
+
+    Bez toho by test prosel i kdyby _baseline_addresses vzdy vratila prazdny
+    seznam - viz vzor v test_arp_guard_drops_own_address_at_any_position.
+    """
+    scope = _scope(
+        interfaces=("irb.14",),
+        addresses=("152.11.14.2/29",),
+        virtual_gw_v4=("152.11.14.1",),
+        routing_instance=None,
+    )
+    baseline_arp = [
+        {"ip": "152.11.14.2", "interface": "ge-0/0/0.14"},  # source (local_ipv4)
+        {"ip": "152.11.14.1", "interface": "ge-0/0/0.14"},  # VGW
+        {"ip": "152.11.14.4", "interface": "ge-0/0/0.14"},  # platny soused
+    ]
+
+    targets = resolve_targets([scope], [], baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["152.11.14.4"]
+    assert targets[0].resolved_from == "baseline-arp"
+
+
+def test_baseline_nd_respects_usable_and_link_local():
+    scope = _scope(
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/64",)
+    )
+    baseline_nd = [
+        {
+            "ip": "2001:abcd:11:13::b",
+            "mac": "0c:00:ef:5e:df:03",
+            "interface": "ge-0/0/8.13",
+            "state": "unreachable",
+        },
+        {
+            "ip": "fe80::c66b:b8ff:fe48:0",
+            "mac": "c4:6b:b8:48:00:00",
+            "interface": "ge-0/0/8.13",
+            "state": "stale",
+        },
+        {
+            "ip": "2001:abcd:11:13::c",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "ge-0/0/8.13",
+            "state": "reachable",
+        },
+    ]
+
+    targets = resolve_targets([scope], [], baseline_nd=baseline_nd)
+
+    assert [t.target for t in targets] == ["2001:abcd:11:13::c"]
+    assert targets[0].resolved_from == "baseline-nd"
+
+
+def test_baseline_nd_never_uses_link_local_even_when_scope_has_it():
+    """Link-local baseline soused se nepouzije, i kdyz scope ma fe80 v local_ipv6.
+
+    Bez explicitniho vyloucni link-local by tenhle zaznam prosel filtrem
+    prislusnosti do site (fe80::/64 obsahuje fe80::1/64) a skoncil by jako
+    cil - fe80 je ale per-link, na jinem boxu neplati.
+    """
+    scope = _scope(interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("fe80::1/64",))
+    baseline_nd = [
+        {
+            "ip": "fe80::c66b:b8ff:fe48:0",
+            "mac": "c4:6b:b8:48:00:00",
+            "interface": "ge-0/0/8.13",
+            "state": "stale",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], baseline_nd=baseline_nd)
+
+    assert targets == []
+
+
+def test_no_baseline_keeps_today_behavior():
+    scope = _scope()
+    arp = [
+        {"ip": "198.11.13.2", "interface": "ge-0/0/2.113"},
+        {"ip": "198.11.13.3", "interface": "ge-0/0/2.113"},
+    ]
+
+    assert resolve_targets([scope], arp) == resolve_targets(
+        [scope], arp, baseline_arp=None, baseline_nd=None
+    )
+
+
 def test_parse_ping_result():
     xml = etree.fromstring(
         """

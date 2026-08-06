@@ -369,6 +369,26 @@ def _capture_into_run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
+    baseline = None
+    if phase == "post":
+        baseline_record = None
+        if args.port:
+            paired = manifest.paired_old(node, args.port)
+            if paired is not None:
+                baseline_record = manifest.find_capture("pre", paired.node, paired.port)
+        if baseline_record is None:
+            old_role = manifest.device_with_role("old")
+            if old_role is not None:
+                old_node, _ = old_role
+                baseline_record = manifest.find_capture("pre", old_node, None)
+        if baseline_record is not None:
+            baseline = _load_snapshot(str(store.dir / baseline_record.snapshot))
+        else:
+            print(
+                "pre snimek nenalezen, ping cile z vlastni ARP",
+                file=sys.stderr,
+            )
+
     try:
         snapshot = api.capture(
             args.device,
@@ -378,6 +398,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
             phase=phase,
             ping_count=args.ping_count,
             record_raw=args.record_raw,
+            baseline=baseline,
         )
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error

@@ -80,6 +80,7 @@ def capture_device(
     ping_count: int = DEFAULT_COUNT,
     now: str | None = None,
     record_raw: str | Path | None = None,
+    baseline: Snapshot | None = None,
 ) -> Snapshot:
     started_at = now or _timestamp()
     platform = detect_platform(device)
@@ -105,7 +106,15 @@ def capture_device(
 
     pings: list[dict[str, Any]] = []
     if scopes:
-        for target in resolve_targets(scopes, facts.get("arp", []), facts.get("nd", [])):
+        baseline_arp = baseline.facts.get("arp", []) if baseline is not None else None
+        baseline_nd = baseline.facts.get("nd", []) if baseline is not None else None
+        for target in resolve_targets(
+            scopes,
+            facts.get("arp", []),
+            facts.get("nd", []),
+            baseline_arp=baseline_arp,
+            baseline_nd=baseline_nd,
+        ):
             pings.append(run_ping(device, target, count=ping_count))
 
     return Snapshot(
