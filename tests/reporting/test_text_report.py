@@ -1335,13 +1335,13 @@ def test_deactivated_peer_renders_as_skip_in_its_family_section():
     assert "deaktivovan" in section
 
 
-def test_info_row_has_blank_status_column():
-    """Radek se vytiskne, ale sloupec STAV je prazdny.
+def test_info_row_carries_info_token():
+    """INFO radek nese token INFO ve sloupci STAV.
 
-    INFO radek nese hodnotu bez hodnoceni - nema byt v STAV sloupci znak,
-    jen prazdny symbol (seznam SYMBOL ma Status.INFO mappovany na "").
-    Padding v STAV sloupci musi zustat konzistentni - sloupec STAV se musi
-    po zarovnani na stejne miste, aby se nezhroutila zarovnani sloupcu.
+    Revize puvodniho rozhodnuti (prazdny symbol): 47 INFO radku v ostrem
+    behu bylo bez tokenu k nerozeznani od pokracovacich radku a nemely se
+    cim obarvit. Token se tiskne a barvi cyan stejne jako ostatni stavy;
+    zarovnani sloupcu musi zustat stejne jako u ctyrznakovych tokenu.
     """
     result = _grouped_result(
         [
@@ -1376,10 +1376,14 @@ def test_info_row_has_blank_status_column():
     pass_line = next(l for l in lines if "Interface admin status" in l)
     info_line = next(l for l in lines if "SID local value" in l)
 
-    # INFO radek nema obsahovat slovo INFO
-    assert "INFO" not in info_line
+    # INFO radek ma token ve sloupci STAV
+    assert info_line.lstrip().startswith("INFO")
 
     # Hranicni pozice | musi byt na stejnem miste u obou radku -
-    # to je jedinym zpusobem, jak overit ze zarovnani se nezhroutilo
-    # a STAV sloupec se doplnil mezerami miste symbolu.
+    # to je jedinym zpusobem, jak overit ze se zarovnani nezhroutilo.
     assert pass_line.index(" | ") == info_line.index(" | ")
+
+    # S barvami je token cyan; po stripu ANSI je vystup identicky.
+    colored = render(result, detail=True, color=True)
+    assert "\x1b[36mINFO\x1b[0m" in colored
+    assert _strip_ansi(colored) == rendered

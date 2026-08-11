@@ -28,7 +28,10 @@ SYMBOL = {
     Status.WARN: "WARN",
     Status.FAIL: "FAIL",
     Status.SKIP: "SKIP",
-    Status.INFO: "",
+    # INFO puvodne mapovalo na "" (hodnota bez verdiktu, prazdny STAV).
+    # Revize s barvenim: 47 INFO radku v ostrem behu bez tokenu splyvalo
+    # s okolim a nemelo se cim obarvit - token se tiskne a barvi cyan.
+    Status.INFO: "INFO",
 }
 
 # Zakladni 8barevna paleta schvalne - funguje na tmavem i svetlem pozadi

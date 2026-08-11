@@ -18,6 +18,12 @@ Barvi se VYHRADNE status tokeny, nic jineho:
 - sloupec STAV v blocich sluzeb vcetne tokenu v hlavicce bloku,
 - nazvy stavu v radcich `Sluzby:` / `Checky:` (jen slovo, cislo ne).
 
+Dodatek (2026-08-11, po nasazeni na runs/mig01): INFO drive mapovalo v
+SYMBOL na prazdny retezec (hodnota bez verdiktu). S barvenim se rozhodnuti
+revidovalo - 47 INFO radku bez tokenu splyvalo s okolim a nemelo se cim
+obarvit. SYMBOL nyni mapuje INFO na "INFO" a token se tiskne (a barvi)
+v STAV sloupcich stejne jako ostatni stavy.
+
 Cele radky se nebarvi - u sirokych tabulek to rusi a zhorsuje citelnost
 sloupcu ZMENA a NALEZ. Sekce NESPAROVANO a NEZARAZENO zadne status tokeny
 nemaji, takze zustavaji bez barev.
