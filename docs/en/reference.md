@@ -210,7 +210,7 @@ Applied in this order; the first one producing an unambiguous pair wins:
 | 1 | `description+service_type+service_subtype` | high |
 | 2 | `description+service_type` | high |
 | 3 | `routing_instance+service_type` | medium |
-| 4 | `subnet+service_type` (network address of the local subnet) | medium |
+| 4 | `subnet+service_type` (network address of the local subnet; p2p prefixes — /30, /31, /127 and longer — use the full host address so the two ends of one link never pair) | medium |
 | 5 | `vlan+service_type` | low |
 
 The key is always **composite**, never the description alone: one description may carry

@@ -81,7 +81,7 @@ různé služby sdílely jedno id.
 | 1 | `description+service_type+service_subtype` | high | trojice, jen když jsou description i subtype vyplněné |
 | 2 | `description+service_type` | high | dvojice |
 | 3 | `routing_instance+service_type` | medium | jeden klíč **na každou** routing-instance ve scope |
-| 4 | `subnet+service_type` | medium | síťová adresa každého záznamu z `local_ipv4` **i** `local_ipv6` |
+| 4 | `subnet+service_type` | medium | síťová adresa každého záznamu z `local_ipv4` **i** `local_ipv6`; p2p prefixy (síť ≤ 4 adresy: /30, /31, /127…) se klíčují celou hostitelskou adresou, aby se nespárovaly protilehlé konce téhož linku |
 | 5 | `vlan+service_type` | low | každá VLAN ze scope |
 
 Klíč je vždy **složený**, ne samotná description — jedna description může nést víc záznamů

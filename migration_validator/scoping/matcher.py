@@ -71,10 +71,17 @@ def _keys_subnet(scope: Scope) -> list[Hashable]:
     keys: list[Hashable] = []
     for address in scope.selectors.local_ipv4 + scope.selectors.local_ipv6:
         try:
-            network = ipaddress.ip_interface(address).network
+            interface = ipaddress.ip_interface(address)
         except ValueError:
             continue
-        keys.append((str(network), key.service_type))
+        network = interface.network
+        if network.num_addresses <= 4:
+            # p2p prefix (/30, /31, /127, ...): sit sdileji oba konce linku,
+            # sluzbu identifikuje az konkretni adresa - jinak by se sparovaly
+            # protilehle strany tehoz spoje misto stare a nove strany migrace
+            keys.append((str(interface), key.service_type))
+        else:
+            keys.append((str(network), key.service_type))
     return keys
 
 

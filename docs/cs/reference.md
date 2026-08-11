@@ -203,7 +203,7 @@ Aplikují se v tomhle pořadí; první, které dá jednoznačný pár, vyhrává
 | 1 | `description+service_type+service_subtype` | high |
 | 2 | `description+service_type` | high |
 | 3 | `routing_instance+service_type` | medium |
-| 4 | `subnet+service_type` (síťová adresa local subnetu) | medium |
+| 4 | `subnet+service_type` (síťová adresa local subnetu; u p2p prefixů — /30, /31, /127 a delších — celá hostitelská adresa, aby se nespárovaly protilehlé konce téhož linku) | medium |
 | 5 | `vlan+service_type` | low |
 
 Klíč je vždy **složený**, ne samotná description: jedna description může nést víc záznamů

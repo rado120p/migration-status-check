@@ -81,7 +81,7 @@ different services would share one id.
 | 1 | `description+service_type+service_subtype` | high | triple, only when both description and subtype are set |
 | 2 | `description+service_type` | high | pair |
 | 3 | `routing_instance+service_type` | medium | one key **per** routing instance in the scope |
-| 4 | `subnet+service_type` | medium | the network address of every `local_ipv4` **and** `local_ipv6` entry |
+| 4 | `subnet+service_type` | medium | the network address of every `local_ipv4` **and** `local_ipv6` entry; p2p prefixes (network of ≤ 4 addresses: /30, /31, /127…) are keyed by the full host address so the two ends of one link never pair |
 | 5 | `vlan+service_type` | low | every VLAN in the scope |
 
 The key is always **composite**, never the description alone — one description may carry

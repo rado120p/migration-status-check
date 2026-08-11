@@ -81,6 +81,44 @@ def test_falls_back_to_subnet_on_ipv6():
     assert pair.method == "subnet+service_type"
 
 
+def test_subnet_rule_ignores_opposite_ends_of_p2p_link():
+    baseline = [_scope("ge-0/0/1.0", None, "Core", addresses=["10.1.0.4/31"])]
+    subject = [_scope("et-0/0/1.0", None, "Core", addresses=["10.1.0.5/31"])]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+    assert len(result.unmatched_baseline) == 1
+    assert len(result.unmatched_subject) == 1
+
+
+def test_subnet_rule_ignores_opposite_ends_of_p2p_link_on_ipv6():
+    baseline = [_scope("ge-0/0/1.0", None, "Core", addresses_v6=["2001:db8:6::/127"])]
+    subject = [_scope("et-0/0/1.0", None, "Core", addresses_v6=["2001:db8:6::1/127"])]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+
+
+def test_subnet_rule_pairs_same_address_on_p2p_prefix():
+    baseline = [_scope("ge-0/0/1.0", None, "Core", addresses=["10.1.0.4/31"])]
+    subject = [_scope("et-0/0/1.0", None, "Core", addresses=["10.1.0.4/31"])]
+
+    pair = match_scopes(baseline, subject).pairs[0]
+
+    assert pair.method == "subnet+service_type"
+
+
+def test_subnet_rule_pairs_different_addresses_in_wide_subnet():
+    baseline = [_scope("ge-0/0/9.0", None, "Internet", addresses=["192.0.2.1/24"])]
+    subject = [_scope("et-0/0/9.0", None, "Internet", addresses=["192.0.2.2/24"])]
+
+    pair = match_scopes(baseline, subject).pairs[0]
+
+    assert pair.method == "subnet+service_type"
+
+
 def test_falls_back_to_vlan():
     baseline = [_scope("ge-0/0/9.7", None, "Internet", vlans=["7"])]
     subject = [_scope("et-0/0/9.7", None, "Internet", vlans=["7"])]
