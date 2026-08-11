@@ -67,7 +67,7 @@ def use_color(
 
     Poradi: --no-color > --color > autodetekce. Vypnuti vyhrava, aby se
     barvy daly vzdy zakazat i ve skriptu, ktery je jinde vynucuje.
-    Autodetekce: stdout je TTY a NO_COLOR neni nastavena na neprazdnou
+    Autodetekce: stream (default stdout) je TTY a NO_COLOR neni nastavena na neprazdnou
     hodnotu (konvence no-color.org - prazdna hodnota se cte jako
     nenastavena).
     """
@@ -228,7 +228,7 @@ def _block(view: ServiceView, has_baseline: bool, color: bool) -> list[str]:
 
     # Nadpisy sekci taky - nesou adresy rodiny, kterych muze byt vic, a u
     # ctyr rozsahu jsou delsi nez cela tabulka sloupcu. Treti vyskyt tehoz
-    # tvaru: u hlavicky bloku i u souhrnne tabulce uz to ostre overeni
+    # tvaru: u hlavicky bloku i u souhrnne tabulky uz to ostre overeni
     # naslo, pokazde na skutecnych datech z laborky.
     headers = [_section_header(section) for section in view.sections]
     # Nadpisy skupin taky - ctvrty vyskyt tehoz tvaru, ktery komentar vys

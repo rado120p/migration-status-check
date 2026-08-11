@@ -11,7 +11,7 @@ from migration_validator.models.result import (
     Status,
 )
 from migration_validator.reporting.json_report import to_json
-from migration_validator.reporting.text_report import filter_result, render, use_color
+from migration_validator.reporting.text_report import _colorize, filter_result, render, use_color
 
 
 class _Tty(io.StringIO):
@@ -131,6 +131,13 @@ def test_color_paints_names_in_counts_lines():
     output = render(_legacy_result(), color=True)
     assert "1 \x1b[31mFAIL\x1b[0m" in output
     assert "\x1b[31m1" not in output
+
+
+def test_colorize_uses_dim_for_skip_and_cyan_for_info():
+    # Primy assert na byty: strip-equality test escape sekvence odstrani,
+    # takze zamenu kodu SKIP/INFO by bez tohoto testu nic nechytilo.
+    assert _colorize(Status.SKIP, "SKIP", True) == "\x1b[2mSKIP\x1b[0m"
+    assert _colorize(Status.INFO, "INFO", True) == "\x1b[36mINFO\x1b[0m"
 
 
 def test_color_off_emits_no_ansi():
