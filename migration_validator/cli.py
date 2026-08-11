@@ -27,7 +27,7 @@ from migration_validator.models.snapshot import (
     load_snapshot,
 )
 from migration_validator.reporting.json_report import to_json, write_json
-from migration_validator.reporting.text_report import filter_result, render
+from migration_validator.reporting.text_report import filter_result, render, use_color
 from migration_validator.runs.manifest import (
     CaptureRecord,
     MappingEndpoint,
@@ -93,7 +93,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         else:
             print(to_json(shown))
     else:
-        print(render(shown, detail=args.detail), end="")
+        color = use_color(force_on=args.color, force_off=args.no_color)
+        print(render(shown, detail=args.detail, color=color), end="")
         if args.output:
             write_json(result, args.output)
 
@@ -143,6 +144,7 @@ def _evaluate_run(args: argparse.Namespace) -> int:
     mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
     config = load_config(args.config) if args.config else default_config()
     statuses = _parse_statuses(args.status)
+    color = use_color(force_on=args.color, force_off=args.no_color)
 
     exit_code = EXIT_OK
     for evaluation in evaluations:
@@ -163,7 +165,7 @@ def _evaluate_run(args: argparse.Namespace) -> int:
         if args.format == "json":
             print(to_json(shown))
         else:
-            print(render(shown, detail=args.detail), end="")
+            print(render(shown, detail=args.detail, color=color), end="")
 
         if result.summary["fail"]:
             exit_code = EXIT_FAILED_CHECKS
@@ -524,6 +526,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--detail",
         action="store_true",
         help="rozbali plny blok i u sluzeb se stavem PASS (WARN/FAIL se rozbaluji vzdy)",
+    )
+    color = evaluate.add_mutually_exclusive_group()
+    color.add_argument(
+        "--color",
+        action="store_true",
+        help="vynuti barvy i mimo terminal (napr. do 'less -R')",
+    )
+    color.add_argument(
+        "--no-color",
+        action="store_true",
+        help="vypne barvy (autodetekce: barvi se jen na TTY bez NO_COLOR)",
     )
     evaluate.add_argument("--warn-as-error", action="store_true")
     evaluate.set_defaults(func=_cmd_evaluate)

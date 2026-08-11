@@ -940,3 +940,27 @@ def test_capture_maps_to_outside_run_is_tool_error(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "--maps-to" in err
     assert "--run" in err
+
+
+# --- color flag (faze 5, task 3) -----
+
+def test_evaluate_color_flag_forces_ansi(tmp_path, capsys):
+    path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    code = main(["evaluate", "--snapshot", str(path), "--color"])
+    assert code == EXIT_OK
+    assert "\x1b[32mPASS\x1b[0m" in capsys.readouterr().out
+
+
+def test_evaluate_defaults_to_plain_when_not_a_tty(tmp_path, capsys):
+    # capsys nahrazuje stdout ne-TTY objektem - autodetekce musi
+    # barvy vypnout bez jakehokoli prepinace.
+    path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    code = main(["evaluate", "--snapshot", str(path)])
+    assert code == EXIT_OK
+    assert "\x1b[" not in capsys.readouterr().out
+
+
+def test_evaluate_color_and_no_color_are_exclusive(tmp_path, capsys):
+    path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    with pytest.raises(SystemExit):
+        main(["evaluate", "--snapshot", str(path), "--color", "--no-color"])
