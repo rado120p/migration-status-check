@@ -1,3 +1,4 @@
+import io
 import json
 import re
 
@@ -10,7 +11,39 @@ from migration_validator.models.result import (
     Status,
 )
 from migration_validator.reporting.json_report import to_json
-from migration_validator.reporting.text_report import filter_result, render
+from migration_validator.reporting.text_report import filter_result, render, use_color
+
+
+class _Tty(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def test_use_color_defaults_to_isatty(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert use_color(stream=_Tty()) is True
+    assert use_color(stream=io.StringIO()) is False
+
+
+def test_use_color_respects_no_color_env(monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert use_color(stream=_Tty()) is False
+
+
+def test_use_color_empty_no_color_counts_as_unset(monkeypatch):
+    # Konvence no-color.org: vypina jen NEPRAZDNA hodnota.
+    monkeypatch.setenv("NO_COLOR", "")
+    assert use_color(stream=_Tty()) is True
+
+
+def test_use_color_force_on_beats_pipe_and_env(monkeypatch):
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert use_color(force_on=True, stream=io.StringIO()) is True
+
+
+def test_use_color_force_off_beats_everything(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    assert use_color(force_on=True, force_off=True, stream=_Tty()) is False
 
 
 def _strip_ansi(text: str) -> str:

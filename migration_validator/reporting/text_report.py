@@ -10,6 +10,8 @@ prehlednuti nezmigrovane sluzby, respektive objektu bez prirazene sluzby.
 
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import replace
 
 from migration_validator.models.result import RunResult, Status, count_statuses
@@ -56,6 +58,26 @@ def _status_cell(status: Status, width: int, *, color: bool) -> str:
     """
     plain = SYMBOL[status].strip()
     return _colorize(status, plain, color) + " " * (width - len(plain))
+
+
+def use_color(
+    *, force_on: bool = False, force_off: bool = False, stream=None
+) -> bool:
+    """Rozhodne, jestli report barvit.
+
+    Poradi: --no-color > --color > autodetekce. Vypnuti vyhrava, aby se
+    barvy daly vzdy zakazat i ve skriptu, ktery je jinde vynucuje.
+    Autodetekce: stdout je TTY a NO_COLOR neni nastavena na neprazdnou
+    hodnotu (konvence no-color.org - prazdna hodnota se cte jako
+    nenastavena).
+    """
+    if force_off:
+        return False
+    if force_on:
+        return True
+    if stream is None:
+        stream = sys.stdout
+    return stream.isatty() and not os.environ.get("NO_COLOR")
 
 
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
