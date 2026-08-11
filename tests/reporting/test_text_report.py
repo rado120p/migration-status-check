@@ -13,6 +13,10 @@ from migration_validator.reporting.json_report import to_json
 from migration_validator.reporting.text_report import filter_result, render
 
 
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
 def _legacy_check(check_id, status, message):
     return CheckResult(
         id=check_id,
@@ -80,6 +84,50 @@ def _legacy_result() -> RunResult:
         },
         unassigned={"bgp_peers": []},
     )
+
+
+def test_color_wraps_status_tokens():
+    output = render(_legacy_result(), color=True)
+    assert "\x1b[32mPASS\x1b[0m" in output
+    assert "\x1b[33mWARN\x1b[0m" in output
+    assert "\x1b[31mFAIL\x1b[0m" in output
+
+
+def test_color_paints_names_in_counts_lines():
+    # Radky Sluzby:/Checky: barvi nazev stavu, cislo pred nim ne.
+    output = render(_legacy_result(), color=True)
+    assert "1 \x1b[31mFAIL\x1b[0m" in output
+    assert "\x1b[31m1" not in output
+
+
+def test_color_off_emits_no_ansi():
+    assert "\x1b[" not in render(_legacy_result())
+
+
+def test_stripped_color_output_equals_plain_output():
+    # Hlida, ze barveni nerozbiji zarovnani ani sirky ramecku: po
+    # odstraneni ANSI sekvenci musi byt vystup znak po znaku stejny.
+    result = _legacy_result()
+    assert _strip_ansi(render(result, color=True)) == render(result)
+
+
+def test_block_header_token_is_colored():
+    # Blok zacina =, pak hlavicka s tokenem stavu - token musi byt obarven.
+    output = render(_legacy_result(), color=True, detail=True)
+    lines = output.splitlines()
+
+    # Najdi prvni ramec (=)
+    frame_idx = next(i for i, line in enumerate(lines) if line and set(line) == {"="})
+    # Nasledujici radek je hlavicka s tokenem
+    header = lines[frame_idx + 1]
+
+    # Header obsahuje PASS (zelena) nebo WARN/FAIL (zluty/cerveny)
+    has_colored_token = (
+        "\x1b[32mPASS\x1b[0m" in header or
+        "\x1b[33mWARN\x1b[0m" in header or
+        "\x1b[31mFAIL\x1b[0m" in header
+    )
+    assert has_colored_token, f"hlavicka bloku ma neobarveny token: {header}"
 
 
 def test_render_contains_header_with_both_devices():

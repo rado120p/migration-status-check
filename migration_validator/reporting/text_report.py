@@ -29,6 +29,35 @@ SYMBOL = {
     Status.INFO: "",
 }
 
+# Zakladni 8barevna paleta schvalne - funguje na tmavem i svetlem pozadi
+# a nevyzaduje detekci schopnosti terminalu.
+_ANSI = {
+    Status.PASS: "\x1b[32m",
+    Status.WARN: "\x1b[33m",
+    Status.FAIL: "\x1b[31m",
+    Status.SKIP: "\x1b[2m",
+    Status.INFO: "\x1b[36m",
+}
+_RESET = "\x1b[0m"
+
+
+def _colorize(status: Status, text: str, color: bool) -> str:
+    """Obali text ANSI barvou statusu. Prazdny token se neobaluje."""
+    if not color or not text:
+        return text
+    return f"{_ANSI[status]}{text}{_RESET}"
+
+
+def _status_cell(status: Status, width: int, *, color: bool) -> str:
+    """Status token doplneny mezerami na sirku sloupce.
+
+    Padding se pocita z cisteho textu PRED obarvenim - escape sekvence
+    maji nenulovy len(), takze format spec `:<w` by rozjel zarovnani.
+    """
+    plain = SYMBOL[status].strip()
+    return _colorize(status, plain, color) + " " * (width - len(plain))
+
+
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
 
 
@@ -125,7 +154,7 @@ def _group_header(group: Group) -> str:
     return f"   -- {group.title}"
 
 
-def _block(view: ServiceView, has_baseline: bool) -> list[str]:
+def _block(view: ServiceView, has_baseline: bool, color: bool) -> list[str]:
     """Blok jedne sluzby. Sirky se pocitaji ze VSECH radku bloku.
 
     Kdyby si je pocitala kazda sekce zvlast, neseden by na spolecnou
@@ -148,8 +177,8 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     value_width = max([len(row.value) for row in rows] + [len(value_title)])
     change_width = max([len(text) for text in changes.values()] + [len(change_title)])
 
-    def line(status: str, label: str, value: str, change: str) -> str:
-        text = f" {status:<4} | {label:<{label_width}} : {value:<{value_width}}"
+    def line(status_cell: str, label: str, value: str, change: str) -> str:
+        text = f" {status_cell} | {label:<{label_width}} : {value:<{value_width}}"
         if not has_baseline:
             return text.rstrip()
         return f"{text} | {change}".rstrip()
@@ -166,14 +195,18 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
     # Popisek sluzby je volny text bez horni meze delky (description,
     # routing instance) - ramec musi obalit i tenhle radek, ne jen tabulku
     # sloupcu. Jinak by dlouhy nazev sluzby prerostl "=" caru.
-    header_line = (
-        f" {SYMBOL[view.status].strip():<4}  {view.description}   "
+    header_rest = (
+        f"  {view.description}   "
         f"{view.service_type}   {ports}   RI: {instance}"
     )
+    # Pro vypocet sirky ramecku cisty text; obarvena varianta ma delsi
+    # len() o escape sekvence a prerostla by "=" caru.
+    header_line = f" {SYMBOL[view.status].strip():<4}{header_rest}"
+    header_out = f" {_status_cell(view.status, 4, color=color)}{header_rest}"
 
     # Nadpisy sekci taky - nesou adresy rodiny, kterych muze byt vic, a u
     # ctyr rozsahu jsou delsi nez cela tabulka sloupcu. Treti vyskyt tehoz
-    # tvaru: u hlavicky bloku i u souhrnne tabulky uz to ostre overeni
+    # tvaru: u hlavicky bloku i u souhrnne tabulce uz to ostre overeni
     # naslo, pokazde na skutecnych datech z laborky.
     headers = [_section_header(section) for section in view.sections]
     # Nadpisy skupin taky - ctvrty vyskyt tehoz tvaru, ktery komentar vys
@@ -192,11 +225,11 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
         + [len(text) for text in group_titles]
     )
 
-    lines = ["=" * width, header_line]
+    lines = ["=" * width, header_out]
     if note_line:
         lines.append(note_line)
     lines.append("=" * width)
-    lines.append(line("STAV", label_title, value_title, change_title))
+    lines.append(line(f"{'STAV':<4}", label_title, value_title, change_title))
     separator = f" {'-'*4}-+-{'-'*label_width}-+-{'-'*value_width}"
     if has_baseline:
         separator += f"-+-{'-'*change_width}"
@@ -208,13 +241,13 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
             lines.append(header + "-" * max(0, width - len(header)))
         for row in section.rows:
             lines.append(
-                line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
+                line(_status_cell(row.status, 4, color=color), row.label, row.value, changes[id(row)])
             )
         for group in section.groups:
             lines.append(_group_header(group))
             for row in group.rows:
                 lines.append(
-                    line(SYMBOL[row.status].strip(), row.label, row.value, changes[id(row)])
+                    line(_status_cell(row.status, 4, color=color), row.label, row.value, changes[id(row)])
                 )
 
     lines.append("")
@@ -227,7 +260,7 @@ def _block(view: ServiceView, has_baseline: bool) -> list[str]:
 COUNT_NAMES = (("pass", "PASS"), ("warn", "WARN"), ("fail", "FAIL"), ("skip", "SKIP"), ("info", "INFO"))
 
 
-def _counts_lines(services: dict[str, int], checks: dict[str, int]) -> list[str]:
+def _counts_lines(services: dict[str, int], checks: dict[str, int], color: bool) -> list[str]:
     """Dva pojmenovane radky souhrnu misto jednoho neoznaceneho.
 
     Souhrn scital checky, ale tabulka hned pod nim ma radek na sluzbu -
@@ -245,7 +278,8 @@ def _counts_lines(services: dict[str, int], checks: dict[str, int]) -> list[str]
 
     def line(title: str, counts: dict[str, int]) -> str:
         return f"  {title:<7} " + "  ".join(
-            f"{counts[key]:>{widths[key]}} {name}" for key, name in COUNT_NAMES
+            f"{counts[key]:>{widths[key]}} {_colorize(Status(name), name, color)}"
+            for key, name in COUNT_NAMES
         )
 
     return [line("Sluzby:", services), line("Checky:", checks)]
@@ -335,7 +369,7 @@ def _unassigned_lines(result: RunResult) -> list[str]:
     return lines
 
 
-def render(result: RunResult, *, detail: bool = False) -> str:
+def render(result: RunResult, *, detail: bool = False, color: bool = False) -> str:
     lines: list[str] = []
 
     subject = result.subject
@@ -358,7 +392,7 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     # i za vyber. Souhrn za checky prepocitava filtr sam, ten se ze scopu
     # odvodit neda bez toho, aby renderer zacal scitat checky.
     services = count_statuses(scope.status for scope in result.scopes)
-    lines.extend(_counts_lines(services, summary))
+    lines.extend(_counts_lines(services, summary, color))
     lines.append(
         f"  Sparovano {summary['scopes_matched']} sluzeb, "
         f"{summary['unmatched_baseline']} nesparovana v baseline, "
@@ -374,7 +408,7 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     # zarovnani. Bez orezavani - orezany nazev je horsi nez nic.
     rows = [
         (
-            SYMBOL[view.status],
+            view.status,
             view.description,
             view.service_type,
             view.baseline_interfaces[0] if view.baseline_interfaces else "-",
@@ -400,7 +434,7 @@ def render(result: RunResult, *, detail: bool = False) -> str:
     )
     for status, description, service_type, old_port, new_port, instance, message in rows:
         lines.append(
-            f"{status:<{status_w}} {description:<{service_w}} {service_type:<{type_w}} "
+            f"{_status_cell(status, status_w, color=color)} {description:<{service_w}} {service_type:<{type_w}} "
             f"{old_port:<{old_port_w}} {new_port:<{new_port_w}} {instance:<{ri_w}} "
             f"{message}".rstrip()
         )
@@ -420,7 +454,7 @@ def render(result: RunResult, *, detail: bool = False) -> str:
             shown.add(scope.scope_id)
     for scope, view in views:
         if scope.scope_id in shown:
-            lines.extend(_block(view, has_baseline))
+            lines.extend(_block(view, has_baseline, color))
 
     lines.append("NESPAROVANO")
     if not result.unmatched["baseline"] and not result.unmatched["subject"]:
