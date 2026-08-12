@@ -1,0 +1,207 @@
+"""Opticke urovne a alarmy - jen Layer1 scopy.
+
+Urovne se posuzuji deltou proti baseline (prahy modulu uz vyhodnotil box
+sam - to jsou alarm/warn flagy). Alarm radky se tisknou JEN zvednute;
+tichy port ma jeden souhrnny radek, stejny vzor jako Interface errors.
+
+Nepripojeny port hlasi rx/tx jako -inf (skutecne chovani krabice, ne
+chyba fixture). Delta se pocita jen kdyz jsou konecne obe strany -
+z nekonecna by vysel nan/inf a DEGRADED z aritmetiky misto z alarmu.
+Verdikt o nepripojenem portu nese OpticalAlarmsCheck (flagy On), tenhle
+check zustava OK a beze zmeny.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Any
+
+from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.registry import register
+from migration_validator.models.result import Finding, Outcome, Severity
+
+
+def _optics_label(base: str, name: str, lane: int | None, port: str | None) -> str:
+    parts = []
+    if name != port:
+        parts.append(name)  # clen LAGu - jmeno je pointa radku
+    if lane is not None:
+        parts.append(f"lane {lane}")
+    return f"{base} ({' '.join(parts)})" if parts else base
+
+
+def _port(ctx: CheckContext) -> str | None:
+    """Port L1 scopu. None na device scope (applies_to ho pousti - vsechny
+    checky bezi na cely device - ale zadny konkretni port nenese)."""
+    return ctx.scope.selectors.interfaces[0] if ctx.scope.selectors.interfaces else None
+
+
+def _ports(ctx: CheckContext) -> list[str]:
+    port = _port(ctx)
+    return [name for name in [port, *sorted(ctx.scope.selectors.lag_members)] if name]
+
+
+def _fmt(power: float | None) -> str:
+    """Junos-styl token pro nekonecno: '-Inf dBm', ne '-inf dBm' z f-stringu."""
+    if power is None:
+        return "?"
+    if not math.isfinite(power):
+        return f"{'-Inf' if power < 0 else 'Inf'} dBm"
+    return f"{power:.2f} dBm"
+
+
+@register
+class OpticalLevelsCheck(Check):
+    id = "interface_optics_levels"
+    title = "Opticke urovne"
+    label = "Interface optical levels"
+    mode = Mode.BOTH
+    requires = ("optics",)
+    service_types = frozenset()  # nikdy na service scopu
+    layer1 = True
+    default_severity = Severity.ADVISORY
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        optics: dict[str, Any] = ctx.subject.get("optics", {})
+        baseline_optics: dict[str, Any] = (ctx.baseline or {}).get("optics", {})
+        tolerance = float(ctx.options(self.id)["tolerance_db"])
+        port = _port(ctx)
+
+        findings: list[Finding] = []
+        for name in _ports(ctx):
+            data = optics.get(name)
+            if data is None:
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{name}: rozhrani nevraci opticka data",
+                        label=_optics_label(self.label, name, None, port),
+                        value="bez optiky",
+                    )
+                )
+                continue
+            baseline_lanes = {
+                lane.get("lane"): lane
+                for lane in baseline_optics.get(name, {}).get("lanes", [])
+            }
+            for lane in data["lanes"]:
+                findings.append(
+                    _level_finding(
+                        _optics_label(self.label, name, lane["lane"], port),
+                        name,
+                        lane,
+                        baseline_lanes.get(lane["lane"]),
+                        tolerance,
+                    )
+                )
+        return findings
+
+
+def _level_finding(
+    label: str,
+    name: str,
+    lane: dict[str, Any],
+    baseline_lane: dict[str, Any] | None,
+    tolerance: float,
+) -> Finding:
+    value = f"RX {_fmt(lane['rx_power_dbm'])} / TX {_fmt(lane['tx_power_dbm'])}"
+    if baseline_lane is None:
+        return Finding(
+            Outcome.OK, f"{name}: {value}", label=label, value=value,
+            subject={"rx_power_dbm": lane["rx_power_dbm"],
+                     "tx_power_dbm": lane["tx_power_dbm"]},
+        )
+
+    deltas = []
+    degraded = False
+    for key, tag in (("rx_power_dbm", "RX"), ("tx_power_dbm", "TX")):
+        now, before = lane.get(key), baseline_lane.get(key)
+        if now is None or before is None:
+            continue
+        # -Inf na jedne (nebo obou) stranach - port bez svetla. Delta by
+        # z toho vyrobila nan/inf a DEGRADED z aritmetiky misto z alarmu;
+        # tenhle radek zustava OK, alarms check nese verdikt.
+        if not (math.isfinite(now) and math.isfinite(before)):
+            continue
+        diff = now - before
+        deltas.append(f"{tag} {diff:+.1f} dB")
+        if abs(diff) > tolerance:
+            degraded = True
+
+    baseline_value = (
+        f"RX {_fmt(baseline_lane['rx_power_dbm'])}"
+        f" / TX {_fmt(baseline_lane['tx_power_dbm'])}"
+    )
+    message = (
+        f"{name}: uroven se posunula o vic nez {tolerance:.1f} dB"
+        f" ({', '.join(deltas)})"
+        if degraded
+        else f"{name}: urovne v toleranci {tolerance:.1f} dB"
+    )
+    return Finding(
+        Outcome.DEGRADED if degraded else Outcome.OK,
+        message,
+        label=label,
+        value=value,
+        baseline_value=baseline_value,
+        delta=", ".join(deltas) or None,
+        details={"tolerance_db": tolerance},
+    )
+
+
+@register
+class OpticalAlarmsCheck(Check):
+    id = "interface_optics_alarms"
+    title = "Opticke alarmy"
+    label = "Interface optical alarms"
+    mode = Mode.STATE
+    requires = ("optics",)
+    service_types = frozenset()
+    layer1 = True
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        optics: dict[str, Any] = ctx.subject.get("optics", {})
+        port = _port(ctx)
+
+        findings: list[Finding] = []
+        for name in _ports(ctx):
+            data = optics.get(name)
+            if data is None:
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{name}: rozhrani nevraci opticka data",
+                        label=_optics_label(self.label, name, None, port),
+                        value="bez optiky",
+                    )
+                )
+                continue
+            raised: list[tuple[int | None, str, Outcome]] = []
+            for lane in data["lanes"]:
+                for tag, is_on in lane["alarms"].items():
+                    if is_on:
+                        raised.append((lane["lane"], tag, Outcome.BROKEN))
+                for tag, is_on in lane["warnings"].items():
+                    if is_on:
+                        raised.append((lane["lane"], tag, Outcome.DEGRADED))
+            if not raised:
+                findings.append(
+                    Finding(
+                        Outcome.OK,
+                        f"{name}: bez optickych alarmu",
+                        label=_optics_label(self.label, name, None, port),
+                        value="bez alarmu",
+                    )
+                )
+                continue
+            for lane_no, tag, outcome in raised:
+                findings.append(
+                    Finding(
+                        outcome,
+                        f"{name}: {tag} je zvednuty",
+                        label=_optics_label(self.label, name, lane_no, port),
+                        value=tag,
+                    )
+                )
+        return findings

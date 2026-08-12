@@ -12,6 +12,7 @@ from migration_validator.checks import (  # noqa: F401
     deactivation,
     evpn,
     ifaces,
+    optics,
     reachability,
     routes,
 )

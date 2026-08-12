@@ -12,6 +12,7 @@ from migration_validator.models.result import Severity
 
 DEFAULTS: dict[str, dict[str, Any]] = {
     "interface_traffic": {"tolerance_percent": -60, "require_nonzero": True},
+    "interface_optics_levels": {"tolerance_db": 2.0},
     "bgp_prefix_counts": {"tolerance_percent": -10},
     "evpn_mac_count": {"tolerance_percent": -60},
     "ping_reachability": {"count": 5},
