@@ -12,6 +12,10 @@ from typing import Any
 
 DEVICE_SCOPE_ID = "device"
 
+# service_type synteticky vytvoreneho L1 scopu - jedina autoritativni definice,
+# ostatni moduly ji importuji misto vlastni kopie retezce.
+LAYER1_SERVICE_TYPE = "Layer1"
+
 FACT_AREAS = (
     "interfaces",
     "arp",

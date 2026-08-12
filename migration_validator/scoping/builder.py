@@ -9,7 +9,12 @@ from __future__ import annotations
 from collections import Counter
 
 from migration_validator.models.inventory import Inventory, ServiceEntry
-from migration_validator.models.scope import Scope, ScopeKey, Selectors
+from migration_validator.models.scope import (
+    LAYER1_SERVICE_TYPE,
+    Scope,
+    ScopeKey,
+    Selectors,
+)
 
 MIGRATED_SERVICE_TYPES = frozenset({"Internet", "IPVPN", "E-Line", "E-LAN", "Core"})
 
@@ -52,7 +57,9 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
     selektoru logicke jednotky. Layer1 scopy stoji v seznamu za service scopy.
     """
     physical_names = {
-        entry.interface for entry in inventory.entries if entry.service_type == "Layer1"
+        entry.interface
+        for entry in inventory.entries
+        if entry.service_type == LAYER1_SERVICE_TYPE
     }
     eligible = [entry for entry in inventory.entries if _is_eligible(entry)]
 
@@ -94,10 +101,9 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
             )
         )
 
-    LAYER1 = "Layer1"
     children = {entry.physical_name for entry in eligible}
     for entry in inventory.entries:
-        if entry.service_type != LAYER1 or is_management(entry.interface):
+        if entry.service_type != LAYER1_SERVICE_TYPE or is_management(entry.interface):
             continue
         if not entry.interface.startswith(TRANSIT_PREFIXES):
             continue
@@ -110,7 +116,7 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                 kind="layer1",
                 key=ScopeKey(
                     description=entry.description,
-                    service_type=LAYER1,
+                    service_type=LAYER1_SERVICE_TYPE,
                     service_subtype=entry.service_subtype,
                 ),
                 selectors=Selectors(

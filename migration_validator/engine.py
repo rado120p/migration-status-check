@@ -21,7 +21,7 @@ from migration_validator.models.result import (
     Status,
     count_statuses,
 )
-from migration_validator.models.scope import Scope, device_scope
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope, device_scope
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.scoping.linker import ScopeLink, link_scopes
 from migration_validator.scoping.mapping import Mapping, empty_mapping
@@ -192,16 +192,13 @@ def _reorder_linked(results: list[ScopeResult]) -> list[ScopeResult]:
     return ordered
 
 
-LAYER1_TYPE = "Layer1"
-
-
 def _natural_key(name: str) -> list:
     return [int(part) if part.isdigit() else part
             for part in re.split(r"(\d+)", name)]
 
 
 def _is_l1(result: ScopeResult) -> bool:
-    return (result.key or {}).get("service_type") == LAYER1_TYPE
+    return (result.key or {}).get("service_type") == LAYER1_SERVICE_TYPE
 
 
 def _parent_port(result: ScopeResult, by_id: dict[str, ScopeResult]) -> str | None:

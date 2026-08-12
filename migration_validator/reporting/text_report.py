@@ -15,6 +15,7 @@ import sys
 from dataclasses import replace
 
 from migration_validator.models.result import RunResult, Status, count_statuses
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE
 from migration_validator.reporting.view import (
     Group,
     Section,
@@ -92,7 +93,7 @@ def _l1_parent_ids(all_scopes, kept_ids):
     l1_by_port = {
         (scope.identity or {}).get("interfaces", ["?"])[0]: scope.scope_id
         for scope in all_scopes
-        if (scope.key or {}).get("service_type") == "Layer1"
+        if (scope.key or {}).get("service_type") == LAYER1_SERVICE_TYPE
     }
     parents = set()
     for scope in all_scopes:

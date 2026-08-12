@@ -25,9 +25,7 @@ from migration_validator.models.result import (
     SKIP_DEACTIVATED,
     derive_status,
 )
-from migration_validator.models.scope import Scope
-
-LAYER1_SERVICE_TYPE = "Layer1"
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope
 
 
 class Mode(str, Enum):
