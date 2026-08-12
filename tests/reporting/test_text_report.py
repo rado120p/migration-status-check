@@ -1387,3 +1387,72 @@ def test_info_row_carries_info_token():
     colored = render(result, detail=True, color=True)
     assert "\x1b[36mINFO\x1b[0m" in colored
     assert _strip_ansi(colored) == rendered
+
+
+def _run_result(scopes) -> RunResult:
+    return RunResult(
+        evaluated_at="2026-08-12T00:00:00Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
+        baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
+        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+                 "scopes_matched": len(scopes), "unmatched_baseline": 0, "unmatched_subject": 0},
+        scopes=scopes,
+    )
+
+
+def _l1_result(port, *, status) -> ScopeResult:
+    return ScopeResult(
+        scope_id=f"l1:{port}",
+        key={"service_type": "Layer1"},
+        status=status,
+        match=None,
+        checks=[_check("optics_present", status, "optika ok", label="Optika", value="ok")],
+        identity={"service_type": "Layer1", "interfaces": [port], "physical_interfaces": []},
+    )
+
+
+def _svc_result(name, *, parent, status) -> ScopeResult:
+    return ScopeResult(
+        scope_id=f"svc:{name}",
+        key={"description": name, "service_type": "IPVPN"},
+        status=status,
+        match=None,
+        checks=[_check("interface_state", status, "x", label="Interface admin status", value="Up")],
+        identity={
+            "description": name,
+            "service_type": "IPVPN",
+            "interfaces": [],
+            "physical_interfaces": [parent],
+        },
+    )
+
+
+def test_filter_drzi_l1_rodice_vybrane_sluzby():
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.FAIL)])
+    filtered = filter_result(result, text="S-A")
+    ids = [scope.scope_id for scope in filtered.scopes]
+    assert "l1:ae0" in ids  # rodic jede s vybranym ditetem
+
+
+def test_fail_sluzba_rozbali_i_pass_l1_blok():
+    # "Layer1" samo o sobe je slaby signal - vypisuje se i v souhrnne
+    # tabulce za KAZDY scope bez ohledu na shown, takze by prosel i bez
+    # opravy. "Optika" je label checku, ktery existuje jen uvnitr
+    # vypsaneho bloku - to uz je dukaz, ze se blok l1:ae0 skutecne
+    # rozbalil, i kdyz je sam PASS a detail=False.
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.FAIL)])
+    text = render(result)
+    assert "Optika" in text
+
+
+def test_pass_l1_blok_zustava_sbaleny_bez_rozbalene_sluzby():
+    # Negativni kontrola k testu vyse: kdyz je L1 i jeho dite PASS, nic
+    # dite nerozbaluje a bez --detail zustava blok sbaleny - label checku
+    # se nevytiskne. Kdyby _l1_parent_ids pridavala rodice vzdycky (ne jen
+    # k rozbalenym detem), tenhle test by to chytil.
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.PASS)])
+    text = render(result)
+    assert "Optika" not in text

@@ -25,7 +25,7 @@ from migration_validator.models.result import (
     SKIP_DEACTIVATED,
     derive_status,
 )
-from migration_validator.models.scope import Scope
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope
 
 
 class Mode(str, Enum):
@@ -68,11 +68,16 @@ class Check(ABC):
     requires_inventory: ClassVar[bool] = False
     service_types: ClassVar[frozenset[str] | None] = None
     default_severity: ClassVar[Severity] = Severity.ADVISORY
+    # Bezi check i na Layer1 scopu (fyzicky port)? Vychozi ne - vetsina
+    # checku meri sluzbu, ne port, a SKIP radky by L1 blok jen zaplevelily.
+    layer1: ClassVar[bool] = False
 
     def applies_to(self, scope: Scope) -> bool:
         """Device scope dostane vsechny checky - filtrovat nema podle ceho."""
         if scope.is_device:
             return True
+        if scope.kind == "layer1":
+            return self.layer1
         if self.service_types is None:
             return True
         return scope.service_type in self.service_types

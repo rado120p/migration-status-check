@@ -7,6 +7,8 @@ vetev na platformu.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
@@ -341,13 +343,15 @@ def _count_finding(
 ) -> Finding:
     """Ciselny radek: stavove pravidlo; rozdil proti baseline nese ZMENA.
 
-    Rovnost s baseline se nevynucuje (revize spec 2.4 po overeni v laborce
-    2026-08-06): migrace konsoliduje sluzby do jedne mac-vrf instance,
-    takze pocty local/IRB interfacu se meni pri kazde migraci a rovnost by
-    FAILovala trvale. Vyjimkou jsou EVPN neighbors (warn_below_baseline):
-    pokles pod baseline je DEGRADED - ztraceny peer stoji za pozornost,
-    ale u ciste L2 vlan-aware sluzby po migraci legitimne ubyde puvodni
-    box, takze to neni tvrdy FAIL.
+    Jedinym volajicim je EVPN neighbors (stavove pravidlo > 0). Rovnost s
+    baseline se nevynucuje (revize spec 2.4 po overeni v laborce
+    2026-08-06) - misto toho warn_below_baseline: pokles pod baseline je
+    DEGRADED, ztraceny peer stoji za pozornost, ale u ciste L2 vlan-aware
+    sluzby po migraci legitimne ubyde puvodni box, takze to neni tvrdy
+    FAIL. Agregaty local/IRB interfacu, ktere driv rovnez pouzivaly tuhle
+    funkci, Task 2 zrusil - jejich pocet se migraci meni pri kazde
+    konsolidaci sluzeb do jedne mac-vrf instance a rovnost by FAILovala
+    trvale, viz _ServiceUnits vyse.
     """
     outcome = Outcome.OK if ok else Outcome.BROKEN
     text = f"{message}: {value}" if ok else f"{message}: {value}, ocekavano {expectation}"
@@ -364,15 +368,74 @@ def _count_finding(
     )
 
 
+@dataclass(frozen=True)
+class _ServiceUnits:
+    """Identita sluzby pro relevance filtr vlan-aware bloku.
+
+    active=False vypina filtrovani - scope bez interface selektoru nema
+    podle ceho vybirat a radsi vypise vsechno nez nic.
+    """
+
+    interfaces: frozenset[str]
+    irb: str | None
+    vlans: frozenset[str]
+
+    @property
+    def active(self) -> bool:
+        return bool(self.interfaces)
+
+
+def _service_units(ctx: CheckContext) -> _ServiceUnits:
+    interfaces = frozenset(ctx.scope.selectors.interfaces)
+    irb = None
+    if ctx.link and ctx.link.get("role") == "l2":
+        irb = ctx.link.get("peer_interface")
+    vlans = frozenset(ctx.scope.selectors.vlans)
+    if not vlans:
+        # sluzba bez customer_vlan - unit cislo je stejna informace
+        vlans = frozenset(
+            name.split(".", 1)[1] for name in interfaces if "." in name
+        )
+    return _ServiceUnits(interfaces=interfaces, irb=irb, vlans=vlans)
+
+
+_IFL_RE = re.compile(r"by IFL (\S+)")
+
+
+def _esi_is_relevant(status: str | None, units: _ServiceUnits) -> bool:
+    """ESI patri sluzbe, kdyz jeho status jmenuje jeji IFL.
+
+    Unresolved status IFL nenese, takze pri aktivnim filtru vypadne -
+    vlastni ESI sluzby posuzuje DF radek evpn_esi_status (interface-
+    filtrovany), tenhle listing je jen instancni kontext.
+    """
+    if not status:
+        return False
+    match = _IFL_RE.search(status)
+    return bool(match) and match.group(1) in units.interfaces
+
+
 @register
 class EvpnInstanceStatusCheck(Check):
     """Per-instance zdravi EVPN podle brief pravidel ze zadani.
 
-    Compare semantika (revize spec 2.4, 2026-08-06): pocty local/IRB
-    interfacu se s baseline neporovnavaji na rovnost - rozdil je videt ve
-    sloupci ZMENA, stav urcuji jen stavova pravidla. EVPN neighbors pod
-    baseline jsou DEGRADED (viz _count_finding). Text ESI statusu se na
-    rovnost neporovnava, nese jmeno IFL.
+    RI-wide agregaty local/IRB interfacu (Task 2, spec 2026-08-12) jsou
+    zrusene - pocet interfacu v instanci se migraci konsolidace sluzeb do
+    jedne mac-vrf meni pri kazde migraci a byl by trvale nepouzitelny pro
+    porovnani s baseline. Misto nich se posuzuji jen radky vlastnich unitu
+    sluzby: "EVPN interface" (filtr na ctx.scope.selectors.interfaces) a
+    "IRB interface" (jen kdyz je unit linkovany pres ctx.link, role "l2") -
+    viz _service_units. Kdyz vlastni (nebo linkovany IRB) unit v instanci
+    vubec neni - IFL se do mac-vrf nedostal, realny selhany stav migrace -
+    misto ticha se emituje BROKEN radek "{unit} chybi v instanci" (dodatek
+    specu 2026-08-12, review Tasku 2); u vice instanci ve scope (qualify)
+    se tenhle radek preskakuje, protoze bez vedeni "ktera instance je ta
+    spravna" by naivni per-instance kontrola falesne broken-ovala unit v
+    kazde jine instanci. Realne service scopy (scoping/builder.py) maji
+    vzdy presne jednu routing_instance, takze qualify=True u service
+    scopu dnes nenastava - pojistka je precautionary, ne znama mezera.
+    EVPN neighbors pod baseline jsou DEGRADED (viz _count_finding). Text
+    ESI statusu se na rovnost neporovnava, nese jmeno IFL.
     """
 
     id = "evpn_instance_status"
@@ -396,12 +459,13 @@ class EvpnInstanceStatusCheck(Check):
 
         baseline_instances = (ctx.baseline or {}).get("evpn_instance", {})
         many = len(instances) > 1
+        units = _service_units(ctx)
 
         findings: list[Finding] = []
         for name in sorted(instances):
             findings.extend(
                 self._instance_findings(
-                    name, instances[name], baseline_instances.get(name), many
+                    name, instances[name], baseline_instances.get(name), many, units
                 )
             )
         return findings
@@ -412,70 +476,13 @@ class EvpnInstanceStatusCheck(Check):
         data: dict[str, Any],
         baseline: dict[str, Any] | None,
         qualify: bool,
+        units: _ServiceUnits,
     ) -> list[Finding]:
         def label(text: str) -> str:
             return qualified(text, instance) if qualify else text
 
         baseline = baseline or {}
         findings: list[Finding] = []
-
-        local = data.get("local_interfaces", {})
-        baseline_local = baseline.get("local_interfaces") or None
-        findings.append(
-            _count_finding(
-                label("EVPN local interfaces"),
-                f"{instance}: local interfaces",
-                str(local.get("total") or 0),
-                str(baseline_local["total"]) if baseline_local else None,
-                ok=(local.get("total") or 0) > 0,
-                expectation="> 0",
-            )
-        )
-        findings.append(
-            _count_finding(
-                label("EVPN local interfaces up"),
-                f"{instance}: local interfaces up",
-                f"{local.get('up') or 0}/{local.get('total') or 0}",
-                (
-                    f"{baseline_local.get('up') or 0}/{baseline_local.get('total') or 0}"
-                    if baseline_local
-                    else None
-                ),
-                ok=(local.get("up") or 0) == (local.get("total") or 0),
-                expectation="vsechna up",
-            )
-        )
-
-        irb = data.get("irb_interfaces", {})
-        baseline_irb = baseline.get("irb_interfaces") or None
-        # Instance IRB mit nemusi (ciste L2 sluzba) - pocet je informace,
-        # ne pravidlo.
-        findings.append(
-            Finding(
-                Outcome.INFO,
-                f"{instance}: IRB interfaces {irb.get('total') or 0}",
-                label=label("EVPN IRB interfaces"),
-                value=str(irb.get("total") or 0),
-                baseline_value=(
-                    str(baseline_irb["total"]) if baseline_irb else None
-                ),
-            )
-        )
-        if (irb.get("total") or 0) > 0:
-            findings.append(
-                _count_finding(
-                    label("EVPN IRB interfaces up"),
-                    f"{instance}: IRB interfaces up",
-                    f"{irb.get('up') or 0}/{irb.get('total') or 0}",
-                    (
-                        f"{baseline_irb.get('up') or 0}/{baseline_irb.get('total') or 0}"
-                        if baseline_irb
-                        else None
-                    ),
-                    ok=(irb.get("up") or 0) == (irb.get("total") or 0),
-                    expectation="vsechna up",
-                )
-            )
 
         neighbors = data.get("neighbors", {})
         baseline_neighbors = baseline.get("neighbors") or None
@@ -495,30 +502,6 @@ class EvpnInstanceStatusCheck(Check):
             )
         )
 
-        findings.extend(self._esi_findings(instance, data, baseline, label))
-
-        for entry in local.get("entries", []):
-            findings.append(
-                Finding(
-                    Outcome.INFO,
-                    f"{instance}: interface {entry['name']} {entry['status']}",
-                    label=label("EVPN interface"),
-                    value=f"{entry['name']} {entry['status']}",
-                )
-            )
-        for entry in irb.get("entries", []):
-            context = entry.get("l3_context")
-            value = f"{entry['name']} {entry['status']}"
-            if context:
-                value += f" ({context})"
-            findings.append(
-                Finding(
-                    Outcome.INFO,
-                    f"{instance}: IRB {value}",
-                    label=label("IRB interface"),
-                    value=value,
-                )
-            )
         for address in neighbors.get("addresses", []):
             findings.append(
                 Finding(
@@ -526,6 +509,72 @@ class EvpnInstanceStatusCheck(Check):
                     f"{instance}: neighbor {address}",
                     label=label("EVPN neighbor"),
                     value=address,
+                )
+            )
+
+        findings.extend(self._esi_findings(instance, data, baseline, label, units))
+
+        local = data.get("local_interfaces", {})
+        local_entries = local.get("entries", [])
+        local_names = {entry["name"] for entry in local_entries}
+        for entry in local_entries:
+            if units.active and entry["name"] not in units.interfaces:
+                continue
+            up = _is_up(str(entry["status"]))
+            findings.append(
+                Finding(
+                    Outcome.OK if up else Outcome.BROKEN,
+                    f"{instance}: interface {entry['name']} {entry['status']}"
+                    + ("" if up else f", ocekavano {UP}"),
+                    label=label("EVPN interface"),
+                    value=f"{entry['name']} {entry['status']}",
+                )
+            )
+        # IFL, ktery se do mac-vrf teto instance vubec nedostal, by jinak
+        # zustal neviditelny - blok by pro sluzbu nevypsal zadny EVPN
+        # interface radek (dodatek specu 2026-08-12, review Tasku 2).
+        # Multi-instance scope: unit patri tomu RI, ktere ho jmenuje, takze
+        # se pri vice instancich (qualify=True) chybejici-unit radek
+        # neemituje - jinak by naivni per-instance kontrola falesne
+        # nahlasila unit jako chybejici v kazde instanci krome te spravne.
+        if units.active and not qualify:
+            for unit in sorted(units.interfaces - local_names):
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{instance}: unit {unit} chybi v instanci",
+                        label=label("EVPN interface"),
+                        value=f"{unit} chybi v instanci",
+                    )
+                )
+
+        irb = data.get("irb_interfaces", {})
+        irb_entries = irb.get("entries", [])
+        irb_names = {entry["name"] for entry in irb_entries}
+        for entry in irb_entries:
+            if units.active and entry["name"] != units.irb:
+                continue
+            context = entry.get("l3_context")
+            value = f"{entry['name']} {entry['status']}"
+            if context:
+                value += f" ({context})"
+            up = _is_up(str(entry["status"]))
+            findings.append(
+                Finding(
+                    Outcome.OK if up else Outcome.BROKEN,
+                    f"{instance}: IRB {value}"
+                    + ("" if up else f", ocekavano {UP}"),
+                    label=label("IRB interface"),
+                    value=value,
+                )
+            )
+        if units.active and not qualify and units.irb and units.irb not in irb_names:
+            findings.append(
+                Finding(
+                    Outcome.BROKEN,
+                    f"{instance}: IRB unit {units.irb} chybi v instanci",
+                    label=label("IRB interface"),
+                    value=f"{units.irb} chybi v instanci",
                 )
             )
         return findings
@@ -536,6 +585,7 @@ class EvpnInstanceStatusCheck(Check):
         data: dict[str, Any],
         baseline: dict[str, Any],
         label,
+        units: _ServiceUnits,
     ) -> list[Finding]:
         esis: dict[str, str] = data.get("esis", {})
         baseline_esis: dict[str, str] = baseline.get("esis", {}) if baseline else {}
@@ -556,6 +606,13 @@ class EvpnInstanceStatusCheck(Check):
         for esi in sorted(set(esis) | set(baseline_esis)):
             status = esis.get(esi)
             baseline_status = baseline_esis.get(esi)
+            if units.active and not _esi_is_relevant(status, units):
+                # Vetev "status is None" (baseline melo, ted chybi) tady
+                # vypada spolu s ostatnimi - baseline IFL nese stare jmeno
+                # rozhrani, proti novym selektorum nikdy nesedi (zamer,
+                # viz spec kap. 2). Zdravi vlastniho ESI nese DF radek
+                # checku evpn_esi_status (interface-filtrovany).
+                continue
             if status is None:
                 findings.append(
                     Finding(
@@ -606,6 +663,7 @@ class EvpnMacCountCheck(Check):
         baseline_instances = (ctx.baseline or {}).get("evpn_mac", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
         many = len(instances) > 1
+        units = _service_units(ctx)
 
         findings = []
         for instance in sorted(instances):
@@ -623,6 +681,8 @@ class EvpnMacCountCheck(Check):
                 set(subject_vlans) | set(baseline_vlans),
                 key=lambda v: int(v) if v.isdigit() else 0,
             ):
+                if units.active and units.vlans and vlan not in units.vlans:
+                    continue
                 subject_entry = subject_vlans.get(vlan)
                 baseline_entry = baseline_vlans.get(vlan)
                 domain = (subject_entry or baseline_entry).get("domain")
@@ -652,6 +712,8 @@ class EvpnMacCountCheck(Check):
             # nevrati (EVO count vypis), radek se vynechava - rozhodnuti
             # ze specu, per-VLAN uroven je vzdy pokryta.
             for key in sorted(data.get("interfaces", {})):
+                if units.active and key not in units.interfaces:
+                    continue
                 entry = data["interfaces"][key]
                 domain = entry.get("domain")
                 prefix = f"{domain} " if domain else ""

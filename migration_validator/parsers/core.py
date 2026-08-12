@@ -141,6 +141,7 @@ class InterfaceConfig:
     virtual_gw_ipv4_addresses: list[str] = field(default_factory=list)
     virtual_gw_ipv6_addresses: list[str] = field(default_factory=list)
     active: bool = True
+    bundle: str | None = None
 
 
 @dataclass
@@ -180,6 +181,7 @@ class InterfaceService:
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    lag_members: list[str] = field(default_factory=list)
     detection_confidence: str = "medium"
     detection_reason: list[str] = field(default_factory=list)
 
@@ -434,6 +436,20 @@ class JunosServiceParserCore:
         )
 
         self._assign_bfd(services)
+
+        # 802.3ad clenstvi se pripojuje az tady - clen ho ma na sve fyzicke
+        # InterfaceConfig, ale patri na Layer1 zaznam bundlu.
+        members_by_bundle: dict[str, list[str]] = {}
+        for config in interface_configs:
+            if config.bundle:
+                members_by_bundle.setdefault(config.bundle, []).append(
+                    config.name
+                )
+        for service in services:
+            if service.service_type == "Layer1":
+                service.lag_members = sorted(
+                    members_by_bundle.get(service.interface, [])
+                )
 
         return sorted(
             services,
@@ -1244,6 +1260,19 @@ class JunosServiceParserCore:
             "/*[local-name()='map-type']/text()",
         )
 
+        # 802.3ad clenstvi je vzdy na fyzickem rozhrani (ether-options /
+        # gigether-options / aggregated-ether-options) - na unit uzlu xpath
+        # nic nenajde, coz je zamerne. Realny lab pouziva tecku
+        # (ieee-802.3ad, podle CLI stanzy "802.3ad ae0") - overeno na labu
+        # 2026-08-12. Varianta se spojovnikem se drzi jako tolerance pro
+        # jine renderovani/verze Junosu.
+        bundle = first_text(
+            node,
+            ".//*[local-name()='ieee-802.3ad'"
+            " or local-name()='ieee-802-3ad']"
+            "/*[local-name()='bundle']/text()",
+        )
+
         return InterfaceConfig(
             name=logical_name,
             physical_name=physical_name,
@@ -1259,6 +1288,7 @@ class JunosServiceParserCore:
             virtual_gw_ipv4_addresses=unique(virtual_gw_ipv4_addresses),
             virtual_gw_ipv6_addresses=unique(virtual_gw_ipv6_addresses),
             active=active,
+            bundle=bundle,
         )
 
     # ------------------------------------------------------------------
@@ -2235,6 +2265,7 @@ def clean_service_dict(
         "bgp_neighbor_inactive",
         "bridge_domain",
         "customer_vlan",
+        "lag_members",
         "static_route",
         "bfd",
         "detection_confidence",

@@ -12,6 +12,10 @@ from typing import Any
 
 DEVICE_SCOPE_ID = "device"
 
+# service_type synteticky vytvoreneho L1 scopu - jedina autoritativni definice,
+# ostatni moduly ji importuji misto vlastni kopie retezce.
+LAYER1_SERVICE_TYPE = "Layer1"
+
 FACT_AREAS = (
     "interfaces",
     "arp",
@@ -23,6 +27,7 @@ FACT_AREAS = (
     "evpn_mac",
     "routes",
     "bfd",
+    "optics",
 )
 
 
@@ -61,6 +66,7 @@ class Selectors:
     virtual_gw_v6: list[str] = field(default_factory=list)
     vlans: list[str] = field(default_factory=list)
     bridge_domains: list[str] = field(default_factory=list)
+    lag_members: list[str] = field(default_factory=list)
     # Zamer z konfigurace. Slouzi zaroven jako filtr (vyber podle
     # (rib, prefix)) i jako mnozina, proti ktere check pozna, ze
     # nakonfigurovana routa v tabulce chybi.
@@ -86,6 +92,7 @@ class Selectors:
             "virtual_gw_v6": list(self.virtual_gw_v6),
             "vlans": list(self.vlans),
             "bridge_domains": list(self.bridge_domains),
+            "lag_members": list(self.lag_members),
             "static_routes": [dict(route) for route in self.static_routes],
             "bfd_peers": [dict(intent) for intent in self.bfd_peers],
         }
@@ -224,6 +231,13 @@ class Scope:
 
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
 
+        optics = {
+            name: data
+            for name, data in (facts.get("optics") or {}).items()
+            if self.selectors.matches_interface(name)
+            or name in self.selectors.lag_members
+        }
+
         return {
             "interfaces": interfaces,
             "arp": arp,
@@ -235,6 +249,7 @@ class Scope:
             "evpn_mac": evpn_mac,
             "routes": routes,
             "bfd": bfd,
+            "optics": optics,
             "ping": ping,
         }
 

@@ -15,6 +15,7 @@ import sys
 from dataclasses import replace
 
 from migration_validator.models.result import RunResult, Status, count_statuses
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE
 from migration_validator.reporting.view import (
     Group,
     Section,
@@ -86,6 +87,24 @@ def use_color(
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
 
 
+def _l1_parent_ids(all_scopes, kept_ids):
+    """L1 rodice zobrazenych sluzeb - rodic jde s ditetem, aby seskupeni
+    po portech nezustalo bez hlavicky portu."""
+    l1_by_port = {
+        (scope.identity or {}).get("interfaces", ["?"])[0]: scope.scope_id
+        for scope in all_scopes
+        if (scope.key or {}).get("service_type") == LAYER1_SERVICE_TYPE
+    }
+    parents = set()
+    for scope in all_scopes:
+        if scope.scope_id not in kept_ids:
+            continue
+        for port in (scope.identity or {}).get("physical_interfaces") or []:
+            if port in l1_by_port:
+                parents.add(l1_by_port[port])
+    return parents
+
+
 def filter_result(
     result: RunResult,
     *,
@@ -136,6 +155,14 @@ def filter_result(
             if scope.scope_id in kept_ids
             or (scope.link and scope.link["peer_scope_id"] in kept_ids)
         ]
+
+    # L1 rodic jede s vybranou sluzbou dal - jinak by port zustal bez
+    # sve hlavicky a "seskupeni po portech" by u profiltrovaneho vystupu
+    # ukazovalo sluzbu viset bez rodice.
+    kept_ids = {scope.scope_id for scope in scopes}
+    if kept_ids:
+        kept_ids |= _l1_parent_ids(result.scopes, kept_ids)
+        scopes = [scope for scope in result.scopes if scope.scope_id in kept_ids]
 
     summary = {
         **result.summary,
@@ -477,6 +504,7 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
         link = scope.link
         if link and link["peer_scope_id"] in shown:
             shown.add(scope.scope_id)
+    shown |= _l1_parent_ids([scope for scope, _view in views], shown)
     for scope, view in views:
         if scope.scope_id in shown:
             lines.extend(_block(view, has_baseline, color))
