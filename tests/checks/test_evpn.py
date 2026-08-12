@@ -316,6 +316,40 @@ def test_mac_count_missing_data_skips():
     assert findings[0].outcome is Outcome.SKIP
 
 
+def _mac_ctx(subject):
+    return _vlan_aware_ctx(subject)  # stejny scope ae0.14 / vlan 14
+
+
+def _mac_subject_aware():
+    return {"evpn_mac": {"EVPN-VLAN-AWARE-POP1": {
+        "vlans": {
+            "14": {"domain": "VL-14", "count": 8},
+            "15": {"domain": "VL-15", "count": 8},
+        },
+        "interfaces": {
+            "ae0.14": {"name": "ae0.14:14", "domain": "VL-14", "count": 6},
+            "ae0.15": {"name": "ae0.15:15", "domain": "VL-15", "count": 6},
+        },
+    }}}
+
+
+def test_mac_count_jen_vlastni_vlan_a_unit():
+    findings = EvpnMacCountCheck().run(_mac_ctx(_mac_subject_aware()))
+    labels = [f.label for f in findings]
+    assert "VL-14 MAC count" in labels
+    assert "VL-15 MAC count" not in labels
+    assert "VL-14 Interface ae0.14:14 MAC count" in labels
+    assert "VL-15 Interface ae0.15:15 MAC count" not in labels
+
+
+def test_mac_count_fallback_bez_selektoru():
+    ctx = _mac_ctx(_mac_subject_aware())
+    ctx.scope.selectors.interfaces = []
+    ctx.scope.selectors.vlans = []
+    findings = EvpnMacCountCheck().run(ctx)
+    assert len([f for f in findings if f.label.endswith("MAC count")]) == 4
+
+
 def _instance_subject(*, total=2, up=2, irb_total=1, irb_up=1,
                       neighbors=1, esis=None):
     return {"evpn_instance": {"EVPN-AWARE-CPE13": {

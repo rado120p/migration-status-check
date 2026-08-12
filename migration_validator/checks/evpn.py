@@ -663,6 +663,7 @@ class EvpnMacCountCheck(Check):
         baseline_instances = (ctx.baseline or {}).get("evpn_mac", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
         many = len(instances) > 1
+        units = _service_units(ctx)
 
         findings = []
         for instance in sorted(instances):
@@ -680,6 +681,8 @@ class EvpnMacCountCheck(Check):
                 set(subject_vlans) | set(baseline_vlans),
                 key=lambda v: int(v) if v.isdigit() else 0,
             ):
+                if units.active and units.vlans and vlan not in units.vlans:
+                    continue
                 subject_entry = subject_vlans.get(vlan)
                 baseline_entry = baseline_vlans.get(vlan)
                 domain = (subject_entry or baseline_entry).get("domain")
@@ -709,6 +712,8 @@ class EvpnMacCountCheck(Check):
             # nevrati (EVO count vypis), radek se vynechava - rozhodnuti
             # ze specu, per-VLAN uroven je vzdy pokryta.
             for key in sorted(data.get("interfaces", {})):
+                if units.active and key not in units.interfaces:
+                    continue
                 entry = data["interfaces"][key]
                 domain = entry.get("domain")
                 prefix = f"{domain} " if domain else ""
