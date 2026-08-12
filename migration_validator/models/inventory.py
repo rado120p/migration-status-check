@@ -68,6 +68,7 @@ class ServiceEntry:
     bgp_neighbor_inactive: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    lag_members: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
 
@@ -101,6 +102,7 @@ class ServiceEntry:
             bgp_neighbor_inactive=_as_list(data.get("bgp_neighbor_inactive")),
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
+            lag_members=_as_list(data.get("lag_members")),
             static_route=_as_mapping_list(data.get("static_route")),
             bfd=_as_mapping_list(data.get("bfd")),
         )
@@ -123,6 +125,7 @@ class ServiceEntry:
             "bgp_neighbor_inactive": list(self.bgp_neighbor_inactive),
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
+            "lag_members": list(self.lag_members),
             "static_route": [dict(route) for route in self.static_route],
             "bfd": [dict(intent) for intent in self.bfd],
         }
