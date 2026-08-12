@@ -91,7 +91,14 @@ z `customer_vlan` / bridge-domain selektoru.
 | `VL-x Interface y MAC count` | jen unit sluzby (a jeho VLAN) |
 
 Pojistka: scope bez interface selektoru filtr vypina a tiskne vse jako
-dnes. Plain single-VLAN E-LAN je filtrem fakticky nedotcen (vse v jeho
+dnes.
+
+Dodatek (2026-08-12, review Tasku 2): kdyz je filtr aktivni a vlastni
+unit sluzby v local_interfaces instance vubec NENI (IFL se do mac-vrf
+nedostal - realny selhany stav migrace), blok by jinak nevypsal zadny
+`EVPN interface` radek a chyba by byla neviditelna. Proto se pro
+nenalezeny vlastni unit emituje BROKEN radek `{unit} chybi v instanci`;
+totez pro linkovany IRB unit. Plain single-VLAN E-LAN je filtrem fakticky nedotcen (vse v jeho
 instanci je jeho).
 
 ## 3. Layer1 jako plnohodnotny scope
