@@ -1387,3 +1387,57 @@ def test_info_row_carries_info_token():
     colored = render(result, detail=True, color=True)
     assert "\x1b[36mINFO\x1b[0m" in colored
     assert _strip_ansi(colored) == rendered
+
+
+def _run_result(scopes) -> RunResult:
+    return RunResult(
+        evaluated_at="2026-08-12T00:00:00Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
+        baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
+        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+                 "scopes_matched": len(scopes), "unmatched_baseline": 0, "unmatched_subject": 0},
+        scopes=scopes,
+    )
+
+
+def _l1_result(port, *, status) -> ScopeResult:
+    return ScopeResult(
+        scope_id=f"l1:{port}",
+        key={"service_type": "Layer1"},
+        status=status,
+        match=None,
+        checks=[_check("optics_present", status, "optika ok", label="Optika", value="ok")],
+        identity={"service_type": "Layer1", "interfaces": [port], "physical_interfaces": []},
+    )
+
+
+def _svc_result(name, *, parent, status) -> ScopeResult:
+    return ScopeResult(
+        scope_id=f"svc:{name}",
+        key={"description": name, "service_type": "IPVPN"},
+        status=status,
+        match=None,
+        checks=[_check("interface_state", status, "x", label="Interface admin status", value="Up")],
+        identity={
+            "description": name,
+            "service_type": "IPVPN",
+            "interfaces": [],
+            "physical_interfaces": [parent],
+        },
+    )
+
+
+def test_filter_drzi_l1_rodice_vybrane_sluzby():
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.FAIL)])
+    filtered = filter_result(result, text="S-A")
+    ids = [scope.scope_id for scope in filtered.scopes]
+    assert "l1:ae0" in ids  # rodic jede s vybranym ditetem
+
+
+def test_fail_sluzba_rozbali_i_pass_l1_blok():
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.FAIL)])
+    text = render(result)
+    # blok l1:ae0 se vytiskl, i kdyz je PASS a detail=False
+    assert "Layer1" in text

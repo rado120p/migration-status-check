@@ -788,3 +788,22 @@ def test_l2_l3_link_renders_paired_blocks(synthetic_snapshot):
     output = render(result, detail=True)
     assert "L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)" in output
     assert "L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)" in output
+
+
+def test_sluzba_stoji_za_svym_l1_blokem(synthetic_snapshot):
+    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
+    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+    evaluated = api.evaluate(new, baseline=old, now=NOW)
+
+    order = [(r.scope_id, (r.key or {}).get("service_type"),
+              (r.identity or {}).get("physical_interfaces") or [None],
+              (r.identity or {}).get("interfaces") or [None])
+             for r in evaluated.scopes]
+    last_l1_port = None
+    l1_ports = {ifaces[0] for _, t, _, ifaces in order if t == "Layer1"}
+    for scope_id, service_type, parents, ifaces in order:
+        if service_type == "Layer1":
+            last_l1_port = ifaces[0]
+        elif parents[0] in l1_ports:
+            assert parents[0] == last_l1_port, (
+                f"{scope_id}: rodic {parents[0]}, ale posledni L1 blok {last_l1_port}")
