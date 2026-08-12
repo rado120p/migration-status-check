@@ -5,6 +5,8 @@ Engine nesaha na sit. Vsechna data pochazeji ze snapshotu.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
@@ -126,6 +128,7 @@ def _identity(scope: Scope) -> dict[str, Any]:
         # zpusob, jak si prohlednout stav jednoho zarizeni. Bez tohohle pole
         # by v nem byl sloupec s portem prazdny u kazde sluzby.
         "interfaces": list(selectors.interfaces),
+        "physical_interfaces": list(selectors.physical_interfaces),
         "ipv4": list(selectors.local_ipv4),
         "ipv6": list(selectors.local_ipv6),
         "virtual_gw_v4": list(selectors.virtual_gw_v4),
@@ -176,6 +179,83 @@ def _reorder_linked(results: list[ScopeResult]) -> list[ScopeResult]:
         if partner is not None:
             ordered.append(partner)
     return ordered
+
+
+LAYER1_TYPE = "Layer1"
+
+
+def _natural_key(name: str) -> list:
+    return [int(part) if part.isdigit() else part
+            for part in re.split(r"(\d+)", name)]
+
+
+def _is_l1(result: ScopeResult) -> bool:
+    return (result.key or {}).get("service_type") == LAYER1_TYPE
+
+
+def _parent_port(result: ScopeResult, by_id: dict[str, ScopeResult]) -> str | None:
+    """L1 rodic bloku. L3 clen paru dedi rodice sve L2 casti - par ma stat
+    pod portem, na kterem sluzba fyzicky bezi (spec kap. 1)."""
+    link = result.link
+    if link and link["role"] == "l3":
+        peer = by_id.get(link["peer_scope_id"])
+        if peer is not None:
+            result = peer
+    parents = (result.identity or {}).get("physical_interfaces") or []
+    return parents[0] if parents else None
+
+
+def _group_by_layer1(results: list[ScopeResult]) -> list[ScopeResult]:
+    """Poradi bloku: L1 port -> jeho sluzby, porty prirozene razene,
+    sluzby bez L1 rodice na konci. Vstup uz prosel _reorder_linked,
+    takze relativni poradi sluzeb (vcetne L3+L2 sousednosti) se drzi."""
+    by_id = {result.scope_id: result for result in results}
+    l1_by_port = {
+        result.identity.get("interfaces", ["?"])[0]: result
+        for result in results
+        if _is_l1(result)
+    }
+    services = [result for result in results if not _is_l1(result)]
+    ordered: list[ScopeResult] = []
+    for port in sorted(l1_by_port, key=_natural_key):
+        ordered.append(l1_by_port[port])
+        ordered.extend(
+            result for result in services
+            if _parent_port(result, by_id) == port
+        )
+    ordered.extend(
+        result for result in services
+        if _parent_port(result, by_id) not in l1_by_port
+    )
+    return ordered
+
+
+def _l1_baseline(
+    l1_scope: Scope,
+    pairs: list[MatchedPair],
+    baseline_l1: list[Scope],
+) -> Scope | None:
+    """Baseline protejsek L1 portu odvozeny z jeho sparovanych deti.
+
+    Jmeno portu se migraci meni (ge-0/0/5 -> ae0), primy match nejde.
+    Remiza hlasu = zadny par - spatny odkaz je horsi nez zadny (stejne
+    pravidlo jako matcher)."""
+    port = l1_scope.selectors.interfaces[0]
+    votes: Counter[str] = Counter()
+    for pair in pairs:
+        if pair.subject.selectors.physical_interfaces == [port]:
+            parents = pair.baseline.selectors.physical_interfaces
+            if parents:
+                votes[parents[0]] += 1
+    if not votes:
+        return None
+    (top, top_count), *rest = votes.most_common()
+    if rest and rest[0][1] == top_count:
+        return None
+    return next(
+        (scope for scope in baseline_l1 if scope.selectors.interfaces == [top]),
+        None,
+    )
 
 
 def _run_scope(
@@ -338,6 +418,8 @@ def evaluate_snapshots(
     mapping = mapping or empty_mapping()
 
     subject_scopes = _scopes_of(subject)
+    subject_l1 = [s for s in subject_scopes if s.kind == "layer1"]
+    subject_services = [s for s in subject_scopes if s.kind != "layer1"]
     link_payloads = _link_payloads(
         link_scopes(subject_scopes, subject.facts.get("evpn_instance") or {})
     )
@@ -353,7 +435,10 @@ def evaluate_snapshots(
                 )
             )
     else:
-        matches = match_scopes(_scopes_of(baseline), subject_scopes, mapping)
+        baseline_scopes = _scopes_of(baseline)
+        baseline_l1 = [s for s in baseline_scopes if s.kind == "layer1"]
+        baseline_services = [s for s in baseline_scopes if s.kind != "layer1"]
+        matches = match_scopes(baseline_services, subject_services, mapping)
         matched_count = len(matches.pairs)
 
         for pair in matches.pairs:
@@ -390,7 +475,24 @@ def evaluate_snapshots(
         for item in matches.unmatched_baseline:
             unmatched["baseline"].append(_unmatched_entry(item.scope, item.reason))
 
-    scope_results = _reorder_linked(scope_results)
+        for l1_scope in subject_l1:
+            baseline_scope = _l1_baseline(l1_scope, matches.pairs, baseline_l1)
+            match = (
+                MatchInfo(
+                    status="matched",
+                    method="layer1-children",
+                    confidence="medium",
+                    baseline_interfaces=list(baseline_scope.selectors.interfaces),
+                    subject_interfaces=list(l1_scope.selectors.interfaces),
+                )
+                if baseline_scope is not None
+                else None
+            )
+            scope_results.append(
+                _run_scope(l1_scope, subject, baseline_scope, baseline, config, match)
+            )
+
+    scope_results = _group_by_layer1(_reorder_linked(scope_results))
 
     summary = {
         **count_statuses(

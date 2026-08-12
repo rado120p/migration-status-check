@@ -5,12 +5,13 @@ import pytest
 from migration_validator import api
 from migration_validator.engine import (
     _aligned_baseline_data,
+    _group_by_layer1,
     _identity,
     _unassigned_bfd_sessions,
     _unassigned_bgp_peers,
     evaluate_snapshots,
 )
-from migration_validator.models.result import Status
+from migration_validator.models.result import ScopeResult, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 
@@ -615,6 +616,7 @@ def test_identity_on_device_scope_is_empty_not_crashing():
         "service_subtype": None,
         "routing_instance": None,
         "interfaces": [],
+        "physical_interfaces": [],
         "ipv4": [],
         "ipv6": [],
         "virtual_gw_v4": [],
@@ -839,3 +841,93 @@ def test_master_context_link_shows_inet0():
     result = evaluate_snapshots(snapshot)
     by_id = {scope.scope_id: scope for scope in result.scopes}
     assert by_id["svc:EVPN-VLAN-AWARE-CPE14:E-LAN"].link["peer_instance"] == "inet.0"
+
+
+def _snapshot_with(scopes, *, address="172.20.20.5", phase="pre-migration"):
+    return Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(started_at=NOW, finished_at=NOW, phase=phase),
+        facts={},
+        scopes=scopes,
+    )
+
+
+def _l1(port, members=()):
+    return Scope(id=f"l1:{port}", kind="layer1",
+                 key=ScopeKey(f"L1;{port}", "Layer1", "physical-port"),
+                 selectors=Selectors(interfaces=[port],
+                                     lag_members=list(members)))
+
+
+def _svc(name, unit, parent, service_type="Internet"):
+    return Scope(id=f"svc:{name}:{service_type}", kind="service",
+                 key=ScopeKey(name, service_type),
+                 selectors=Selectors(interfaces=[unit],
+                                     physical_interfaces=[parent]))
+
+
+def test_bloky_se_skupinuji_po_portech_prirozene_razene():
+    scopes = [
+        _svc("S-B", "ge-0/0/10.0", "ge-0/0/10"),
+        _svc("S-A", "ge-0/0/2.0", "ge-0/0/2"),
+        _svc("S-LO", "lo0.0", "lo0"),  # bez L1 scopu
+        _l1("ge-0/0/10"),
+        _l1("ge-0/0/2"),
+    ]
+    result = evaluate_snapshots(_snapshot_with(scopes))
+    ids = [r.scope_id for r in result.scopes]
+    assert ids == ["l1:ge-0/0/2", "svc:S-A:Internet",
+                   "l1:ge-0/0/10", "svc:S-B:Internet",
+                   "svc:S-LO:Internet"]
+
+
+def _result(scope_id, service_type, interfaces=(), parents=(), link=None):
+    """Hotovy ScopeResult pro unit test razeni - engine se neobchazi,
+    _group_by_layer1 je cista funkce nad vysledky."""
+    return ScopeResult(
+        scope_id=scope_id, key={"service_type": service_type},
+        status=Status.PASS, match=None, checks=[],
+        identity={"interfaces": list(interfaces),
+                  "physical_interfaces": list(parents)},
+        link=link,
+    )
+
+
+def test_l3_l2_par_drzi_pohromade_pod_portem_l2_rozhrani():
+    # L3 blok (irb.14, bez fyzickeho rodice) dedi rodice sve L2 casti:
+    # par stoji pod l1:ae0, L3 pred L2 (vstup uz prosel _reorder_linked).
+    l3 = _result("svc:INET:Internet", "Internet", interfaces=["irb.14"],
+                 link={"role": "l3", "peer_scope_id": "svc:ELAN:E-LAN",
+                       "peer_interface": "ae0.14", "peer_instance": "POP1"})
+    l2 = _result("svc:ELAN:E-LAN", "E-LAN", interfaces=["ae0.14"],
+                 parents=["ae0"],
+                 link={"role": "l2", "peer_scope_id": "svc:INET:Internet",
+                       "peer_interface": "irb.14", "peer_instance": "inet.0"})
+    l1 = _result("l1:ae0", "Layer1", interfaces=["ae0"])
+    ordered = _group_by_layer1([l3, l2, l1])
+    assert [r.scope_id for r in ordered] == [
+        "l1:ae0", "svc:INET:Internet", "svc:ELAN:E-LAN"]
+
+
+def test_l1_baseline_z_deti():
+    # baseline: sluzba INET na ge-0/0/5.0 (rodic ge-0/0/5) + l1:ge-0/0/5
+    # subject:  sluzba INET na ae0.14 (rodic ae0) + l1:ae0
+    # sluzby sdili description "INET" -> match pres description,
+    # L1 par se pak odvodi z deti. Oba snapshoty stejnou tovarnou.
+    baseline_snapshot = _snapshot_with(
+        [_svc("INET", "ge-0/0/5.0", "ge-0/0/5"), _l1("ge-0/0/5")])
+    subject_snapshot = _snapshot_with(
+        [_svc("INET", "ae0.14", "ae0"), _l1("ae0")])
+    result = evaluate_snapshots(subject_snapshot, baseline_snapshot)
+    l1 = next(r for r in result.scopes if r.scope_id == "l1:ae0")
+    assert l1.match is not None and l1.match.method == "layer1-children"
+    assert l1.match.baseline_interfaces == ["ge-0/0/5"]
+    assert not any(item["scope_id"].startswith("l1:")
+                   for side in ("baseline", "subject")
+                   for item in result.unmatched[side])
+
+
+def test_identity_nese_physical_interfaces():
+    result = evaluate_snapshots(_snapshot_with([_svc("S", "ae0.14", "ae0"), _l1("ae0")]))
+    svc = next(r for r in result.scopes if r.scope_id.startswith("svc:"))
+    assert svc.identity["physical_interfaces"] == ["ae0"]
