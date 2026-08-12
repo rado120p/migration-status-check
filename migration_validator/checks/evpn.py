@@ -7,6 +7,7 @@ vetev na platformu.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -398,6 +399,22 @@ def _service_units(ctx: CheckContext) -> _ServiceUnits:
     return _ServiceUnits(interfaces=interfaces, irb=irb, vlans=vlans)
 
 
+_IFL_RE = re.compile(r"by IFL (\S+)")
+
+
+def _esi_is_relevant(status: str | None, units: _ServiceUnits) -> bool:
+    """ESI patri sluzbe, kdyz jeho status jmenuje jeji IFL.
+
+    Unresolved status IFL nenese, takze pri aktivnim filtru vypadne -
+    vlastni ESI sluzby posuzuje DF radek evpn_esi_status (interface-
+    filtrovany), tenhle listing je jen instancni kontext.
+    """
+    if not status:
+        return False
+    match = _IFL_RE.search(status)
+    return bool(match) and match.group(1) in units.interfaces
+
+
 @register
 class EvpnInstanceStatusCheck(Check):
     """Per-instance zdravi EVPN podle brief pravidel ze zadani.
@@ -495,7 +512,7 @@ class EvpnInstanceStatusCheck(Check):
                 )
             )
 
-        findings.extend(self._esi_findings(instance, data, baseline, label))
+        findings.extend(self._esi_findings(instance, data, baseline, label, units))
 
         local = data.get("local_interfaces", {})
         local_entries = local.get("entries", [])
@@ -568,6 +585,7 @@ class EvpnInstanceStatusCheck(Check):
         data: dict[str, Any],
         baseline: dict[str, Any],
         label,
+        units: _ServiceUnits,
     ) -> list[Finding]:
         esis: dict[str, str] = data.get("esis", {})
         baseline_esis: dict[str, str] = baseline.get("esis", {}) if baseline else {}
@@ -588,6 +606,13 @@ class EvpnInstanceStatusCheck(Check):
         for esi in sorted(set(esis) | set(baseline_esis)):
             status = esis.get(esi)
             baseline_status = baseline_esis.get(esi)
+            if units.active and not _esi_is_relevant(status, units):
+                # Vetev "status is None" (baseline melo, ted chybi) tady
+                # vypada spolu s ostatnimi - baseline IFL nese stare jmeno
+                # rozhrani, proti novym selektorum nikdy nesedi (zamer,
+                # viz spec kap. 2). Zdravi vlastniho ESI nese DF radek
+                # checku evpn_esi_status (interface-filtrovany).
+                continue
             if status is None:
                 findings.append(
                     Finding(

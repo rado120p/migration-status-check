@@ -346,10 +346,19 @@ def test_instance_zero_neighbors_fails():
     assert _by_label(findings, "EVPN neighbors").outcome is Outcome.BROKEN
 
 
+def _instance_findings_bez_filtru(subject, baseline=None):
+    # Tyhle testy overuji vypocet OK/BROKEN per-ESI, ne relevance filtr
+    # (Task 3) - vypnuty selektor drzi puvodni chovani (viz
+    # test_esi_fallback_bez_selektoru_tiskne_vse).
+    ctx = _ctx(subject, baseline)
+    ctx.scope.selectors.interfaces = []
+    return EvpnInstanceStatusCheck().run(ctx)
+
+
 def test_instance_esi_resolved_passes_unresolved_fails():
-    ok = _instance_findings(_instance_subject())
+    ok = _instance_findings_bez_filtru(_instance_subject())
     assert _by_label(ok, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.OK
-    bad = _instance_findings(
+    bad = _instance_findings_bez_filtru(
         _instance_subject(esis={"00:11:12:13:14:00:00:00:00:00": ""})
     )
     assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
@@ -358,7 +367,7 @@ def test_instance_esi_resolved_passes_unresolved_fails():
 def test_instance_esi_unresolved_status_fails_not_substring_match():
     # "Unresolved" obsahuje "resolved" jako podretezec - substring test by
     # tenhle stav omylem oznacil za OK, presne obracene, nez rika status.
-    bad = _instance_findings(
+    bad = _instance_findings_bez_filtru(
         _instance_subject(esis={"00:11:12:13:14:00:00:00:00:00": "Unresolved"})
     )
     assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
@@ -406,7 +415,10 @@ def test_instance_zero_neighbors_fails_even_with_baseline():
 
 
 def test_instance_esi_missing_against_baseline_fails():
-    findings = _instance_findings(
+    # "Chybi vs baseline" radek je bez aktivniho filtru - pri aktivnim
+    # filtru tahle vetev vypada spolu s ostatnimi (Task 3, viz
+    # _esi_is_relevant docstring).
+    findings = _instance_findings_bez_filtru(
         _instance_subject(esis={}),
         baseline=_instance_subject(),
     )
@@ -430,7 +442,7 @@ def test_instance_two_instances_qualify_labels():
 def test_instance_esi_status_text_not_compared_to_baseline():
     # Text statusu nese jmeno IFL ('Resolved by IFL ae0.14'), ktere se
     # migraci meni - rovnost textu by FAILovala kazdou migraci.
-    findings = _instance_findings(
+    findings = _instance_findings_bez_filtru(
         _instance_subject(),
         baseline=_instance_subject(
             esis={"00:11:12:13:14:00:00:00:00:00": "Resolved by IFL ge-0/0/2.313"}
@@ -639,3 +651,27 @@ def test_vice_instanci_negeneruje_falesny_broken():
     )
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
     assert not [f for f in findings if "chybi v instanci" in (f.value or "")]
+
+
+def test_esi_filtr_drzi_jen_vlastni_ifl():
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
+    esi_rows = [f for f in findings if f.label.startswith("ESI ")]
+    assert [f.label for f in esi_rows] == ["ESI 00:11:12:13:14:00:14:00:00:00"]
+    assert esi_rows[0].value == "Resolved by IFL ae0.14"
+
+
+def test_esi_unresolved_bez_ifl_se_pri_filtru_netiskne():
+    subject = _aware_subject()
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["esis"] = {
+        "00:11:12:13:14:00:15:00:00:00": "Unresolved",
+    }
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
+    assert not [f for f in findings if f.label.startswith("ESI ")]
+
+
+def test_esi_fallback_bez_selektoru_tiskne_vse():
+    ctx = _vlan_aware_ctx(_aware_subject())
+    ctx.scope.selectors.interfaces = []
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    esi_rows = [f for f in findings if f.label.startswith("ESI ")]
+    assert len(esi_rows) == 2
