@@ -1,0 +1,190 @@
+#################################################################
+#   Checks interface drop, error and queue counters
+#################################################################
+tests_include:
+  - check_interface_errors
+  - check_interface_queue
+  - check_interface_ae_queue
+  - check_interface_optics
+
+check_interface_errors:
+  - command:  show interfaces extensive "[gxe][et]-*"
+  - iterate:
+      xpath: //physical-interface[oper-status='up']
+      id: name
+      tests:
+        - is-equal: input-error-list/input-resource-errors, 0
+          info: "PASSED! Interface {{id_0}} has no input resource errors"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-resource-errors']}} input resource errors"
+        - is-equal: input-error-list/input-errors, 0
+          info: "PASSED! Interface {{id_0}} has no input errors"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-errors']}} input errors"
+        - is-equal: input-error-list/input-drops, 0
+          info: "PASSED! Interface {{id_0}} has no input drops"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-drops']}} input drops"
+        - is-equal: input-error-list/framing-errors, 0
+          info: "PASSED! Interface {{id_0}} has no framing errors"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/framing-errors']}} input framing errors"
+        - is-equal: input-error-list/input-runts, 0
+          info: "PASSED! Interface {{id_0}} has no input runts"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-runts']}} input runts"
+        - is-equal: input-error-list/input-discards, 0
+          info: "PASSED! Interface {{id_0}} has no input discards"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-discards']}} input discards"
+        - is-equal: input-error-list/input-l3-incompletes, 0
+          info: "PASSED! Interface {{id_0}} has no input L3 incompletes"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-l3-incompletes']}} input L3 incompletes"
+        - is-equal: input-error-list/input-l2-channel-errors, 0
+          info: "PASSED! Interface {{id_0}} has no input L2 channel errors"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-l2-channel-errors']}} input L2 channel errors"
+        - is-equal: input-error-list/input-l2-mismatch-timeouts, 0
+          info: "PASSED! Interface {{id_0}} has no input L2 mismatch timeouts"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-l2-mismatch-timeouts']}} input L2 mismatch timeouts"
+        - is-equal: input-error-list/input-fifo-errors, 0
+          info: "PASSED! Interface {{id_0}} has no input FIFO errors"
+          err: "FAILED! Interface {{id_0}} has {{post['input-error-list/input-fifo-errors']}} input FIFO errors"
+#        - is-equal: output-error-list/carrier-transitions, 0
+#          info: "PASSED! Interface {{id_0}} has no output carrier transitions"
+#          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/carrier-transitions']}} output carrier transitions"
+        - is-equal: output-error-list/output-errors, 0
+          info: "PASSED! Interface {{id_0}} has no output errors"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/output-errors']}} output errors"
+        - is-equal: output-error-list/output-collisions, 0
+          info: "PASSED! Interface {{id_0}} has no output collisions"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/output-collisions']}} output collisions"
+        - is-equal: output-error-list/output-drops, 0
+          info: "PASSED! Interface {{id_0}} has no output drops"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/output-drops']}} output drops"
+        - is-equal: output-error-list/aged-packets, 0
+          info: "PASSED! Interface {{id_0}} has no output aged packets"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/aged-packets']}} output aged packets"
+        - is-equal: output-error-list/mtu-errors, 0
+          info: "PASSED! Interface {{id_0}} has no output mtu errors"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/mtu-errors']}} output mtu errors"
+        - is-equal: output-error-list/hs-link-crc-errors, 0
+          info: "PASSED! Interface {{id_0}} has no output hs link crc errors"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/hs-link-crc-errors']}} output hs link crc errors"
+        - is-equal: output-error-list/output-fifo-errors, 0
+          info: "PASSED! Interface {{id_0}} has no output output fifo errors"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/output-fifo-errors']}} output output fifo errors"
+        - is-equal: output-error-list/output-resource-errors, 0
+          info: "PASSED! Interface {{id_0}} has no output resource errors"
+          err: "FAILED! Interface {{id_0}} has {{post['output-error-list/output-resource-errors']}} output resource errors"
+
+
+check_interface_queue:
+  - command: show interfaces queue "[gxe][et]-*"
+  - iterate:
+      xpath: //physical-interface[oper-status='up']/queue-counters/queue
+      id: forwarding-class-name, ../../name
+      tests:
+        - is-gt: queue-counters-trans-packets, 0
+          info: "PASSED! Interface {{id_1}} has passed {{post['queue-counters-trans-packets']}} packets in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has not forwarded any packets in {{id_0}} queue."
+        - is-equal: queue-counters-tail-drop-packets, 0
+          info: "PASSED! Interface {{id_1}} has no tail drops in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has {{post['queue-counters-tail-drop-packets']}} tail drops!"
+        - is-equal: queue-counters-red-packets, 0
+          info: "PASSED! Interface {{id_1}} has no RED drops in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has {{post['queue-counters-red-packets']}} tail drops!"
+
+
+check_interface_ae_queue:
+  - command: show interfaces queue "ae*"
+  - ignore-null: True
+  - iterate:
+      xpath: //physical-interface[oper-status='up']/queue-counters/queue
+      id: forwarding-class-name, ../../name
+      tests:
+        - is-gt: queue-counters-trans-packets, 0
+          info: "PASSED! Interface {{id_1}} has passed {{post['queue-counters-trans-packets']}} packets in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has not forwarded any packets in {{id_0}} queue."
+        - is-equal: queue-counters-tail-drop-packets, 0
+          info: "PASSED! Interface {{id_1}} has no tail drops in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has {{post['queue-counters-tail-drop-packets']}} tail drops!"
+        - is-equal: queue-counters-red-packets, 0
+          info: "PASSED! Interface {{id_1}} has no RED drops in {{id_0}} queue."
+          err: "FAILED! Interface {{id_1}} has {{post['queue-counters-red-packets']}} tail drops!"
+
+check_interface_optics:
+  - command: show interfaces diagnostics optics
+  - ignore-null: True
+  - iterate:
+      xpath: //optics-diagnostics-lane-values
+      id: ../../name, lane-index
+      tests:
+          # Laser temperature
+        - is-equal: laser-temp-high-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser temperature high alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser temperature high alarm is ON, temperature: {{post['laser-temperature']}}"
+
+        - is-equal: laser-temp-low-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser temperature low alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser temperature low alarm is ON, temperature: {{post['laser-temperature']}}"
+
+        - is-equal: laser-temp-high-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser temperature high warning alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser temperature high warning alarm is ON, temperature: {{post['laser-temperature']}}"
+
+        - is-equal: laser-temp-low-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser temperature low warning alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser temperature low warning alarm is ON, temperature: {{post['laser-temperature']}}"
+
+        # Laser RX power
+        - exists: laser-rx-optical-power-dbm
+          info: "Interface {{id_0}} Lane {{id_1}} Laser RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+          err: "laser-rx-optical-power-dbm doesn't exist"
+
+        # Laser TX power
+        - exists: laser-output-power-dbm
+          info: "Interface {{id_0}} Lane {{id_1}} Laser TX power: {{post['laser-output-power-dbm']}} dBm"
+          err: "laser-output-power-dbm doesn't exist"
+
+        # Laser RX alarms
+        - is-equal: laser-rx-power-high-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser RX power high alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser RX power high alarm is ON, RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+
+        - is-equal: laser-rx-power-low-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser RX power low alarm is OFF"
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser RX power low alarm is ON, RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+
+        - is-equal: laser-rx-power-high-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser RX power high warning alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser RX power high warning alarm is ON, RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+
+        - is-equal: laser-rx-power-low-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} Laser RX power low warning alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser RX power low warning alarm is ON, RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+
+          # Laser RX LOS
+        - is-equal: rx-loss-of-signal-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} rx-loss-of-signal-alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} RX LOS alarm is ON, RX power: {{post['laser-rx-optical-power-dbm']}} dBm"
+
+          # Laser TX power
+        - is-equal: laser-tx-power-high-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} laser-tx-power-high-alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser TX power high alarm is ON, TX power: {{post['laser-output-power-dbm']}} dBm"
+
+        - is-equal: laser-tx-power-low-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} laser-tx-power-low-alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser TX power low alarm is ON, TX power: {{post['laser-output-power-dbm']}} dBm"
+
+        - is-equal: laser-tx-power-high-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} laser-tx-power-high-warn is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser TX power high warning alarm is ON, TX power: {{post['laser-output-power-dbm']}} dBm"
+
+        - is-equal: laser-tx-power-low-warn, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} laser-tx-power-low-warn is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} Laser TX power low warning alarm is ON, TX power: {{post['laser-output-power-dbm']}} dBm"
+
+          # Laser TX LOS 
+        - is-equal: tx-loss-of-signal-functionality-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} TX LOS alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} TX LOS alarm is ON."
+
+          # Laser TX disabled
+        - is-equal: tx-laser-disabled-alarm, Off
+          info: "PASSED! Interface {{id_0}} Lane {{id_1}} TX laser disabled alarm is OFF."
+          err: "FAILED! Interface {{id_0}} Lane {{id_1}} TX laser disabled alarm is ON."
