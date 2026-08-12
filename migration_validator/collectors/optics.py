@@ -17,12 +17,15 @@ Nepripojene porty na realnem zarizeni hlasi laser-rx/output-power-dbm jako
 zustava v datech tak, jak je (collector neinterpretuje, jen prenasi; co s
 nekonecnem na reportu udelat resi az check v navaznem tasku).
 
-Teplota nema na EVO per-lane cislo - 'laser-temperature' tam nese jen
-prahove hodnoty (*-alarm-threshold), samotna teplota je jedna spolecna
-hodnota za cely modul v <module-temperature> ve tvaru '0 degrees C /
-32 degrees F' (overeno na nahravce z labu). _module_temperature_c z ni
-vytahne prvni cislo pred 'degrees C' a sdili se pres vsechny lany stejneho
-portu - to je fyzikalne spravne, teplomer v modulu je jeden.
+Teplota: 'laser-temperature' na kazde lane NENI absentni - existuje, ale
+je to formatovany text s atributem, napr.
+<laser-temperature celsius="0">0 degrees C / 32 degrees F</laser-temperature>
+(overeno na nahravce z labu, 16x). Cte se z atributu 'celsius' (cislo
+primo, bez parsovani textu); text 'N degrees C / M degrees F' je jen
+fallback pro pripad, ze by atribut na jine platforme/verzi chybel.
+Modulova teplota (<module-temperature>, stejny tvar) se pouzije jen tehdy,
+kdyz per-lane tag v XML vubec neni (bez-lane MX modul, kde se cte primo
+z optics-diagnostics uzlu).
 """
 
 from __future__ import annotations
@@ -71,6 +74,10 @@ def _float(node: etree._Element, path: str) -> float | None:
     try:
         return float(value)
     except ValueError:
+        # Zamerne tichy fallback: tag existuje, ale text neni cisty float
+        # (napr. '0 degrees C / 32 degrees F' na temperature tazich - ty se
+        # ctou zvlast pres _temperature_c, nikdy skrz _float). Format
+        # nesouhlasi neni chyba parsovani, jen znak, ze cesta je spatna.
         return None
 
 
@@ -88,14 +95,31 @@ def _flags(node: etree._Element, tags: tuple[str, ...]) -> dict[str, bool]:
 _TEMPERATURE_RE = re.compile(r"(-?[\d.]+)\s*degrees C")
 
 
-def _module_temperature_c(diagnostics: etree._Element) -> float | None:
-    """'<module-temperature>0 degrees C / 32 degrees F</module-temperature>'
-    -> 0.0. Realny fixture nema per-lane teplotu (viz docstring modulu)."""
-    text = _text(diagnostics, "module-temperature")
+def _temperature_c(node: etree._Element, tag: str) -> float | None:
+    """Cte '<tag celsius="N">N degrees C / M degrees F</tag>'.
+
+    Atribut 'celsius' se preferuje (primo cislo, zadne parsovani textu).
+    Regex na text je fallback pro pripad, ze by atribut na jine platforme
+    nebo verzi Junosu chybel a v XML zustal jen formatovany text.
+    """
+    found = node.find(tag)
+    if found is None:
+        return None
+    celsius = found.attrib.get("celsius")
+    if celsius is not None:
+        try:
+            return float(celsius)
+        except ValueError:
+            pass
+    text = found.text.strip() if found.text else None
     if text is None:
         return None
     match = _TEMPERATURE_RE.search(text)
     return float(match.group(1)) if match else None
+
+
+def _module_temperature_c(diagnostics: etree._Element) -> float | None:
+    return _temperature_c(diagnostics, "module-temperature")
 
 
 def _lane(
@@ -104,9 +128,10 @@ def _lane(
     rx = _float(node, "laser-rx-optical-power-dbm")
     if rx is None:
         rx = _float(node, "rx-signal-avg-optical-power-dbm")
-    # Bare 'laser-temperature' je hypoteticka per-lane hodnota (nekryta
-    # zadnou nahravkou) - kdyz existuje, ma prednost pred module-temperature.
-    temperature = _float(node, "laser-temperature")
+    # Per-lane 'laser-temperature' ma prednost - realny fixture ho ma na
+    # kazde lane (viz docstring modulu). Modulova teplota je fallback jen
+    # pro bez-lane moduly / pripady, kdy per-lane tag v XML chybi.
+    temperature = _temperature_c(node, "laser-temperature")
     if temperature is None:
         temperature = module_temperature_c
     return {

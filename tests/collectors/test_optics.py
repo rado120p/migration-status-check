@@ -111,6 +111,33 @@ def test_temperature_se_bere_z_modulu_kdyz_lane_nema_vlastni():
     assert lane["temperature_c"] == 23.0
 
 
+EVO_TVAR_ROZDILNA_TEPLOTA = etree.fromstring("""
+<interface-information>
+  <physical-interface>
+    <name>et-0/0/12</name>
+    <optics-diagnostics>
+      <module-temperature celsius="30">30 degrees C / 86 degrees F</module-temperature>
+      <optics-diagnostics-lane-values>
+        <lane-index>0</lane-index>
+        <laser-rx-optical-power-dbm>-4.0</laser-rx-optical-power-dbm>
+        <laser-temperature celsius="45">45 degrees C / 113 degrees F</laser-temperature>
+      </optics-diagnostics-lane-values>
+    </optics-diagnostics>
+  </physical-interface>
+</interface-information>
+""")
+
+
+def test_per_lane_teplota_ma_prednost_pred_modulovou():
+    """Realny EVO fixture ma per-lane a modulovou teplotu shodne (obe 0), coz
+    by masklo regresi 'per-lane se nikdy neprecte'. Tenhle test je rozlisi:
+    modul 30, lane 45 - vysledek musi byt 45, ne 30.
+    """
+    result = OpticsCollector().parse(EVO_TVAR_ROZDILNA_TEPLOTA, "junos-evo")
+    lane = result["et-0/0/12"]["lanes"][0]
+    assert lane["temperature_c"] == 45.0
+
+
 def test_realne_evo_xml(rpc_fixture):
     xml = rpc_fixture("junos-evo", "optics")  # skip, dokud fixture neni
     result = OpticsCollector().parse(xml, "junos-evo")
@@ -133,6 +160,8 @@ def test_realne_evo_xml(rpc_fixture):
     # Realny fixture ma nepripojene porty - RX-low/LOS alarmy jsou tam
     # genuinne zvednute, takze test_all_false by lhal o datech z labu.
     assert found_true_alarm
-    # EVO nema per-lane teplotu, jen module-temperature ('0 degrees C / ...')
-    # - bez fallbacku na modul by temperature_c bylo tise porad None.
+    # Overuje jen, ze temperature_c neni tise porad None - odkud presne
+    # hodnota prisla (per-lane vs modulovy fallback) v tomto fixture
+    # nerozlisi, protoze obe se shoduji (celsius="0" vsude). To pokryva
+    # test_per_lane_teplota_ma_prednost_pred_modulovou vyse.
     assert found_temperature
