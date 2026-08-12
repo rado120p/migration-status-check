@@ -17,7 +17,8 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
-  lag_members: []
+  lag_members:
+  - et-0/0/5
   static_route: []
   bfd: []
   detection_confidence: high
