@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -43,6 +44,7 @@ interfaces:
   - VL-14
   customer_vlan:
   - '14'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -69,6 +71,7 @@ interfaces:
   - VL-15
   customer_vlan:
   - '15'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -83,8 +86,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE24-UNI
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - ccc
   - evpn
@@ -94,6 +97,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '224'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -109,7 +113,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-POP1
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - ethernet-switching
   - evpn
@@ -121,6 +125,7 @@ interfaces:
   customer_vlan:
   - 0x8100.4094
   - '4094'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -142,6 +147,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -169,13 +175,14 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
 - interface: et-0/0/1
-  description: clab-pop-migration-MX1-POP1 ge-0/0/1
+  description: clab-pop-migration-MX1-POP1;ge-0/0/1
   service_type: Layer1
   service_subtype: physical-port
   ipv4_address: []
@@ -190,13 +197,14 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: et-0/0/1.0
-  description: clab-pop-migration-MX1-POP1 ge-0/0/1
+  description: clab-pop-migration-MX1-POP1;ge-0/0/1
   service_type: Core
   service_subtype: null
   ipv4_address:
@@ -217,6 +225,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -238,6 +247,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -259,6 +269,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -288,6 +299,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '13'
+  lag_members: []
   static_route:
   - rib: inet.0
     prefix: 198.62.1.0/29
@@ -339,6 +351,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  lag_members: []
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
     prefix: 172.26.1.0/29
@@ -380,6 +393,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '213'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -406,6 +420,7 @@ interfaces:
   - VL-313
   customer_vlan:
   - '313'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -432,11 +447,34 @@ interfaces:
   - VL-NONE
   customer_vlan:
   - '413'
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
   detection_reason:
   - Routing instance explicitně používá service-type vlan-based.
+- interface: et-0/0/10
+  description: null
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: irb
   description: null
   service_type: Layer1
@@ -453,6 +491,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -479,6 +518,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: medium
@@ -490,11 +530,13 @@ interfaces:
   service_type: IPVPN
   service_subtype: null
   ipv4_address:
-  - 198.11.14.1/30
+  - 198.11.14.2/29
   ipv6_address:
-  - 2001:db8:11:14::a/127
-  virtual_gw_ipv4_address: []
-  virtual_gw_ipv6_address: []
+  - 2001:db8:11:14::2/64
+  virtual_gw_ipv4_address:
+  - 198.11.14.1
+  virtual_gw_ipv6_address:
+  - 2001:db8:11:14::1
   routing_instance: L3VPN-CPE14-UNI
   routing_instance_active: true
   interface_active: true
@@ -504,25 +546,26 @@ interfaces:
   - bgp
   - vrf
   bgp_neighbor:
-  - 198.11.14.2
-  - 2001:db8:11:14::b
+  - 198.11.14.4
+  - 2001:db8:11:14::4
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd:
-  - peer: 198.11.14.2
+  - peer: 198.11.14.4
     minimum_interval: 3000
     multiplier: 3
     source: group
-  - peer: 2001:db8:11:14::b
+  - peer: 2001:db8:11:14::4
     minimum_interval: 3000
     multiplier: 3
     source: group
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
-  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.2, 2001:db8:11:14::b'
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.4, 2001:db8:11:14::4'
 - interface: irb.4094
   description: null
   service_type: IPVPN
@@ -534,8 +577,8 @@ interfaces:
   - 10.40.94.1
   virtual_gw_ipv6_address: []
   routing_instance: MGMT
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - vrf
@@ -543,12 +586,13 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route:
   - rib: MGMT.inet.0
     prefix: 10.40.95.0/24
     next_hop:
     - 10.40.94.10
-    active: false
+    active: true
   bfd: []
   detection_confidence: high
   detection_reason:
@@ -570,6 +614,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -596,6 +641,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -617,6 +663,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
@@ -640,6 +687,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  lag_members: []
   static_route: []
   bfd: []
   detection_confidence: medium
