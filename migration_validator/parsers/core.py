@@ -369,6 +369,19 @@ class JunosServiceParserCore:
 
     LOGGER_NAME = "junos-service-parser"
 
+    # Top-level hierarchie pro get-config filtr. NETCONF server filtr
+    # validuje proti schematu platformy, podtrida proto vynecha
+    # hierarchie, ktere jeji platforma nezna (jinak RpcError bad_element).
+    CONFIG_HIERARCHIES: tuple[str, ...] = (
+        "interfaces",
+        "routing-options",
+        "routing-instances",
+        "protocols",
+        "bridge-domains",
+        "vlans",
+        "switch-options",
+    )
+
     def __init__(self, config_xml: etree._Element):
         self._logger = logging.getLogger(self.LOGGER_NAME)
 
@@ -2152,32 +2165,20 @@ def build_device(
 
 def retrieve_configuration(
     device: Device,
+    hierarchies: tuple[str, ...],
 ) -> etree._Element:
     """
     Načte konfiguraci potřebnou pro klasifikaci služeb.
 
-    Použit je jeden filtr, aby parser viděl vazby mezi:
-        interfaces
-        routing-options
-        routing-instances
-        protocols
-        bridge-domains
-        vlans
+    Filtr se skládá z hierarchií dané platformy (CONFIG_HIERARCHIES
+    parseru) - NETCONF server odmítne filtr s hierarchií, kterou
+    schéma platformy nezná (např. vlans na MX).
     """
 
-    config_filter = etree.XML(
-        b"""
-        <configuration>
-            <interfaces/>
-            <routing-options/>
-            <routing-instances/>
-            <protocols/>
-            <bridge-domains/>
-            <vlans/>
-            <switch-options/>
-        </configuration>
-        """
-    )
+    config_filter = etree.Element("configuration")
+
+    for hierarchy in hierarchies:
+        etree.SubElement(config_filter, hierarchy)
 
     response = device.rpc.get_config(
         filter_xml=config_filter,
@@ -2478,7 +2479,10 @@ def main(argv: list[str] | None = None, *, parser_cls: type | None = None) -> in
             "Spojení navázáno, načítám konfiguraci."
         )
 
-        config_xml = retrieve_configuration(device)
+        config_xml = retrieve_configuration(
+            device,
+            hierarchies=parser_cls.CONFIG_HIERARCHIES,
+        )
 
         parser = parser_cls(config_xml)
         services = parser.parse()

@@ -13,6 +13,17 @@ from migration_validator.parsers.core import (
 class JunosServiceParser(JunosServiceParserCore):
     LOGGER_NAME = "junos-service-parser"
 
+    # Klasicky Junos na MX nema top-level hierarchii vlans,
+    # NETCONF get-config s ni skonci RpcError bad_element.
+    CONFIG_HIERARCHIES = (
+        "interfaces",
+        "routing-options",
+        "routing-instances",
+        "protocols",
+        "bridge-domains",
+        "switch-options",
+    )
+
     def _detect_vpls(
         self,
         instance_type: str | None,

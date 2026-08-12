@@ -24,8 +24,12 @@ def generate_inventory(
     rozhrani (cast pred teckou) odpovida.
     """
 
-    config = retrieve_configuration(device)
-    services = parser_for_platform(platform)(config).parse()
+    parser_cls = parser_for_platform(platform)
+    config = retrieve_configuration(
+        device,
+        hierarchies=parser_cls.CONFIG_HIERARCHIES,
+    )
+    services = parser_cls(config).parse()
 
     if port is not None:
         services = [

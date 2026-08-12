@@ -41,7 +41,7 @@ TWO_PORTS = """
 
 
 def _fake_retrieve_configuration(monkeypatch, xml_text):
-    def fake(device):
+    def fake(device, hierarchies):
         return etree.fromstring(xml_text)
 
     monkeypatch.setattr(
