@@ -341,32 +341,6 @@ def test_instance_healthy_rows_pass():
     assert _by_label(findings, "EVPN interface").outcome is Outcome.OK
 
 
-def test_instance_zero_local_interfaces_fails():
-    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
-    # neexistuje.
-    findings = _instance_findings(_instance_subject(total=0, up=0))
-    assert not [f for f in findings if f.label == "EVPN local interfaces"]
-
-
-def test_instance_interface_down_fails_up_row():
-    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
-    # neexistuje.
-    findings = _instance_findings(_instance_subject(total=2, up=1))
-    assert not [f for f in findings if f.label == "EVPN local interfaces up"]
-
-
-def test_instance_without_irb_skips_irb_up_row():
-    findings = _instance_findings(_instance_subject(irb_total=0, irb_up=0))
-    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
-
-
-def test_instance_irb_down_fails():
-    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
-    # neexistuje.
-    findings = _instance_findings(_instance_subject(irb_total=2, irb_up=1))
-    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
-
-
 def test_instance_zero_neighbors_fails():
     findings = _instance_findings(_instance_subject(neighbors=0))
     assert _by_label(findings, "EVPN neighbors").outcome is Outcome.BROKEN
@@ -395,29 +369,6 @@ def test_instance_no_esi_gives_skip_row():
     row = _by_label(findings, "ESI status")
     assert row.outcome is Outcome.SKIP
     assert row.value == "bez dat"
-
-
-def test_instance_local_count_differs_from_baseline_is_not_a_finding():
-    # Revize spec 2.4 (overeno v laborce 2026-08-06): migrace konsoliduje
-    # sluzby do jedne mac-vrf instance, takze pocty local/IRB interfacu se
-    # meni pri kazde migraci. Task 2 agregatni radky zrusil uplne - rozdil
-    # proti baseline uz tedy neni co hlasit, radek proste neexistuje.
-    findings = _instance_findings(
-        _instance_subject(total=2, up=2),
-        baseline=_instance_subject(total=3, up=3),
-    )
-    assert not [
-        f for f in findings
-        if f.label in ("EVPN local interfaces", "EVPN local interfaces up")
-    ]
-
-
-def test_instance_irb_up_count_differs_from_baseline_is_not_a_finding():
-    findings = _instance_findings(
-        _instance_subject(irb_total=3, irb_up=3),
-        baseline=_instance_subject(irb_total=1, irb_up=1),
-    )
-    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
 
 
 def test_instance_neighbors_below_baseline_degrades():

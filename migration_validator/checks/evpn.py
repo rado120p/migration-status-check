@@ -342,13 +342,15 @@ def _count_finding(
 ) -> Finding:
     """Ciselny radek: stavove pravidlo; rozdil proti baseline nese ZMENA.
 
-    Rovnost s baseline se nevynucuje (revize spec 2.4 po overeni v laborce
-    2026-08-06): migrace konsoliduje sluzby do jedne mac-vrf instance,
-    takze pocty local/IRB interfacu se meni pri kazde migraci a rovnost by
-    FAILovala trvale. Vyjimkou jsou EVPN neighbors (warn_below_baseline):
-    pokles pod baseline je DEGRADED - ztraceny peer stoji za pozornost,
-    ale u ciste L2 vlan-aware sluzby po migraci legitimne ubyde puvodni
-    box, takze to neni tvrdy FAIL.
+    Jedinym volajicim je EVPN neighbors (stavove pravidlo > 0). Rovnost s
+    baseline se nevynucuje (revize spec 2.4 po overeni v laborce
+    2026-08-06) - misto toho warn_below_baseline: pokles pod baseline je
+    DEGRADED, ztraceny peer stoji za pozornost, ale u ciste L2 vlan-aware
+    sluzby po migraci legitimne ubyde puvodni box, takze to neni tvrdy
+    FAIL. Agregaty local/IRB interfacu, ktere driv rovnez pouzivaly tuhle
+    funkci, Task 2 zrusil - jejich pocet se migraci meni pri kazde
+    konsolidaci sluzeb do jedne mac-vrf instance a rovnost by FAILovala
+    trvale, viz _ServiceUnits vyse.
     """
     outcome = Outcome.OK if ok else Outcome.BROKEN
     text = f"{message}: {value}" if ok else f"{message}: {value}, ocekavano {expectation}"
@@ -400,11 +402,15 @@ def _service_units(ctx: CheckContext) -> _ServiceUnits:
 class EvpnInstanceStatusCheck(Check):
     """Per-instance zdravi EVPN podle brief pravidel ze zadani.
 
-    Compare semantika (revize spec 2.4, 2026-08-06): pocty local/IRB
-    interfacu se s baseline neporovnavaji na rovnost - rozdil je videt ve
-    sloupci ZMENA, stav urcuji jen stavova pravidla. EVPN neighbors pod
-    baseline jsou DEGRADED (viz _count_finding). Text ESI statusu se na
-    rovnost neporovnava, nese jmeno IFL.
+    RI-wide agregaty local/IRB interfacu (Task 2, spec 2026-08-12) jsou
+    zrusene - pocet interfacu v instanci se migraci konsolidace sluzeb do
+    jedne mac-vrf meni pri kazde migraci a byl by trvale nepouzitelny pro
+    porovnani s baseline. Misto nich se posuzuji jen radky vlastnich unitu
+    sluzby: "EVPN interface" (filtr na ctx.scope.selectors.interfaces) a
+    "IRB interface" (jen kdyz je unit linkovany pres ctx.link, role "l2") -
+    viz _service_units. EVPN neighbors pod baseline jsou DEGRADED (viz
+    _count_finding). Text ESI statusu se na rovnost neporovnava, nese
+    jmeno IFL.
     """
 
     id = "evpn_instance_status"
@@ -453,9 +459,6 @@ class EvpnInstanceStatusCheck(Check):
         baseline = baseline or {}
         findings: list[Finding] = []
 
-        local = data.get("local_interfaces", {})
-        irb = data.get("irb_interfaces", {})
-
         neighbors = data.get("neighbors", {})
         baseline_neighbors = baseline.get("neighbors") or None
         findings.append(
@@ -486,6 +489,7 @@ class EvpnInstanceStatusCheck(Check):
 
         findings.extend(self._esi_findings(instance, data, baseline, label))
 
+        local = data.get("local_interfaces", {})
         for entry in local.get("entries", []):
             if units.active and entry["name"] not in units.interfaces:
                 continue
@@ -499,6 +503,7 @@ class EvpnInstanceStatusCheck(Check):
                     value=f"{entry['name']} {entry['status']}",
                 )
             )
+        irb = data.get("irb_interfaces", {})
         for entry in irb.get("entries", []):
             if units.active and entry["name"] != units.irb:
                 continue
