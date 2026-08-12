@@ -507,3 +507,24 @@ def test_instance_not_run_on_eline_scope():
         _ctx(_instance_subject(), service_type="E-Line", subtype="vpws"),
     )
     assert result == []
+
+
+def _instance_subject_with_addresses(**overrides):
+    data = {
+        "local_interfaces": {"total": 1, "up": 1, "entries": [
+            {"name": "ge-0/0/2.313", "status": "Up"},
+        ]},
+        "irb_interfaces": {"total": 0, "up": 0, "entries": []},
+        "neighbors": {"total": 2, "addresses": ["150.0.0.2", "150.0.0.3"]},
+        "esis": {},
+    }
+    data.update(overrides)
+    return {"evpn_instance": {"EVPN-AWARE-CPE13": data}}
+
+
+def test_neighbor_adresy_stoji_hned_pod_countem():
+    findings = EvpnInstanceStatusCheck().run(_ctx(_instance_subject_with_addresses()))
+    labels = [f.label for f in findings]
+    count_idx = labels.index("EVPN neighbors")
+    assert labels[count_idx + 1] == "EVPN neighbor"
+    assert labels[count_idx + 2] == "EVPN neighbor"

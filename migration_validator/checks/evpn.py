@@ -495,6 +495,16 @@ class EvpnInstanceStatusCheck(Check):
             )
         )
 
+        for address in neighbors.get("addresses", []):
+            findings.append(
+                Finding(
+                    Outcome.INFO,
+                    f"{instance}: neighbor {address}",
+                    label=label("EVPN neighbor"),
+                    value=address,
+                )
+            )
+
         findings.extend(self._esi_findings(instance, data, baseline, label))
 
         for entry in local.get("entries", []):
@@ -517,15 +527,6 @@ class EvpnInstanceStatusCheck(Check):
                     f"{instance}: IRB {value}",
                     label=label("IRB interface"),
                     value=value,
-                )
-            )
-        for address in neighbors.get("addresses", []):
-            findings.append(
-                Finding(
-                    Outcome.INFO,
-                    f"{instance}: neighbor {address}",
-                    label=label("EVPN neighbor"),
-                    value=address,
                 )
             )
         return findings
