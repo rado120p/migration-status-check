@@ -1262,10 +1262,14 @@ class JunosServiceParserCore:
 
         # 802.3ad clenstvi je vzdy na fyzickem rozhrani (ether-options /
         # gigether-options / aggregated-ether-options) - na unit uzlu xpath
-        # nic nenajde, coz je zamerne.
+        # nic nenajde, coz je zamerne. Realny lab pouziva tecku
+        # (ieee-802.3ad, podle CLI stanzy "802.3ad ae0") - overeno na labu
+        # 2026-08-12. Varianta se spojovnikem se drzi jako tolerance pro
+        # jine renderovani/verze Junosu.
         bundle = first_text(
             node,
-            ".//*[local-name()='ieee-802-3ad']"
+            ".//*[local-name()='ieee-802.3ad'"
+            " or local-name()='ieee-802-3ad']"
             "/*[local-name()='bundle']/text()",
         )
 
