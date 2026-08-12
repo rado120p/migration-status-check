@@ -92,8 +92,8 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_seven():
-    assert SCHEMA_VERSION == 7
+def test_snapshot_version_is_eight():
+    assert SCHEMA_VERSION == 8
 
 
 def test_old_snapshot_fails_loudly():

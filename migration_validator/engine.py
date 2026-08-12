@@ -79,6 +79,11 @@ def _aligned_baseline_data(
     Tasku 3 hledal par pod jmenem subjektu (et-0/0/8.313), ale baseline by
     ho porad mel ulozeny pod starym jmenem (ge-0/0/2.313) - par by se
     nikdy nenasel.
+
+    Oblast optics je klicovana fyzickym portem, ktery muze byt i clen LAGu
+    (lag_members) - proto se do rename pozicne pricitaji i cleny, ne jen
+    physical_interfaces. Bez toho by port v LAGu po migraci na jiny hardware
+    nikdy nenasel svou baseline optiku.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
     selectors = baseline_scope.selectors
@@ -86,6 +91,7 @@ def _aligned_baseline_data(
     rename.update(
         zip(selectors.physical_interfaces, scope.selectors.physical_interfaces)
     )
+    rename.update(zip(selectors.lag_members, scope.selectors.lag_members))
     if rename:
         data["interfaces"] = {
             rename.get(name, name): iface_data
@@ -104,6 +110,11 @@ def _aligned_baseline_data(
                 },
             }
             for instance, instance_data in data["evpn_mac"].items()
+        }
+    if rename and data.get("optics"):
+        data["optics"] = {
+            rename.get(name, name): optics_data
+            for name, optics_data in data["optics"].items()
         }
     return data
 

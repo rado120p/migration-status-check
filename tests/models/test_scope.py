@@ -265,6 +265,42 @@ def test_missing_areas_come_back_as_empty_mappings():
     assert selected["bfd"] == {}
 
 
+OPTICS_FACTS = {
+    "et-0/0/8": {"lanes": [{"lane": 0, "rx_power_dbm": -3.0}]},
+    "et-0/0/9": {"lanes": [{"lane": 0, "rx_power_dbm": -1.0}]},
+    "et-0/0/10": {"lanes": [{"lane": 0, "rx_power_dbm": -9.0}]},
+}
+
+
+def test_optics_selected_by_physical_interface():
+    """Optika je klicovana fyzickym portem, ne logickym rozhranim scopu."""
+    scope = _scope_with(physical_interfaces=["et-0/0/8"])
+
+    selected = scope.select({"optics": OPTICS_FACTS})
+
+    assert set(selected["optics"]) == {"et-0/0/8"}
+
+
+def test_optics_selected_by_lag_member():
+    """LAG-clen nese vlastni optiku, i kdyz neni v physical_interfaces (to
+    je jmeno agregovaneho ae rozhrani). Zabiji mutanta: vypusteni
+    `or name in self.selectors.lag_members` ze Scope.select.
+    """
+    scope = _scope_with(physical_interfaces=["ae0"], lag_members=["et-0/0/9"])
+
+    selected = scope.select({"optics": OPTICS_FACTS})
+
+    assert set(selected["optics"]) == {"et-0/0/9"}
+
+
+def test_optics_of_foreign_port_is_not_selected():
+    scope = _scope_with(physical_interfaces=["et-0/0/8"])
+
+    selected = scope.select({"optics": OPTICS_FACTS})
+
+    assert "et-0/0/10" not in selected["optics"]
+
+
 def test_scope_reports_why_it_is_deactivated():
     """Duvod jmenuje oba zdroje, aby operator vedel, co odaktivovat.
 

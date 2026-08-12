@@ -9,6 +9,7 @@ from migration_validator.collectors import (  # noqa: F401
     evpn,
     interfaces,
     nd,
+    optics,
     routes,
 )
 

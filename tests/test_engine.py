@@ -259,6 +259,47 @@ def test_aligned_baseline_renames_evpn_mac_interface_keys():
     assert set(data["evpn_mac"]["EVPN-X"]["interfaces"]) == {"et-0/0/8.313"}
 
 
+def test_aligned_baseline_renames_optics_keys_including_lag_members():
+    """Optika je klicovana fyzickym portem (i clenem LAGu) - preklicovani
+    z Tasku 11 musi platit i pro ni, jinak by po migraci na jiny hardware
+    (ge-0/0/2 -> et-0/0/8, ae0 s clenem ge-0/0/3 -> ae0 s clenem et-0/0/9)
+    optika navzdy hlasila 'bez baseline'.
+    """
+    baseline_scope = Scope(
+        id="l1:ge-0/0/2",
+        kind="layer1",
+        key=ScopeKey("Optika CPE14", "Layer1", None),
+        selectors=Selectors(
+            physical_interfaces=["ge-0/0/2"],
+            lag_members=["ge-0/0/3"],
+        ),
+    )
+    subject_scope = Scope(
+        id="l1:et-0/0/8",
+        kind="layer1",
+        key=ScopeKey("Optika CPE14", "Layer1", None),
+        selectors=Selectors(
+            physical_interfaces=["et-0/0/8"],
+            lag_members=["et-0/0/9"],
+        ),
+    )
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
+        facts={
+            "optics": {
+                "ge-0/0/2": {"lanes": [{"lane": 0, "rx_power_dbm": -3.0}]},
+                "ge-0/0/3": {"lanes": [{"lane": 0, "rx_power_dbm": -4.0}]},
+            }
+        },
+        scopes=[baseline_scope],
+    )
+
+    data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
+
+    assert set(data["optics"]) == {"et-0/0/8", "et-0/0/9"}
+
+
 def test_traffic_drop_surfaces_as_warn_in_summary():
     result = api.evaluate(_new(pps=100), baseline=_old(), now=NOW)
 

@@ -27,6 +27,7 @@ COLLECTOR_NAMES = (
     "evpn_mac",
     "routes",
     "bfd",
+    "optics",
 )
 
 
@@ -124,6 +125,7 @@ def _facts_for(scopes, pps: int) -> dict:
     evpn_mac = {}
     routes: dict[str, dict[str, dict]] = {}
     bfd = {}
+    optics = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -134,6 +136,22 @@ def _facts_for(scopes, pps: int) -> dict:
                 "output_pps": pps,
                 "input_errors": 0,
                 "output_errors": 0,
+            }
+        # Zdrava optika pro kazdy fyzicky tranzitni port - bez ni by scope
+        # s optickym rozhranim dostal prazdnou oblast a check z Tasku 12
+        # by ji nemel co overit (fixture by lhala o zdravem stavu sluzby).
+        for port in scope.selectors.physical_interfaces:
+            optics[port] = {
+                "lanes": [
+                    {
+                        "lane": 0,
+                        "rx_power_dbm": -5.0,
+                        "tx_power_dbm": -2.0,
+                        "temperature_c": 30.0,
+                        "alarms": {},
+                        "warnings": {},
+                    }
+                ]
             }
         seen_families = set()
         for peer in scope.selectors.bgp_neighbors:
@@ -279,6 +297,7 @@ def _facts_for(scopes, pps: int) -> dict:
         "evpn_mac": evpn_mac,
         "routes": routes,
         "bfd": bfd,
+        "optics": optics,
     }
 
 

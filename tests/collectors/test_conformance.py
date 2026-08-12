@@ -31,6 +31,7 @@ from migration_validator.collectors.evpn import (
 )
 from migration_validator.collectors.interfaces import InterfacesCollector
 from migration_validator.collectors.nd import NdCollector
+from migration_validator.collectors.optics import OpticsCollector
 from migration_validator.collectors.routes import RoutesCollector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
@@ -59,7 +60,15 @@ COLLECTORS = (
     EvpnInstanceCollector(),
     RoutesCollector(),
     BfdCollector(),
+    OpticsCollector(),
 )
+
+# optics na junos (vMX) nema fixture zamerne: RPC existuje, ale vMX na nej
+# odpovida prazdnym <interface-information/> (zadny fyzicky opticky modul
+# k zaznamenani neni). MX tvary (s lanes / bez lanes / slevani RX variant)
+# kryji syntetiky v test_optics.py; conformance na junos-evo overuje skutecny
+# XML z labu.
+NO_FIXTURE_ON: set[tuple[str, str]] = {("junos", "optics")}
 
 
 def _fixture_paths(platform: str, collector) -> list[Path]:
@@ -69,6 +78,8 @@ def _fixture_paths(platform: str, collector) -> list[Path]:
     Kdyby se tady cetla jen prvni, MX vlan-based instance by v faktech
     chybela a test by tvrdil mensi pokryti, nez capture ve skutecnosti ma.
     """
+    if (platform, collector.name) in NO_FIXTURE_ON:
+        return []
     root = RPC_ROOT / platform
     paths = [root / f"{collector.name}.xml"]
     paths += [
@@ -108,8 +119,15 @@ def _facts_from_recorded_xml(platform: str) -> dict:
     """Fakta presne tak, jak by je vyrobil capture - bez rucniho dolepovani."""
     facts = {}
     for collector in COLLECTORS:
+        paths = _fixture_paths(platform, collector)
+        if not paths:
+            # NO_FIXTURE_ON: RPC na teto platforme skutecne existuje, ale
+            # vraci prazdny vysledek (vMX optics) - {} je presne to, co by
+            # collector.parse() nad takovou odpovedi vratil, ne fabulace.
+            facts[collector.name] = {}
+            continue
         merged: Any = None
-        for path in _fixture_paths(platform, collector):
+        for path in paths:
             # Drive tu byl pytest.skip. Ten z prejmenovane oblasti udelal
             # "19 skipped, nula failu" - tedy signal, ze je vsechno v poradku.
             # Chybejici nahravka je chyba sady, ne duvod ji preskocit.

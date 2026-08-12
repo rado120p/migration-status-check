@@ -23,6 +23,7 @@ FACT_AREAS = (
     "evpn_mac",
     "routes",
     "bfd",
+    "optics",
 )
 
 
@@ -226,6 +227,13 @@ class Scope:
 
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
 
+        optics = {
+            name: data
+            for name, data in (facts.get("optics") or {}).items()
+            if self.selectors.matches_interface(name)
+            or name in self.selectors.lag_members
+        }
+
         return {
             "interfaces": interfaces,
             "arp": arp,
@@ -237,6 +245,7 @@ class Scope:
             "evpn_mac": evpn_mac,
             "routes": routes,
             "bfd": bfd,
+            "optics": optics,
             "ping": ping,
         }
 
