@@ -334,23 +334,25 @@ def _instance_findings(subject, baseline=None):
 
 
 def test_instance_healthy_rows_pass():
+    # Agregatni radky (Task 2) zmizely - "zdravi" ted nese jen count a
+    # posouzeny radek vlastniho unitu.
     findings = _instance_findings(_instance_subject())
-    for label in ("EVPN local interfaces", "EVPN local interfaces up",
-                  "EVPN IRB interfaces up", "EVPN neighbors"):
-        assert _by_label(findings, label).outcome in (Outcome.OK, Outcome.INFO), label
-    assert _by_label(findings, "EVPN IRB interfaces").outcome is Outcome.INFO
+    assert _by_label(findings, "EVPN neighbors").outcome is Outcome.OK
+    assert _by_label(findings, "EVPN interface").outcome is Outcome.OK
 
 
 def test_instance_zero_local_interfaces_fails():
+    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
+    # neexistuje.
     findings = _instance_findings(_instance_subject(total=0, up=0))
-    assert _by_label(findings, "EVPN local interfaces").outcome is Outcome.BROKEN
+    assert not [f for f in findings if f.label == "EVPN local interfaces"]
 
 
 def test_instance_interface_down_fails_up_row():
+    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
+    # neexistuje.
     findings = _instance_findings(_instance_subject(total=2, up=1))
-    row = _by_label(findings, "EVPN local interfaces up")
-    assert row.outcome is Outcome.BROKEN
-    assert row.value == "1/2"
+    assert not [f for f in findings if f.label == "EVPN local interfaces up"]
 
 
 def test_instance_without_irb_skips_irb_up_row():
@@ -359,8 +361,10 @@ def test_instance_without_irb_skips_irb_up_row():
 
 
 def test_instance_irb_down_fails():
+    # Agregatni radek zrusen (Task 2) - misto BROKEN uz radek proste
+    # neexistuje.
     findings = _instance_findings(_instance_subject(irb_total=2, irb_up=1))
-    assert _by_label(findings, "EVPN IRB interfaces up").outcome is Outcome.BROKEN
+    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
 
 
 def test_instance_zero_neighbors_fails():
@@ -396,18 +400,16 @@ def test_instance_no_esi_gives_skip_row():
 def test_instance_local_count_differs_from_baseline_is_not_a_finding():
     # Revize spec 2.4 (overeno v laborce 2026-08-06): migrace konsoliduje
     # sluzby do jedne mac-vrf instance, takze pocty local/IRB interfacu se
-    # meni pri kazde migraci. Rozdil nese sloupec ZMENA (baseline_value),
-    # stav zustava podle stavoveho pravidla.
+    # meni pri kazde migraci. Task 2 agregatni radky zrusil uplne - rozdil
+    # proti baseline uz tedy neni co hlasit, radek proste neexistuje.
     findings = _instance_findings(
         _instance_subject(total=2, up=2),
         baseline=_instance_subject(total=3, up=3),
     )
-    row = _by_label(findings, "EVPN local interfaces")
-    assert row.outcome is Outcome.OK
-    assert row.baseline_value == "3"
-    up_row = _by_label(findings, "EVPN local interfaces up")
-    assert up_row.outcome is Outcome.OK
-    assert up_row.baseline_value == "3/3"
+    assert not [
+        f for f in findings
+        if f.label in ("EVPN local interfaces", "EVPN local interfaces up")
+    ]
 
 
 def test_instance_irb_up_count_differs_from_baseline_is_not_a_finding():
@@ -415,9 +417,7 @@ def test_instance_irb_up_count_differs_from_baseline_is_not_a_finding():
         _instance_subject(irb_total=3, irb_up=3),
         baseline=_instance_subject(irb_total=1, irb_up=1),
     )
-    row = _by_label(findings, "EVPN IRB interfaces up")
-    assert row.outcome is Outcome.OK
-    assert row.baseline_value == "1/1"
+    assert not [f for f in findings if f.label == "EVPN IRB interfaces up"]
 
 
 def test_instance_neighbors_below_baseline_degrades():
@@ -465,13 +465,15 @@ def test_instance_esi_missing_against_baseline_fails():
 
 def test_instance_two_instances_qualify_labels():
     # Dve instance ve scope musi mit odlisitelne radky - stejny princip
-    # jako test_two_interfaces_qualify_labels u VPWS checku.
+    # jako test_two_interfaces_qualify_labels u VPWS checku. Agregatni
+    # radek "EVPN local interfaces" zmizel (Task 2) - qualifikace se
+    # overuje na posuzovanem "EVPN interface" radku.
     subject = _instance_subject()
     subject["evpn_instance"]["EVPN-B"] = subject["evpn_instance"].pop("EVPN-AWARE-CPE13")
     subject["evpn_instance"]["EVPN-A"] = _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
     findings = _instance_findings(subject)
-    assert any(f.label == "EVPN local interfaces (EVPN-A)" for f in findings)
-    assert any(f.label == "EVPN local interfaces (EVPN-B)" for f in findings)
+    assert any(f.label == "EVPN interface (EVPN-A)" for f in findings)
+    assert any(f.label == "EVPN interface (EVPN-B)" for f in findings)
 
 
 def test_instance_esi_status_text_not_compared_to_baseline():
@@ -487,11 +489,12 @@ def test_instance_esi_status_text_not_compared_to_baseline():
 
 
 def test_instance_info_rows_list_names():
+    # IRB interface radek vyzaduje link (Task 2) - bez nej se netiskne,
+    # viz test_bez_linku_zadny_irb_radek. Tady se overuje jen EVPN
+    # interface a neighbor, ktere link nepotrebuji.
     findings = _instance_findings(_instance_subject())
     values = [f.value for f in findings if f.label == "EVPN interface"]
     assert "ge-0/0/2.313 Up" in values
-    irb_values = [f.value for f in findings if f.label == "IRB interface"]
-    assert "irb.14 Up (master)" in irb_values
     neighbor_values = [f.value for f in findings if f.label == "EVPN neighbor"]
     assert "150.0.0.13" in neighbor_values
 
@@ -528,3 +531,93 @@ def test_neighbor_adresy_stoji_hned_pod_countem():
     count_idx = labels.index("EVPN neighbors")
     assert labels[count_idx + 1] == "EVPN neighbor"
     assert labels[count_idx + 2] == "EVPN neighbor"
+
+
+def _vlan_aware_ctx(subject, link=None):
+    """Scope sluzby ae0.14 v RI se tremi sluzbami - vlan-aware vzor z labu."""
+    scope = Scope(
+        id="svc:SVC:E-LAN",
+        kind="service",
+        key=ScopeKey("SVC", "E-LAN", "vlan-aware"),
+        selectors=Selectors(
+            interfaces=["ae0.14"],
+            routing_instances=["EVPN-VLAN-AWARE-POP1"],
+            vlans=["14"],
+        ),
+    )
+    return CheckContext(
+        scope=scope, subject=subject, baseline=None,
+        config=default_config(), failed_collectors={}, link=link,
+    )
+
+
+def _aware_subject():
+    return {"evpn_instance": {"EVPN-VLAN-AWARE-POP1": {
+        "local_interfaces": {"total": 4, "up": 4, "entries": [
+            {"name": ".local..64", "status": "Up"},
+            {"name": "ae0.14", "status": "Up"},
+            {"name": "ae0.15", "status": "Up"},
+            {"name": "ae0.4094", "status": "Down"},
+        ]},
+        "irb_interfaces": {"total": 3, "up": 3, "entries": [
+            {"name": "irb.14", "status": "Up", "l3_context": "master"},
+            {"name": "irb.15", "status": "Up", "l3_context": "L3VPN-CPE14"},
+            {"name": "irb.4094", "status": "Up", "l3_context": "MGMT"},
+        ]},
+        "neighbors": {"total": 1, "addresses": ["150.0.0.2"]},
+        "esis": {
+            "00:11:12:13:14:00:14:00:00:00": "Resolved by IFL ae0.14",
+            "00:11:12:13:14:00:15:00:00:00": "Resolved by IFL ae0.15",
+        },
+    }}}
+
+
+LINK_L2 = {"role": "l2", "peer_scope_id": "svc:X:Internet",
+           "peer_interface": "irb.14", "peer_instance": "inet.0"}
+
+
+def test_agregatni_radky_se_netisknou():
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
+    labels = {f.label for f in findings}
+    assert "EVPN local interfaces" not in labels
+    assert "EVPN local interfaces up" not in labels
+    assert "EVPN IRB interfaces" not in labels
+    assert "EVPN IRB interfaces up" not in labels
+    assert "EVPN neighbors" in labels  # count zustava
+
+
+def test_evpn_interface_jen_vlastni_unit_a_je_posuzovany():
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
+    rows = [f for f in findings if f.label == "EVPN interface"]
+    assert [r.value for r in rows] == ["ae0.14 Up"]
+    assert rows[0].outcome is Outcome.OK
+
+
+def test_evpn_interface_down_je_broken():
+    subject = _aware_subject()
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"][1][
+        "status"] = "Down"
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
+    rows = [f for f in findings if f.label == "EVPN interface"]
+    assert rows[0].outcome is Outcome.BROKEN
+
+
+def test_irb_radek_jen_linkovany_unit():
+    findings = EvpnInstanceStatusCheck().run(
+        _vlan_aware_ctx(_aware_subject(), link=LINK_L2))
+    rows = [f for f in findings if f.label == "IRB interface"]
+    assert [r.value for r in rows] == ["irb.14 Up (master)"]
+    assert rows[0].outcome is Outcome.OK
+
+
+def test_bez_linku_zadny_irb_radek():
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
+    assert not [f for f in findings if f.label == "IRB interface"]
+
+
+def test_fallback_bez_selektoru_tiskne_vse():
+    ctx = _vlan_aware_ctx(_aware_subject())
+    ctx.scope.selectors.interfaces = []
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    rows = [f for f in findings if f.label == "EVPN interface"]
+    assert len(rows) == 4  # filtr vypnuty, vsechno jako drive

@@ -7,6 +7,7 @@ vetev na platformu.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
@@ -364,6 +365,37 @@ def _count_finding(
     )
 
 
+@dataclass(frozen=True)
+class _ServiceUnits:
+    """Identita sluzby pro relevance filtr vlan-aware bloku.
+
+    active=False vypina filtrovani - scope bez interface selektoru nema
+    podle ceho vybirat a radsi vypise vsechno nez nic.
+    """
+
+    interfaces: frozenset[str]
+    irb: str | None
+    vlans: frozenset[str]
+
+    @property
+    def active(self) -> bool:
+        return bool(self.interfaces)
+
+
+def _service_units(ctx: CheckContext) -> _ServiceUnits:
+    interfaces = frozenset(ctx.scope.selectors.interfaces)
+    irb = None
+    if ctx.link and ctx.link.get("role") == "l2":
+        irb = ctx.link.get("peer_interface")
+    vlans = frozenset(ctx.scope.selectors.vlans)
+    if not vlans:
+        # sluzba bez customer_vlan - unit cislo je stejna informace
+        vlans = frozenset(
+            name.split(".", 1)[1] for name in interfaces if "." in name
+        )
+    return _ServiceUnits(interfaces=interfaces, irb=irb, vlans=vlans)
+
+
 @register
 class EvpnInstanceStatusCheck(Check):
     """Per-instance zdravi EVPN podle brief pravidel ze zadani.
@@ -396,12 +428,13 @@ class EvpnInstanceStatusCheck(Check):
 
         baseline_instances = (ctx.baseline or {}).get("evpn_instance", {})
         many = len(instances) > 1
+        units = _service_units(ctx)
 
         findings: list[Finding] = []
         for name in sorted(instances):
             findings.extend(
                 self._instance_findings(
-                    name, instances[name], baseline_instances.get(name), many
+                    name, instances[name], baseline_instances.get(name), many, units
                 )
             )
         return findings
@@ -412,6 +445,7 @@ class EvpnInstanceStatusCheck(Check):
         data: dict[str, Any],
         baseline: dict[str, Any] | None,
         qualify: bool,
+        units: _ServiceUnits,
     ) -> list[Finding]:
         def label(text: str) -> str:
             return qualified(text, instance) if qualify else text
@@ -420,62 +454,7 @@ class EvpnInstanceStatusCheck(Check):
         findings: list[Finding] = []
 
         local = data.get("local_interfaces", {})
-        baseline_local = baseline.get("local_interfaces") or None
-        findings.append(
-            _count_finding(
-                label("EVPN local interfaces"),
-                f"{instance}: local interfaces",
-                str(local.get("total") or 0),
-                str(baseline_local["total"]) if baseline_local else None,
-                ok=(local.get("total") or 0) > 0,
-                expectation="> 0",
-            )
-        )
-        findings.append(
-            _count_finding(
-                label("EVPN local interfaces up"),
-                f"{instance}: local interfaces up",
-                f"{local.get('up') or 0}/{local.get('total') or 0}",
-                (
-                    f"{baseline_local.get('up') or 0}/{baseline_local.get('total') or 0}"
-                    if baseline_local
-                    else None
-                ),
-                ok=(local.get("up") or 0) == (local.get("total") or 0),
-                expectation="vsechna up",
-            )
-        )
-
         irb = data.get("irb_interfaces", {})
-        baseline_irb = baseline.get("irb_interfaces") or None
-        # Instance IRB mit nemusi (ciste L2 sluzba) - pocet je informace,
-        # ne pravidlo.
-        findings.append(
-            Finding(
-                Outcome.INFO,
-                f"{instance}: IRB interfaces {irb.get('total') or 0}",
-                label=label("EVPN IRB interfaces"),
-                value=str(irb.get("total") or 0),
-                baseline_value=(
-                    str(baseline_irb["total"]) if baseline_irb else None
-                ),
-            )
-        )
-        if (irb.get("total") or 0) > 0:
-            findings.append(
-                _count_finding(
-                    label("EVPN IRB interfaces up"),
-                    f"{instance}: IRB interfaces up",
-                    f"{irb.get('up') or 0}/{irb.get('total') or 0}",
-                    (
-                        f"{baseline_irb.get('up') or 0}/{baseline_irb.get('total') or 0}"
-                        if baseline_irb
-                        else None
-                    ),
-                    ok=(irb.get("up") or 0) == (irb.get("total") or 0),
-                    expectation="vsechna up",
-                )
-            )
 
         neighbors = data.get("neighbors", {})
         baseline_neighbors = baseline.get("neighbors") or None
@@ -508,23 +487,31 @@ class EvpnInstanceStatusCheck(Check):
         findings.extend(self._esi_findings(instance, data, baseline, label))
 
         for entry in local.get("entries", []):
+            if units.active and entry["name"] not in units.interfaces:
+                continue
+            up = _is_up(str(entry["status"]))
             findings.append(
                 Finding(
-                    Outcome.INFO,
-                    f"{instance}: interface {entry['name']} {entry['status']}",
+                    Outcome.OK if up else Outcome.BROKEN,
+                    f"{instance}: interface {entry['name']} {entry['status']}"
+                    + ("" if up else f", ocekavano {UP}"),
                     label=label("EVPN interface"),
                     value=f"{entry['name']} {entry['status']}",
                 )
             )
         for entry in irb.get("entries", []):
+            if units.active and entry["name"] != units.irb:
+                continue
             context = entry.get("l3_context")
             value = f"{entry['name']} {entry['status']}"
             if context:
                 value += f" ({context})"
+            up = _is_up(str(entry["status"]))
             findings.append(
                 Finding(
-                    Outcome.INFO,
-                    f"{instance}: IRB {value}",
+                    Outcome.OK if up else Outcome.BROKEN,
+                    f"{instance}: IRB {value}"
+                    + ("" if up else f", ocekavano {UP}"),
                     label=label("IRB interface"),
                     value=value,
                 )
