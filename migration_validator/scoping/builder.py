@@ -15,6 +15,11 @@ MIGRATED_SERVICE_TYPES = frozenset({"Internet", "IPVPN", "E-Line", "E-LAN", "Cor
 
 MANAGEMENT_PREFIXES = ("fxp", "em", "me", "vme", "bme", "re0:mgmt-", "re1:mgmt-")
 
+# Zrcadli checks/ifaces.py TRANSIT_PREFIXES - builder nesmi importovat z checks
+# (vrstveni), ale L1 blok davat smysl jen pro tranzitni fyzicke porty (optika,
+# chybovost); irb/lo0/ae bez tohoto filtru by dostaly nesmyslny L1 scope.
+TRANSIT_PREFIXES = ("ge", "xe", "et", "ae")
+
 
 def is_management(interface: str) -> bool:
     """Management rozhrani se nikdy nestane service scopem."""
@@ -93,6 +98,8 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
     children = {entry.physical_name for entry in eligible}
     for entry in inventory.entries:
         if entry.service_type != LAYER1 or is_management(entry.interface):
+            continue
+        if not entry.interface.startswith(TRANSIT_PREFIXES):
             continue
         if entry.interface not in children:
             # port bez migrovane sluzby nema v reportu co rict

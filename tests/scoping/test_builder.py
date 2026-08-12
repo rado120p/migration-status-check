@@ -236,3 +236,31 @@ def test_management_layer1_scope_nedostane():
         ServiceEntry(interface="fxp0.0", service_type="Internet"),
     ])
     assert not [s for s in build_scopes(inventory) if s.kind == "layer1"]
+
+
+def test_interni_layer1_rozhrani_scope_nedostane():
+    """irb a lo0 nejsou tranzitni porty - nemaji optiku ani chyby k mereni,
+
+    L1 blok pro ne by byl jen sum a pozdeji by pod ne padaly sluzby nesmyslne.
+    """
+    inventory = Inventory(device="dev", entries=[
+        ServiceEntry(interface="irb", service_type="Layer1"),
+        ServiceEntry(interface="irb.4094", service_type="Internet", description="MGMT-GW"),
+        ServiceEntry(interface="lo0", service_type="Layer1"),
+        ServiceEntry(interface="lo0.0", service_type="Core", description="LO"),
+    ])
+    assert not [s for s in build_scopes(inventory) if s.kind == "layer1"]
+
+
+def test_tranzitni_porty_si_scope_zachovaji():
+    inventory = Inventory(device="dev", entries=[
+        ServiceEntry(interface="ae0", service_type="Layer1",
+                     description="EX1;ae0", service_subtype="physical-port",
+                     lag_members=["et-0/0/5"]),
+        ServiceEntry(interface="ae0.14", service_type="Internet", description="INET"),
+        ServiceEntry(interface="ge-0/0/2", service_type="Layer1", description="NNI"),
+        ServiceEntry(interface="ge-0/0/2.113", service_type="IPVPN",
+                     description="L3VPN-CPE13-NNI", routing_instance="L3VPN-CPE13-NNI"),
+    ])
+    l1_ids = {s.id for s in build_scopes(inventory) if s.kind == "layer1"}
+    assert l1_ids == {"l1:ae0", "l1:ge-0/0/2"}
