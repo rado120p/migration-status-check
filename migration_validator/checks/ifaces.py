@@ -68,7 +68,9 @@ def scope_interfaces(ctx: CheckContext) -> list[str]:
     names = sorted(ctx.subject.get("interfaces", {}))
     if ctx.scope.kind == "layer1":
         return [name for name in names if is_physical(name)]
-    if ctx.scope.selectors.physical_interfaces:
+    # Netranzitni rodic (lo0/irb) zadny L1 blok nema, jeho radky musi
+    # zustat ve sluzbe - builder L1 scope staví jen pro tranzitni porty.
+    if any(is_transit(p) for p in ctx.scope.selectors.physical_interfaces):
         return [name for name in names if not is_physical(name)]
     return names
 
@@ -167,8 +169,11 @@ class InterfaceErrorsCheck(Check):
 
         # Chybove countery nese jen fyzicky port - v service scopu s L1
         # rodicem ho hlasi ten L1 blok (deduplikace ze specu), tady by radek
-        # jen zdvojoval.
-        if ctx.scope.kind != "layer1" and ctx.scope.selectors.physical_interfaces:
+        # jen zdvojoval. Netranzitni rodic (lo0/irb) zadny L1 blok nema, jeho
+        # radky musi zustat ve sluzbe.
+        if ctx.scope.kind != "layer1" and any(
+            is_transit(p) for p in ctx.scope.selectors.physical_interfaces
+        ):
             return []
 
         layer1_scope = ctx.scope.kind == "layer1"

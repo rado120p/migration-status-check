@@ -580,3 +580,34 @@ def test_parentless_service_beze_zmeny():
                        physical_interfaces=[])
     rows = InterfaceErrorsCheck().run(ctx)
     assert rows[0].outcome is Outcome.SKIP  # "jen unity" jako dnes
+
+
+LO0_IFACES = {
+    "lo0": {"admin_status": "up", "oper_status": "up", "input_errors": 0,
+            "output_errors": 0, "framing_errors": 0, "input_pps": 0, "output_pps": 0},
+    "lo0.0": {"admin_status": "up", "oper_status": "up", "input_errors": 0,
+              "output_errors": 0, "framing_errors": 0, "input_pps": 0, "output_pps": 0},
+}
+
+
+def test_service_scope_s_netranzitnim_rodicem_tiskne_i_fyzicky_radek():
+    """lo0 neni v TRANSIT_PREFIXES, builder mu zadny L1 blok nevytvori -
+    jeho admin/oper radky nesmi zmizet, jinak spadnou pod stul."""
+    ctx = _service_ctx({"interfaces": LO0_IFACES}, physical_interfaces=["lo0"])
+    labels = [f.label for f in InterfaceStateCheck().run(ctx)]
+    assert labels == [
+        "Interface admin status (lo0)",
+        "Interface operational status (lo0)",
+        "Interface admin status (lo0.0)",
+        "Interface operational status (lo0.0)",
+    ]
+
+
+def test_errors_v_service_scopu_s_netranzitnim_rodicem_skip_ne_prazdno():
+    """Chybove countery lo0 nenese (neni tranzitni), ale duvod je 'neni
+    tranzitni rozhrani', ne tiche [] jako u tranzitniho L1 rodice."""
+    ctx = _service_ctx({"interfaces": LO0_IFACES}, physical_interfaces=["lo0"])
+    rows = InterfaceErrorsCheck().run(ctx)
+    assert len(rows) == 1
+    assert rows[0].outcome is Outcome.SKIP
+    assert rows[0].value == "netranzitni rozhrani"
