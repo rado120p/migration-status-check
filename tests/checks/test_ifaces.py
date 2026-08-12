@@ -50,6 +50,46 @@ def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None, link
     )
 
 
+def _service_ctx(subject, physical_interfaces, baseline=None, config=None, link=None):
+    """Service scope s L1 rodicem - fyzicky port si drzi jeho L1 blok,
+    tady zustavaji jen unity."""
+    interfaces = sorted(subject.get("interfaces", {}))
+    scope = Scope(
+        id="svc:X:Internet",
+        kind="service",
+        key=ScopeKey("X", "Internet", None),
+        selectors=Selectors(
+            interfaces=interfaces, physical_interfaces=list(physical_interfaces)
+        ),
+    )
+    return CheckContext(
+        scope=scope,
+        subject=subject,
+        baseline=baseline,
+        config=config or default_config(),
+        failed_collectors={},
+        link=link,
+    )
+
+
+def _layer1_ctx(subject, baseline=None, config=None, link=None):
+    interfaces = sorted(subject.get("interfaces", {}))
+    scope = Scope(
+        id="l1:ae0",
+        kind="layer1",
+        key=ScopeKey("EX1;ae0", "Layer1", "physical-port"),
+        selectors=Selectors(interfaces=interfaces),
+    )
+    return CheckContext(
+        scope=scope,
+        subject=subject,
+        baseline=baseline,
+        config=config or default_config(),
+        failed_collectors={},
+        link=link,
+    )
+
+
 def test_interface_state_up_passes():
     ctx = _ctx({"interfaces": {"ge-0/0/2.113": {"admin_status": "up", "oper_status": "up"}}})
     results = run_check(InterfaceStateCheck(), ctx)
@@ -484,3 +524,59 @@ def test_l2_side_of_link_measures_as_before():
 def test_traffic_ceased_with_l3_link_emits_nothing():
     ctx = _ceased_ctx(0, 400, link=L3_LINK, interfaces=("irb.15",))
     assert TrafficCeasedCheck().run(ctx) == []
+
+
+IFACES = {
+    "ae0": {"admin_status": "up", "oper_status": "up", "input_errors": 0,
+            "output_errors": 0, "framing_errors": 0, "input_pps": 2, "output_pps": 2},
+    "ae0.14": {"admin_status": "up", "oper_status": "up", "input_errors": 0,
+               "output_errors": 0, "framing_errors": 0, "input_pps": 1, "output_pps": 1},
+}
+
+
+def test_service_scope_s_l1_rodicem_tiskne_jen_unity():
+    ctx = _service_ctx({"interfaces": IFACES}, physical_interfaces=["ae0"])
+    labels = [f.label for f in InterfaceStateCheck().run(ctx)]
+    assert labels == ["Interface admin status (ae0.14)",
+                      "Interface operational status (ae0.14)"]
+
+
+def test_layer1_scope_tiskne_jen_fyzicky_port_bez_kvalifikatoru():
+    ctx = _layer1_ctx({"interfaces": {"ae0": IFACES["ae0"]}})
+    labels = [f.label for f in InterfaceStateCheck().run(ctx)]
+    assert labels == ["Interface admin status", "Interface operational status"]
+
+
+def test_errors_v_service_scopu_s_l1_rodicem_zadny_radek():
+    ctx = _service_ctx({"interfaces": IFACES}, physical_interfaces=["ae0"])
+    assert InterfaceErrorsCheck().run(ctx) == []
+
+
+def test_errors_v_layer1_scopu_bez_kvalifikatoru():
+    ctx = _layer1_ctx({"interfaces": {"ae0": IFACES["ae0"]}})
+    rows = InterfaceErrorsCheck().run(ctx)
+    assert [f.label for f in rows] == ["Interface errors"]
+
+
+def test_traffic_v_service_scopu_jen_unit_v_l1_jen_port():
+    service = InterfaceTrafficCheck().run(
+        _service_ctx({"interfaces": IFACES}, physical_interfaces=["ae0"]))
+    assert {f.label for f in service} == {
+        "Interface traffic in (ae0.14)", "Interface traffic out (ae0.14)"}
+    l1 = InterfaceTrafficCheck().run(_layer1_ctx({"interfaces": {"ae0": IFACES["ae0"]}}))
+    assert {f.label for f in l1} == {"Interface traffic in", "Interface traffic out"}
+
+
+def test_service_scope_bez_unitu_netiskne_bez_dat():
+    """Prazdny scope_interfaces() neni prazdna cela area - service scope
+    s L1 rodicem, jehoz unit v datech chybi, ma zustat ticho, ne vratit
+    falesne 'bez dat' (to je vyhrazeno pro scope bez zadnych dat vubec)."""
+    ctx = _service_ctx({"interfaces": {"ae0": IFACES["ae0"]}}, physical_interfaces=["ae0"])
+    assert InterfaceStateCheck().run(ctx) == []
+
+
+def test_parentless_service_beze_zmeny():
+    ctx = _service_ctx({"interfaces": {"ae0.14": IFACES["ae0.14"]}},
+                       physical_interfaces=[])
+    rows = InterfaceErrorsCheck().run(ctx)
+    assert rows[0].outcome is Outcome.SKIP  # "jen unity" jako dnes

@@ -50,6 +50,15 @@ def _scope(service_type="Internet") -> Scope:
     )
 
 
+def _layer1_scope() -> Scope:
+    return Scope(
+        id="l1:ae0",
+        kind="layer1",
+        key=ScopeKey("EX1;ae0", "Layer1", "physical-port"),
+        selectors=Selectors(interfaces=["ae0"]),
+    )
+
+
 def _ctx(**kwargs) -> CheckContext:
     defaults = dict(
         scope=_scope(),
@@ -107,6 +116,18 @@ def test_check_not_applicable_to_service_type_produces_no_results():
 
 def test_check_applies_to_device_scope_regardless_of_service_types():
     assert TypedCheck().applies_to(device_scope()) is True
+
+
+def test_layer1_scope_pousti_jen_layer1_checky():
+    class ServiceOnly(DummyCheck):
+        service_types = None
+
+    class ForPort(DummyCheck):
+        layer1 = True
+
+    assert not ServiceOnly().applies_to(_layer1_scope())
+    assert ForPort().applies_to(_layer1_scope())
+    assert ServiceOnly().applies_to(_scope())  # chovani sluzeb beze zmeny
 
 
 def test_exception_in_check_becomes_skip_not_crash():

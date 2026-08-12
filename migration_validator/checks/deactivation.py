@@ -57,6 +57,7 @@ class DeactivationStateCheck(Check):
     mode = Mode.BOTH
     requires_inventory = True
     default_severity = Severity.CRITICAL
+    layer1 = True
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         subject_off = ctx.scope.is_deactivated

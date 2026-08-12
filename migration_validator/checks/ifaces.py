@@ -58,6 +58,21 @@ def _transit_interfaces(ctx: CheckContext) -> list[str]:
     return sorted(name for name in ctx.subject.get("interfaces", {}) if is_transit(name))
 
 
+def scope_interfaces(ctx: CheckContext) -> list[str]:
+    """Rozhrani, jejichz radky patri do tohoto scopu.
+
+    Layer1 scope nese fyzicky port; service scope s L1 rodicem jen unity
+    (radky portu ma jeho L1 blok - deduplikace ze specu); sluzba bez L1
+    rodice vse jako drive.
+    """
+    names = sorted(ctx.subject.get("interfaces", {}))
+    if ctx.scope.kind == "layer1":
+        return [name for name in names if is_physical(name)]
+    if ctx.scope.selectors.physical_interfaces:
+        return [name for name in names if not is_physical(name)]
+    return names
+
+
 def _no_transit_finding(ctx: CheckContext) -> Finding:
     """Popisek si radek vezme od checku - stejny duvod hlasi tri ruzne
     countery a kazdy ma vlastni jmeno sloupce."""
@@ -90,6 +105,7 @@ class InterfaceStateCheck(Check):
     mode = Mode.STATE
     requires = ("interfaces",)
     default_severity = Severity.CRITICAL
+    layer1 = True
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         interfaces: dict[str, Any] = ctx.subject.get("interfaces", {})
@@ -102,8 +118,11 @@ class InterfaceStateCheck(Check):
                 )
             ]
 
+        names = scope_interfaces(ctx)
+        layer1_scope = ctx.scope.kind == "layer1"
+
         findings = []
-        for name in sorted(interfaces):
+        for name in names:
             data = interfaces[name]
             for label, key in (
                 ("Interface admin status", "admin_status"),
@@ -115,7 +134,7 @@ class InterfaceStateCheck(Check):
                     Finding(
                         Outcome.OK if ok else Outcome.BROKEN,
                         f"{name}: {key} {state}",
-                        label=qualified(label, name),
+                        label=label if layer1_scope else qualified(label, name),
                         value=state.capitalize(),
                         subject={key: state},
                     )
@@ -131,6 +150,7 @@ class InterfaceErrorsCheck(Check):
     mode = Mode.STATE
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
+    layer1 = True
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         link = _l3_link_without_transit(ctx)
@@ -145,8 +165,17 @@ class InterfaceErrorsCheck(Check):
                 )
             ]
 
+        # Chybove countery nese jen fyzicky port - v service scopu s L1
+        # rodicem ho hlasi ten L1 blok (deduplikace ze specu), tady by radek
+        # jen zdvojoval.
+        if ctx.scope.kind != "layer1" and ctx.scope.selectors.physical_interfaces:
+            return []
+
+        layer1_scope = ctx.scope.kind == "layer1"
         transit_names = _transit_interfaces(ctx)
-        names = [name for name in transit_names if is_physical(name)]
+        # Chybove countery nese jen fyzicke rozhrani - scope_interfaces samo
+        # o sobe fyzicke od logickych oddeli jen na layer1 scopu.
+        names = [name for name in scope_interfaces(ctx) if is_transit(name) and is_physical(name)]
         if not names:
             if transit_names:
                 # Tranzitni rozhrani jsou, ale jen logicke unity - nemaji
@@ -170,7 +199,7 @@ class InterfaceErrorsCheck(Check):
                 for key in ("input_errors", "output_errors", "framing_errors")
                 if key in data
             }
-            label = qualified("Interface errors", name)
+            label = "Interface errors" if layer1_scope else qualified("Interface errors", name)
             total = sum(counters.values())
             if total == 0:
                 findings.append(
@@ -204,16 +233,18 @@ class InterfaceTrafficCheck(Check):
     mode = Mode.BOTH
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
+    layer1 = True
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         if _l3_link_without_transit(ctx) is not None:
             # radek by duplikoval INFO odkaz z interface_errors
             return []
 
-        names = _transit_interfaces(ctx)
+        names = [name for name in scope_interfaces(ctx) if is_transit(name)]
         if not names:
             return [_no_transit_finding(ctx)]
 
+        layer1_scope = ctx.scope.kind == "layer1"
         options = ctx.options(self.id)
         tolerance = float(options["tolerance_percent"])
         require_nonzero = bool(options["require_nonzero"])
@@ -224,10 +255,11 @@ class InterfaceTrafficCheck(Check):
             baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
             baseline = _rates(baseline_data) if baseline_data else None
 
-            for label, key in (
+            for base_label, key in (
                 ("Interface traffic in", "input_pps"),
                 ("Interface traffic out", "output_pps"),
             ):
+                label = base_label if layer1_scope else qualified(base_label, name)
                 findings.append(
                     _traffic_finding(
                         name, label, key, subject[key],
@@ -257,9 +289,9 @@ def _traffic_finding(
     """Jeden smer provozu = jeden radek reportu.
 
     Bez baseline se hodnoti jen absolutni hodnota; delta zustava None a
-    report ve sloupci ZMENA nevypise nic.
+    report ve sloupci ZMENA nevypise nic. `label` prichazi hotovy - jestli
+    ponese jmeno rozhrani v zavorce, rozhoduje volajici podle scopu.
     """
-    label = qualified(label, name)
     value = f"{subject} pps"
 
     if baseline is None:
@@ -308,21 +340,27 @@ class TrafficCeasedCheck(Check):
     mode = Mode.COMPARE
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
+    layer1 = True
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         if _l3_link_without_transit(ctx) is not None:
             # radek by duplikoval INFO odkaz z interface_errors
             return []
 
-        names = _transit_interfaces(ctx)
+        names = [name for name in scope_interfaces(ctx) if is_transit(name)]
         if not names:
             return [_no_transit_finding(ctx)]
 
+        layer1_scope = ctx.scope.kind == "layer1"
         threshold = int(ctx.options(self.id)["max_residual_pps"])
 
         findings = []
         for name in names:
-            label = qualified("Interface traffic ceased", name)
+            label = (
+                "Interface traffic ceased"
+                if layer1_scope
+                else qualified("Interface traffic ceased", name)
+            )
             subject = _rates(ctx.subject["interfaces"][name])
             baseline_data = (ctx.baseline or {}).get("interfaces", {}).get(name)
             if baseline_data is None:

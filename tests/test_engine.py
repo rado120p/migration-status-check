@@ -157,19 +157,39 @@ def test_physical_interface_finds_its_baseline_after_rename():
     vypsala dva trvale radky 'WARN 0 pps | bez baseline'. V ostrem behu to
     bylo 16 z 36 varovani - presne ten trvaly oranzovy svit, kvuli kteremu
     counter checky na internich rozhranich davaji SKIP misto WARN.
+
+    Task 8 presunulo radky fyzickeho portu z bloku sluzby do L1 bloku -
+    preslovnovani se tedy overuje na scopu l1:ae0-ekvivalentu, ne uz na
+    service scopu, ktery uz fyzicky port vubec netiskne.
     """
+    l1_key = ("Optika CPE14", "Layer1")
+
+    def _l1_scope(scope_id, physical):
+        return Scope(
+            id=scope_id,
+            kind="layer1",
+            key=ScopeKey(l1_key[0], l1_key[1], None),
+            selectors=Selectors(interfaces=[physical]),
+        )
+
     baseline = _snapshot(
         "172.20.20.4",
         "ge-0/0/2.113",
-        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "ge-0/0/2.113",
-                physical=["ge-0/0/2"])],
+        [
+            _scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "ge-0/0/2.113",
+                   physical=["ge-0/0/2"]),
+            _l1_scope("l1:ge-0/0/2", "ge-0/0/2"),
+        ],
         physical="ge-0/0/2",
     )
     subject = _snapshot(
         "172.20.20.5",
         "et-0/0/8.113",
-        [_scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "et-0/0/8.113",
-                physical=["et-0/0/8"])],
+        [
+            _scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "et-0/0/8.113",
+                   physical=["et-0/0/8"]),
+            _l1_scope("l1:et-0/0/8", "et-0/0/8"),
+        ],
         phase="post-migration",
         physical="et-0/0/8",
     )
@@ -178,7 +198,8 @@ def test_physical_interface_finds_its_baseline_after_rename():
 
     physical = [
         check
-        for check in result.scopes[0].checks
+        for scope in result.scopes
+        for check in scope.checks
         if check.id == "interface_traffic" and check.message.startswith("et-0/0/8:")
     ]
     assert len(physical) == 2, "fyzicke rozhrani ma mit radek pro oba smery provozu"
