@@ -1436,8 +1436,23 @@ def test_filter_drzi_l1_rodice_vybrane_sluzby():
 
 
 def test_fail_sluzba_rozbali_i_pass_l1_blok():
+    # "Layer1" samo o sobe je slaby signal - vypisuje se i v souhrnne
+    # tabulce za KAZDY scope bez ohledu na shown, takze by prosel i bez
+    # opravy. "Optika" je label checku, ktery existuje jen uvnitr
+    # vypsaneho bloku - to uz je dukaz, ze se blok l1:ae0 skutecne
+    # rozbalil, i kdyz je sam PASS a detail=False.
     result = _run_result([_l1_result("ae0", status=Status.PASS),
                           _svc_result("S-A", parent="ae0", status=Status.FAIL)])
     text = render(result)
-    # blok l1:ae0 se vytiskl, i kdyz je PASS a detail=False
-    assert "Layer1" in text
+    assert "Optika" in text
+
+
+def test_pass_l1_blok_zustava_sbaleny_bez_rozbalene_sluzby():
+    # Negativni kontrola k testu vyse: kdyz je L1 i jeho dite PASS, nic
+    # dite nerozbaluje a bez --detail zustava blok sbaleny - label checku
+    # se nevytiskne. Kdyby _l1_parent_ids pridavala rodice vzdycky (ne jen
+    # k rozbalenym detem), tenhle test by to chytil.
+    result = _run_result([_l1_result("ae0", status=Status.PASS),
+                          _svc_result("S-A", parent="ae0", status=Status.PASS)])
+    text = render(result)
+    assert "Optika" not in text
