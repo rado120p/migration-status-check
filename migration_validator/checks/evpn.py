@@ -408,9 +408,17 @@ class EvpnInstanceStatusCheck(Check):
     porovnani s baseline. Misto nich se posuzuji jen radky vlastnich unitu
     sluzby: "EVPN interface" (filtr na ctx.scope.selectors.interfaces) a
     "IRB interface" (jen kdyz je unit linkovany pres ctx.link, role "l2") -
-    viz _service_units. EVPN neighbors pod baseline jsou DEGRADED (viz
-    _count_finding). Text ESI statusu se na rovnost neporovnava, nese
-    jmeno IFL.
+    viz _service_units. Kdyz vlastni (nebo linkovany IRB) unit v instanci
+    vubec neni - IFL se do mac-vrf nedostal, realny selhany stav migrace -
+    misto ticha se emituje BROKEN radek "{unit} chybi v instanci" (dodatek
+    specu 2026-08-12, review Tasku 2); u vice instanci ve scope (qualify)
+    se tenhle radek preskakuje, protoze bez vedeni "ktera instance je ta
+    spravna" by naivni per-instance kontrola falesne broken-ovala unit v
+    kazde jine instanci. Realne service scopy (scoping/builder.py) maji
+    vzdy presne jednu routing_instance, takze qualify=True u service
+    scopu dnes nenastava - pojistka je precautionary, ne znama mezera.
+    EVPN neighbors pod baseline jsou DEGRADED (viz _count_finding). Text
+    ESI statusu se na rovnost neporovnava, nese jmeno IFL.
     """
 
     id = "evpn_instance_status"
@@ -490,7 +498,9 @@ class EvpnInstanceStatusCheck(Check):
         findings.extend(self._esi_findings(instance, data, baseline, label))
 
         local = data.get("local_interfaces", {})
-        for entry in local.get("entries", []):
+        local_entries = local.get("entries", [])
+        local_names = {entry["name"] for entry in local_entries}
+        for entry in local_entries:
             if units.active and entry["name"] not in units.interfaces:
                 continue
             up = _is_up(str(entry["status"]))
@@ -503,8 +513,28 @@ class EvpnInstanceStatusCheck(Check):
                     value=f"{entry['name']} {entry['status']}",
                 )
             )
+        # IFL, ktery se do mac-vrf teto instance vubec nedostal, by jinak
+        # zustal neviditelny - blok by pro sluzbu nevypsal zadny EVPN
+        # interface radek (dodatek specu 2026-08-12, review Tasku 2).
+        # Multi-instance scope: unit patri tomu RI, ktere ho jmenuje, takze
+        # se pri vice instancich (qualify=True) chybejici-unit radek
+        # neemituje - jinak by naivni per-instance kontrola falesne
+        # nahlasila unit jako chybejici v kazde instanci krome te spravne.
+        if units.active and not qualify:
+            for unit in sorted(units.interfaces - local_names):
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{instance}: unit {unit} chybi v instanci",
+                        label=label("EVPN interface"),
+                        value=f"{unit} chybi v instanci",
+                    )
+                )
+
         irb = data.get("irb_interfaces", {})
-        for entry in irb.get("entries", []):
+        irb_entries = irb.get("entries", [])
+        irb_names = {entry["name"] for entry in irb_entries}
+        for entry in irb_entries:
             if units.active and entry["name"] != units.irb:
                 continue
             context = entry.get("l3_context")
@@ -519,6 +549,15 @@ class EvpnInstanceStatusCheck(Check):
                     + ("" if up else f", ocekavano {UP}"),
                     label=label("IRB interface"),
                     value=value,
+                )
+            )
+        if units.active and not qualify and units.irb and units.irb not in irb_names:
+            findings.append(
+                Finding(
+                    Outcome.BROKEN,
+                    f"{instance}: IRB unit {units.irb} chybi v instanci",
+                    label=label("IRB interface"),
+                    value=f"{units.irb} chybi v instanci",
                 )
             )
         return findings

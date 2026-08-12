@@ -572,3 +572,70 @@ def test_fallback_bez_selektoru_tiskne_vse():
     findings = EvpnInstanceStatusCheck().run(ctx)
     rows = [f for f in findings if f.label == "EVPN interface"]
     assert len(rows) == 4  # filtr vypnuty, vsechno jako drive
+
+
+def _aware_subject_bez_vlastni_unit():
+    """IFL se do mac-vrf vubec nedostal - realny selhany stav migrace."""
+    subject = _aware_subject()
+    entries = subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"]
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"] = [
+        e for e in entries if e["name"] != "ae0.14"
+    ]
+    return subject
+
+
+def test_chybejici_vlastni_unit_je_broken():
+    findings = EvpnInstanceStatusCheck().run(
+        _vlan_aware_ctx(_aware_subject_bez_vlastni_unit()))
+    rows = [f for f in findings if f.label == "EVPN interface"]
+    assert [r.value for r in rows] == ["ae0.14 chybi v instanci"]
+    assert rows[0].outcome is Outcome.BROKEN
+
+
+def test_chybejici_linkovany_irb_je_broken():
+    subject = _aware_subject()
+    entries = subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"]
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"] = [
+        e for e in entries if e["name"] != "irb.14"
+    ]
+    findings = EvpnInstanceStatusCheck().run(
+        _vlan_aware_ctx(subject, link=LINK_L2))
+    rows = [f for f in findings if f.label == "IRB interface"]
+    assert [r.value for r in rows] == ["irb.14 chybi v instanci"]
+    assert rows[0].outcome is Outcome.BROKEN
+
+
+def test_fallback_bez_selektoru_zadny_chybejici_radek():
+    ctx = _vlan_aware_ctx(_aware_subject_bez_vlastni_unit())
+    ctx.scope.selectors.interfaces = []
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    assert not [f for f in findings if "chybi v instanci" in (f.value or "")]
+
+
+def test_vice_chybejicich_unitu_jeden_radek_kazdy_serazene():
+    # Ruling explicitne pozaduje: jeden BROKEN radek per chybejici vlastni
+    # unit (sluzba muze mit v principu vic selektorovych interfacu).
+    # ae0.14 v subjektu je, ae0.16 ne - poradi overuje, ze sorted() neni
+    # nahodne.
+    ctx = _vlan_aware_ctx(_aware_subject())
+    ctx.scope.selectors.interfaces = ["ae0.16", "ae0.14"]
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    rows = [f for f in findings if f.label == "EVPN interface"]
+    assert [(r.value, r.outcome) for r in rows] == [
+        ("ae0.14 Up", Outcome.OK),
+        ("ae0.16 chybi v instanci", Outcome.BROKEN),
+    ]
+
+
+def test_vice_instanci_negeneruje_falesny_broken():
+    # Unit patri tomu RI, ktere ho jmenuje - u vice instanci ve scope by
+    # naivni per-instance kontrola oznacila unit za chybejici v kazde
+    # instanci, kde neni, i kdyz je spravne v jine. Jednoducha pojistka:
+    # pri vice instancich (qualify=True) se chybejici-unit radek vubec
+    # neemituje.
+    subject = _aware_subject_bez_vlastni_unit()
+    subject["evpn_instance"]["EVPN-OTHER"] = (
+        _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
+    )
+    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
+    assert not [f for f in findings if "chybi v instanci" in (f.value or "")]
