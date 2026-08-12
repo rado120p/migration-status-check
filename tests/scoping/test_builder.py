@@ -33,7 +33,13 @@ def test_is_management(interface, expected):
     assert is_management(interface) is expected
 
 
-def test_layer1_does_not_become_a_scope_but_feeds_physical_selector():
+def test_layer1_feeds_physical_selector_and_becomes_its_own_scope():
+    """Layer1 zaznam s aspon jednou eligible sluzbou na portu je ted zaroven
+
+    zdrojem physical_interfaces selektoru sluzby (jako drive) i vlastnim
+    scopem kind=layer1 (Task 7) - deti nema, protoze v tomto fixture zadny
+    dalsi zaznam neni na portu ge-0/0/2 zavisly krome L3VPN-CPE13-NNI.
+    """
     inventory = Inventory(
         device="172.20.20.4",
         entries=[
@@ -52,13 +58,17 @@ def test_layer1_does_not_become_a_scope_but_feeds_physical_selector():
 
     scopes = build_scopes(inventory)
 
-    assert len(scopes) == 1
-    scope = scopes[0]
-    assert scope.id == "svc:L3VPN-CPE13-NNI:IPVPN"
-    assert scope.selectors.interfaces == ["ge-0/0/2.113"]
-    assert scope.selectors.physical_interfaces == ["ge-0/0/2"]
-    assert scope.selectors.bgp_neighbors == ["198.11.13.2"]
-    assert scope.selectors.routing_instances == ["L3VPN-CPE13-NNI"]
+    assert len(scopes) == 2
+    service = next(s for s in scopes if s.kind == "service")
+    assert service.id == "svc:L3VPN-CPE13-NNI:IPVPN"
+    assert service.selectors.interfaces == ["ge-0/0/2.113"]
+    assert service.selectors.physical_interfaces == ["ge-0/0/2"]
+    assert service.selectors.bgp_neighbors == ["198.11.13.2"]
+    assert service.selectors.routing_instances == ["L3VPN-CPE13-NNI"]
+
+    l1 = next(s for s in scopes if s.kind == "layer1")
+    assert l1.id == "l1:ge-0/0/2"
+    assert l1.selectors.interfaces == ["ge-0/0/2"]
 
 
 def test_management_interfaces_are_excluded_even_when_typed_internet():
@@ -190,9 +200,39 @@ def test_real_inventory_files_produce_expected_scope_counts():
 
     for name in ("172.20.20.4.yml", "172.20.20.5.yml"):
         scopes = build_scopes(load_inventory(FIXTURES / name))
-        types = {scope.key.service_type for scope in scopes}
-        assert "Layer1" not in types
         assert not any(
             scope.selectors.interfaces[0].startswith(("fxp", "re0:mgmt"))
             for scope in scopes
         )
+
+
+def test_layer1_port_se_sluzbou_dostane_scope():
+    inventory = Inventory(device="dev", entries=[
+        ServiceEntry(interface="ae0", service_type="Layer1",
+                     description="EX1;ae0", service_subtype="physical-port",
+                     lag_members=["et-0/0/5"]),
+        ServiceEntry(interface="ae0.14", service_type="Internet",
+                     description="INET"),
+    ])
+    scopes = build_scopes(inventory)
+    l1 = [s for s in scopes if s.kind == "layer1"]
+    assert len(l1) == 1
+    assert l1[0].id == "l1:ae0"
+    assert l1[0].key.service_type == "Layer1"
+    assert l1[0].selectors.interfaces == ["ae0"]
+    assert l1[0].selectors.lag_members == ["et-0/0/5"]
+
+
+def test_layer1_port_bez_sluzeb_scope_nedostane():
+    inventory = Inventory(device="dev", entries=[
+        ServiceEntry(interface="ge-0/0/9", service_type="Layer1"),
+    ])
+    assert not [s for s in build_scopes(inventory) if s.kind == "layer1"]
+
+
+def test_management_layer1_scope_nedostane():
+    inventory = Inventory(device="dev", entries=[
+        ServiceEntry(interface="fxp0", service_type="Layer1"),
+        ServiceEntry(interface="fxp0.0", service_type="Internet"),
+    ])
+    assert not [s for s in build_scopes(inventory) if s.kind == "layer1"]

@@ -41,9 +41,10 @@ def _is_eligible(entry: ServiceEntry) -> bool:
 def build_scopes(inventory: Inventory) -> list[Scope]:
     """Vytvori jeden scope pro kazdy zaznam migrovaneho typu sluzby.
 
-    Zaznamy Layer1 se scopem nestanou - slouzi jen jako potvrzeni, ze
+    Zaznam Layer1 navic sam dostane scope (kind=layer1), pokud jeho port
+    nese aspon jednu eligible sluzbu - jinak slouzi jen jako potvrzeni, ze
     rodicovske fyzicke rozhrani v inventory existuje, a doplni se do
-    selektoru logicke jednotky.
+    selektoru logicke jednotky. Layer1 scopy stoji v seznamu za service scopy.
     """
     physical_names = {
         entry.interface for entry in inventory.entries if entry.service_type == "Layer1"
@@ -82,6 +83,32 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                     bridge_domains=list(entry.bridge_domain),
                     static_routes=[dict(route) for route in entry.static_route],
                     bfd_peers=[dict(intent) for intent in entry.bfd],
+                ),
+                routing_instance_active=entry.routing_instance_active,
+                interface_active=entry.interface_active,
+            )
+        )
+
+    LAYER1 = "Layer1"
+    children = {entry.physical_name for entry in eligible}
+    for entry in inventory.entries:
+        if entry.service_type != LAYER1 or is_management(entry.interface):
+            continue
+        if entry.interface not in children:
+            # port bez migrovane sluzby nema v reportu co rict
+            continue
+        scopes.append(
+            Scope(
+                id=f"l1:{entry.interface}",
+                kind="layer1",
+                key=ScopeKey(
+                    description=entry.description,
+                    service_type=LAYER1,
+                    service_subtype=entry.service_subtype,
+                ),
+                selectors=Selectors(
+                    interfaces=[entry.interface],
+                    lag_members=list(entry.lag_members),
                 ),
                 routing_instance_active=entry.routing_instance_active,
                 interface_active=entry.interface_active,
