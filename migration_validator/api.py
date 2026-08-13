@@ -62,11 +62,19 @@ def evaluate(
     mapping: Mapping | None = None,
     config: CheckConfig | None = None,
     now: str | None = None,
+    service_types: list[str] | None = None,
+    profile_name: str | None = None,
 ) -> RunResult:
     """Vyhodnoti snapshot, volitelne proti baseline snapshotu."""
     load_all()
     return evaluate_snapshots(
-        subject=snapshot, baseline=baseline, mapping=mapping, config=config, now=now
+        subject=snapshot,
+        baseline=baseline,
+        mapping=mapping,
+        config=config,
+        now=now,
+        service_types=service_types,
+        profile_name=profile_name,
     )
 
 

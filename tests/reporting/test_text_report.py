@@ -1,6 +1,7 @@
 import io
 import json
 import re
+from dataclasses import replace
 
 from migration_validator.models.result import (
     CheckResult,
@@ -294,6 +295,30 @@ def test_filter_records_what_it_hid():
     filtered = filter_result(_legacy_result(), statuses={Status.FAIL})
 
     assert filtered.filtered["statuses"] == ["FAIL"]
+    assert filtered.filtered["scopes_shown"] == 1
+    assert filtered.filtered["scopes_total"] == 3
+
+
+def test_filter_slucuje_cli_filtr_s_enginovym_markerem():
+    """service_types/profile z evaluate prezije --filter/--status - jen
+    scopes_shown/scopes_total od CLI filtru je spravne prepsat, protoze
+    CLI vybira z uz profiltrovane mnoziny (binding decision z Tasku 6)."""
+    result = replace(
+        _legacy_result(),
+        filtered={
+            "service_types": ["IPVPN"],
+            "profile": "core-only.yml",
+            "scopes_shown": 1,
+            "scopes_total": 2,
+        },
+    )
+
+    filtered = filter_result(result, text="L3VPN")
+
+    assert filtered.filtered["service_types"] == ["IPVPN"]
+    assert filtered.filtered["profile"] == "core-only.yml"
+    assert filtered.filtered["text"] == "L3VPN"
+    # Prepsane CLI filtrem, ne enginovymi hodnotami:
     assert filtered.filtered["scopes_shown"] == 1
     assert filtered.filtered["scopes_total"] == 3
 

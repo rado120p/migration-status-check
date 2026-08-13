@@ -86,7 +86,12 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     service_types = _parse_service_types(args, profile)
 
     result = api.evaluate(
-        subject, baseline=baseline, mapping=mapping, config=profile.checks
+        subject,
+        baseline=baseline,
+        mapping=mapping,
+        config=profile.checks,
+        service_types=service_types,
+        profile_name=profile.name or None,
     )
 
     shown = filter_result(result, text=args.filter, statuses=_parse_statuses(args.status))
@@ -165,7 +170,12 @@ def _evaluate_run(args: argparse.Namespace) -> int:
         print(f"=== {evaluation.subject.snapshot} vs {baseline_label} ===")
 
         result = api.evaluate(
-            subject, baseline=baseline, mapping=mapping, config=profile.checks
+            subject,
+            baseline=baseline,
+            mapping=mapping,
+            config=profile.checks,
+            service_types=service_types,
+            profile_name=profile.name or None,
         )
         shown = filter_result(result, text=args.filter, statuses=statuses)
 

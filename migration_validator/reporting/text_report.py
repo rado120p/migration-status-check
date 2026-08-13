@@ -168,10 +168,23 @@ def filter_result(
         **result.summary,
         **count_statuses(check.status for scope in scopes for check in scope.checks),
     }
-    applied: dict[str, object] = {
-        "scopes_shown": len(scopes),
-        "scopes_total": len(result.scopes),
-    }
+    # Zaklad je existujici marker z evaluate (service_types/profile) - CLI
+    # filtr ho DOPLNUJE, ne prepisuje. scopes_shown/scopes_total od CLI
+    # filtru prepsat smi (CLI vybira z uz profiltrovane mnoziny), ale
+    # service_types/profile musi prezit, jinak by report tvaril, ze
+    # engine filtr vubec nebezel.
+    # Zaklad je existujici marker z evaluate (service_types/profile) - CLI
+    # filtr ho DOPLNUJE, ne prepisuje. scopes_shown/scopes_total od CLI
+    # filtru prepsat smi (CLI vybira z uz profiltrovane mnoziny), ale
+    # service_types/profile musi prezit, jinak by report tvaril, ze
+    # engine filtr vubec nebezel.
+    applied: dict[str, object] = dict(result.filtered or {})
+    applied.update(
+        {
+            "scopes_shown": len(scopes),
+            "scopes_total": len(result.scopes),
+        }
+    )
     if text:
         applied["text"] = text
     if statuses:

@@ -329,6 +329,98 @@ def test_unmatched_baseline_scope_is_reported_without_checks():
     assert all(s.scope_id != "svc:ZMIZELA:Internet" for s in result.scopes)
 
 
+def _multi_service_snapshot(phase="pre-migration"):
+    """Snapshot se dvema sluzbami ruznych typu (IPVPN + Internet) a L1
+    blokem - pro overeni, ze service_types filtr sahne jen na sluzby."""
+    ipvpn = _scope("svc:L3VPN:IPVPN", "L3VPN", "IPVPN", "ge-0/0/2.113")
+    internet = _scope("svc:NET:Internet", "NET", "Internet", "ge-0/0/3.0")
+    l1 = Scope(
+        id="l1:ge-0/0/4",
+        kind="layer1",
+        key=ScopeKey("Optika X", "Layer1", None),
+        selectors=Selectors(interfaces=["ge-0/0/4"]),
+    )
+    snapshot = _snapshot(
+        "172.20.20.4", "ge-0/0/2.113", [ipvpn, internet, l1], phase=phase
+    )
+    snapshot.facts["interfaces"]["ge-0/0/3.0"] = {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_pps": 100,
+        "output_pps": 100,
+        "input_errors": 0,
+        "output_errors": 0,
+    }
+    snapshot.facts["interfaces"]["ge-0/0/4"] = {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_pps": 0,
+        "output_pps": 0,
+        "input_errors": 0,
+        "output_errors": 0,
+    }
+    return snapshot
+
+
+def test_service_types_filtruje_check_smycku():
+    subject = _multi_service_snapshot()
+
+    result = evaluate_snapshots(
+        subject, service_types=["IPVPN"], profile_name="core-only.yml", now=NOW
+    )
+
+    typy = {
+        scope.key.get("service_type")
+        for scope in result.scopes
+        if scope.key and scope.key.get("service_type")
+    }
+    assert "Internet" not in typy
+    assert result.filtered["service_types"] == ["IPVPN"]
+    assert result.filtered["profile"] == "core-only.yml"
+    assert result.filtered["scopes_total"] > result.filtered["scopes_shown"]
+
+
+def test_device_a_layer1_scopy_filtru_nepodlehaji():
+    subject = _multi_service_snapshot()
+
+    result = evaluate_snapshots(subject, service_types=["IPVPN"], now=NOW)
+
+    ids = {scope.scope_id for scope in result.scopes}
+    # L1 blok zustava v reportu i kdyz jeho service_type neni v `IPVPN` -
+    # filtr je jen na sluzby, ne na infrastrukturu.
+    assert "l1:ge-0/0/4" in ids
+
+
+def test_nesparovane_se_nefiltruji():
+    baseline = _old()
+    baseline.scopes.append(_scope("svc:ZMIZELA:Internet", "ZMIZELA", "Internet", "ge-0/0/6.0"))
+
+    result = evaluate_snapshots(
+        _new(), baseline=baseline, service_types=["IPVPN"], now=NOW
+    )
+
+    assert any("Internet" in str(item) for item in result.unmatched["baseline"])
+
+
+def test_nesparovany_subject_mimo_profil_zustava_v_nesparovano():
+    """NESPAROVANY subject scope, ktery filtr vyradi z check smycky, musi
+    porad zustat v NESPAROVANO - i tam se pocita do skipped_total."""
+    result = evaluate_snapshots(
+        _new(extra_scope=True), baseline=_old(), service_types=["IPVPN"], now=NOW
+    )
+
+    assert result.unmatched["subject"][0]["scope_id"] == "svc:NOVA:E-LAN"
+    assert result.summary["unmatched_subject"] == 1
+    assert all(s.scope_id != "svc:NOVA:E-LAN" for s in result.scopes)
+    assert result.filtered["scopes_total"] == result.filtered["scopes_shown"] + 1
+
+
+def test_bez_filtru_zadny_marker():
+    result = evaluate_snapshots(_old(), now=NOW)
+
+    assert result.filtered is None
+
+
 def test_unassigned_bgp_peers_are_reported():
     peers = {"10.9.9.9": {"state": "Established", "routing_instance": None}}
     subject = _new()

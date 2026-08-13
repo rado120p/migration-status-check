@@ -421,9 +421,18 @@ def evaluate_snapshots(
     mapping: Mapping | None = None,
     config: CheckConfig | None = None,
     now: str | None = None,
+    service_types: list[str] | None = None,
+    profile_name: str | None = None,
 ) -> RunResult:
     config = config or default_config()
     mapping = mapping or empty_mapping()
+
+    def _in_profile(scope: Scope) -> bool:
+        # Filtr je jen na service typy: device a layer1 scopy jsou
+        # infrastruktura, ne sluzba, a v reportu zustavaji vzdy.
+        if service_types is None or scope.kind != "service":
+            return True
+        return scope.service_type in set(service_types)
 
     subject_scopes = _scopes_of(subject)
     subject_l1 = [s for s in subject_scopes if s.kind == "layer1"]
@@ -434,9 +443,13 @@ def evaluate_snapshots(
     scope_results: list[ScopeResult] = []
     unmatched: dict[str, list[dict[str, Any]]] = {"baseline": [], "subject": []}
     matched_count = 0
+    skipped_total = 0
 
     if baseline is None:
         for scope in subject_scopes:
+            if not _in_profile(scope):
+                skipped_total += 1
+                continue
             scope_results.append(
                 _run_scope(
                     scope, subject, None, None, config, None, link=link_payloads.get(scope.id)
@@ -450,6 +463,9 @@ def evaluate_snapshots(
         matched_count = len(matches.pairs)
 
         for pair in matches.pairs:
+            if not _in_profile(pair.subject):
+                skipped_total += 1
+                continue
             scope_results.append(
                 _run_scope(
                     pair.subject,
@@ -463,21 +479,27 @@ def evaluate_snapshots(
             )
 
         for item in matches.unmatched_subject:
-            scope_results.append(
-                _run_scope(
-                    item.scope,
-                    subject,
-                    None,
-                    None,
-                    config,
-                    MatchInfo(
-                        status="unmatched",
-                        reason=item.reason,
-                        subject_interfaces=list(item.scope.selectors.interfaces),
-                    ),
-                    link=link_payloads.get(item.scope.id),
+            # `unmatched["subject"]` seznam se nefiltruje - NESPAROVANO je
+            # pojistka proti prehlednuti a filtr ji smi zuzit jen v tom, co
+            # jde do check smycky (scope_results), ne co je videt v sekci.
+            if not _in_profile(item.scope):
+                skipped_total += 1
+            else:
+                scope_results.append(
+                    _run_scope(
+                        item.scope,
+                        subject,
+                        None,
+                        None,
+                        config,
+                        MatchInfo(
+                            status="unmatched",
+                            reason=item.reason,
+                            subject_interfaces=list(item.scope.selectors.interfaces),
+                        ),
+                        link=link_payloads.get(item.scope.id),
+                    )
                 )
-            )
             unmatched["subject"].append(_unmatched_entry(item.scope, item.reason))
 
         for item in matches.unmatched_baseline:
@@ -511,6 +533,16 @@ def evaluate_snapshots(
         "unmatched_subject": len(unmatched["subject"]),
     }
 
+    filtered = None
+    if service_types is not None:
+        filtered = {
+            "service_types": list(service_types),
+            "scopes_shown": len(scope_results),
+            "scopes_total": len(scope_results) + skipped_total,
+        }
+        if profile_name:
+            filtered["profile"] = profile_name
+
     return RunResult(
         evaluated_at=now or _now(),
         subject=_snapshot_meta(subject),
@@ -523,4 +555,5 @@ def evaluate_snapshots(
             "static_routes": _unassigned_static_routes(subject, subject_scopes),
             "bfd_sessions": _unassigned_bfd_sessions(subject, subject_scopes),
         },
+        filtered=filtered,
     )
