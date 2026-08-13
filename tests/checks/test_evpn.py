@@ -607,6 +607,21 @@ def test_irb_radek_jen_linkovany_unit():
     assert rows[0].outcome is Outcome.OK
 
 
+def test_irb_down_je_broken():
+    """IRB je v instanci, ale Down - operacne overeno 2026-08-13 v labu
+    (disablovany irb.4094 hlasi v mac-vrf vypisu Down). Mutant OK<->BROKEN
+    na IRB vetvi tenhle test zabiji, zadny jiny ji nedrzel."""
+    subject = _aware_subject()
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"][0][
+        "status"] = "Down"
+    findings = EvpnInstanceStatusCheck().run(
+        _vlan_aware_ctx(subject, link=LINK_L2))
+    rows = [f for f in findings if f.label == "IRB interface"]
+    assert [r.value for r in rows] == ["irb.14 Down (master)"]
+    assert rows[0].outcome is Outcome.BROKEN
+    assert "ocekavano Up" in rows[0].message
+
+
 def test_bez_linku_zadny_irb_radek():
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
     assert not [f for f in findings if f.label == "IRB interface"]
