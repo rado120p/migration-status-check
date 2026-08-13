@@ -157,7 +157,11 @@ def test_failed_collector_shows_up_as_skip_in_evaluate():
 
 
 def test_failed_arp_collector_leaves_ping_empty():
-    """Cile pingu se odvozuji z ARP - bez nej nesmi vzniknout falesny probe."""
+    """Bez ARP nesmi vzniknout probe odvozeny z ARP.
+
+    Sluzby s nakonfigurovanym BGP sousedem cili resolvuji z konfigurace
+    (bgp) a na ARP nezavisi - zbytek musi spadnout na subnet-fallback.
+    """
     inventory = load_inventory(INVENTORY_4)
     device = FakeDevice(failing=("get_arp_table_information",))
 
@@ -167,7 +171,8 @@ def test_failed_arp_collector_leaves_ping_empty():
     # Bez tohohle by all() prosel i na prazdnem seznamu a netvrdil nic.
     assert snapshot.probes["ping"]
     assert all(
-        probe["resolved_from"] == "subnet-fallback" for probe in snapshot.probes["ping"]
+        probe["resolved_from"] in ("bgp", "subnet-fallback")
+        for probe in snapshot.probes["ping"]
     )
 
 

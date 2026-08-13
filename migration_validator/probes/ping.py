@@ -28,7 +28,7 @@ class PingTarget:
     target: str
     source: str | None
     routing_instance: str | None
-    resolved_from: str  # arp | nd | subnet-fallback | baseline-arp | baseline-nd
+    resolved_from: str  # bgp | arp | nd | subnet-fallback | baseline-arp | baseline-nd
     family: int
     interface: str | None = None
 
@@ -184,6 +184,9 @@ def resolve_targets(
     stejne nic nezavisi, checky rodinu ctou z pole `family`, ne z pozice
     v seznamu.
 
+    Priorita tieru: bgp > baseline > arp/nd > subnet-fallback. Prvni tier,
+    ktery pro danou rodinu neco vrati, vyhrava.
+
     `baseline_arp`/`baseline_nd` jsou ARP/ND z pre snimku stareho boxu -
     pouziva se pri --phase post, kdy novy box jeste nema vlastni ARP/ND
     napliene (cutover cerstvy). Maji prednost pred vlastnimi cili.
@@ -228,6 +231,31 @@ def resolve_targets(
                     own_addresses.add(ipaddress.ip_interface(addr).ip)
                 except ValueError:
                     continue
+
+            # Nakonfigurovany BGP soused je nejpresnejsi cil - je to adresa
+            # CPE primo z konfigurace sluzby, ne odhad z tabulek. Deaktivovani
+            # sousedi (bgp_neighbors_inactive) se zamerne nepouzivaji: vypnuty
+            # zamer nema generovat FAIL, ktery se cte jako nedostupne CPE.
+            # Link-local soused se preskakuje - ping na fe80 potrebuje
+            # rozhrani a selektor bgp_neighbors zadne nenese.
+            bgp_addresses = []
+            for neighbor in scope.selectors.bgp_neighbors:
+                try:
+                    neighbor_ip = ipaddress.ip_address(neighbor)
+                except ValueError:
+                    continue
+                if (
+                    neighbor_ip.version == family
+                    and not neighbor_ip.is_link_local
+                    and neighbor_ip not in own_addresses
+                ):
+                    bgp_addresses.append(str(neighbor_ip))
+            if bgp_addresses:
+                targets.extend(
+                    PingTarget(scope.id, address, source, instance, "bgp", family)
+                    for address in bgp_addresses
+                )
+                continue
 
             baseline_addresses = [
                 address

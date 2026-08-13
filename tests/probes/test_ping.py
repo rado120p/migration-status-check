@@ -19,6 +19,8 @@ def _scope(
     virtual_gw_v4=(),
     virtual_gw_v6=(),
     routing_instance="L3VPN-CPE13-NNI",
+    bgp_neighbors=(),
+    bgp_neighbors_inactive=(),
 ):
     # local_ipv6/virtual_gw_v6 doplneny, aby na ne slo sahnout - drivejsi
     # verze tenhle helper rozdelila jen napul (IPv4 vetev), IPv6 byla skrz
@@ -34,6 +36,8 @@ def _scope(
             virtual_gw_v4=list(virtual_gw_v4),
             virtual_gw_v6=list(virtual_gw_v6),
             routing_instances=[routing_instance] if routing_instance else [],
+            bgp_neighbors=list(bgp_neighbors),
+            bgp_neighbors_inactive=list(bgp_neighbors_inactive),
         ),
     )
 
@@ -565,6 +569,100 @@ def test_no_baseline_keeps_today_behavior():
     assert resolve_targets([scope], arp) == resolve_targets(
         [scope], arp, baseline_arp=None, baseline_nd=None
     )
+
+
+def test_bgp_neighbor_wins_over_baseline_and_arp():
+    """Nakonfigurovany BGP soused je nejpresnejsi cil - adresa CPE primo z konfigurace."""
+    scope = _scope(addresses=("198.11.13.1/29",), bgp_neighbors=("198.11.13.2",))
+    arp = [{"ip": "198.11.13.3", "interface": "ge-0/0/2.113"}]
+    baseline_arp = [{"ip": "198.11.13.4", "interface": "ge-0/0/0.100"}]
+
+    targets = resolve_targets([scope], arp, baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["198.11.13.2"]
+    assert targets[0].resolved_from == "bgp"
+    assert targets[0].source == "198.11.13.1"
+
+
+def test_bgp_neighbors_split_by_family():
+    scope = _scope(
+        addresses=("198.11.13.1/30",),
+        local_ipv6=("2001:abcd:11:13::a/127",),
+        bgp_neighbors=("198.11.13.2", "2001:abcd:11:13::b"),
+    )
+
+    targets = resolve_targets([scope], [])
+
+    assert [(t.target, t.family) for t in targets] == [
+        ("198.11.13.2", 4),
+        ("2001:abcd:11:13::b", 6),
+    ]
+    assert all(t.resolved_from == "bgp" for t in targets)
+
+
+def test_inactive_bgp_neighbor_is_not_a_target():
+    """Deaktivovana session je vypnuty zamer - FAIL pingu by lhal o nedostupnem CPE."""
+    scope = _scope(bgp_neighbors_inactive=("198.11.13.2",))
+    arp = [{"ip": "198.11.13.2", "interface": "ge-0/0/2.113"}]
+
+    targets = resolve_targets([scope], arp)
+
+    assert [t.resolved_from for t in targets] == ["arp"]
+
+
+def test_bgp_neighbor_guard_drops_own_addresses():
+    """Vlastni adresy (source i VGW) nesmi projit ani z BGP selektoru.
+
+    Kdyby filtr nefungoval, vratily by se tri cile - platny soused musi
+    projit, aby test nemohl projit s tierem, ktery vraci prazdny seznam.
+    """
+    scope = _scope(
+        interfaces=("irb.14",),
+        addresses=("152.11.14.2/29",),
+        virtual_gw_v4=("152.11.14.1",),
+        bgp_neighbors=("152.11.14.2", "152.11.14.1", "152.11.14.4"),
+        routing_instance=None,
+    )
+
+    targets = resolve_targets([scope], [])
+
+    assert [t.target for t in targets] == ["152.11.14.4"]
+    assert targets[0].resolved_from == "bgp"
+
+
+def test_link_local_bgp_neighbor_is_skipped():
+    """fe80 soused bez rozhrani se pingnout neda - selektor rozhrani nenese.
+
+    Selekce musi propadnout na dalsi tier (tady ND), ne vyrobit cil,
+    ktery Junos odmitne.
+    """
+    scope = _scope(
+        interfaces=("et-0/0/8.13",),
+        addresses=(),
+        local_ipv6=("2001:abcd:11:13::a/64",),
+        bgp_neighbors=("fe80::c66b:b8ff:fe48:0",),
+    )
+    nd = [
+        {
+            "ip": "2001:abcd:11:13::b",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [(t.target, t.resolved_from) for t in targets] == [("2001:abcd:11:13::b", "nd")]
+
+
+def test_scope_without_bgp_neighbors_behaves_as_before():
+    scope = _scope()
+    arp = [{"ip": "198.11.13.2", "interface": "ge-0/0/2.113"}]
+
+    targets = resolve_targets([scope], arp)
+
+    assert [t.resolved_from for t in targets] == ["arp"]
 
 
 def test_parse_ping_result():
