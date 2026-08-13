@@ -147,6 +147,10 @@ class Scope:
         if self.is_device:
             selected: dict[str, Any] = {area: facts.get(area, _empty(area)) for area in FACT_AREAS}
             selected["ping"] = pings
+            selected["ping_skipped"] = any(
+                entry.get("scope_id") == self.id
+                for entry in probes.get("ping_skipped", [])
+            )
             return selected
 
         interfaces = {
@@ -251,6 +255,10 @@ class Scope:
             "bfd": bfd,
             "optics": optics,
             "ping": ping,
+            "ping_skipped": any(
+                entry.get("scope_id") == self.id
+                for entry in probes.get("ping_skipped", [])
+            ),
         }
 
     def to_dict(self) -> dict[str, Any]:

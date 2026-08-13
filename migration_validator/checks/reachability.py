@@ -188,6 +188,17 @@ class PingReachabilityCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         probes: list[dict[str, Any]] = ctx.subject.get("ping", [])
         if not probes:
+            if ctx.subject.get("ping_skipped"):
+                # Odfiltrovano profilem pri capture - vedome nesbirano,
+                # ne chybejici cil. Stav se nefabuluje: rekneme proc.
+                return [
+                    Finding(
+                        Outcome.SKIP,
+                        "ping neproveden - mimo profil",
+                        label="Ping",
+                        value="mimo profil",
+                    )
+                ]
             return [
                 Finding(
                     Outcome.SKIP,

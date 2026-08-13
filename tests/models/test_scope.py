@@ -126,6 +126,26 @@ def test_select_tolerates_missing_fact_areas():
     assert selected["ping"] == []
 
 
+def test_select_prenasi_ping_skipped_marker():
+    scope = _service_scope()
+    subject = scope.select(
+        {}, {"ping": [], "ping_skipped": [{"scope_id": scope.id, "reason": "mimo profil"}]}
+    )
+    assert subject["ping_skipped"] is True
+
+
+def test_select_bez_markeru_je_false():
+    subject = _service_scope().select({}, {"ping": []})
+    assert subject["ping_skipped"] is False
+
+
+def test_device_scope_ping_skipped_je_vzdy_false():
+    """Device scope zadne sluzebni pingy nema - klic ale byt musi, aby
+    check necetl neexistujici klic."""
+    subject = device_scope().select({}, {"ping_skipped": [{"scope_id": "svc:X:IPVPN"}]})
+    assert subject["ping_skipped"] is False
+
+
 def test_scope_round_trip():
     scope = _service_scope()
     assert Scope.from_dict(scope.to_dict()) == scope

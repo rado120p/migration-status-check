@@ -174,6 +174,16 @@ def test_ping_without_targets_skips():
     assert "cile" in result.message
 
 
+def test_ping_mimo_profil_je_skip_s_duvodem():
+    """Prazdne pingy s markerem ping_skipped jsou vedomy vynechani profilem,
+    ne chybejici cil - zprava musi rozlisit proc."""
+    ctx = _ctx({"ping": [], "ping_skipped": True})
+    findings = PingReachabilityCheck().run(ctx)
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
+    assert "mimo profil" in findings[0].message
+
+
 def test_ping_probe_without_family_skips_instead_of_vanishing():
     """Probe bez rodiny nesmi tise zmizet - check musi zustat v poli checku.
 
