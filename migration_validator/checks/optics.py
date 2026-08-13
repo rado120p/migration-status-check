@@ -6,9 +6,10 @@ tichy port ma jeden souhrnny radek, stejny vzor jako Interface errors.
 
 Nepripojeny port hlasi rx/tx jako -inf (skutecne chovani krabice, ne
 chyba fixture). Delta se pocita jen kdyz jsou konecne obe strany -
-z nekonecna by vysel nan/inf a DEGRADED z aritmetiky misto z alarmu.
-Verdikt o nepripojenem portu nese OpticalAlarmsCheck (flagy On), tenhle
-check zustava OK a beze zmeny.
+z nekonecna by vysel nan/inf a DEGRADED z aritmetiky. Nekonecna uroven
+sama je ale BROKEN: 'RX -Inf dBm' neni "v toleranci", je to port bez
+svetla (pozadavek z lab testovani 2026-08-13; do te doby verdikt nesl
+jen alarms check a levels radek matl PASSem).
 """
 
 from __future__ import annotations
@@ -59,7 +60,9 @@ class OpticalLevelsCheck(Check):
     requires = ("optics",)
     service_types = frozenset()  # nikdy na service scopu
     layer1 = True
-    default_severity = Severity.ADVISORY
+    # CRITICAL kvuli -Inf urovnim (BROKEN => FAIL). Delta pres toleranci
+    # je DEGRADED a ta zustava WARN pri jakekoli severity (derive_status).
+    default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         optics: dict[str, Any] = ctx.subject.get("optics", {})
@@ -75,7 +78,10 @@ class OpticalLevelsCheck(Check):
                     Finding(
                         Outcome.SKIP,
                         f"{name}: rozhrani nevraci opticka data",
-                        label=_optics_label(self.label, name, None, port),
+                        # Jmeno vzdy, i kdyz name == port: SKIP radek stoji
+                        # vedle lane radku clenu LAGu a bez jmena nebylo
+                        # poznat, ze "bez optiky" mluvi o rodici (ae0).
+                        label=f"{self.label} ({name})",
                         value="bez optiky",
                     )
                 )
@@ -97,6 +103,15 @@ class OpticalLevelsCheck(Check):
         return findings
 
 
+def _dark_sides(lane: dict[str, Any]) -> list[str]:
+    """Strany s nekonecnou urovni ('RX', 'TX') - port bez svetla."""
+    return [
+        tag
+        for key, tag in (("rx_power_dbm", "RX"), ("tx_power_dbm", "TX"))
+        if lane.get(key) is not None and not math.isfinite(lane[key])
+    ]
+
+
 def _level_finding(
     label: str,
     name: str,
@@ -105,9 +120,16 @@ def _level_finding(
     tolerance: float,
 ) -> Finding:
     value = f"RX {_fmt(lane['rx_power_dbm'])} / TX {_fmt(lane['tx_power_dbm'])}"
+    dark = _dark_sides(lane)
     if baseline_lane is None:
         return Finding(
-            Outcome.OK, f"{name}: {value}", label=label, value=value,
+            Outcome.BROKEN if dark else Outcome.OK,
+            (
+                f"{name}: {'/'.join(dark)} bez svetla ({value})"
+                if dark
+                else f"{name}: {value}"
+            ),
+            label=label, value=value,
             subject={"rx_power_dbm": lane["rx_power_dbm"],
                      "tx_power_dbm": lane["tx_power_dbm"]},
         )
@@ -118,9 +140,8 @@ def _level_finding(
         now, before = lane.get(key), baseline_lane.get(key)
         if now is None or before is None:
             continue
-        # -Inf na jedne (nebo obou) stranach - port bez svetla. Delta by
-        # z toho vyrobila nan/inf a DEGRADED z aritmetiky misto z alarmu;
-        # tenhle radek zustava OK, alarms check nese verdikt.
+        # -Inf na jedne (nebo obou) stranach: delta by z nekonecna vyrobila
+        # nan/inf, takze se nepocita - verdikt BROKEN nese vetev `dark`.
         if not (math.isfinite(now) and math.isfinite(before)):
             continue
         diff = now - before
@@ -132,14 +153,20 @@ def _level_finding(
         f"RX {_fmt(baseline_lane['rx_power_dbm'])}"
         f" / TX {_fmt(baseline_lane['tx_power_dbm'])}"
     )
-    message = (
-        f"{name}: uroven se posunula o vic nez {tolerance:.1f} dB"
-        f" ({', '.join(deltas)})"
-        if degraded
-        else f"{name}: urovne v toleranci {tolerance:.1f} dB"
-    )
+    if dark:
+        outcome = Outcome.BROKEN
+        message = f"{name}: {'/'.join(dark)} bez svetla ({value})"
+    elif degraded:
+        outcome = Outcome.DEGRADED
+        message = (
+            f"{name}: uroven se posunula o vic nez {tolerance:.1f} dB"
+            f" ({', '.join(deltas)})"
+        )
+    else:
+        outcome = Outcome.OK
+        message = f"{name}: urovne v toleranci {tolerance:.1f} dB"
     return Finding(
-        Outcome.DEGRADED if degraded else Outcome.OK,
+        outcome,
         message,
         label=label,
         value=value,
@@ -172,7 +199,10 @@ class OpticalAlarmsCheck(Check):
                     Finding(
                         Outcome.SKIP,
                         f"{name}: rozhrani nevraci opticka data",
-                        label=_optics_label(self.label, name, None, port),
+                        # Jmeno vzdy, i kdyz name == port: SKIP radek stoji
+                        # vedle lane radku clenu LAGu a bez jmena nebylo
+                        # poznat, ze "bez optiky" mluvi o rodici (ae0).
+                        label=f"{self.label} ({name})",
                         value="bez optiky",
                     )
                 )

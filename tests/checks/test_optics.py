@@ -83,15 +83,24 @@ def test_flag_off_se_nevypisuje():
 
 # Nepripojeny port hlasi rx/tx jako -inf (skutecne chovani krabice). _fmt
 # musi vytisknout citelny Junos-styl token, ne "-inf dBm" z f-stringu, a
-# _level_finding nesmi z nekonecna spocitat delta/DEGRADED - verdikt o
-# nepripojenem portu nese alarms check (flagy On), ne aritmetika levels
-# checku.
-def test_levels_nekonecny_rx_se_formatuje_jako_inf_token_bez_delty():
+# _level_finding nesmi z nekonecna spocitat delta/DEGRADED - delta se
+# pocita jen z konecnych hodnot. Nekonecno samo je ale BROKEN: port bez
+# svetla neni "uroven v toleranci" (pozadavek z lab testovani 2026-08-13).
+def test_levels_nekonecny_rx_je_broken_s_inf_tokenem():
     lane = _lane(rx=float("-inf"), tx=-2.0)
     findings = OpticalLevelsCheck().run(
         _ctx({"optics": {"ae0": {"lanes": [lane]}}}))
-    assert findings[0].outcome is Outcome.OK
+    assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == "RX -Inf dBm / TX -2.00 dBm"
+
+
+def test_levels_nekonecno_je_fail_i_pres_run_check():
+    from migration_validator.checks.base import run_check
+    from migration_validator.models.result import Status
+    lane = _lane(rx=float("-inf"), tx=float("-inf"))
+    results = run_check(OpticalLevelsCheck(),
+                        _ctx({"optics": {"ae0": {"lanes": [lane]}}}))
+    assert results[0].status is Status.FAIL
 
 
 def test_levels_prechod_z_konecne_na_nekonecnou_hodnotu_nedava_rx_deltu():
@@ -99,9 +108,25 @@ def test_levels_prechod_z_konecne_na_nekonecnou_hodnotu_nedava_rx_deltu():
         {"optics": {"ae0": {"lanes": [_lane(rx=float("-inf"), tx=-2.5)]}}},
         baseline={"optics": {"ae0": {"lanes": [_lane(rx=-5.0, tx=-2.0)]}}}))
     finding = findings[0]
-    assert finding.outcome is Outcome.OK
+    assert finding.outcome is Outcome.BROKEN
     assert "RX" not in (finding.delta or "")
     assert "TX -0.5 dB" in finding.delta
+
+
+# SKIP "bez optiky" na LAG rodici stal v reportu bez jmena rozhrani a
+# vedle lane radku clenu nebylo poznat, ke komu patri (lab 2026-08-13).
+def test_skip_bez_optiky_nese_jmeno_rozhrani_v_labelu():
+    findings = OpticalLevelsCheck().run(_ctx(
+        {"optics": {"et-0/0/5": {"lanes": [_lane()]}}},
+        port="ae0", members=["et-0/0/5"]))
+    skip = next(f for f in findings if f.outcome is Outcome.SKIP)
+    assert skip.label == "Interface optical levels (ae0)"
+
+    alarm_findings = OpticalAlarmsCheck().run(_ctx(
+        {"optics": {"et-0/0/5": {"lanes": [_lane()]}}},
+        port="ae0", members=["et-0/0/5"]))
+    alarm_skip = next(f for f in alarm_findings if f.outcome is Outcome.SKIP)
+    assert alarm_skip.label == "Interface optical alarms (ae0)"
 
 
 # Check.applies_to() pousti device scope na VSECHNY checky bez ohledu na
