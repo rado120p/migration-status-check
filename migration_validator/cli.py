@@ -365,6 +365,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         args.collectors.split(",") if args.collectors else profile.collectors
     )
     ping_count = _pick(args.ping_count, profile.ping_count, 5)
+    service_types = _parse_service_types(args, profile)
 
     try:
         snapshot = api.capture(
@@ -375,6 +376,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
             phase=args.phase,
             ping_count=ping_count,
             record_raw=args.record_raw,
+            service_types=service_types,
         )
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error
@@ -458,6 +460,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
         args.collectors.split(",") if args.collectors else profile.collectors
     )
     ping_count = _pick(args.ping_count, profile.ping_count, 5)
+    service_types = _parse_service_types(args, profile)
 
     try:
         snapshot = api.capture(
@@ -469,6 +472,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
             ping_count=ping_count,
             record_raw=args.record_raw,
             baseline=baseline,
+            service_types=service_types,
         )
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error

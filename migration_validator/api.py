@@ -29,6 +29,7 @@ def capture(
     ping_count: int = 5,
     record_raw: str | None = None,
     baseline: Snapshot | None = None,
+    service_types: list[str] | None = None,
 ) -> Snapshot:
     """Sebere stav zarizeni a vrati self-contained snapshot.
 
@@ -50,6 +51,7 @@ def capture(
             ping_count=ping_count,
             record_raw=record_raw,
             baseline=baseline,
+            service_types=service_types,
         )
 
 

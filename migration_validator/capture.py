@@ -81,6 +81,7 @@ def capture_device(
     now: str | None = None,
     record_raw: str | Path | None = None,
     baseline: Snapshot | None = None,
+    service_types: list[str] | None = None,
 ) -> Snapshot:
     started_at = now or _timestamp()
     platform = detect_platform(device)
@@ -105,11 +106,24 @@ def capture_device(
     scopes = build_scopes(inventory) if inventory is not None else []
 
     pings: list[dict[str, Any]] = []
+    ping_skipped: list[dict[str, Any]] = []
     if scopes:
+        if service_types is None:
+            ping_scopes = scopes
+        else:
+            allowed = set(service_types)
+            ping_scopes = [s for s in scopes if s.service_type in allowed]
+            # Marker misto ticha: evaluate z nej udela SKIP s duvodem,
+            # jinak by odfiltrovany ping vypadal jako "bez cile".
+            ping_skipped = [
+                {"scope_id": s.id, "reason": "mimo profil"}
+                for s in scopes
+                if s.kind == "service" and s.service_type not in allowed
+            ]
         baseline_arp = baseline.facts.get("arp", []) if baseline is not None else None
         baseline_nd = baseline.facts.get("nd", []) if baseline is not None else None
         for target in resolve_targets(
-            scopes,
+            ping_scopes,
             facts.get("arp", []),
             facts.get("nd", []),
             baseline_arp=baseline_arp,
@@ -126,7 +140,7 @@ def capture_device(
             collectors=status,
         ),
         facts=facts,
-        probes={"ping": pings},
+        probes={"ping": pings, "ping_skipped": ping_skipped},
         scopes=scopes,
         inventory=inventory.entries if inventory is not None else None,
     )

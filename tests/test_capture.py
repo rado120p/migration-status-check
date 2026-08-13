@@ -5,6 +5,7 @@ from lxml import etree
 
 from migration_validator.capture import capture_device
 from migration_validator.models.inventory import load_inventory
+from migration_validator.scoping.builder import build_scopes
 
 NOW = "2026-07-24T09:12:41Z"
 
@@ -285,6 +286,44 @@ def test_capture_device_passes_baseline_facts_to_resolve_targets(monkeypatch):
 
     assert captured_kwargs["baseline_arp"] == [{"ip": "1.2.3.4", "interface": "ge-0/0/0.0"}]
     assert captured_kwargs["baseline_nd"] == []
+
+
+def test_service_types_filtruje_ping_a_zapisuje_marker():
+    """service_types omezi jen resolve ping cilu - inventory zustava cela.
+
+    IPVPN filtr necha projit ge-0/0/2.113, ge-0/0/4.0 a irb.4094, Internet
+    sluzby (ge-0/0/2.13, ge-0/0/5.0) dostanou marker mimo profil.
+    """
+    inventory = load_inventory(INVENTORY_4)
+    device = FakeDevice()
+
+    snapshot = capture_device(
+        device, "172.20.20.4", inventory=inventory, now=NOW, service_types=["IPVPN"]
+    )
+
+    expected_scopes = build_scopes(inventory)
+    all_scope_ids = {s.id for s in expected_scopes}
+    internet_scope_ids = {
+        s.id for s in expected_scopes if s.service_type == "Internet"
+    }
+
+    pinged_scopes = {p["scope_id"] for p in snapshot.probes["ping"]}
+    skipped = {p["scope_id"] for p in snapshot.probes["ping_skipped"]}
+
+    assert internet_scope_ids  # sanity - fixture musi mit Internet sluzby
+    assert all(sid in skipped for sid in internet_scope_ids)
+    assert not (pinged_scopes & internet_scope_ids)
+    # vsechny scopy jsou porad ve snapshotu (inventory se nefiltruje)
+    assert {s.id for s in snapshot.scopes} == all_scope_ids
+
+
+def test_bez_filtru_zadny_marker():
+    inventory = load_inventory(INVENTORY_4)
+    device = FakeDevice()
+
+    snapshot = capture_device(device, "172.20.20.4", inventory=inventory, now=NOW)
+
+    assert snapshot.probes.get("ping_skipped", []) == []
 
 
 def test_evo_platform_selects_evo_rpcs():
