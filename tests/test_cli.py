@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from migration_validator.cli import EXIT_FAILED_CHECKS, EXIT_OK, EXIT_TOOL_ERROR, main
+from migration_validator.cli import (
+    EXIT_FAILED_CHECKS,
+    EXIT_OK,
+    EXIT_TOOL_ERROR,
+    build_parser,
+    main,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import (
     SCHEMA_VERSION,
@@ -964,3 +970,69 @@ def test_evaluate_color_and_no_color_are_exclusive(tmp_path, capsys):
     path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
     with pytest.raises(SystemExit):
         main(["evaluate", "--snapshot", str(path), "--color", "--no-color"])
+
+
+# --- profil, auth soubor, service-types (task 3) -----
+
+def test_evaluate_prijima_profile_i_config_alias():
+    parser = build_parser()
+    args = parser.parse_args(["evaluate", "--snapshot", "s.json", "--profile", "p.yml"])
+    assert args.profile == "p.yml"
+    args = parser.parse_args(["evaluate", "--snapshot", "s.json", "--config", "p.yml"])
+    assert args.profile == "p.yml"
+
+
+def test_capture_ma_auth_file_a_service_types():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["capture", "--device", "r1", "--auth-file", "a.yml",
+         "--service-types", "Internet,IPVPN"]
+    )
+    assert args.auth_file == "a.yml"
+    assert args.service_types == "Internet,IPVPN"
+
+
+def test_flag_prebiji_auth_soubor(tmp_path, monkeypatch):
+    from migration_validator.auth import AuthSettings
+    from migration_validator.cli import _connection_options, build_parser
+
+    auth = AuthSettings(username="rmohyla", ssh_port=2222)
+    args = build_parser().parse_args(
+        ["capture", "--device", "r1", "--username", "ansible"]
+    )
+    options = _connection_options(args, auth)
+    assert options.username == "ansible"   # flag vyhrava
+    assert options.port == 2222            # soubor vyhrava nad defaultem
+
+
+def test_soubor_prebiji_default(tmp_path):
+    from migration_validator.auth import AuthSettings
+    from migration_validator.cli import _connection_options, build_parser
+
+    args = build_parser().parse_args(["capture", "--device", "r1"])
+    options = _connection_options(args, AuthSettings(username="rmohyla"))
+    assert options.username == "rmohyla"
+
+
+def test_default_kdyz_neni_flag_ani_soubor():
+    from migration_validator.auth import AuthSettings
+    from migration_validator.cli import _connection_options, build_parser
+
+    args = build_parser().parse_args(["capture", "--device", "r1"])
+    options = _connection_options(args, AuthSettings())
+    assert options.username == "ansible"
+    assert options.port == 22
+    assert options.timeout == 30
+
+
+def test_capture_sitovy_port_se_nepropise_do_ssh_portu():
+    # --port u capture --run je sitovy port (napr. "ge-0/0/0"), ne SSH port -
+    # bez --ssh-port se SSH port musi vzit z auth souboru/defaultu.
+    from migration_validator.auth import AuthSettings
+    from migration_validator.cli import _connection_options, build_parser
+
+    args = build_parser().parse_args(
+        ["capture", "--run", "r", "--device", "r1", "--port", "ge-0/0/0"]
+    )
+    options = _connection_options(args, AuthSettings())
+    assert options.port == 22

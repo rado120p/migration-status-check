@@ -12,8 +12,9 @@ import sys
 from pathlib import Path
 
 from migration_validator import api
+from migration_validator.auth import AuthSettings, DEFAULT_AUTH_PATH, load_auth_file
 from migration_validator.collectors.registry import collectors_for
-from migration_validator.config import default_config, load_config
+from migration_validator.config import Profile, default_profile, load_profile
 from migration_validator.connection.junos import (
     ConnectionOptions,
     JunosConnectionError,
@@ -81,9 +82,12 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     subject = _load_snapshot(args.snapshot)
     baseline = _load_snapshot(args.baseline) if args.baseline else None
     mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
-    config = load_config(args.config) if args.config else default_config()
+    profile = load_profile(args.profile) if args.profile else default_profile()
+    service_types = _parse_service_types(args, profile)
 
-    result = api.evaluate(subject, baseline=baseline, mapping=mapping, config=config)
+    result = api.evaluate(
+        subject, baseline=baseline, mapping=mapping, config=profile.checks
+    )
 
     shown = filter_result(result, text=args.filter, statuses=_parse_statuses(args.status))
 
@@ -142,7 +146,8 @@ def _evaluate_run(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     mapping = load_mapping(args.mapping) if args.mapping else empty_mapping()
-    config = load_config(args.config) if args.config else default_config()
+    profile = load_profile(args.profile) if args.profile else default_profile()
+    service_types = _parse_service_types(args, profile)
     statuses = _parse_statuses(args.status)
     color = use_color(force_on=args.color, force_off=args.no_color)
 
@@ -159,7 +164,9 @@ def _evaluate_run(args: argparse.Namespace) -> int:
 
         print(f"=== {evaluation.subject.snapshot} vs {baseline_label} ===")
 
-        result = api.evaluate(subject, baseline=baseline, mapping=mapping, config=config)
+        result = api.evaluate(
+            subject, baseline=baseline, mapping=mapping, config=profile.checks
+        )
         shown = filter_result(result, text=args.filter, statuses=statuses)
 
         if args.format == "json":
@@ -272,29 +279,65 @@ def _cmd_checks(args: argparse.Namespace) -> int:
 def _add_auth_arguments(
     parser: argparse.ArgumentParser, *, port_flag: str = "--port", port_dest: str = "port"
 ) -> None:
-    parser.add_argument("--username", default="ansible")
-    parser.add_argument("--auth", choices=("key", "password"), default="key")
-    parser.add_argument("--key-file", default=str(Path.home() / ".ssh" / "id_rsa"))
+    # default=None vsude: merge flag > soubor > default se deje az
+    # v _connection_options, argparse default by soubor tise prebil.
+    parser.add_argument("--username", default=None)
+    parser.add_argument("--auth", choices=("key", "password"), default=None)
+    parser.add_argument("--key-file", default=None)
     parser.add_argument("--password")
-    parser.add_argument(port_flag, dest=port_dest, type=int, default=22)
-    parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument(port_flag, dest=port_dest, type=int, default=None)
+    parser.add_argument("--timeout", type=int, default=None)
+    parser.add_argument(
+        "--auth-file",
+        help="cesta k auth YAML (default ~/.config/mig-validate/auth.yml)",
+    )
 
 
-def _connection_options(args: argparse.Namespace) -> ConnectionOptions:
+def _pick(*values):
+    """Prvni hodnota, ktera neni None - precedence flag > soubor > default."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _auth_settings(args: argparse.Namespace) -> AuthSettings:
+    if args.auth_file:
+        return load_auth_file(Path(args.auth_file), required=True)
+    return load_auth_file(DEFAULT_AUTH_PATH, required=False)
+
+
+def _connection_options(
+    args: argparse.Namespace, auth: AuthSettings
+) -> ConnectionOptions:
     # capture ma --ssh-port (dest "ssh_port"), protoze --port u nej znamena
-    # cislo/jmeno sitoveho portu v run rezimu; record pouziva puvodni --port.
-    ssh_port = getattr(args, "ssh_port", None)
-    if ssh_port is None:
-        ssh_port = args.port
+    # cislo/jmeno sitoveho portu v run rezimu; record pouziva puvodni --port
+    # jako SSH port. Rozlisuje se pritomnosti atributu, ne hodnotou None -
+    # capture s --ssh-port nezadanym ma ssh_port None, coz by jinak spadlo
+    # na args.port (sitovy port typu "ge-0/0/0") a poslalo ho jako SSH port.
+    if hasattr(args, "ssh_port"):
+        flag_port = args.ssh_port
+    else:
+        flag_port = getattr(args, "port", None)
     return ConnectionOptions(
         host=args.device,
-        username=args.username,
-        auth_type=args.auth,
-        key_file=args.key_file,
-        password=args.password,
-        port=ssh_port,
-        timeout=args.timeout,
+        username=_pick(args.username, auth.username, "ansible"),
+        auth_type=_pick(args.auth, auth.auth_type, "key"),
+        key_file=_pick(
+            args.key_file, auth.key_file, str(Path.home() / ".ssh" / "id_rsa")
+        ),
+        password=_pick(args.password, auth.password),
+        port=_pick(flag_port, auth.ssh_port, 22),
+        timeout=_pick(args.timeout, auth.timeout, 30),
     )
+
+
+def _parse_service_types(
+    args: argparse.Namespace, profile: Profile
+) -> list[str] | None:
+    if getattr(args, "service_types", None):
+        return [s.strip() for s in args.service_types.split(",") if s.strip()]
+    return profile.service_types
 
 
 def _cmd_capture(args: argparse.Namespace) -> int:
@@ -317,14 +360,20 @@ def _cmd_capture(args: argparse.Namespace) -> int:
 
     from migration_validator.models.snapshot import save_snapshot
 
+    profile = load_profile(args.profile) if args.profile else default_profile()
+    collectors = (
+        args.collectors.split(",") if args.collectors else profile.collectors
+    )
+    ping_count = _pick(args.ping_count, profile.ping_count, 5)
+
     try:
         snapshot = api.capture(
             args.device,
             inventory=args.inventory,
-            options=_connection_options(args),
-            collectors=args.collectors.split(",") if args.collectors else None,
+            options=_connection_options(args, _auth_settings(args)),
+            collectors=collectors,
             phase=args.phase,
-            ping_count=args.ping_count,
+            ping_count=ping_count,
             record_raw=args.record_raw,
         )
     except JunosConnectionError as error:
@@ -348,7 +397,7 @@ def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None
     """
 
     try:
-        with connect(_connection_options(args)) as device:
+        with connect(_connection_options(args, _auth_settings(args))) as device:
             platform = detect_platform(device)
             generate_inventory(device, platform, inventory_path, args.port)
     except JunosConnectionError as error:
@@ -404,14 +453,20 @@ def _capture_into_run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
+    profile = load_profile(args.profile) if args.profile else default_profile()
+    collectors = (
+        args.collectors.split(",") if args.collectors else profile.collectors
+    )
+    ping_count = _pick(args.ping_count, profile.ping_count, 5)
+
     try:
         snapshot = api.capture(
             args.device,
             inventory=str(inventory_path),
-            options=_connection_options(args),
-            collectors=args.collectors.split(",") if args.collectors else None,
+            options=_connection_options(args, _auth_settings(args)),
+            collectors=collectors,
             phase=phase,
-            ping_count=args.ping_count,
+            ping_count=ping_count,
             record_raw=args.record_raw,
             baseline=baseline,
         )
@@ -468,7 +523,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
 
     target_root = Path(args.output_dir)
     try:
-        with connect(_connection_options(args)) as device:
+        with connect(_connection_options(args, _auth_settings(args))) as device:
             platform = detect_platform(device)
             target = target_root / platform
             target.mkdir(parents=True, exist_ok=True)
@@ -517,7 +572,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--ports", help="carkou oddeleny seznam portu, filtr pro --run rezim"
     )
     evaluate.add_argument("--mapping")
-    evaluate.add_argument("--config")
+    evaluate.add_argument(
+        "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
+    )
+    evaluate.add_argument("--service-types", help="carkou oddeleny seznam typu sluzeb")
     evaluate.add_argument("--format", choices=("text", "json"), default="text")
     evaluate.add_argument("--output")
     evaluate.add_argument("--filter", help="podretezec v description nebo scope id")
@@ -564,8 +622,12 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--phase")
     capture.add_argument("--output")
     capture.add_argument("--collectors", help="carkou oddeleny seznam")
-    capture.add_argument("--ping-count", type=int, default=5)
+    capture.add_argument("--ping-count", type=int, default=None)
     capture.add_argument("--record-raw")
+    capture.add_argument(
+        "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
+    )
+    capture.add_argument("--service-types", help="carkou oddeleny seznam typu sluzeb")
     capture.add_argument("--run", help="nazev run adresare (runs/<nazev>/)")
     capture.add_argument(
         "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
