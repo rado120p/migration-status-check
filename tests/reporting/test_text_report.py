@@ -179,6 +179,23 @@ def test_render_contains_header_with_both_devices():
     assert "pre-migration" in output and "post-migration" in output
 
 
+def test_render_appends_profile_name_to_header_bez_service_types_filtru():
+    """Jmeno profilu se ma propsat do hlavicky i kdyz service_types filtr
+    vubec nebezel (result.filtered is None) - profil bez omezeni typu."""
+    from dataclasses import replace
+
+    result = replace(_legacy_result(), profile="core-only.yml")
+    output = render(result)
+    first_line = output.splitlines()[0]
+    assert first_line.endswith("[profil core-only.yml]")
+
+
+def test_render_bez_profilu_nepripoji_zavorku():
+    output = render(_legacy_result())
+    first_line = output.splitlines()[0]
+    assert "[profil" not in first_line
+
+
 def test_render_contains_summary_counts():
     output = render(_legacy_result())
     assert "3 PASS" in output

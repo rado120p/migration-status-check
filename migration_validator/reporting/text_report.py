@@ -440,12 +440,17 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
     baseline = result.baseline
     has_baseline = baseline is not None
     if has_baseline:
-        lines.append(
+        header = (
             f"Migrace: {baseline['address']} ({baseline['phase']}) -> "
             f"{subject['address']} ({subject['phase']})"
         )
     else:
-        lines.append(f"Validace: {subject['address']} ({subject['phase']})")
+        header = f"Validace: {subject['address']} ({subject['phase']})"
+    # Profil se pripojuje na uvodni radek vzdy, kdyz je znamy - i pri behu
+    # bez service_types filtru - aby report rekl, pod jakym profilem vznikl.
+    if result.profile:
+        header += f" [profil {result.profile}]"
+    lines.append(header)
     lines.append("")
 
     lines.extend(_filter_note(result))

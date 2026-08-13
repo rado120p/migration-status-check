@@ -226,6 +226,11 @@ class RunResult:
     # zapisuje prave ten profiltrovany, bez nej by strojovy vystup hlasil
     # prepoctena cisla a nic by neprozradilo, ze nejde o cely beh.
     filtered: dict[str, Any] | None = None
+    # Jmeno profilu (basename souboru), pod kterym beh vznikl - nezavisle na
+    # tom, jestli profil nesl service_types filtr. Na rozdil od `filtered`,
+    # ktery se plni jen pri aktivnim filtrovani sluzeb, tohle ma byt v
+    # kazdem behu s profilem, aby report vzdy rekl, pod cim vznikl.
+    profile: str | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -243,4 +248,8 @@ class RunResult:
         # tvarem, ktery uz cte okoli.
         if self.filtered is not None:
             payload["filtered"] = self.filtered
+        # Stejne pravidlo jako u `filtered`: beh bez profilu ma zustat
+        # presne tim tvarem, ktery uz cte okoli.
+        if self.profile is not None:
+            payload["profile"] = self.profile
         return payload

@@ -992,6 +992,55 @@ def test_capture_ma_auth_file_a_service_types():
     assert args.service_types == "Internet,IPVPN"
 
 
+def test_service_types_carka_bez_typu_je_chyba(tmp_path, capsys):
+    """--service-types "," parsuje na [] - ticha shoda by odfiltrovala
+    kazdou sluzbu bez jedineho `typy=` kriteria v reportu."""
+    path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    code = main(
+        ["evaluate", "--snapshot", str(path), "--service-types", ","]
+    )
+    assert code == EXIT_TOOL_ERROR
+    assert "zadny platny typ v --service-types" in capsys.readouterr().err
+
+
+def test_service_types_prazdny_retezec_je_chyba(tmp_path, capsys):
+    """--service-types "" se drive tise vracelo na profil - ted je to
+    chyba, protoze prazdny flag neni totez jako flag nezadany."""
+    path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    code = main(["evaluate", "--snapshot", str(path), "--service-types", ""])
+    assert code == EXIT_TOOL_ERROR
+    assert "zadny platny typ v --service-types" in capsys.readouterr().err
+
+
+def test_evaluate_s_profilem_bez_service_types_propise_jmeno_do_hlavicky(
+    tmp_path, capsys
+):
+    """End-to-end: profil bez sekce service_types (tedy zadny --service-types
+    filtr) porad musi rict v hlavicce reportu, pod jakym profilem beh
+    vznikl - basename souboru, ne cela cesta."""
+    snapshot_path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+    profile_path = tmp_path / "core-only.yml"
+    profile_path.write_text("profile:\n  ping_count: 3\n", encoding="utf-8")
+
+    code = main(
+        ["evaluate", "--snapshot", str(snapshot_path), "--profile", str(profile_path)]
+    )
+
+    assert code == EXIT_OK
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert first_line.endswith("[profil core-only.yml]")
+
+
+def test_evaluate_bez_profilu_neprida_zavorku_do_hlavicky(tmp_path, capsys):
+    snapshot_path = _write(tmp_path, "s.json", "172.20.20.5", "et-0/0/1")
+
+    code = main(["evaluate", "--snapshot", str(snapshot_path)])
+
+    assert code == EXIT_OK
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert "[profil" not in first_line
+
+
 def test_flag_prebiji_auth_soubor(tmp_path, monkeypatch):
     from migration_validator.auth import AuthSettings
     from migration_validator.cli import _connection_options, build_parser

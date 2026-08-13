@@ -306,6 +306,7 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
     internet_scope_ids = {
         s.id for s in expected_scopes if s.service_type == "Internet"
     }
+    ipvpn_scope_ids = {s.id for s in expected_scopes if s.service_type == "IPVPN"}
 
     pinged_scopes = {p["scope_id"] for p in snapshot.probes["ping"]}
     skipped = {p["scope_id"] for p in snapshot.probes["ping_skipped"]}
@@ -313,6 +314,11 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
     assert internet_scope_ids  # sanity - fixture musi mit Internet sluzby
     assert all(sid in skipped for sid in internet_scope_ids)
     assert not (pinged_scopes & internet_scope_ids)
+    # pozitivni tvrzeni: filtr nesmi umlcet ping uplne - IPVPN sluzby, ktere
+    # v profilu jsou, se skutecne pingly.
+    assert ipvpn_scope_ids  # sanity - fixture musi mit IPVPN sluzby
+    assert pinged_scopes
+    assert ipvpn_scope_ids <= pinged_scopes
     # vsechny scopy jsou porad ve snapshotu (inventory se nefiltruje)
     assert {s.id for s in snapshot.scopes} == all_scope_ids
 

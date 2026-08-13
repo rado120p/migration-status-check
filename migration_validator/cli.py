@@ -345,8 +345,15 @@ def _connection_options(
 def _parse_service_types(
     args: argparse.Namespace, profile: Profile
 ) -> list[str] | None:
-    if getattr(args, "service_types", None):
-        return [s.strip() for s in args.service_types.split(",") if s.strip()]
+    raw = getattr(args, "service_types", None)
+    if raw is not None:
+        parsed = [s.strip() for s in raw.split(",") if s.strip()]
+        if not parsed:
+            # Flag byl zadany (raw neni None), ale po parsovani nezbyl
+            # zadny typ - "," i "" spadaji sem. Ticha shoda na profil by
+            # u "," odfiltrovala kazdou sluzbu bez ohlaseni proc.
+            raise ToolError("zadny platny typ v --service-types")
+        return parsed
     return profile.service_types
 
 

@@ -4,6 +4,7 @@ from migration_validator.models.result import (
     CheckResult,
     Finding,
     Outcome,
+    RunResult,
     ScopeResult,
     Severity,
     Status,
@@ -138,3 +139,24 @@ def test_count_statuses_counts_info_separately():
     counts = count_statuses([Status.PASS, Status.INFO, Status.INFO])
     assert counts["pass"] == 1
     assert counts["info"] == 2
+
+
+def _run_result(**kwargs) -> RunResult:
+    defaults = dict(
+        evaluated_at="2026-08-13T00:00:00Z",
+        subject={"address": "172.20.20.4"},
+        baseline=None,
+        summary={},
+    )
+    defaults.update(kwargs)
+    return RunResult(**defaults)
+
+
+def test_run_result_to_dict_omits_profile_when_none():
+    payload = _run_result().to_dict()
+    assert "profile" not in payload
+
+
+def test_run_result_to_dict_carries_profile_name():
+    payload = _run_result(profile="core-only.yml").to_dict()
+    assert payload["profile"] == "core-only.yml"

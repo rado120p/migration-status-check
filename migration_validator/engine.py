@@ -427,12 +427,16 @@ def evaluate_snapshots(
     config = config or default_config()
     mapping = mapping or empty_mapping()
 
+    # Mnozina se stavi jednou mimo _in_profile - jinak by ji smycka pres
+    # scopy prevadela ze seznamu znovu na kazde jednotlive volani.
+    service_types_set = set(service_types) if service_types is not None else None
+
     def _in_profile(scope: Scope) -> bool:
         # Filtr je jen na service typy: device a layer1 scopy jsou
         # infrastruktura, ne sluzba, a v reportu zustavaji vzdy.
-        if service_types is None or scope.kind != "service":
+        if service_types_set is None or scope.kind != "service":
             return True
-        return scope.service_type in set(service_types)
+        return scope.service_type in service_types_set
 
     subject_scopes = _scopes_of(subject)
     subject_l1 = [s for s in subject_scopes if s.kind == "layer1"]
@@ -556,4 +560,5 @@ def evaluate_snapshots(
             "bfd_sessions": _unassigned_bfd_sessions(subject, subject_scopes),
         },
         filtered=filtered,
+        profile=profile_name,
     )

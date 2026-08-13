@@ -421,6 +421,35 @@ def test_bez_filtru_zadny_marker():
     assert result.filtered is None
 
 
+def test_profile_name_se_propisuje_i_bez_service_types_filtru():
+    """Jmeno profilu ma byt v result.profile vzdy, kdyz je predano - i kdyz
+    profil nema service_types, takze zadny filtr sluzeb nebezi."""
+    result = evaluate_snapshots(_old(), profile_name="core-only.yml", now=NOW)
+
+    assert result.profile == "core-only.yml"
+    assert result.filtered is None
+
+
+def test_bez_profile_name_je_profile_none():
+    result = evaluate_snapshots(_old(), now=NOW)
+
+    assert result.profile is None
+
+
+def test_prazdny_seznam_service_types_odfiltruje_vsechny_sluzby_ale_marker_zustava():
+    """service_types=[] predane primo (ne pres CLI) musi vyfiltrovat vsechny
+    sluzbove scopy a stale vyprodukovat `filtered` znacku - dokumentuje to
+    API chovani, CLI samo prazdny seznam odmita drive."""
+    subject = _multi_service_snapshot()
+
+    result = evaluate_snapshots(subject, service_types=[], now=NOW)
+
+    service_scopes = [scope for scope in result.scopes if scope.scope_id.startswith("svc:")]
+    assert service_scopes == []
+    assert result.filtered is not None
+    assert result.filtered["service_types"] == []
+
+
 def test_unassigned_bgp_peers_are_reported():
     peers = {"10.9.9.9": {"state": "Established", "routing_instance": None}}
     subject = _new()
