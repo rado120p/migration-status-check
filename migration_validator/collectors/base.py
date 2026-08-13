@@ -44,6 +44,18 @@ class Collector(ABC):
     def rpc_kwargs(self, platform: str) -> dict[str, Any]:
         return {}
 
+    def rpc_calls(self, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
+        """Vsechna RPC volani vcetne kwargs, v poradi volani.
+
+        Autorita pro `record` i pro vice-RPC collect. Default odvozuje
+        z rpc_names + rpc_kwargs (stejne kwargs pro kazde RPC); collector,
+        jehoz volani se lisi jen v kwargs (interfaces: extensive vs terse),
+        musi prepsat tuhle metodu, jinak by record nahral dvakrat tutez
+        variantu.
+        """
+        kwargs = self.rpc_kwargs(platform)
+        return tuple((name, kwargs) for name in self.rpc_names(platform))
+
     @abstractmethod
     def parse(self, xml: etree._Element, platform: str) -> Any:
         """Prevede RPC odpoved na strukturovana data. Zadne verdikty."""

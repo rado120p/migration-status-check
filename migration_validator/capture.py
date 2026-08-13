@@ -59,9 +59,9 @@ def _record(xml_root: Path, platform: str, name: str, device: Any, collector) ->
     target = Path(xml_root) / platform
     target.mkdir(parents=True, exist_ok=True)
 
-    for index, rpc_name in enumerate(collector.rpc_names(platform)):
+    for index, (rpc_name, rpc_kwargs) in enumerate(collector.rpc_calls(platform)):
         try:
-            xml = getattr(device.rpc, rpc_name)(**collector.rpc_kwargs(platform))
+            xml = getattr(device.rpc, rpc_name)(**rpc_kwargs)
         except Exception:  # noqa: BLE001 - nahravani je best effort
             continue
         suffix = "" if index == 0 else f".{index + 1}"
