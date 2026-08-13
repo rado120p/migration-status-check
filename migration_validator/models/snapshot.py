@@ -12,9 +12,13 @@ from pathlib import Path
 from typing import Any
 
 from migration_validator.models.inventory import ServiceEntry
+from migration_validator.models.jsonsafe import decode_nonfinite, encode_nonfinite
 from migration_validator.models.scope import Scope
 
-SCHEMA_VERSION = 8
+# 9: evpn_esi zaznamy nesou resolved_status (popisny 'Resolved by IFL ...'
+#    pro radek "ESI Status") a nekonecne floaty se na disku serializuji
+#    jako string tokeny ('-Inf'), ne jako neplatny JSON token -Infinity.
+SCHEMA_VERSION = 9
 
 
 class SnapshotVersionError(Exception):
@@ -137,10 +141,18 @@ def save_snapshot(snapshot: Snapshot, path: str | Path) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(snapshot.to_dict(), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(
+            encode_nonfinite(snapshot.to_dict()),
+            indent=2,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
 
 def load_snapshot(path: str | Path) -> Snapshot:
-    return Snapshot.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+    return Snapshot.from_dict(
+        decode_nonfinite(json.loads(Path(path).read_text(encoding="utf-8")))
+    )

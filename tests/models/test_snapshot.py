@@ -92,8 +92,33 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_eight():
-    assert SCHEMA_VERSION == 8
+def test_snapshot_version_is_nine():
+    assert SCHEMA_VERSION == 9
+
+
+def test_nonfinite_optics_round_trip_as_strict_json(tmp_path):
+    """Nepripojeny port ma rx/tx -inf. json.dumps by vypsal '-Infinity',
+    coz neni platny JSON (jq a spol. ho odmitnou). Na disku musi byt
+    striktni JSON a po load_snapshot zpet float('-inf'), ne string."""
+    snapshot = _snapshot()
+    snapshot.facts["optics"] = {
+        "et-0/0/5": {"lanes": [{"lane": 0, "rx_power_dbm": float("-inf"),
+                                "tx_power_dbm": float("-inf")}]}
+    }
+    path = tmp_path / "snap.json"
+    save_snapshot(snapshot, path)
+
+    def _reject(token):
+        raise AssertionError(f"nestriktni JSON token: {token}")
+
+    written = json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject)
+    lane = written["facts"]["optics"]["et-0/0/5"]["lanes"][0]
+    assert lane["rx_power_dbm"] == "-Inf"
+
+    loaded = load_snapshot(path)
+    restored = loaded.facts["optics"]["et-0/0/5"]["lanes"][0]
+    assert restored["rx_power_dbm"] == float("-inf")
+    assert restored["tx_power_dbm"] == float("-inf")
 
 
 def test_old_snapshot_fails_loudly():

@@ -214,28 +214,76 @@ def test_vpws_missing_remote_peer_borrows_baseline_from_first_peer():
     assert status.baseline_value == "Resolved"
 
 
-def test_esi_row_carries_the_previous_state_when_there_is_one():
+# Rozpad ESI bloku na samostatne radky (lab 2026-08-13): jeden slepeny
+# radek "Up/Forwarding  DF 150.0.0.12" s ESI v labelu se spatne cetl a
+# u nezvoleneho DF vypsal "DF DF not elected yet". Novy tvar: INFO
+# hlavicka s ESI, pak radky ESI Status / ESI Local interface status /
+# ESI DF, kazdy s vlastnim verdiktem.
+def _esi_entry(status="Up/Forwarding", df="150.0.0.12", interface="ae0.14",
+               resolved="Resolved by IFL ae0.14"):
+    return {"status": status, "df_role": df, "interface": interface,
+            "resolved_status": resolved}
+
+
+def test_esi_block_splits_into_header_and_detail_rows():
+    ctx = _ctx({"evpn_esi": {"00:11": _esi_entry()}})
+    results = run_check(EvpnEsiStatusCheck(), ctx)
+    labels = [r.label for r in results]
+    assert labels == ["ESI", "ESI Status",
+                      "ESI Local interface status", "ESI DF"]
+
+    header, status, local, df = results
+    # Hodnota nesmi byt prazdna (invariant kazdy-radek-ma-hodnotu,
+    # test_every_row_has_a_label_and_a_value_on_real_data) - ESI je
+    # hodnotou hlavicky.
+    assert header.status is Status.INFO and header.value == "00:11"
+    assert status.status is Status.PASS
+    assert status.value == "Resolved by IFL ae0.14"
+    assert local.status is Status.PASS
+    assert local.value == "ae0.14 Up/Forwarding"
+    assert df.status is Status.PASS and df.value == "150.0.0.12"
+
+
+def test_esi_rows_carry_the_previous_state_when_there_is_one():
     ctx = _ctx(
-        {"evpn_esi": {"00:11": {"status": "Up", "df_role": "DF", "interface": "ae0"}}},
-        baseline={"evpn_esi": {"00:11": {"status": "Down", "df_role": "-", "interface": "ae0"}}},
+        {"evpn_esi": {"00:11": _esi_entry()}},
+        baseline={"evpn_esi": {"00:11": _esi_entry(
+            status="Down", df="-", interface="ae0.14",
+            resolved="Resolved by IFL ae0.14")}},
     )
-
-    result = run_check(EvpnEsiStatusCheck(), ctx)[0]
-
-    assert result.value == "Up  DF DF"
-    assert result.baseline_value == "Down  DF -"
-
-
-def test_esi_up_passes_and_reports_df_role():
-    ctx = _ctx({"evpn_esi": {"00:11": {"status": "Up", "df_role": "DF", "interface": "ae0"}}})
-    result = run_check(EvpnEsiStatusCheck(), ctx)[0]
-    assert result.status is Status.PASS
-    assert result.subject["df_role"] == "DF"
+    header, status, local, df = run_check(EvpnEsiStatusCheck(), ctx)
+    # ESI v baseline existuje -> hlavicka nesmi hlasit "bez baseline";
+    # shodna baseline hodnota necha sloupec ZMENA prazdny.
+    assert header.baseline_value == "00:11"
+    assert status.baseline_value == "Resolved by IFL ae0.14"
+    assert local.baseline_value == "ae0.14 Down"
+    assert df.baseline_value == "-"
 
 
-def test_esi_down_fails():
-    ctx = _ctx({"evpn_esi": {"00:11": {"status": "Down", "df_role": "-", "interface": "ae0"}}})
-    assert run_check(EvpnEsiStatusCheck(), ctx)[0].status is Status.FAIL
+def test_esi_down_interface_fails():
+    ctx = _ctx({"evpn_esi": {"00:11": _esi_entry(status="Down")}})
+    results = run_check(EvpnEsiStatusCheck(), ctx)
+    local = next(r for r in results if r.label == "ESI Local interface status")
+    assert local.status is Status.FAIL
+
+
+def test_esi_df_not_elected_fails_without_double_df():
+    ctx = _ctx({"evpn_esi": {"00:11": _esi_entry(df="DF not elected yet")}})
+    results = run_check(EvpnEsiStatusCheck(), ctx)
+    df = next(r for r in results if r.label == "ESI DF")
+    assert df.status is Status.FAIL
+    assert df.value == "DF not elected yet"
+
+
+def test_esi_without_resolved_status_omits_the_status_row():
+    # Stary snapshot pole resolved_status nema - radek se vynechava,
+    # nefabuluje se ([[stav-se-nikdy-nefabuluje]]).
+    entry = {"status": "Up/Forwarding", "df_role": "150.0.0.12",
+             "interface": "ae0.14"}
+    ctx = _ctx({"evpn_esi": {"00:11": entry}})
+    labels = [r.label for r in run_check(EvpnEsiStatusCheck(), ctx)]
+    assert "ESI Status" not in labels
+    assert "ESI Local interface status" in labels
 
 
 def test_esi_missing_data_skips():
@@ -407,11 +455,17 @@ def test_instance_esi_unresolved_status_fails_not_substring_match():
     assert _by_label(bad, "ESI 00:11:12:13:14:00:00:00:00:00").outcome is Outcome.BROKEN
 
 
-def test_instance_no_esi_gives_skip_row():
-    findings = _instance_findings(_instance_subject(esis={}))
+def test_instance_no_esi_gives_skip_row_only_without_filter():
+    # SKIP "zadne ESI ve vypisu" patri jen fallbacku bez selektoru -
+    # u sluzby s aktivnim filtrem nese ESI zdravi blok checku
+    # evpn_esi_status a instancni radek by ho jen dubloval.
+    findings = _instance_findings_bez_filtru(_instance_subject(esis={}))
     row = _by_label(findings, "ESI status")
     assert row.outcome is Outcome.SKIP
     assert row.value == "bez dat"
+
+    filtered = _instance_findings(_instance_subject(esis={}))
+    assert not [f for f in filtered if f.label == "ESI status"]
 
 
 def test_instance_neighbors_below_baseline_degrades():
@@ -702,19 +756,14 @@ def test_vice_instanci_negeneruje_falesny_broken():
     assert not [f for f in findings if "chybi v instanci" in (f.value or "")]
 
 
-def test_esi_filtr_drzi_jen_vlastni_ifl():
+def test_esi_listing_se_pri_aktivnim_filtru_netiskne():
+    # Revize 2026-08-13: relevance filtr (drzel jen vlastni IFL) nechaval
+    # jediny radek, ktery po rozpadu evpn_esi_status na blok ESI Status /
+    # Local interface status / DF rikal doslova totez. Pri aktivnim
+    # filtru se instancni ESI listing uz netiskne vubec; vetev "v
+    # baseline bylo, ted chybi" tam byla stejne mrtva (chybejici ESI nema
+    # status text, ktery by jmenoval IFL).
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
-    esi_rows = [f for f in findings if f.label.startswith("ESI ")]
-    assert [f.label for f in esi_rows] == ["ESI 00:11:12:13:14:00:14:00:00:00"]
-    assert esi_rows[0].value == "Resolved by IFL ae0.14"
-
-
-def test_esi_unresolved_bez_ifl_se_pri_filtru_netiskne():
-    subject = _aware_subject()
-    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["esis"] = {
-        "00:11:12:13:14:00:15:00:00:00": "Unresolved",
-    }
-    findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
     assert not [f for f in findings if f.label.startswith("ESI ")]
 
 

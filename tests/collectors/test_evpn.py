@@ -64,7 +64,7 @@ def test_esi_schema(rpc_fixture, platform):
     result = EvpnEsiCollector().parse(rpc_fixture(platform, "evpn_esi"), platform)
     assert isinstance(result, dict)
     for esi, data in result.items():
-        assert set(data) == {"status", "df_role", "interface"}
+        assert set(data) == {"status", "df_role", "interface", "resolved_status"}
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
@@ -153,6 +153,7 @@ def test_esi_emits_logical_unit_as_interface():
             "status": "Up/Forwarding",
             "df_role": "150.0.0.2",
             "interface": "ae0.14",
+            "resolved_status": "Resolved by IFL ae0.14",
         }
     }
 

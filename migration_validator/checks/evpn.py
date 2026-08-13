@@ -7,7 +7,6 @@ vetev na platformu.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,11 +27,8 @@ def _is_up(status: str) -> bool:
     return status.split("/", 1)[0].strip() == UP
 
 
-def _esi_value(data: dict[str, Any] | None) -> str | None:
-    if data is None:
-        return None
-    status = str(data.get("status", "unknown"))
-    return f"{status}  DF {data.get('df_role') or '-'}"
+def _esi_local_value(data: dict[str, Any]) -> str:
+    return f"{data.get('interface') or '?'} {data.get('status', 'unknown')}"
 
 
 def _find_baseline_peer(
@@ -284,6 +280,18 @@ class EvpnVpwsStatusCheck(Check):
 
 @register
 class EvpnEsiStatusCheck(Check):
+    """Blok radku per ESI misto jednoho slepeneho radku.
+
+    Puvodni jediny radek 'Up/Forwarding  DF 150.0.0.12' s ESI v labelu se
+    spatne cetl a u nezvoleneho DF vypsal 'DF DF not elected yet' (Junos
+    dava do esi-designated-forwarder literal 'DF not elected yet'). Novy
+    tvar: INFO hlavicka s ESI, pak ESI Status (popisny 'Resolved by IFL
+    ...', na rovnost s baseline se neporovnava - nese jmeno IFL, ktere se
+    migraci meni), ESI Local interface status a ESI DF, kazdy s vlastnim
+    verdiktem. Radek ESI Status se u snapshotu bez resolved_status
+    vynechava - stav se nefabuluje.
+    """
+
     id = "evpn_esi_status"
     title = "Stav EVPN ESI"
     label = "EVPN ESI status"
@@ -301,33 +309,79 @@ class EvpnEsiStatusCheck(Check):
 
         baseline_entries = (ctx.baseline or {}).get("evpn_esi", {})
 
-        findings = []
+        findings: list[Finding] = []
         for esi in sorted(entries):
-            data = entries[esi]
-            status = str(data.get("status", "unknown"))
-            subject = {
-                "status": status,
-                "df_role": data.get("df_role"),
-                "interface": data.get("interface"),
-            }
-            baseline = baseline_entries.get(esi)
-            outcome = Outcome.OK if _is_up(status) else Outcome.BROKEN
-            message = (
-                f"{esi}: {status}, DF {subject['df_role']}"
-                if outcome is Outcome.OK
-                else f"{esi}: stav rozhrani {status}, ocekavano {UP}"
+            findings.extend(
+                self._esi_block(esi, entries[esi], baseline_entries.get(esi))
             )
+        return findings
+
+    def _esi_block(
+        self, esi: str, data: dict[str, Any], baseline: dict[str, Any] | None
+    ) -> list[Finding]:
+        # ESI je HODNOTA hlavicky, ne label: kazdy radek musi mit hodnotu
+        # (invariant end-to-end testu) a v labelu by dlouhe ESI roztahlo
+        # sloupec CHECK celeho bloku. Baseline hodnota je shodne ESI, kdyz
+        # zaznam v baseline je - jinak by hlavicka hlasila "bez baseline"
+        # i u sparovaneho segmentu.
+        findings = [
+            Finding(
+                Outcome.INFO,
+                f"ESI {esi}",
+                label="ESI",
+                value=esi,
+                baseline_value=esi if baseline else None,
+            )
+        ]
+        baseline = baseline or {}
+
+        resolved = data.get("resolved_status")
+        if resolved:
+            resolved_ok = resolved.lower().startswith("resolved")
             findings.append(
                 Finding(
-                    outcome,
-                    message,
-                    label=esi,
-                    value=_esi_value(subject),
-                    baseline_value=_esi_value(baseline),
-                    baseline=baseline,
-                    subject=subject,
+                    Outcome.OK if resolved_ok else Outcome.BROKEN,
+                    f"{esi}: {resolved}",
+                    label="ESI Status",
+                    value=resolved,
+                    baseline_value=baseline.get("resolved_status"),
                 )
             )
+
+        status = str(data.get("status", "unknown"))
+        up = _is_up(status)
+        findings.append(
+            Finding(
+                Outcome.OK if up else Outcome.BROKEN,
+                f"{esi}: stav rozhrani {status}"
+                + ("" if up else f", ocekavano {UP}"),
+                label="ESI Local interface status",
+                value=_esi_local_value(data),
+                baseline_value=(
+                    _esi_local_value(baseline) if baseline.get("status") else None
+                ),
+                subject={"status": status, "interface": data.get("interface")},
+            )
+        )
+
+        df = data.get("df_role")
+        if df is None:
+            # DF blok ve vypisu chybi - zadny verdikt, stav se nefabuluje.
+            df_outcome = Outcome.INFO
+        elif "not elected" in df.lower():
+            df_outcome = Outcome.BROKEN
+        else:
+            df_outcome = Outcome.OK
+        findings.append(
+            Finding(
+                df_outcome,
+                f"{esi}: DF {df or 'bez zaznamu'}",
+                label="ESI DF",
+                value=df or "-",
+                baseline_value=baseline.get("df_role"),
+                subject={"df_role": df},
+            )
+        )
         return findings
 
 
@@ -397,22 +451,6 @@ def _service_units(ctx: CheckContext) -> _ServiceUnits:
             name.split(".", 1)[1] for name in interfaces if "." in name
         )
     return _ServiceUnits(interfaces=interfaces, irb=irb, vlans=vlans)
-
-
-_IFL_RE = re.compile(r"by IFL (\S+)")
-
-
-def _esi_is_relevant(status: str | None, units: _ServiceUnits) -> bool:
-    """ESI patri sluzbe, kdyz jeho status jmenuje jeji IFL.
-
-    Unresolved status IFL nenese, takze pri aktivnim filtru vypadne -
-    vlastni ESI sluzby posuzuje DF radek evpn_esi_status (interface-
-    filtrovany), tenhle listing je jen instancni kontext.
-    """
-    if not status:
-        return False
-    match = _IFL_RE.search(status)
-    return bool(match) and match.group(1) in units.interfaces
 
 
 @register
@@ -587,6 +625,18 @@ class EvpnInstanceStatusCheck(Check):
         label,
         units: _ServiceUnits,
     ) -> list[Finding]:
+        if units.active:
+            # Vlastni ESI sluzby nese blok checku evpn_esi_status (ESI
+            # Status / Local interface status / DF) - drivejsi relevance
+            # filtr (jen ESI jmenujici vlastni IFL) tu nechaval jediny
+            # radek, ktery ten blok doslova opakoval (revize 2026-08-13).
+            # Vetev "v baseline bylo, ted chybi" byla pri aktivnim filtru
+            # stejne mrtva: chybejici ESI nema status text a bez nej filtr
+            # nikdy nepustil (zamer, viz spec kap. 2 - baseline IFL nese
+            # stare jmeno rozhrani). Bez selektoru zustava plny instancni
+            # kontext vcetne SKIP a "chybi" radku.
+            return []
+
         esis: dict[str, str] = data.get("esis", {})
         baseline_esis: dict[str, str] = baseline.get("esis", {}) if baseline else {}
 
@@ -606,13 +656,6 @@ class EvpnInstanceStatusCheck(Check):
         for esi in sorted(set(esis) | set(baseline_esis)):
             status = esis.get(esi)
             baseline_status = baseline_esis.get(esi)
-            if units.active and not _esi_is_relevant(status, units):
-                # Vetev "status is None" (baseline melo, ted chybi) tady
-                # vypada spolu s ostatnimi - baseline IFL nese stare jmeno
-                # rozhrani, proti novym selektorum nikdy nesedi (zamer,
-                # viz spec kap. 2). Zdravi vlastniho ESI nese DF radek
-                # checku evpn_esi_status (interface-filtrovany).
-                continue
             if status is None:
                 findings.append(
                     Finding(

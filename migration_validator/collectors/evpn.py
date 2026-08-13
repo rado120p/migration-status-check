@@ -127,9 +127,11 @@ class EvpnEsiCollector(Collector):
 
             segments[esi] = {
                 # 'Up/Forwarding' - stav lokalniho rozhrani v segmentu.
-                # evpn-esi-status je proti tomu popisny text ('Resolved by
-                # IFL ae0.14'), ktery se neda porovnavat.
                 "status": _text(local, "evpn-esi-local-intf-status") or "unknown",
+                # Popisny text 'Resolved by IFL ae0.14'. Na rovnost se
+                # neporovnava (nese jmeno IFL, ktere se migraci meni) -
+                # v reportu je to samostatny radek "ESI Status".
+                "resolved_status": _text(node, "evpn-esi-status"),
                 # IP adresa zvoleneho DF, ne role tohohle boxu - urcit "jsem
                 # DF?" by znamenalo interpretovat, a to collectoru nepatri.
                 "df_role": _text(df, "esi-designated-forwarder"),
