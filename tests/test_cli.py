@@ -1025,6 +1025,29 @@ def test_default_kdyz_neni_flag_ani_soubor():
     assert options.timeout == 30
 
 
+def test_auth_settings_necte_skutecny_domovsky_auth_soubor(tmp_path, monkeypatch):
+    # Autouse fixture v conftest.py patchuje DEFAULT_AUTH_PATH na neexistujici
+    # cestu - i kdyby na stroji lezel skutecny ~/.config/mig-validate/auth.yml
+    # s hodnotami, testy je nesmi videt. Overuje se tak, ze _auth_settings
+    # skutecne cte patchnutou vazbu (migration_validator.cli.DEFAULT_AUTH_PATH),
+    # ne puvodni z auth.py.
+    from migration_validator.cli import DEFAULT_AUTH_PATH, _auth_settings, build_parser
+
+    real_home_auth = tmp_path / "by-any-other-name" / "auth.yml"
+    real_home_auth.parent.mkdir(parents=True)
+    real_home_auth.write_text("username: utocnik\n", encoding="utf-8")
+
+    # Sanity: DEFAULT_AUTH_PATH v cli modulu je ted patchnuta pryc od
+    # skutecneho domova a rozhodne neukazuje na soubor, ktery jsme prave
+    # vyrobili vedle.
+    assert DEFAULT_AUTH_PATH != real_home_auth
+    assert not DEFAULT_AUTH_PATH.exists()
+
+    args = build_parser().parse_args(["capture", "--device", "r1"])
+    settings = _auth_settings(args)
+    assert settings.username is None
+
+
 def test_capture_sitovy_port_se_nepropise_do_ssh_portu():
     # --port u capture --run je sitovy port (napr. "ge-0/0/0"), ne SSH port -
     # bez --ssh-port se SSH port musi vzit z auth souboru/defaultu.
