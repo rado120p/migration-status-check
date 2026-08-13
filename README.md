@@ -28,6 +28,37 @@ uvedeného ruční cesty i `mig-validate capture --run <nazev> ...` / `evaluate 
 `runs/<nazev>/run.yml`. Ruční workflow beze změny funguje dál; podrobný postup je
 v [docs/cs/README.md, kap. 3a](docs/cs/README.md#3a-run-management---run).
 
+## Profil a auth soubor
+
+Profil (sdileny, klidne v gitu) rika, CO beh testuje:
+
+```yaml
+profile:
+  collectors: [interfaces, bgp, evpn_instance]
+  service_types: [Internet, IPVPN]
+  ping_count: 3
+checks:
+  interface_optics_levels:
+    enabled: false
+```
+
+```bash
+mig-validate evaluate --run mig01 --profile profiles/core-only.yml
+```
+
+Auth soubor (per-user, default ~/.config/mig-validate/auth.yml) rika,
+KDO se pripojuje - heslo pres env promennou, plaintext jen pri 0600:
+
+```yaml
+username: rmohyla
+auth: password
+password_env: MIG_PROD_PASSWORD
+```
+
+Sdileny ansible ucet: `--auth-file /cesta/k/ansible-auth.yml`.
+Precedence vsude: CLI flag > soubor > vestavena default.
+Heslo do env bez ~/.bash_history: `read -s MIG_PROD_PASSWORD && export MIG_PROD_PASSWORD`.
+
 ## Documentation / Dokumentace
 
 | | |
