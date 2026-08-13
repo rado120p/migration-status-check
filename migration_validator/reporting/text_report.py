@@ -352,6 +352,10 @@ def _filter_note(result: RunResult) -> list[str]:
         return []
 
     criteria = []
+    if applied.get("profile"):
+        criteria.append(f"profil={applied['profile']}")
+    if applied.get("service_types"):
+        criteria.append(f"typy={','.join(applied['service_types'])}")
     if applied.get("text"):
         criteria.append(f"text={applied['text']}")
     if applied.get("statuses"):

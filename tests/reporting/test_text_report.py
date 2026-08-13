@@ -1481,3 +1481,22 @@ def test_pass_l1_blok_zustava_sbaleny_bez_rozbalene_sluzby():
                           _svc_result("S-A", parent="ae0", status=Status.PASS)])
     text = render(result)
     assert "Optika" not in text
+
+
+def test_filtr_hlavicka_nese_profil_a_typy():
+    """Filtr s profilem a service typy musi jmenovat oba v zazname,
+    jinak operator cte prepoctena cisla jako cely beh."""
+    result = replace(
+        _legacy_result(),
+        filtered={
+            "service_types": ["IPVPN"],
+            "profile": "core-only.yml",
+            "scopes_shown": 2,
+            "scopes_total": 5,
+        },
+    )
+    lines = render(result).splitlines()
+    note = next(line for line in lines if "filtr:" in line)
+    assert "profil=core-only.yml" in note
+    assert "typy=IPVPN" in note
+    assert "2 z 5 sluzeb" in note
