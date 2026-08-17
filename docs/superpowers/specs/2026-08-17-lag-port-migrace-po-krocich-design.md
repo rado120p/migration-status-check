@@ -148,7 +148,8 @@ dnešní chování beze změny). Se zadaným `step`:
   baseline), ne potlačené.
 - JSON (`RunResult`): aditivní klíče `step`
   (`{old: {node, port}, new: {node, port}}`) a `excluded_services`
-  (seznam `{scope_id, description, reason}`). Klíče jen když krok
+  (seznam `{scope_id, description, service_type, reason}` — tvar
+  `_unmatched_entry`). Klíče jen když krok
   existuje — vzor `profile`. **Snapshot ani RunResult schema se
   nemění** (čistě aditivní).
 - `status --run`: jeden new port může mít víc řádků — po jednom na
