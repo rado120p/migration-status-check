@@ -167,6 +167,29 @@ def test_paired_old_ambiguous_lag_returns_none():
     assert manifest.paired_old("PTX1-POP1", "ae0") is None
 
 
+def test_mapped_olds_returns_all_old_endpoints_of_new_port():
+    manifest = RunManifest()
+    manifest.interface_mapping = [
+        InterfaceMapping(
+            old=MappingEndpoint(node="MX1", port="ge-0/0/4"),
+            new=MappingEndpoint(node="PTX1", port="ae0"),
+        ),
+        InterfaceMapping(
+            old=MappingEndpoint(node="MX1", port="ge-0/0/5"),
+            new=MappingEndpoint(node="PTX1", port="ae0"),
+        ),
+        InterfaceMapping(
+            old=MappingEndpoint(node="MX1", port="ge-0/0/6"),
+            new=MappingEndpoint(node="PTX1", port="ae1"),
+        ),
+    ]
+
+    olds = manifest.mapped_olds("PTX1", "ae0")
+
+    assert [o.port for o in olds] == ["ge-0/0/4", "ge-0/0/5"]
+    assert manifest.mapped_olds("PTX1", "et-9/9/9") == []
+
+
 def test_add_mapping_idempotent_and_conflicting():
     manifest = _manifest()
     manifest.add_mapping(

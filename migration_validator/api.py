@@ -28,14 +28,13 @@ def capture(
     phase: str | None = None,
     ping_count: int = 5,
     record_raw: str | None = None,
-    baseline: Snapshot | None = None,
+    baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
 ) -> Snapshot:
     """Sebere stav zarizeni a vrati self-contained snapshot.
 
-    `baseline` je pre snimek stareho boxu - kdyz je dany, ping cile pro
-    --phase post se prednostne odvozuji z jeho ARP/ND (novy box po cutoveru
-    jeste nema vlastni ARP napliene).
+    `baselines` jsou pre snimky starych boxu mapovanych na tento port - ping
+    cile pro --phase post se prednostne odvozuji ze sjednoceni jejich ARP/ND.
     """
     if isinstance(inventory, str):
         inventory = load_inventory(inventory)
@@ -50,7 +49,7 @@ def capture(
             phase=phase,
             ping_count=ping_count,
             record_raw=record_raw,
-            baseline=baseline,
+            baselines=baselines,
             service_types=service_types,
         )
 

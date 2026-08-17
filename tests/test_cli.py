@@ -351,7 +351,7 @@ def test_capture_run_port_mode_and_maps_to(tmp_path, monkeypatch):
     assert post_record is not None
 
 
-def test_capture_run_post_with_pre_snapshot_passes_baseline(tmp_path, monkeypatch):
+def test_capture_run_post_with_pre_snapshot_passes_baselines(tmp_path, monkeypatch):
     calls = _fake_capture(monkeypatch)
     store = RunStore(tmp_path, "mig01")
 
@@ -396,8 +396,9 @@ def test_capture_run_post_with_pre_snapshot_passes_baseline(tmp_path, monkeypatc
     )
 
     assert code == 0
-    assert calls["baseline"] is not None
-    assert calls["baseline"].device.address == "172.20.20.4"
+    assert calls["baselines"] is not None
+    assert len(calls["baselines"]) == 1
+    assert calls["baselines"][0].device.address == "172.20.20.4"
 
 
 def test_capture_run_post_falls_back_to_whole_box_pre_snapshot(tmp_path, monkeypatch):
@@ -445,8 +446,9 @@ def test_capture_run_post_falls_back_to_whole_box_pre_snapshot(tmp_path, monkeyp
     )
 
     assert code == 0
-    assert calls["baseline"] is not None
-    assert calls["baseline"].device.address == "172.20.20.4"
+    assert calls["baselines"] is not None
+    assert len(calls["baselines"]) == 1
+    assert calls["baselines"][0].device.address == "172.20.20.4"
 
 
 def test_capture_run_post_without_pre_snapshot_has_no_baseline(tmp_path, monkeypatch, capsys):
@@ -476,8 +478,80 @@ def test_capture_run_post_without_pre_snapshot_has_no_baseline(tmp_path, monkeyp
     )
 
     assert code == 0
-    assert calls["baseline"] is None
+    assert calls["baselines"] is None
     assert "pre snimek nenalezen" in capsys.readouterr().err
+
+
+def test_capture_run_post_on_lag_passes_union_of_mapped_pre_snapshots(
+    tmp_path, monkeypatch
+):
+    """run.yml se 2 mappingy ge-0/0/4,ge-0/0/5 -> ae0 a obema pre snimky:
+    post capture ae0 dostane baselines=[pre4, pre5] (poradi mappingu)."""
+    calls = _fake_capture(monkeypatch)
+    store = RunStore(tmp_path, "mig01")
+
+    manifest = RunManifest(
+        devices={
+            "172.20.20.4": RunDevice(host="172.20.20.4", platform="junos", role="old"),
+            "172.20.20.5": RunDevice(
+                host="172.20.20.5", platform="junos-evo", role="new"
+            ),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="172.20.20.4", port="ge-0/0/4"),
+                new=MappingEndpoint(node="172.20.20.5", port="ae0"),
+            ),
+            InterfaceMapping(
+                old=MappingEndpoint(node="172.20.20.4", port="ge-0/0/5"),
+                new=MappingEndpoint(node="172.20.20.5", port="ae0"),
+            ),
+        ],
+    )
+    pre4_path = _write_run_snapshot(
+        store, "pre", "172.20.20.4", "ge-0/0/4", "172.20.20.4", "ge-0/0/4.0"
+    )
+    manifest.record_capture(
+        CaptureRecord(
+            phase="pre",
+            device="172.20.20.4",
+            port="ge-0/0/4",
+            snapshot=pre4_path.name,
+            taken=NOW,
+        )
+    )
+    pre5_path = _write_run_snapshot(
+        store, "pre", "172.20.20.4", "ge-0/0/5", "172.20.20.4", "ge-0/0/5.0"
+    )
+    manifest.record_capture(
+        CaptureRecord(
+            phase="pre",
+            device="172.20.20.4",
+            port="ge-0/0/5",
+            snapshot=pre5_path.name,
+            taken=NOW,
+        )
+    )
+    store.save(manifest)
+
+    code = main(
+        [
+            "capture",
+            "--run", "mig01",
+            "--run-root", str(tmp_path),
+            "--device", "172.20.20.5",
+            "--phase", "post",
+            "--port", "ae0",
+            "--inventory", "tests/fixtures/172.20.20.5.yml",
+        ]
+    )
+
+    assert code == 0
+    assert len(calls["baselines"]) == 2
+    assert [b.device.address for b in calls["baselines"]] == [
+        "172.20.20.4",
+        "172.20.20.4",
+    ]
 
 
 def test_capture_run_missing_inventory_hint(tmp_path, monkeypatch, capsys):

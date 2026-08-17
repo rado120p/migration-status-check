@@ -281,11 +281,68 @@ def test_capture_device_passes_baseline_facts_to_resolve_targets(monkeypatch):
 
     inventory = load_inventory(INVENTORY_4)
     capture_device(
-        FakeDevice(), "172.20.20.4", inventory=inventory, now=NOW, baseline=baseline
+        FakeDevice(), "172.20.20.4", inventory=inventory, now=NOW, baselines=[baseline]
     )
 
     assert captured_kwargs["baseline_arp"] == [{"ip": "1.2.3.4", "interface": "ge-0/0/0.0"}]
     assert captured_kwargs["baseline_nd"] == []
+
+
+def test_ping_baselines_merge_and_dedup_by_ip(monkeypatch):
+    """Dva pre snimky: spolecna IP se pinguje jednou, unikatni z obou."""
+    from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
+
+    captured_kwargs = {}
+
+    def fake_resolve_targets(scopes, arp, nd, **kwargs):
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr(
+        "migration_validator.capture.resolve_targets", fake_resolve_targets
+    )
+
+    baseline_a = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, finished_at=NOW, phase="pre", collectors={}),
+        facts={
+            "arp": [
+                {"ip": "10.0.0.2", "interface": "ge-0/0/0.0"},
+                {"ip": "10.0.0.3", "interface": "ge-0/0/0.0"},
+            ],
+            "nd": [],
+        },
+        probes={"ping": []},
+        scopes=[],
+        inventory=[],
+    )
+    baseline_b = Snapshot(
+        device=DeviceMeta(address="172.20.20.6"),
+        capture=CaptureMeta(started_at=NOW, finished_at=NOW, phase="pre", collectors={}),
+        facts={
+            "arp": [
+                {"ip": "10.0.0.3", "interface": "ge-0/0/1.0"},
+                {"ip": "10.0.0.4", "interface": "ge-0/0/1.0"},
+            ],
+            "nd": [],
+        },
+        probes={"ping": []},
+        scopes=[],
+        inventory=[],
+    )
+
+    inventory = load_inventory(INVENTORY_4)
+    capture_device(
+        FakeDevice(),
+        "172.20.20.4",
+        inventory=inventory,
+        now=NOW,
+        baselines=[baseline_a, baseline_b],
+    )
+
+    ips = {entry["ip"] for entry in captured_kwargs["baseline_arp"]}
+    assert ips == {"10.0.0.2", "10.0.0.3", "10.0.0.4"}
+    assert [e["ip"] for e in captured_kwargs["baseline_arp"]].count("10.0.0.3") == 1
 
 
 def test_service_types_filtruje_ping_a_zapisuje_marker():

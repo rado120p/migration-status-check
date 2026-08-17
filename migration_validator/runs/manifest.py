@@ -88,6 +88,14 @@ class RunManifest:
             return None
         return matches[0]
 
+    def mapped_olds(self, new_node: str, new_port: str) -> list[MappingEndpoint]:
+        """Vsechny stare endpointy mapovane na dany novy port (N:1 u LAGu)."""
+        return [
+            mapping.old
+            for mapping in self.interface_mapping
+            if mapping.new.node == new_node and mapping.new.port == new_port
+        ]
+
     def paired_new(self, old_node: str, old_port: str) -> MappingEndpoint | None:
         matches = [
             mapping.new

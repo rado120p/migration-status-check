@@ -70,6 +70,25 @@ def _record(xml_root: Path, platform: str, name: str, device: Any, collector) ->
         )
 
 
+def _merged_baseline_entries(
+    snapshots: list[Snapshot], area: str
+) -> list[dict[str, Any]]:
+    """Sjednoceni ARP/ND zaznamu vice pre snimku, dedup podle IP.
+
+    Prvni vyskyt vyhrava - poradi snimku urcuje cli (poradi mappingu).
+    """
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for snapshot in snapshots:
+        for entry in snapshot.facts.get(area, []):
+            ip = entry.get("ip")
+            if ip is None or ip in seen:
+                continue
+            seen.add(ip)
+            merged.append(entry)
+    return merged
+
+
 def capture_device(
     device: Any,
     address: str,
@@ -80,7 +99,7 @@ def capture_device(
     ping_count: int = DEFAULT_COUNT,
     now: str | None = None,
     record_raw: str | Path | None = None,
-    baseline: Snapshot | None = None,
+    baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
 ) -> Snapshot:
     started_at = now or _timestamp()
@@ -120,8 +139,12 @@ def capture_device(
                 for s in scopes
                 if s.kind == "service" and s.service_type not in allowed
             ]
-        baseline_arp = baseline.facts.get("arp", []) if baseline is not None else None
-        baseline_nd = baseline.facts.get("nd", []) if baseline is not None else None
+        baseline_arp = (
+            _merged_baseline_entries(baselines, "arp") if baselines else None
+        )
+        baseline_nd = (
+            _merged_baseline_entries(baselines, "nd") if baselines else None
+        )
         for target in resolve_targets(
             ping_scopes,
             facts.get("arp", []),

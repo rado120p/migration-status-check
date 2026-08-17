@@ -461,12 +461,24 @@ def _capture_into_run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
 
-    baseline = None
+    baselines: list[Snapshot] = []
     if phase == "post":
-        baseline_record = find_pre_baseline(manifest, node, args.port)
-        if baseline_record is not None:
-            baseline = _load_snapshot(str(store.dir / baseline_record.snapshot))
-        else:
+        seen_snapshots: set[str] = set()
+        records = []
+        for old in manifest.mapped_olds(node, args.port) if args.port else []:
+            record = manifest.find_capture(
+                "pre", old.node, old.port
+            ) or manifest.find_capture("pre", old.node, None)
+            if record is not None and record.snapshot not in seen_snapshots:
+                seen_snapshots.add(record.snapshot)
+                records.append(record)
+        if not records:
+            fallback = find_pre_baseline(manifest, node, args.port)
+            if fallback is not None:
+                records.append(fallback)
+        for record in records:
+            baselines.append(_load_snapshot(str(store.dir / record.snapshot)))
+        if not baselines:
             print(
                 "pre snimek nenalezen, ping cile z vlastni ARP",
                 file=sys.stderr,
@@ -488,7 +500,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
             phase=phase,
             ping_count=ping_count,
             record_raw=args.record_raw,
-            baseline=baseline,
+            baselines=baselines or None,
             service_types=service_types,
         )
     except JunosConnectionError as error:
