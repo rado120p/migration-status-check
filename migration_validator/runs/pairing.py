@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from migration_validator.runs.manifest import CaptureRecord, RunManifest
+from migration_validator.runs.manifest import (
+    CaptureRecord,
+    InterfaceMapping,
+    RunManifest,
+)
 
 
 @dataclass
@@ -15,6 +19,9 @@ class Evaluation:
     subject: CaptureRecord
     baseline: CaptureRecord | None
     reason: str | None = None
+    # Migracni krok (zaznam interface_mapping), ktery evaluaci vyrobil.
+    # None = celoboxova nebo nemapovana evaluace - chovani beze zmeny.
+    step: InterfaceMapping | None = None
 
 
 def _passes_port_filter(port: str | None, ports: list[str] | None) -> bool:
@@ -51,14 +58,66 @@ def find_pre_baseline(
     return baseline
 
 
-def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
-    baseline = find_pre_baseline(manifest, subject.device, subject.port)
+def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> list[Evaluation]:
+    steps = [
+        mapping
+        for mapping in manifest.interface_mapping
+        if subject.port is not None
+        and mapping.new.node == subject.device
+        and mapping.new.port == subject.port
+    ]
 
-    if baseline is None:
-        return Evaluation(
-            subject=subject, baseline=None, reason="chybi pre snimek stareho boxu"
-        )
-    return Evaluation(subject=subject, baseline=baseline)
+    if not steps:
+        baseline = find_pre_baseline(manifest, subject.device, subject.port)
+        if baseline is None:
+            return [
+                Evaluation(
+                    subject=subject,
+                    baseline=None,
+                    reason="chybi pre snimek stareho boxu",
+                )
+            ]
+        return [Evaluation(subject=subject, baseline=baseline)]
+
+    # For 1:1 cases, use old behavior (single evaluation without step)
+    if len(steps) == 1:
+        mapping = steps[0]
+        baseline = manifest.find_capture(
+            "pre", mapping.old.node, mapping.old.port
+        ) or manifest.find_capture("pre", mapping.old.node, None)
+        if baseline is None:
+            return [
+                Evaluation(
+                    subject=subject,
+                    baseline=None,
+                    reason="chybi pre snimek stareho boxu",
+                )
+            ]
+        return [Evaluation(subject=subject, baseline=baseline)]
+
+    # For N:1 cases (N > 1), emit one evaluation per mapping
+    evaluations: list[Evaluation] = []
+    for mapping in steps:
+        baseline = manifest.find_capture(
+            "pre", mapping.old.node, mapping.old.port
+        ) or manifest.find_capture("pre", mapping.old.node, None)
+        if baseline is None:
+            evaluations.append(
+                Evaluation(
+                    subject=subject,
+                    baseline=None,
+                    reason=(
+                        "chybi pre snimek "
+                        f"{mapping.old.node}:{mapping.old.port}"
+                    ),
+                    step=mapping,
+                )
+            )
+        else:
+            evaluations.append(
+                Evaluation(subject=subject, baseline=baseline, step=mapping)
+            )
+    return evaluations
 
 
 def _plan_rollback(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
@@ -72,21 +131,31 @@ def _plan_rollback(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
     return Evaluation(subject=subject, baseline=baseline)
 
 
+def _filter_port(evaluation: Evaluation) -> str | None:
+    if evaluation.step is not None:
+        return evaluation.step.old.port
+    return evaluation.subject.port
+
+
 def plan_evaluations(
     manifest: RunManifest, ports: list[str] | None = None
 ) -> list[Evaluation]:
     """Naplanuje evaluace pro capturey s fazi post/rollback.
 
     pre captury samy o sobe evaluaci netvori - jsou jen baseline zdroj.
+    Post snimek portu s vice mapovanymi old porty vyrobi evaluaci na kazdy
+    mapping (migracni krok); `ports` filtr se u kroku vztahuje na stary port.
     """
     evaluations: list[Evaluation] = []
     for capture in manifest.captures:
         if capture.phase not in ("post", "rollback"):
             continue
-        if not _passes_port_filter(capture.port, ports):
-            continue
         if capture.phase == "post":
-            evaluations.append(_plan_post(manifest, capture))
+            evaluations.extend(_plan_post(manifest, capture))
         else:
             evaluations.append(_plan_rollback(manifest, capture))
-    return evaluations
+    return [
+        evaluation
+        for evaluation in evaluations
+        if _passes_port_filter(_filter_port(evaluation), ports)
+    ]
