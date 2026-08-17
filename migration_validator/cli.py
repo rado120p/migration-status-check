@@ -466,6 +466,14 @@ def _capture_into_run(args: argparse.Namespace) -> int:
 
     node = manifest.node_for_host(args.device) or args.device
 
+    if phase == "pre" and not args.overwrite:
+        existing = manifest.find_capture("pre", node, args.port)
+        if existing is not None:
+            raise ToolError(
+                f"pre snimek uz existuje: {existing.snapshot}; "
+                "prepis povol s --overwrite"
+            )
+
     if args.inventory:
         inventory_path = Path(args.inventory)
     elif args.parse_services:
@@ -692,6 +700,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--parse-services",
         action="store_true",
         help="chybejici inventory pro --run vyrob z konfigurace (samostatne spojeni)",
+    )
+    capture.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="povol prepsani existujiciho pre snimku v run adresari",
     )
     _add_auth_arguments(capture, port_flag="--ssh-port", port_dest="ssh_port")
     capture.set_defaults(func=_cmd_capture)

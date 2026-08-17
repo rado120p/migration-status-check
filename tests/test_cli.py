@@ -580,7 +580,7 @@ def test_capture_run_second_capture_replaces_record(tmp_path, monkeypatch):
         "--run", "mig01",
         "--run-root", str(tmp_path),
         "--device", "172.20.20.4",
-        "--phase", "pre",
+        "--phase", "post",
         "--inventory", "tests/fixtures/172.20.20.4.yml",
     ]
 
@@ -589,6 +589,35 @@ def test_capture_run_second_capture_replaces_record(tmp_path, monkeypatch):
 
     manifest = load_manifest(tmp_path / "mig01" / "run.yml")
     assert len(manifest.captures) == 1
+
+
+def test_pre_capture_refuses_overwrite_without_flag(tmp_path, monkeypatch, capsys):
+    """Druhy pre capture stejneho node/port konci chybou s navodem;
+    s --overwrite probehne. post se prepisuje bez flagu (dnesni chovani)."""
+    _fake_capture(monkeypatch)
+    args = [
+        "capture", "--run", "mig01", "--run-root", str(tmp_path),
+        "--device", "172.20.20.4", "--phase", "pre",
+        "--inventory", "tests/fixtures/172.20.20.4.yml",
+    ]
+    assert main(args) == 0                       # vlna 1: pre vznikne
+    assert main(args) == 2                       # opakovani: ToolError
+    err = capsys.readouterr().err
+    assert "pre snimek uz existuje" in err
+    assert "snapshot_pre_172.20.20.4_all.json" in err
+    assert main(args + ["--overwrite"]) == 0     # explicitni prepis projde
+
+
+def test_post_capture_can_be_overwritten_without_flag(tmp_path, monkeypatch):
+    """post se prepisuje bez flagu (dnesni chovani)."""
+    _fake_capture(monkeypatch)
+    args = [
+        "capture", "--run", "mig01", "--run-root", str(tmp_path),
+        "--device", "172.20.20.5", "--phase", "post",
+        "--inventory", "tests/fixtures/172.20.20.5.yml",
+    ]
+    assert main(args) == 0     # prvni post
+    assert main(args) == 0     # druhy post bez flagu - ok
 
 
 def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
