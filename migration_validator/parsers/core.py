@@ -181,6 +181,10 @@ class InterfaceService:
     # Doplňující údaje pro další skripty.
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    # irb protějšky bridge-domén/VLAN tohoto unitu (routing-interface /
+    # l3-interface) - port filtr inventory podle nich přitahuje L3 polovinu
+    # služby, která bydlí mimo filtrovaný port.
+    l3_interface: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
     detection_confidence: str = "medium"
     detection_reason: list[str] = field(default_factory=list)
@@ -980,9 +984,12 @@ class JunosServiceParserCore:
                 "/*[local-name()='name']/text()",
             )
 
+            # MX bridge-domains píší <routing-interface>, EVO vlans
+            # <l3-interface> - obojí je táž vazba L2 domény na irb.
             routing_interface = first_text(
                 domain_node,
-                "./*[local-name()='routing-interface']/text()",
+                "./*[local-name()='routing-interface']/text()"
+                " | ./*[local-name()='l3-interface']/text()",
             )
 
             domains.append(
@@ -1353,6 +1360,13 @@ class JunosServiceParserCore:
                 for domain in bridge_domains
             ],
             customer_vlan=customer_vlans,
+            l3_interface=unique(
+                [
+                    domain.routing_interface
+                    for domain in bridge_domains
+                    if domain.routing_interface
+                ]
+            ),
             detection_confidence=confidence,
             detection_reason=reasons,
         )

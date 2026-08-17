@@ -176,3 +176,32 @@ dnešní chování beze změny). Se zadaným `step`:
   konzistentní sadou fixtures.
 - **Lab ověření**: žádné nové RPC — lab jen na end-to-end smoke:
   pre na `ge-0/0/4` (vMX), post na LAGu (PTX EVO), dvě vlny po sobě.
+
+## Dodatek 2026-08-17 večer — port filtr přitahuje irb protějšky
+
+Lab našel díru v §1: „post capture = celý LAG" mlčky předpokládal, že
+všechny služby kroku bydlí na LAGu. L3 polovina L2+L3 dvojice ale bydlí
+na `irb.X` (fáze 3) a port filtr `generate_inventory` ji zahazoval —
+IPVPN scope pak ve snímku chyběl a baseline služba se neměla s čím
+spárovat (`L3VPN-CPE14-UNI`: `ae0.15` E-LAN prošla filtrem, `irb.15`
+IPVPN ne).
+
+Řešení je **strukturální, ne přes description** (rozhodnutí uživatele:
+description může chybět či se lišit a jedna VLAN může mít víc L2 portů —
+lab příklad `VL-4094` s `ae0.4094` + `et-0/0/8.4094` + `l3-interface
+irb.4094`):
+
+- Parser čte vazbu L2 domény na irb z obou syntaxí: MX `bridge-domains`
+  `<routing-interface>`, EVO `vlans` `<l3-interface>` (jeden XPath,
+  `BridgeDomain.routing_interface`).
+- `InterfaceService.l3_interface: list[str]` — irb protějšky domén,
+  do kterých unit patří. Aditivní pole, inventory schema zůstává 5
+  (loader neznámé klíče toleruje, precedent `ping_skipped`).
+- Port filtr v `runs/services.py` dělá druhé kolo: přibere služby,
+  jejichž `interface` je v množině `l3_interface` už vybraných služeb.
+  Přitahuje se jen irb protějšek unitů daného portu — irb sdílené VLAN
+  se přitáhne z KAŽDÉHO portu, který má v té VLAN unit.
+
+Ověřeno na labu 2026-08-17: krok `ge-0/0/4 → ae0` po regeneraci
+inventory páruje `ge-0/0/4.0 → irb.15` (PASS) a `ae0.15` se ukáže jako
+L2 část páru.
