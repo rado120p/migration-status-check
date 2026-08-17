@@ -1200,3 +1200,21 @@ def test_step_pulls_linked_partner_of_matched_scope():
     assert "svc:OTHER:Internet" not in shown_ids
     excluded_ids = {e["scope_id"] for e in result.excluded_services}
     assert excluded_ids == {"svc:OTHER:Internet"}
+
+
+def test_step_without_baseline_has_no_excluded_services():
+    """Krok bez pre snimku nema baseline, filtr pres baseline neprobehl."""
+    subject = _snapshot(
+        "172.20.20.5",
+        "ae0.15",
+        [_scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ae0.15")],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, None, now=NOW, step=STEP)
+
+    assert result.step == STEP
+    assert result.excluded_services is None
+    payload = result.to_dict()
+    assert "step" in payload
+    assert "excluded_services" not in payload

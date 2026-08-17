@@ -433,6 +433,8 @@ def _inventory_interfaces(path: Path) -> set[str] | None:
     if not path.exists():
         return None
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        return set()
     return {
         entry.get("interface")
         for entry in raw.get("interfaces") or []
@@ -718,7 +720,7 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument(
         "--parse-services",
         action="store_true",
-        help="chybejici inventory pro --run vyrob z konfigurace (samostatne spojeni)",
+        help="inventory pro --run vzdy pregeneruj z konfigurace (samostatne spojeni)",
     )
     capture.add_argument(
         "--overwrite",

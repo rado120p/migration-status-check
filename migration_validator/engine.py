@@ -578,5 +578,5 @@ def evaluate_snapshots(
         filtered=filtered,
         profile=profile_name,
         step=step,
-        excluded_services=excluded if step is not None else None,
+        excluded_services=excluded if (step is not None and baseline is not None) else None,
     )
