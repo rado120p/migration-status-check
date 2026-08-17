@@ -382,8 +382,8 @@ class JunosServiceParserCore:
         self._parse_routing_instances()
         self.static_routes = self._parse_static_routes()
         self._parse_default_bgp_neighbors()
-        self._parse_global_l2circuits()
-        self._parse_global_connections()
+        self._parse_global_eline_interfaces("l2circuit", self.global_l2circuits)
+        self._parse_global_eline_interfaces("connections", self.global_ccc_interfaces)
 
         interface_configs = self._parse_interfaces()
         interface_configs_by_name = {
@@ -496,8 +496,8 @@ class JunosServiceParserCore:
                     )
                 ),
                 protocols=child_names(node, "./*[local-name()='protocols']/*"),
-                bridge_domains=self._parse_bridge_domains(node),
-                vlans=self._parse_vlans(node),
+                bridge_domains=self._parse_l2_domains(node, "bridge-domains"),
+                vlans=self._parse_l2_domains(node, "vlans"),
                 route_distinguisher=self._parse_route_distinguisher(node),
                 vrf_targets=self._parse_vrf_targets(node),
                 evpn_service_type=self._parse_evpn_service_type(node),
@@ -774,18 +774,13 @@ class JunosServiceParserCore:
 
         return intents
 
-    def _parse_bridge_domains(
-        self, instance_node: etree._Element
+    def _parse_l2_domains(
+        self, instance_node: etree._Element, container_name: str
     ) -> list[BridgeDomain]:
-        container_nodes = instance_node.xpath("./*[local-name()='bridge-domains']")
-
-        if not container_nodes:
-            return []
-
-        return self._parse_l2_domain_container(container_nodes[0])
-
-    def _parse_vlans(self, instance_node: etree._Element) -> list[BridgeDomain]:
-        container_nodes = instance_node.xpath("./*[local-name()='vlans']")
+        """Bridge-domains (MX) i vlans (EVO) - tataz struktura, jiny kontejner."""
+        container_nodes = instance_node.xpath(
+            f"./*[local-name()='{container_name}']"
+        )
 
         if not container_nodes:
             return []
@@ -873,63 +868,28 @@ class JunosServiceParserCore:
             self.config_xml, "./*[local-name()='protocols']/*[local-name()='bgp']"
         )
 
-    def _parse_global_l2circuits(self) -> None:
-        """
-        Typická konfigurace:
+    def _parse_global_eline_interfaces(
+        self, hierarchy: str, target: set[str]
+    ) -> None:
+        """Rozhraní pod globálním E-Line protokolem (protocols <hierarchy>).
 
-            protocols {
-                l2circuit {
-                    neighbor 192.0.2.1 {
-                        interface ge-0/0/0.100 {
-                            virtual-circuit-id 100;
-                        }
-                    }
-                }
-            }
+        l2circuit: protocols l2circuit neighbor X interface ge-0/0/0.100
+        connections (CCC): protocols connections interface-switch N interface ...
         """
 
         interface_names = all_texts(
             self.config_xml,
             "./*[local-name()='protocols']"
-            "/*[local-name()='l2circuit']"
+            f"/*[local-name()='{hierarchy}']"
             "//*[local-name()='interface']"
             "/*[local-name()='name']/text()",
         )
 
-        self.global_l2circuits.update(interface_names)
+        target.update(interface_names)
 
         for interface_name in interface_names:
             self.global_protocols_by_interface.setdefault(interface_name, set()).add(
-                "l2circuit"
-            )
-
-    def _parse_global_connections(self) -> None:
-        """
-        Typická CCC konfigurace:
-
-            protocols {
-                connections {
-                    interface-switch CUSTOMER {
-                        interface ge-0/0/0.100;
-                        interface ge-0/0/1.100;
-                    }
-                }
-            }
-        """
-
-        interface_names = all_texts(
-            self.config_xml,
-            "./*[local-name()='protocols']"
-            "/*[local-name()='connections']"
-            "//*[local-name()='interface']"
-            "/*[local-name()='name']/text()",
-        )
-
-        self.global_ccc_interfaces.update(interface_names)
-
-        for interface_name in interface_names:
-            self.global_protocols_by_interface.setdefault(interface_name, set()).add(
-                "connections"
+                hierarchy
             )
 
     # ------------------------------------------------------------------
@@ -1186,15 +1146,6 @@ class JunosServiceParserCore:
             if name in self.routing_instances
         ]
 
-        # Přímé hledání podle XML obsahu routing instance.
-        if not instances:
-            for instance_name, instance in self.routing_instances.items():
-                if (
-                    interface.name in instance.interfaces
-                    or interface.physical_name in instance.interfaces
-                ):
-                    instances.append(instance)
-
         if not instances:
             return None
 
@@ -1219,42 +1170,17 @@ class JunosServiceParserCore:
     def _find_evpn_vpws_instance(
         self, interface: InterfaceConfig
     ) -> RoutingInstance | None:
-        candidate_names = {interface.name, interface.physical_name}
+        """Evpn-vpws instance rozhraní - má přednost před _find_best_instance."""
 
-        instance_nodes = self.config_xml.xpath(
-            "./*[local-name()='routing-instances']/*[local-name()='instance']"
-        )
-
-        for node in instance_nodes:
-            instance_type = (
-                (first_text(node, "./*[local-name()='instance-type']/text()") or "")
-                .strip()
-                .lower()
-            )
-
-            if instance_type != "evpn-vpws":
+        for instance in self.routing_instances.values():
+            if instance.instance_type != "evpn-vpws":
                 continue
 
-            configured_interfaces = set(
-                all_texts(
-                    node,
-                    ".//*[local-name()='interface']"
-                    "/*[local-name()='name']/text()"
-                    " | .//*[local-name()='interface']/text()",
-                )
-            )
-
-            if candidate_names & configured_interfaces:
-                instance_name = first_text(node, "./*[local-name()='name']/text()")
-
-                if instance_name in self.routing_instances:
-                    return self.routing_instances[instance_name]
-
-                return RoutingInstance(
-                    name=instance_name or "unknown-evpn-vpws",
-                    instance_type="evpn-vpws",
-                    interfaces=list(configured_interfaces),
-                )
+            if (
+                interface.name in instance.interfaces
+                or interface.physical_name in instance.interfaces
+            ):
+                return instance
 
         return None
 
@@ -1309,13 +1235,13 @@ class JunosServiceParserCore:
             matched_neighbors = [
                 neighbor
                 for neighbor in candidate_neighbors
-                if self._bgp_neighbor_matches_interface(neighbor, interface)
+                if self._ip_in_interface_subnet(neighbor, interface)
             ]
 
             matched_inactive = [
                 neighbor
                 for neighbor in candidate_inactive
-                if self._bgp_neighbor_matches_interface(neighbor, interface)
+                if self._ip_in_interface_subnet(neighbor, interface)
             ]
 
             if matched_inactive:
@@ -1333,7 +1259,7 @@ class JunosServiceParserCore:
                 + ", ".join(service.bgp_neighbor)
             )
 
-    def _bgp_neighbor_matches_interface(
+    def _ip_in_interface_subnet(
         self, neighbor: str, interface: InterfaceConfig
     ) -> bool:
         try:
@@ -1382,7 +1308,7 @@ class JunosServiceParserCore:
                 for route in self.static_routes
                 if rib_instance(route.rib) == service.routing_instance
                 and any(
-                    self._bgp_neighbor_matches_interface(next_hop, interface)
+                    self._ip_in_interface_subnet(next_hop, interface)
                     for next_hop in route.next_hop
                 )
             ]
