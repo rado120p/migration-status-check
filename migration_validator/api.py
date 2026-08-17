@@ -63,6 +63,7 @@ def evaluate(
     now: str | None = None,
     service_types: list[str] | None = None,
     profile_name: str | None = None,
+    step: dict[str, Any] | None = None,
 ) -> RunResult:
     """Vyhodnoti snapshot, volitelne proti baseline snapshotu."""
     load_all()
@@ -74,6 +75,7 @@ def evaluate(
         now=now,
         service_types=service_types,
         profile_name=profile_name,
+        step=step,
     )
 
 

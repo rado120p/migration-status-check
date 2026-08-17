@@ -823,7 +823,10 @@ def test_evaluate_run_pairs_and_exit_code(tmp_path, capsys):
     code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
 
     output = capsys.readouterr().out
-    assert f"=== {post_path.name} vs {pre_path.name} ===" in output
+    assert (
+        f"=== {post_path.name} vs {pre_path.name}"
+        " [krok MX1-POP1:ge-0/0/0 -> PTX1-POP1:et-0/0/0] ===" in output
+    )
     # oba snimky maji sluzbu ve stejnem stavu (up) -> sluzba PASS -> exit 0
     assert code == EXIT_OK
 
@@ -859,8 +862,14 @@ def test_evaluate_run_exit_code_is_worst_across_evaluations(tmp_path, capsys):
 
     output = capsys.readouterr().out
     # obe evaluace se skutecne provedly - hlavicky obou jsou ve vystupu
-    assert f"=== {post_ok.name} vs {pre_ok.name} ===" in output
-    assert f"=== {post_down.name} vs {pre_down.name} ===" in output
+    assert (
+        f"=== {post_ok.name} vs {pre_ok.name}"
+        " [krok MX1-POP1:ge-0/0/0 -> PTX1-POP1:et-0/0/0] ===" in output
+    )
+    assert (
+        f"=== {post_down.name} vs {pre_down.name}"
+        " [krok MX1-POP1:ge-0/0/1 -> PTX1-POP1:et-0/0/1] ===" in output
+    )
     # jedna sluzba spadla (down interface) -> nejhorsi kod vyhrava, druha
     # zdrava evaluace ho neprebiji zpatky na OK
     assert code == EXIT_FAILED_CHECKS
@@ -881,7 +890,10 @@ def test_evaluate_run_without_baseline_still_runs_and_warns(tmp_path, capsys):
     code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
 
     captured = capsys.readouterr()
-    assert f"=== {post_path.name} vs bez baseline ===" in captured.out
+    assert (
+        f"=== {post_path.name} vs bez baseline"
+        " [krok MX1-POP1:ge-0/0/0 -> PTX1-POP1:et-0/0/0] ===" in captured.out
+    )
     assert "chybi pre snimek MX1-POP1:ge-0/0/0" in captured.err
     # subject se sam o sobe vyhodnoti (bez baseline porovnani neni fail)
     assert code == EXIT_OK
@@ -948,6 +960,99 @@ def test_evaluate_run_ports_filter(tmp_path, capsys):
     assert post0.name not in output
     # oba pary maji shodny stav (up) na obou stranach -> PASS -> exit 0
     assert code == EXIT_OK
+
+
+def _lag_run_manifest():
+    """MX1-POP1 (old) + PTX1-POP1 (new); dva stare porty mapovane na ae0."""
+    manifest = RunManifest(
+        devices={
+            "MX1-POP1": RunDevice(host="172.20.20.4", platform="junos", role="old"),
+            "PTX1-POP1": RunDevice(
+                host="172.20.20.5", platform="junos-evo", role="new"
+            ),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1-POP1", port="ge-0/0/4"),
+                new=MappingEndpoint(node="PTX1-POP1", port="ae0"),
+            ),
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1-POP1", port="ge-0/0/5"),
+                new=MappingEndpoint(node="PTX1-POP1", port="ae0"),
+            ),
+        ],
+    )
+    return manifest
+
+
+def _write_lag_run(tmp_path):
+    """Ulozi run se 2 mappingy na ae0 + pre4/pre5/post snimky na disku."""
+    store = RunStore(tmp_path, "mig01")
+    manifest = _lag_run_manifest()
+
+    pre4 = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/4", "172.20.20.4", "ge-0/0/4.113"
+    )
+    pre5 = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/5", "172.20.20.4", "ge-0/0/5.113"
+    )
+    post = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "ae0", "172.20.20.5", "ae0.113"
+    )
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/4", pre4.name, NOW))
+    manifest.record_capture(CaptureRecord("pre", "MX1-POP1", "ge-0/0/5", pre5.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1-POP1", "ae0", post.name, NOW))
+    store.save(manifest)
+    return store
+
+
+def test_evaluate_run_emits_one_report_per_step_with_header(tmp_path, capsys):
+    """run.yml se 2 mappingy na ae0 + pre4/pre5/post snimky na disku:
+    evaluate --run vypise 2 reporty, kazdy s [krok ...] sve dvojice."""
+    _write_lag_run(tmp_path)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "[krok MX1-POP1:ge-0/0/4 -> PTX1-POP1:ae0]" in out
+    assert "[krok MX1-POP1:ge-0/0/5 -> PTX1-POP1:ae0]" in out
+    assert out.count("=== ") == 2
+
+
+def test_evaluate_run_json_output_carries_step_and_excluded_services(tmp_path, capsys):
+    _write_lag_run(tmp_path)
+
+    code = main(
+        [
+            "evaluate", "--run", "mig01", "--run-root", str(tmp_path),
+            "--format", "json",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 0
+
+    blocks = [block for block in out.split("=== ") if block.strip()]
+    # kazdy blok zacina "<hlavicka> ===\n{...json...}\n"
+    payloads = [
+        json.loads(block.split("===\n", 1)[1]) for block in blocks
+    ]
+    assert len(payloads) == 2
+    for payload in payloads:
+        assert "step" in payload
+        assert "excluded_services" in payload
+
+
+def test_status_run_lists_two_rows_for_lag_mappings_to_same_new_port(tmp_path, capsys):
+    """Regresni zamek N:1 - status --run uz dnes iteruje mappingy, ne porty."""
+    _write_lag_run(tmp_path)
+
+    code = main(["status", "--run", "mig01", "--run-root", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert code == EXIT_OK
+    assert "MX1-POP1:ge-0/0/4" in out
+    assert "MX1-POP1:ge-0/0/5" in out
+    assert out.count("PTX1-POP1:ae0") == 2
 
 
 def test_evaluate_run_rejects_snapshot_combo(tmp_path):

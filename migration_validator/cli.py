@@ -169,7 +169,25 @@ def _evaluate_run(args: argparse.Namespace) -> int:
         elif evaluation.reason:
             print(f"varovani: {evaluation.reason}", file=sys.stderr)
 
-        print(f"=== {evaluation.subject.snapshot} vs {baseline_label} ===")
+        step_payload = None
+        step_label = ""
+        if evaluation.step is not None:
+            step_payload = {
+                "old": {
+                    "node": evaluation.step.old.node,
+                    "port": evaluation.step.old.port,
+                },
+                "new": {
+                    "node": evaluation.step.new.node,
+                    "port": evaluation.step.new.port,
+                },
+            }
+            step_label = (
+                f" [krok {evaluation.step.old.node}:{evaluation.step.old.port}"
+                f" -> {evaluation.step.new.node}:{evaluation.step.new.port}]"
+            )
+
+        print(f"=== {evaluation.subject.snapshot} vs {baseline_label}{step_label} ===")
 
         result = api.evaluate(
             subject,
@@ -178,6 +196,7 @@ def _evaluate_run(args: argparse.Namespace) -> int:
             config=profile.checks,
             service_types=service_types,
             profile_name=profile.name or None,
+            step=step_payload,
         )
         shown = filter_result(result, text=args.filter, statuses=statuses)
 
