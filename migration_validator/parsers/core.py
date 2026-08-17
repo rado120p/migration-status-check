@@ -279,11 +279,9 @@ def _bfd_values(node: etree._Element | None, source: str) -> dict[str, Any] | No
 
     return {
         "minimum_interval": _optional_int(
-            first_text(node, "./*[local-name()='minimum-interval']/text()")
+            first_text(node, "./minimum-interval/text()")
         ),
-        "multiplier": _optional_int(
-            first_text(node, "./*[local-name()='multiplier']/text()")
-        ),
+        "multiplier": _optional_int(first_text(node, "./multiplier/text()")),
         "source": source,
     }
 
@@ -326,10 +324,23 @@ def normalize_vlan_values(values: Iterable[str]) -> list[str]:
     return unique(normalized)
 
 
+def strip_namespaces(root: etree._Element) -> etree._Element:
+    """Prepise tagy elementu na localname, atributy necha byt."""
+    for element in root.iter():
+        if isinstance(element.tag, str):
+            element.tag = etree.QName(element).localname
+
+    etree.cleanup_namespaces(root)
+
+    return root
+
+
 def find_configuration_root(response: etree._Element) -> etree._Element:
     if local_name(response) == "configuration":
         return response
 
+    # Bezi nad surovou RPC odpovedi, ktera jeste nese junos namespace -
+    # jedine misto, kde musi zustat namespace-agnosticky local-name().
     nodes = response.xpath(".//*[local-name()='configuration']")
 
     if not nodes:
@@ -364,7 +375,12 @@ class JunosServiceParserCore:
     def __init__(self, config_xml: etree._Element):
         self._logger = logging.getLogger(self.LOGGER_NAME)
 
-        self.config_xml = config_xml
+        # Junos XML chodi s namespacy. Jednou se stripnou tady a vsechny
+        # xpathy nize jsou plain (./routing-instances/instance) misto
+        # namespace-agnostickeho *[local-name()='...'] na kazdem kroku.
+        # Atributy (inactive, YANG active) se nemeni - _node_is_inactive
+        # s namespacovanym atributem pocita dal.
+        self.config_xml = strip_namespaces(config_xml)
 
         self.routing_instances: dict[str, RoutingInstance] = {}
         self.interface_to_instances: dict[str, list[str]] = {}
@@ -464,38 +480,29 @@ class JunosServiceParserCore:
     # ------------------------------------------------------------------
 
     def _parse_routing_instances(self) -> None:
-        nodes = self.config_xml.xpath(
-            "./*[local-name()='routing-instances']/*[local-name()='instance']"
-        )
+        nodes = self.config_xml.xpath("./routing-instances/instance")
 
         for node in nodes:
-            instance_name = first_text(node, "./*[local-name()='name']/text()")
+            instance_name = first_text(node, "./name/text()")
 
             if not instance_name:
                 continue
 
             instance_neighbors, instance_neighbors_inactive = self._parse_bgp_neighbors(
-                node, "./*[local-name()='protocols']/*[local-name()='bgp']"
+                node, "./protocols/bgp"
             )
 
             instance = RoutingInstance(
                 name=instance_name,
                 active=not self._is_inactive(node),
-                instance_type=(
-                    first_text(node, "./*[local-name()='instance-type']/text()") or ""
-                )
+                instance_type=(first_text(node, "./instance-type/text()") or "")
                 .strip()
                 .lower()
                 or None,
                 interfaces=unique(
-                    all_texts(
-                        node,
-                        ".//*[local-name()='interface']"
-                        "/*[local-name()='name']/text()"
-                        " | .//*[local-name()='interface']/text()",
-                    )
+                    all_texts(node, ".//interface/name/text() | .//interface/text()")
                 ),
-                protocols=child_names(node, "./*[local-name()='protocols']/*"),
+                protocols=child_names(node, "./protocols/*"),
                 bridge_domains=self._parse_l2_domains(node, "bridge-domains"),
                 vlans=self._parse_l2_domains(node, "vlans"),
                 route_distinguisher=self._parse_route_distinguisher(node),
@@ -504,17 +511,12 @@ class JunosServiceParserCore:
                 instance_vlan_ids=normalize_vlan_values(
                     all_texts(
                         node,
-                        "./*[local-name()='vlan-id']/text()"
-                        " | ./*[local-name()='vlan-id-list']/text()"
-                        " | ./*[local-name()='vlan-id-list']"
-                        "/*[local-name()='name']/text()",
+                        "./vlan-id/text() | ./vlan-id-list/text() | ./vlan-id-list/name/text()",
                     )
                 ),
                 bgp_neighbors=instance_neighbors,
                 bgp_neighbors_inactive=instance_neighbors_inactive,
-                bfd=self._parse_bfd(
-                    node, "./*[local-name()='protocols']/*[local-name()='bgp']"
-                ),
+                bfd=self._parse_bfd(node, "./protocols/bgp"),
             )
 
             self.routing_instances[instance_name] = instance
@@ -532,19 +534,11 @@ class JunosServiceParserCore:
 
     def _parse_route_distinguisher(self, node: etree._Element) -> str | None:
         return first_text(
-            node,
-            "./*[local-name()='route-distinguisher']"
-            "/*[local-name()='rd-type']/text()"
-            " | ./*[local-name()='route-distinguisher']/text()",
+            node, "./route-distinguisher/rd-type/text() | ./route-distinguisher/text()"
         )
 
     def _parse_vrf_targets(self, node: etree._Element) -> list[str]:
-        return all_texts(
-            node,
-            "./*[local-name()='vrf-target']"
-            "//*[local-name()='community']/text()"
-            " | ./*[local-name()='vrf-target']/text()",
-        )
+        return all_texts(node, "./vrf-target//community/text() | ./vrf-target/text()")
 
     def _parse_evpn_service_type(self, node: etree._Element) -> str | None:
         """
@@ -562,12 +556,7 @@ class JunosServiceParserCore:
             service-type vlan-based;
         """
 
-        value = first_text(
-            node,
-            ".//*[local-name()='evpn']"
-            "/*[local-name()='service-type']/text()"
-            " | ./*[local-name()='service-type']/text()",
-        )
+        value = first_text(node, ".//evpn/service-type/text() | ./service-type/text()")
 
         if value:
             return value.lower()
@@ -581,10 +570,10 @@ class JunosServiceParserCore:
         inactive: list[str] = []
 
         for bgp_node in node.xpath(bgp_xpath):
-            for neighbor_node in bgp_node.xpath(".//*[local-name()='neighbor']"):
-                neighbor = first_text(
-                    neighbor_node, "./*[local-name()='name']/text()"
-                ) or first_text(neighbor_node, "./text()")
+            for neighbor_node in bgp_node.xpath(".//neighbor"):
+                neighbor = first_text(neighbor_node, "./name/text()") or first_text(
+                    neighbor_node, "./text()"
+                )
 
                 if not neighbor:
                     continue
@@ -616,22 +605,16 @@ class JunosServiceParserCore:
 
         routes: list[StaticRoute] = []
 
-        for options_node in self.config_xml.xpath(
-            "./*[local-name()='routing-options']"
-        ):
+        for options_node in self.config_xml.xpath("./routing-options"):
             routes.extend(self._static_routes_under(options_node, None))
 
-        for instance_node in self.config_xml.xpath(
-            "./*[local-name()='routing-instances']/*[local-name()='instance']"
-        ):
-            instance_name = first_text(instance_node, "./*[local-name()='name']/text()")
+        for instance_node in self.config_xml.xpath("./routing-instances/instance"):
+            instance_name = first_text(instance_node, "./name/text()")
 
             if not instance_name:
                 continue
 
-            for options_node in instance_node.xpath(
-                "./*[local-name()='routing-options']"
-            ):
+            for options_node in instance_node.xpath("./routing-options"):
                 routes.extend(self._static_routes_under(options_node, instance_name))
 
         return routes
@@ -644,26 +627,24 @@ class JunosServiceParserCore:
         default_rib = f"{instance_name}.inet.0" if instance_name else "inet.0"
 
         containers: list[tuple[str, etree._Element]] = [
-            (default_rib, static_node)
-            for static_node in options_node.xpath("./*[local-name()='static']")
+            (default_rib, static_node) for static_node in options_node.xpath("./static")
         ]
 
-        for rib_node in options_node.xpath("./*[local-name()='rib']"):
-            rib_name = first_text(rib_node, "./*[local-name()='name']/text()")
+        for rib_node in options_node.xpath("./rib"):
+            rib_name = first_text(rib_node, "./name/text()")
 
             if not rib_name:
                 continue
 
             containers.extend(
-                (rib_name, static_node)
-                for static_node in rib_node.xpath("./*[local-name()='static']")
+                (rib_name, static_node) for static_node in rib_node.xpath("./static")
             )
 
         routes: list[StaticRoute] = []
 
         for rib_name, static_node in containers:
-            for route_node in static_node.xpath("./*[local-name()='route']"):
-                prefix = first_text(route_node, "./*[local-name()='name']/text()")
+            for route_node in static_node.xpath("./route"):
+                prefix = first_text(route_node, "./name/text()")
 
                 if not prefix:
                     continue
@@ -683,9 +664,7 @@ class JunosServiceParserCore:
                         # dostane prázdný next_hop, na službu se nenamapuje
                         # a nenainstalovaná zmizí beze stopy. Zapsáno jako
                         # otevřený bod roadmapy vlny 10.
-                        next_hop=all_texts(
-                            route_node, "./*[local-name()='next-hop']/text()"
-                        ),
+                        next_hop=all_texts(route_node, "./next-hop/text()"),
                         active=not self._is_inactive(route_node),
                     )
                 )
@@ -709,7 +688,7 @@ class JunosServiceParserCore:
         if node is None:
             return None
 
-        found = node.xpath("./*[local-name()='bfd-liveness-detection']")
+        found = node.xpath("./bfd-liveness-detection")
 
         if not found or self._is_inactive(found[0]):
             return None
@@ -743,7 +722,7 @@ class JunosServiceParserCore:
                 (bgp_node, protocol_level)
             ]
 
-            for group_node in bgp_node.xpath("./*[local-name()='group']"):
+            for group_node in bgp_node.xpath("./group"):
                 containers.append(
                     (
                         group_node,
@@ -753,13 +732,13 @@ class JunosServiceParserCore:
                 )
 
             for container, inherited in containers:
-                for neighbor_node in container.xpath("./*[local-name()='neighbor']"):
+                for neighbor_node in container.xpath("./neighbor"):
                     if self._is_inactive(neighbor_node):
                         continue
 
-                    peer = first_text(
-                        neighbor_node, "./*[local-name()='name']/text()"
-                    ) or first_text(neighbor_node, "./text()")
+                    peer = first_text(neighbor_node, "./name/text()") or first_text(
+                        neighbor_node, "./text()"
+                    )
 
                     if not peer:
                         continue
@@ -778,9 +757,7 @@ class JunosServiceParserCore:
         self, instance_node: etree._Element, container_name: str
     ) -> list[BridgeDomain]:
         """Bridge-domains (MX) i vlans (EVO) - tataz struktura, jiny kontejner."""
-        container_nodes = instance_node.xpath(
-            f"./*[local-name()='{container_name}']"
-        )
+        container_nodes = instance_node.xpath(f"./{container_name}")
 
         if not container_nodes:
             return []
@@ -796,7 +773,7 @@ class JunosServiceParserCore:
             if not isinstance(domain_node.tag, str):
                 continue
 
-            domain_name = first_text(domain_node, "./*[local-name()='name']/text()")
+            domain_name = first_text(domain_node, "./name/text()")
 
             if not domain_name:
                 domain_name = local_name(domain_node)
@@ -804,35 +781,23 @@ class JunosServiceParserCore:
             vlan_ids = normalize_vlan_values(
                 all_texts(
                     domain_node,
-                    "./*[local-name()='vlan-id']/text()"
-                    " | ./*[local-name()='vlan-tags']"
-                    "/*[local-name()='outer']/text()"
-                    " | ./*[local-name()='vlan-tags']"
-                    "/*[local-name()='inner']/text()",
+                    "./vlan-id/text() | ./vlan-tags/outer/text() | ./vlan-tags/inner/text()",
                 )
             )
 
             vlan_id_list = normalize_vlan_values(
                 all_texts(
                     domain_node,
-                    "./*[local-name()='vlan-id-list']/text()"
-                    " | ./*[local-name()='vlan-id-list']"
-                    "/*[local-name()='name']/text()"
-                    " | ./*[local-name()='vlan-id-range']/text()",
+                    "./vlan-id-list/text() | ./vlan-id-list/name/text() | ./vlan-id-range/text()",
                 )
             )
 
-            interfaces = all_texts(
-                domain_node,
-                "./*[local-name()='interface']/*[local-name()='name']/text()",
-            )
+            interfaces = all_texts(domain_node, "./interface/name/text()")
 
             # MX bridge-domains píší <routing-interface>, EVO vlans
             # <l3-interface> - obojí je táž vazba L2 domény na irb.
             routing_interface = first_text(
-                domain_node,
-                "./*[local-name()='routing-interface']/text()"
-                " | ./*[local-name()='l3-interface']/text()",
+                domain_node, "./routing-interface/text() | ./l3-interface/text()"
             )
 
             domains.append(
@@ -860,17 +825,11 @@ class JunosServiceParserCore:
         """
 
         (self.default_bgp_neighbors, self.default_bgp_neighbors_inactive) = (
-            self._parse_bgp_neighbors(
-                self.config_xml, "./*[local-name()='protocols']/*[local-name()='bgp']"
-            )
+            self._parse_bgp_neighbors(self.config_xml, "./protocols/bgp")
         )
-        self.default_bfd = self._parse_bfd(
-            self.config_xml, "./*[local-name()='protocols']/*[local-name()='bgp']"
-        )
+        self.default_bfd = self._parse_bfd(self.config_xml, "./protocols/bgp")
 
-    def _parse_global_eline_interfaces(
-        self, hierarchy: str, target: set[str]
-    ) -> None:
+    def _parse_global_eline_interfaces(self, hierarchy: str, target: set[str]) -> None:
         """Rozhraní pod globálním E-Line protokolem (protocols <hierarchy>).
 
         l2circuit: protocols l2circuit neighbor X interface ge-0/0/0.100
@@ -878,11 +837,7 @@ class JunosServiceParserCore:
         """
 
         interface_names = all_texts(
-            self.config_xml,
-            "./*[local-name()='protocols']"
-            f"/*[local-name()='{hierarchy}']"
-            "//*[local-name()='interface']"
-            "/*[local-name()='name']/text()",
+            self.config_xml, f"./protocols/{hierarchy}//interface/name/text()"
         )
 
         target.update(interface_names)
@@ -899,24 +854,18 @@ class JunosServiceParserCore:
     def _parse_interfaces(self) -> list[InterfaceConfig]:
         results: list[InterfaceConfig] = []
 
-        nodes = self.config_xml.xpath(
-            "./*[local-name()='interfaces']/*[local-name()='interface']"
-        )
+        nodes = self.config_xml.xpath("./interfaces/interface")
 
         for interface_node in nodes:
-            physical_name = first_text(
-                interface_node, "./*[local-name()='name']/text()"
-            )
+            physical_name = first_text(interface_node, "./name/text()")
 
             if not physical_name:
                 continue
 
-            physical_description = first_text(
-                interface_node, "./*[local-name()='description']/text()"
-            )
+            physical_description = first_text(interface_node, "./description/text()")
 
             physical_encapsulation = first_text(
-                interface_node, "./*[local-name()='encapsulation']/text()"
+                interface_node, "./encapsulation/text()"
             )
 
             physical_inactive = self._is_inactive(interface_node)
@@ -934,10 +883,10 @@ class JunosServiceParserCore:
             )
 
             # Potom přidáme jednotlivé logical units.
-            unit_nodes = interface_node.xpath("./*[local-name()='unit']")
+            unit_nodes = interface_node.xpath("./unit")
 
             for unit_node in unit_nodes:
-                unit_number = first_text(unit_node, "./*[local-name()='name']/text()")
+                unit_number = first_text(unit_node, "./name/text()")
 
                 if unit_number is None:
                     continue
@@ -969,85 +918,41 @@ class JunosServiceParserCore:
         node: etree._Element,
         active: bool = True,
     ) -> InterfaceConfig:
-        unit_description = first_text(node, "./*[local-name()='description']/text()")
+        unit_description = first_text(node, "./description/text()")
 
-        unit_encapsulation = first_text(
-            node, "./*[local-name()='encapsulation']/text()"
-        )
+        unit_encapsulation = first_text(node, "./encapsulation/text()")
 
-        families = child_names(node, "./*[local-name()='family']/*")
+        families = child_names(node, "./family/*")
 
         vlan_ids = normalize_vlan_values(
             all_texts(
                 node,
-                "./*[local-name()='vlan-id']/text()"
-                " | ./*[local-name()='inner-vlan-id']/text()"
-                " | ./*[local-name()='vlan-tags']"
-                "/*[local-name()='outer']/text()"
-                " | ./*[local-name()='vlan-tags']"
-                "/*[local-name()='inner']/text()"
-                " | ./*[local-name()='family']"
-                "/*[local-name()='bridge']"
-                "/*[local-name()='vlan-id']/text()"
-                " | ./*[local-name()='family']"
-                "/*[local-name()='ethernet-switching']"
-                "/*[local-name()='vlan']"
-                "/*[local-name()='members']/text()",
+                "./vlan-id/text() | ./inner-vlan-id/text() | ./vlan-tags/outer/text() | ./vlan-tags/inner/text() | ./family/bridge/vlan-id/text() | ./family/ethernet-switching/vlan/members/text()",
             )
         )
 
         vlan_id_list = normalize_vlan_values(
             all_texts(
                 node,
-                "./*[local-name()='vlan-id-list']/text()"
-                " | ./*[local-name()='vlan-id-list']"
-                "/*[local-name()='name']/text()"
-                " | ./*[local-name()='family']"
-                "/*[local-name()='bridge']"
-                "/*[local-name()='vlan-id-list']/text()",
+                "./vlan-id-list/text() | ./vlan-id-list/name/text() | ./family/bridge/vlan-id-list/text()",
             )
         )
 
-        ipv4_addresses = all_texts(
-            node,
-            "./*[local-name()='family']"
-            "/*[local-name()='inet']"
-            "/*[local-name()='address']"
-            "/*[local-name()='name']/text()",
-        )
+        ipv4_addresses = all_texts(node, "./family/inet/address/name/text()")
 
-        ipv6_addresses = all_texts(
-            node,
-            "./*[local-name()='family']"
-            "/*[local-name()='inet6']"
-            "/*[local-name()='address']"
-            "/*[local-name()='name']/text()",
-        )
+        ipv6_addresses = all_texts(node, "./family/inet6/address/name/text()")
 
         virtual_gw_ipv4_addresses = all_texts(
-            node,
-            "./*[local-name()='family']"
-            "/*[local-name()='inet']"
-            "/*[local-name()='address']"
-            "/*[local-name()='virtual-gateway-address']/text()",
+            node, "./family/inet/address/virtual-gateway-address/text()"
         )
 
         virtual_gw_ipv6_addresses = all_texts(
-            node,
-            "./*[local-name()='family']"
-            "/*[local-name()='inet6']"
-            "/*[local-name()='address']"
-            "/*[local-name()='virtual-gateway-address']/text()",
+            node, "./family/inet6/address/virtual-gateway-address/text()"
         )
 
-        input_vlan_map = first_text(
-            node, "./*[local-name()='input-vlan-map']/*[local-name()='map-type']/text()"
-        )
+        input_vlan_map = first_text(node, "./input-vlan-map/map-type/text()")
 
-        output_vlan_map = first_text(
-            node,
-            "./*[local-name()='output-vlan-map']/*[local-name()='map-type']/text()",
-        )
+        output_vlan_map = first_text(node, "./output-vlan-map/map-type/text()")
 
         # 802.3ad clenstvi je vzdy na fyzickem rozhrani (ether-options /
         # gigether-options / aggregated-ether-options) - na unit uzlu xpath
@@ -1056,10 +961,7 @@ class JunosServiceParserCore:
         # 2026-08-12. Varianta se spojovnikem se drzi jako tolerance pro
         # jine renderovani/verze Junosu.
         bundle = first_text(
-            node,
-            ".//*[local-name()='ieee-802.3ad'"
-            " or local-name()='ieee-802-3ad']"
-            "/*[local-name()='bundle']/text()",
+            node, ".//ieee-802.3ad/bundle/text() | .//ieee-802-3ad/bundle/text()"
         )
 
         return InterfaceConfig(
@@ -1515,8 +1417,7 @@ class JunosServiceParserCore:
 
         if self._is_layer3(interface):
             reasons.append(
-                "Rozhraní má family inet/inet6 nebo IP adresu "
-                "a není přiřazeno do zákaznické VRF."
+                "Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF."
             )
 
             return ("Internet", None, "medium", reasons)
@@ -1536,8 +1437,7 @@ class JunosServiceParserCore:
 
         if self._is_layer2(interface):
             reasons.append(
-                "Rozhraní je L2, ale konfigurace neobsahuje dostatek "
-                "údajů pro určení konkrétní služby."
+                "Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby."
             )
 
             return ("Unknown", "layer2", "low", reasons)
@@ -1980,9 +1880,7 @@ def interface_sort_key(interface_name: str) -> tuple[Any, ...]:
 def main(argv: list[str] | None = None, *, parser_cls: type | None = None) -> int:
     if parser_cls is None:
         raise ValueError(
-            "parser_cls neni zadana - pouzij platformni wrapper "
-            "(mx_parser.py / evo_parser.py) nebo predej "
-            "parser_cls=JunosServiceParser / JunosEvoAcxServiceParser."
+            "parser_cls neni zadana - pouzij platformni wrapper (mx_parser.py / evo_parser.py) nebo predej parser_cls=JunosServiceParser / JunosEvoAcxServiceParser."
         )
 
     args = parse_arguments(argv)
@@ -2042,8 +1940,7 @@ def main(argv: list[str] | None = None, *, parser_cls: type | None = None) -> in
 
     except ConnectRefusedError:
         LOGGER.error(
-            "NETCONF spojení bylo odmítnuto. "
-            "Zkontroluj konfiguraci system services netconf ssh."
+            "NETCONF spojení bylo odmítnuto. Zkontroluj konfiguraci system services netconf ssh."
         )
 
         return 4
