@@ -30,14 +30,8 @@ class JunosServiceParser(JunosServiceParserCore):
         protocol_set: set[str],
         instance: RoutingInstance | None,
     ) -> str | None:
-        if (
-            instance_type == "vpls"
-            or "vpls" in protocol_set
-        ):
-            return (
-                "Routing instance používá instance-type vpls "
-                "nebo protocols vpls."
-            )
+        if instance_type == "vpls" or "vpls" in protocol_set:
+            return "Routing instance používá instance-type vpls nebo protocols vpls."
 
         return None
 
@@ -59,72 +53,41 @@ class JunosServiceParser(JunosServiceParserCore):
 
         reasons: list[str] = []
 
-        instance_type = (
-            instance.instance_type or ""
-        ).lower()
+        instance_type = (instance.instance_type or "").lower()
 
-        all_bridge_domains = (
-            instance.bridge_domains
-            + instance.vlans
-        )
+        all_bridge_domains = instance.bridge_domains + instance.vlans
 
-        if (
-            instance_type == "virtual-switch"
-            and all_bridge_domains
-        ):
+        if instance_type == "virtual-switch" and all_bridge_domains:
             reasons.append(
                 "Routing instance má instance-type virtual-switch "
                 "a obsahuje bridge domain."
             )
 
-            return (
-                "vlan-aware",
-                "high",
-                reasons,
-            )
+            return ("vlan-aware", "high", reasons)
 
         if instance_type == "evpn":
-            reasons.append(
-                "Routing instance má instance-type evpn."
-            )
+            reasons.append("Routing instance má instance-type evpn.")
 
-            return (
-                "vlan-based",
-                "high",
-                reasons,
-            )
+            return ("vlan-based", "high", reasons)
 
         reasons.append(
             "EVPN služba byla nalezena, ale instance-type "
             "neodpovídá pravidlům pro vlan-aware nebo vlan-based."
         )
 
-        return (
-            "evpn-unknown",
-            "low",
-            reasons,
-        )
+        return ("evpn-unknown", "low", reasons)
 
-    def _is_evpn_instance(
-        self,
-        instance: RoutingInstance | None,
-    ) -> bool:
+    def _is_evpn_instance(self, instance: RoutingInstance | None) -> bool:
         if instance is None:
             return False
 
-        instance_type = (
-            instance.instance_type or ""
-        ).lower()
+        instance_type = (instance.instance_type or "").lower()
 
         if instance_type == "evpn":
             return True
 
-        if (
-            instance_type == "virtual-switch"
-            and (
-                instance.bridge_domains
-                or instance.vlans
-            )
+        if instance_type == "virtual-switch" and (
+            instance.bridge_domains or instance.vlans
         ):
             return True
 
