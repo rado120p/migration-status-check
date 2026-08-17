@@ -1,6 +1,7 @@
 import json
 
 import pytest
+import yaml
 
 from migration_validator.cli import (
     EXIT_FAILED_CHECKS,
@@ -653,19 +654,42 @@ def test_parse_services_requires_run(monkeypatch, capsys):
     assert "--run" in err
 
 
-def test_capture_run_parse_services_skips_existing_inventory(tmp_path, monkeypatch, capsys):
+def test_parse_services_regenerates_existing_inventory_and_prints_delta(
+    tmp_path, monkeypatch, capsys
+):
+    """--parse-services prepise existujici per-port inventory a vypise deltu."""
+    from contextlib import contextmanager
+
     _fake_capture(monkeypatch)
 
-    store = RunStore(tmp_path, "mig01")
-    inventory_path = store.inventory_path("172.20.20.4", "ge-0/0/0")
-    inventory_path.parent.mkdir(parents=True, exist_ok=True)
-    inventory_path.write_text("schema_version: 5\ndevice: x\ninterfaces: []\n")
+    @contextmanager
+    def fake_connect(options):
+        yield object()
 
-    def fail_generate_inventory(*args, **kwargs):
-        raise AssertionError("generate_inventory nemel byt volan, inventory uz existuje")
+    def fake_detect_platform(device):
+        return "junos"
+
+    monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
+    monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
+
+    store = RunStore(tmp_path, "mig01")
+    inventory_path = store.inventory_path("172.20.20.5", "ae0")
+    inventory_path.parent.mkdir(parents=True, exist_ok=True)
+    inventory_path.write_text(
+        "schema_version: 5\ndevice: x\ninterfaces:\n"
+        "  - interface: ae0.15\n"
+    )
+
+    def fake_generate_inventory(device, platform, output_path, port):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            "schema_version: 5\ndevice: x\ninterfaces:\n"
+            "  - interface: ae0.15\n"
+            "  - interface: ae0.16\n"
+        )
 
     monkeypatch.setattr(
-        "migration_validator.cli.generate_inventory", fail_generate_inventory
+        "migration_validator.cli.generate_inventory", fake_generate_inventory
     )
 
     code = main(
@@ -673,15 +697,21 @@ def test_capture_run_parse_services_skips_existing_inventory(tmp_path, monkeypat
             "capture",
             "--run", "mig01",
             "--run-root", str(tmp_path),
-            "--device", "172.20.20.4",
-            "--phase", "pre",
-            "--port", "ge-0/0/0",
+            "--device", "172.20.20.5",
+            "--phase", "post",
+            "--port", "ae0",
             "--parse-services",
         ]
     )
 
     assert code == 0
-    assert "jiz existuje" in capsys.readouterr().err
+    raw = yaml.safe_load(inventory_path.read_text(encoding="utf-8"))
+    assert len(raw["interfaces"]) == 2
+
+    out = capsys.readouterr().out
+    assert "inventory pregenerovana" in out
+    assert "+1 nove, -0 odebrane" in out
+    assert "generovani se preskakuje" not in out
 
 
 def test_capture_run_resolves_existing_node_name(tmp_path, monkeypatch):

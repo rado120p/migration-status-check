@@ -11,6 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
+
 from migration_validator import api
 from migration_validator.auth import AuthSettings, DEFAULT_AUTH_PATH, load_auth_file
 from migration_validator.collectors.registry import collectors_for
@@ -408,12 +410,26 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _inventory_interfaces(path: Path) -> set[str] | None:
+    if not path.exists():
+        return None
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return {
+        entry.get("interface")
+        for entry in raw.get("interfaces") or []
+        if entry.get("interface")
+    }
+
+
 def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None:
     """Vyrobi inventory pro --parse-services v samostatnem kratkem spojeni.
 
-    api.capture se nemeni - konfigurace pro inventory se stahne pred
-    samotnym capture spojenim, ne v nem.
+    Existujici soubor se pregeneruje - konfigurace noveho boxu se meni
+    kazdou vlnou a flag je explicitni umysl (revize faze 4, viz spec
+    2026-08-17). api.capture se nemeni - konfigurace pro inventory se
+    stahne pred snapshotem.
     """
+    previous = _inventory_interfaces(inventory_path)
 
     try:
         with connect(_connection_options(args, _auth_settings(args))) as device:
@@ -422,7 +438,16 @@ def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error
 
-    print(f"inventory vyrobena: {inventory_path}")
+    current = _inventory_interfaces(inventory_path) or set()
+    if previous is None:
+        print(f"inventory vyrobena: {inventory_path} ({len(current)} sluzeb)")
+    else:
+        added = len(current - previous)
+        removed = len(previous - current)
+        print(
+            f"inventory pregenerovana: {inventory_path} "
+            f"({len(current)} sluzeb, +{added} nove, -{removed} odebrane)"
+        )
 
 
 def _capture_into_run(args: argparse.Namespace) -> int:
@@ -443,23 +468,15 @@ def _capture_into_run(args: argparse.Namespace) -> int:
 
     if args.inventory:
         inventory_path = Path(args.inventory)
+    elif args.parse_services:
+        inventory_path = store.inventory_path(node, args.port)
+        _parse_services_into(args, inventory_path)
     else:
         inventory_path = store.inventory_path(node, args.port)
         if not inventory_path.exists():
             inventory_path = store.inventory_path(node, None)
         if not inventory_path.exists():
-            if not args.parse_services:
-                raise ToolError(
-                    "inventory nenalezena - spust s --parse-services"
-                )
-            inventory_path = store.inventory_path(node, args.port)
-            _parse_services_into(args, inventory_path)
-        elif args.parse_services:
-            # Existujici soubor ma prednost - zadne tiche prepsani.
-            print(
-                f"inventory jiz existuje, generovani se preskakuje: {inventory_path}",
-                file=sys.stderr,
-            )
+            raise ToolError("inventory nenalezena - spust s --parse-services")
 
     baselines: list[Snapshot] = []
     if phase == "post":
