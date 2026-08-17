@@ -328,9 +328,13 @@ netvoří, je jen zdroj baseline):
   se vyhodnotí bez baseline s důvodem `chybi puvodni pre snimek stejneho zarizeni a portu`.
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
-baseline"> ===`; u kroku s baseline (`post`/`rollback` na mapovaném portu) záhlaví nese navíc
-`[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]`, stejné rozlišení, jaké tiskne i vlastní
-text report (viz `docs/cs/files/reporting.md`). Pod záhlavím normální výstup `evaluate` (text
+baseline"> ===`; `[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]` se k němu připojí,
+právě když evaluace vznikla z mapovaného kroku (`post` na mapovaném portu) — **nezávisle na
+tom, jestli se baseline našla**. I `post` bez baseline (chybějící `pre` snímek) tak stále nese
+`[krok ...]`, jen s `bez baseline` místo jména snímku. `rollback` krok nenese nikdy, protože
+`rollback` evaluace se z mapování nestaví (baseline je `pre` téhož zařízení a portu, ne
+protistrana). Stejné rozlišení tiskne i vlastní text report (viz
+`docs/cs/files/reporting.md`). Pod záhlavím normální výstup `evaluate` (text
 nebo `--format json`, `--filter`, `--status`, `--detail`, `--mapping`, `--config` fungují
 stejně jako mimo `--run`). Návratový kód je **nejhorší ze všech evaluací** — jeden FAIL
 v kterékoliv z nich vrátí kód 1, i když zbytek runu prošel.

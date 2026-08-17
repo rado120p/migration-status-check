@@ -701,9 +701,14 @@ migration step, not one for the whole `post` capture.
 | `rollback` | `pre` of the **same** device and **same** port | evaluated without a baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
 
 Each evaluation prints the header `=== <subject snapshot> vs <baseline snapshot|"bez
-baseline">{step} ===`; for a step with a baseline, `{step}` is
-`[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]` (empty without a baseline). The exit code of
-`evaluate --run` is the worst across all evaluations.
+baseline">{step} ===`, where `{step}` is `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]`
+whenever the evaluation was built from a mapped step (`post` on a mapped port) —
+**independent of whether a baseline was found**. A `post` step with no `pre` snapshot on
+disk still prints `[krok ...]`, just with `bez baseline` instead of a snapshot name:
+`=== ... vs bez baseline [krok ...] ===`. A `rollback` evaluation never carries `{step}`
+(`_plan_rollback` in `runs/pairing.py` builds it without `step` — its baseline is `pre` of the
+same device and port, not a mapped counterpart). The exit code of `evaluate --run` is the
+worst across all evaluations.
 
 **Filter-through-baseline (N:1).** When services belonging to more than one step share a LAG
 port, a given step's report only evaluates the services that matched **its own** baseline —

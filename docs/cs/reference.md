@@ -694,9 +694,13 @@ to znamená jednu `post` evaluaci na každý mapping, ne jednu na celou `post` c
 | `rollback` | `pre` **téhož** zařízení a **téhož** portu | vyhodnotí se bez baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
-baseline">{krok} ===`, kde `{krok}` je u kroku s baseline `[krok STARY_NODE:STARY_PORT ->
-NOVY_NODE:NOVY_PORT]` (prázdné bez baseline). Návratový kód `evaluate --run` je nejhorší
-napříč všemi evaluacemi (`EXIT_FAILED_CHECKS`, jakmile má FAIL kterákoliv z nich).
+baseline">{krok} ===`, kde `{krok}` je `[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]`,
+právě když evaluace vznikla z mapovaného kroku (`post` na mapovaném portu) —
+**nezávisle na tom, jestli se baseline našla**: chybí-li `pre` snímek starého portu,
+záhlaví je `=== ... vs bez baseline [krok ...] ===`, `{krok}` nemizí. `rollback` evaluace
+`{krok}` nenese nikdy (`_plan_rollback` v `runs/pairing.py` ji staví bez `step` — baseline je
+`pre` téhož zařízení a portu, ne mapovaná protistrana). Návratový kód `evaluate --run` je
+nejhorší napříč všemi evaluacemi (`EXIT_FAILED_CHECKS`, jakmile má FAIL kterákoliv z nich).
 
 **Filtr přes baseline (N:1).** Když se na LAG portu potkají služby patřící více krokům
 (víc starých portů namapovaných na stejný nový), report jednoho kroku vyhodnotí jen ty
