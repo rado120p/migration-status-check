@@ -1517,3 +1517,59 @@ def test_filtr_hlavicka_nese_profil_a_typy():
     assert "profil=core-only.yml" in note
     assert "typy=IPVPN" in note
     assert "2 z 5 sluzeb" in note
+
+
+STEP = {
+    "old": {"node": "MX1", "port": "ge-0/0/4"},
+    "new": {"node": "PTX1", "port": "ae0"},
+}
+EXCLUDED = [
+    {
+        "scope_id": "svc:X:Internet",
+        "description": "X",
+        "service_type": "Internet",
+        "reason": "nova sluzba, chybi baseline",
+    }
+]
+
+
+def _step_result(*, step=None, excluded=None):
+    return RunResult(
+        evaluated_at="2026-08-17T11:40:02Z",
+        subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
+        baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
+        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+                 "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0},
+        scopes=[],
+        step=step,
+        excluded_services=excluded,
+    )
+
+
+def test_render_header_carries_step():
+    """Hlavicka nese [krok old -> new] a souhrny radek potlacenych sluzeb."""
+    out = render(_step_result(step=STEP, excluded=EXCLUDED))
+    assert "[krok MX1:ge-0/0/4 -> PTX1:ae0]" in out
+    assert (
+        "Dalsi sluzby na ae0 mimo tento krok: 1 "
+        "(nesparovano s baseline ge-0/0/4)" in out
+    )
+
+
+def test_render_no_step_no_step_lines():
+    out = render(_step_result())
+    assert "[krok" not in out
+    assert "mimo tento krok" not in out
+
+
+def test_render_step_without_excluded_has_no_summary_line():
+    out = render(_step_result(step=STEP, excluded=[]))
+    assert "[krok" in out
+    assert "mimo tento krok" not in out
+
+
+def test_filter_result_preserves_step_and_excluded():
+    result = _step_result(step=STEP, excluded=EXCLUDED)
+    shown = filter_result(result, text=None, statuses=None)
+    assert shown.step == STEP
+    assert shown.excluded_services == EXCLUDED

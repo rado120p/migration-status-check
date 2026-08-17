@@ -450,6 +450,13 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
     # bez service_types filtru - aby report rekl, pod jakym profilem vznikl.
     if result.profile:
         header += f" [profil {result.profile}]"
+    if result.step:
+        step_old = result.step["old"]
+        step_new = result.step["new"]
+        header += (
+            f" [krok {step_old['node']}:{step_old['port']}"
+            f" -> {step_new['node']}:{step_new['port']}]"
+        )
     lines.append(header)
     lines.append("")
 
@@ -467,6 +474,12 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
         f"{summary['unmatched_baseline']} nesparovana v baseline, "
         f"{summary['unmatched_subject']} nesparovane v subject"
     )
+    if result.step and result.excluded_services:
+        lines.append(
+            f"  Dalsi sluzby na {result.step['new']['port']} mimo tento krok: "
+            f"{len(result.excluded_services)} "
+            f"(nesparovano s baseline {result.step['old']['port']})"
+        )
     lines.append("")
 
     views = [(scope, build_view(scope, detail=detail)) for scope in result.scopes]
