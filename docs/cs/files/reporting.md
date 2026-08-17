@@ -112,12 +112,19 @@ se to spolu s přepisem reportu, aby byly symboly stejně dlouhé a sloupec `STA
 Skládá pět částí:
 
 1. **Hlavička** — s baselinem `Migrace: <adresa> (<fáze>) -> <adresa> (<fáze>)`, bez něj
-   `Validace: <adresa> (<fáze>)`.
+   `Validace: <adresa> (<fáze>)`. Nese-li výsledek `RunResult.step` (migrační krok z
+   `evaluate --run` na N:1 mapovaném portu), hlavička k tomu připojí
+   `[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]` — stejné pořadí `old`/`new`, jaké je
+   v `interface_mapping`. Bez kroku se tenhle suffix nevypisuje vůbec.
 2. **Souhrn** — dva pojmenované řádky (`Sluzby:` a `Checky:`) a pod nimi počty spárovaných
    a nespárovaných služeb. Dva řádky proto, že jde o dvě různé jednotky: `Sluzby:` sedí na
    počet řádků tabulky pod ním, `Checky:` je součet přes všechna měření. Šířky sloupců se
    počítají z obou řádků najednou, aby čísla stála pod sebou. Když běžel filtr, je nad
-   souhrnem ještě řádek `filtr: ... -- N z M sluzeb` a věta o tom, co se nepřepočítalo.
+   souhrnem ještě řádek `filtr: ... -- N z M sluzeb` a věta o tom, co se nepřepočítalo. Když
+   je nastavený krok a filtr přes baseline vyloučil nějaké služby cizí vlny na sdíleném LAG
+   portu (`RunResult.excluded_services`), přibude pod řádkem „Sparovano ..." ještě
+   `  Dalsi sluzby na <novy port> mimo tento krok: N (nesparovano s baseline <stary port>)`
+   — čistě informativní, tyhle služby nejdou ani do checků, ani do `NESPAROVANO`.
 
    `INFO` má v obou řádcích vlastní počet (`COUNT_NAMES` v `text_report.py` ho přidává jako
    páté, poslední pole) — nepočítá se dohromady s `PASS`/`WARN`/`FAIL`/`SKIP`, nesčítá se do

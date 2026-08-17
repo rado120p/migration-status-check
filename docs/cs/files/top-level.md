@@ -41,11 +41,19 @@ Jen docstring a `__version__ = "0.1.0"`. Verzi ověřuje `tests/test_package.py`
 Jediný šev, který bude volat budoucí GUI. Tři funkce:
 
 ```python
-capture(host, *, inventory=None, options=None, collectors=None,
-        phase=None, ping_count=5, record_raw=None) -> Snapshot
-evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None) -> RunResult
+capture(host, *, inventory=None, options=None, collectors=None, phase=None,
+        ping_count=5, record_raw=None, baselines=None, service_types=None) -> Snapshot
+evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None,
+         service_types=None, profile_name=None, step=None) -> RunResult
 list_checks() -> list[dict]
 ```
+
+- **`capture(..., baselines=...)`** nahradilo dřívější jednotný `baseline` — je to seznam,
+  protože N:1 mapování (víc starých portů na jeden nový LAG port) potřebuje sjednotit ARP/ND
+  víc `pre` snímků najednou (`cli._capture_into_run`/`_cmd_capture`, `capture._merged_baseline_entries`).
+- **`evaluate(..., step=...)`** nese `{"old": {...}, "new": {...}}` migračního kroku; engine
+  ho jen provlíká do `RunResult.step` a používá k filtru přes baseline (viz
+  [reporting.md](reporting.md)). Bez kroku (`step=None`) se chová jako dřív.
 
 - **`capture()`** přijme `inventory` buď jako hotový objekt `Inventory`, nebo jako cestu
   ke stringu (pak si ji sám načte). Otevře spojení přes `connect()` jako context manager
@@ -65,8 +73,8 @@ Tenký obal nad `api.py`, ne alternativní implementace. Definuje šest podpří
 
 | podpříkaz | funkce | co dělá |
 |---|---|---|
-| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, varování o selhaných collectorech na stderr; s `--run` navíc zápis do run manifestu (`_capture_into_run`) |
-| `evaluate` | `_cmd_evaluate` | načte snapshoty, mapping a config, `api.evaluate()`, filtruje a vykreslí; s `--run` vyhodnotí všechny sparovane snimky z manifestu (`_evaluate_run`) |
+| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, varování o selhaných collectorech na stderr; s `--run` navíc zápis do run manifestu (`_capture_into_run`) — `--phase pre` bez `--overwrite` odmítne přepsat existující snímek, `--parse-services` vždy přegeneruje inventory a vypíše deltu |
+| `evaluate` | `_cmd_evaluate` | načte snapshoty, mapping a config, `api.evaluate()`, filtruje a vykreslí; s `--run` vyhodnotí každý migrační krok z manifestu (`_evaluate_run`) — na N:1 mapovaném portu jednu evaluaci na mapping, `--ports` filtruje podle starého portu kroku |
 | `status` | `_cmd_status` | přehled párování starý↔nový port a pořízených fází pro daný run adresář, viz [reference.md](../reference.md#8-run-management---run-fáze-4) |
 | `match` | `_cmd_match` | jen `match_scopes()` — ladění `mapping.yml` bez celé validace |
 | `checks` | `_cmd_checks` | výpis registru checků, text nebo JSON |

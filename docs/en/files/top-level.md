@@ -41,11 +41,20 @@ Just a docstring and `__version__ = "0.1.0"`, asserted by `tests/test_package.py
 The single seam a future GUI will call. Three functions:
 
 ```python
-capture(host, *, inventory=None, options=None, collectors=None,
-        phase=None, ping_count=5, record_raw=None) -> Snapshot
-evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None) -> RunResult
+capture(host, *, inventory=None, options=None, collectors=None, phase=None,
+        ping_count=5, record_raw=None, baselines=None, service_types=None) -> Snapshot
+evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None,
+         service_types=None, profile_name=None, step=None) -> RunResult
 list_checks() -> list[dict]
 ```
+
+- **`capture(..., baselines=...)`** replaced the earlier single `baseline` — it is now a
+  list, because N:1 mapping (several old ports sharing one new LAG port) needs to merge the
+  ARP/ND of several `pre` snapshots at once (`cli._capture_into_run`/`_cmd_capture`,
+  `capture._merged_baseline_entries`).
+- **`evaluate(..., step=...)`** carries `{"old": {...}, "new": {...}}` for the migration step;
+  the engine just threads it into `RunResult.step` and uses it for the filter-through-baseline
+  (see [reporting.md](reporting.md)). Without a step (`step=None`) behaviour is unchanged.
 
 - **`capture()`** accepts `inventory` either as a ready `Inventory` object or as a path
   string (which it then loads itself). It opens the connection through `connect()` as a
@@ -66,8 +75,8 @@ A thin wrapper over `api.py`, not an alternative implementation. It defines six 
 
 | subcommand | function | what it does |
 |---|---|---|
-| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, warnings about failed collectors on stderr; with `--run` also writes into the run manifest (`_capture_into_run`) |
-| `evaluate` | `_cmd_evaluate` | loads snapshots, mapping and config, calls `api.evaluate()`, filters and renders; with `--run` evaluates every paired snapshot from the manifest (`_evaluate_run`) |
+| `capture` | `_cmd_capture` | `api.capture()` + `save_snapshot()`, warnings about failed collectors on stderr; with `--run` also writes into the run manifest (`_capture_into_run`) — `--phase pre` without `--overwrite` refuses to replace an existing snapshot, `--parse-services` always regenerates the inventory and prints a delta |
+| `evaluate` | `_cmd_evaluate` | loads snapshots, mapping and config, calls `api.evaluate()`, filters and renders; with `--run` evaluates every migration step from the manifest (`_evaluate_run`) — one evaluation per mapping on an N:1-mapped port, `--ports` filters by the step's old port |
 | `status` | `_cmd_status` | overview of old↔new port pairing and captured phases for a given run directory |
 | `match` | `_cmd_match` | `match_scopes()` only — for debugging `mapping.yml` without a full validation |
 | `checks` | `_cmd_checks` | prints the check registry, text or JSON |

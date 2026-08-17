@@ -118,12 +118,20 @@ length and the `STAV` column does not need special handling.
 Assembles five parts:
 
 1. **Header** — with a baseline, `Migrace: <address> (<phase>) -> <address> (<phase>)`;
-   without one, `Validace: <address> (<phase>)`.
+   without one, `Validace: <address> (<phase>)`. When the result carries `RunResult.step` (a
+   migration step from `evaluate --run` on an N:1-mapped port), the header appends
+   `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]` — same `old`/`new` order as
+   `interface_mapping`. Without a step, this suffix is omitted entirely.
 2. **Summary** — two named lines (`Sluzby:` and `Checky:`) followed by the paired / unpaired
    service counts. Two lines because these are two different units: `Sluzby:` matches the row
    count of the table below it, `Checky:` totals every measurement. Column widths are computed
    across both lines so the numbers stack. When a filter ran, a `filtr: ... -- N z M sluzeb`
-   line and a sentence about what was *not* recomputed sit above the summary.
+   line and a sentence about what was *not* recomputed sit above the summary. When a step is
+   set and the filter-through-baseline excluded services belonging to another step on the
+   same shared LAG port (`RunResult.excluded_services`), a further line appears below
+   "Sparovano ...": `  Dalsi sluzby na <new port> mimo tento krok: N (nesparovano s baseline
+   <old port>)` — purely informational; those services enter neither the checks nor
+   `NESPAROVANO`.
 3. **Summary table** — one row per service, columns `STAV`, `SLUZBA` (description, else scope
    id), `TYP`, `STARY PORT`, `NOVY PORT`, `RI`, `NALEZ` (the worst finding,
    `_worst_message()`; empty on a green row). Every column's width **is computed from the

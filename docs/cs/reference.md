@@ -527,6 +527,12 @@ Vlastnosti:
 - **`scopes[].link` je volitelný klíč** — nese vazbu L3 (IRB) ↔ L2 (E-LAN tranzit) v téže
   EVPN instanci, viz „Vazba L2+L3" níže. Bez vazby klíč u scope chybí úplně (aditivní klíč,
   stejné pravidlo jako u ostatních volitelných polí v tomto formátu).
+- **`step` a `excluded_services` jsou aditivní klíče z `evaluate --run` na migračním kroku**
+  (viz [oddíl 8](#8-run-management---run-fáze-4)). `step` nese
+  `{"old": {"node", "port"}, "new": {"node", "port"}}`; bez kroku chybí úplně. `excluded_services`
+  je seznam ve tvaru `unmatched.subject` (`scope_id`, `description`, `service_type`, `reason`)
+  — služby na sdíleném LAG portu, které patří jinému kroku (nesparovaly se s baseline tohoto
+  kroku); plní se **jen** s `step`, i prázdný seznam znamená „filtr proběhl".
 
 ### Vazba L2+L3
 
@@ -647,7 +653,8 @@ Soubory v `runs/<nazev>/` normalizují port náhradou `-`/`/` za `_`
 | `--run-root` | `runs` | kořen run adresářů |
 | `--port` | — | logická/fyzická jednotka pro `--run` režim (`ge-0/0/0`); **jen s `--run`** — bez něj `--port` hlásí chybu, protože mimo `--run` je `--port` u `capture` přejmenován na `--ssh-port` |
 | `--maps-to` | — | `NODE:PORT`, vyžaduje `--port`; zapíše pár do `interface_mapping` jako protistranu téhle capture |
-| `--parse-services` | — | vyžaduje `--run`; chybějící inventory vyrobí z konfigurace, existující soubor nikdy nepřepíše |
+| `--parse-services` | — | vyžaduje `--run`; inventory vyrobí z konfigurace, existující soubor **vždy přegeneruje** a vypíše deltu (`inventory pregenerovana: ... (+N nove, -M odebrane)`), poprvé `inventory vyrobena: ...` |
+| `--overwrite` | — | jen v `--run` režimu (uplatní se v `_capture_into_run`, mimo `--run` je no-op); povolí přepis existujícího `pre` snímku (stejný node/port); bez něj druhý `--phase pre` skončí chybou `pre snimek uz existuje: ...; prepis povol s --overwrite` |
 | `--ssh-port` | `22` | **přejmenováno z `--port`**, aby `--port` mohlo znamenat síťový port v `--run` režimu. `record` si ponechává původní `--port` pro SSH — kolize u něj nehrozí |
 
 `--phase` v `--run` režimu je uzavřený výčet `pre`/`post`/`rollback` (mimo `--run` je to volný
@@ -659,7 +666,7 @@ text, viz [oddíl 4](#4-formát-snapshotu) — pole `capture.phase` ve snapshotu
 |---|---|---|
 | `--run` | — | vzájemně vylučné s `--snapshot` i s `--output`; vyhodnotí sparovane snimky z manifestu |
 | `--run-root` | `runs` | kořen run adresářů |
-| `--ports` | — | čárkou oddělený filtr portů pro `--run` režim |
+| `--ports` | — | čárkou oddělený filtr portů pro `--run` režim; u kroku na N:1 mapovaném (LAG) portu filtruje podle **starého** portu kroku |
 
 `evaluate --run` nejdřív ověří, že soubory všech `captures` z manifestu existují
 (`RunStore.missing_snapshots`) — chybí-li jeden, skončí chybou a nevyhodnotí nic.
@@ -677,17 +684,29 @@ manifest.
 
 ### Pravidla párování `evaluate --run`
 
-Jedna evaluace na každou `post`/`rollback` capture; `pre` capture je jen zdroj baseline a
-evaluaci sama netvoří.
+Jedna evaluace na **každý migrační krok** (`pre` capture je jen zdroj baseline a evaluaci sama
+netvoří). Na N:1 mapovaném (LAG) portu — víc `interface_mapping` záznamů se stejným `new` —
+to znamená jednu `post` evaluaci na každý mapping, ne jednu na celou `post` capture.
 
 | fáze subjektu | baseline (v pořadí, první nalezená vyhrává) | když nic nevyjde |
 |---|---|---|
-| `post` | 1. `pre` starého portu spárovaného přes `interface_mapping` 2. `pre` celého starého boxu (capture bez portu) | vyhodnotí se bez baseline, stderr: `chybi pre snimek stareho boxu` |
+| `post` (na krok) | 1. `pre` starého portu daného kroku, spárovaného přes `interface_mapping` 2. `pre` celého starého boxu (capture bez portu) | vyhodnotí se bez baseline, stderr: `chybi pre snimek stareho boxu` |
 | `rollback` | `pre` **téhož** zařízení a **téhož** portu | vyhodnotí se bez baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
-baseline"> ===`. Návratový kód `evaluate --run` je nejhorší napříč všemi evaluacemi
-(`EXIT_FAILED_CHECKS`, jakmile má FAIL kterákoliv z nich).
+baseline">{krok} ===`, kde `{krok}` je u kroku s baseline `[krok STARY_NODE:STARY_PORT ->
+NOVY_NODE:NOVY_PORT]` (prázdné bez baseline). Návratový kód `evaluate --run` je nejhorší
+napříč všemi evaluacemi (`EXIT_FAILED_CHECKS`, jakmile má FAIL kterákoliv z nich).
+
+**Filtr přes baseline (N:1).** Když se na LAG portu potkají služby patřící více krokům
+(víc starých portů namapovaných na stejný nový), report jednoho kroku vyhodnotí jen ty
+služby, které se spárovaly s baseline **tohoto** kroku — zbytek se do checků nezapočítá,
+report o nich jen vypíše souhrnný řádek `Dalsi sluzby na <novy port> mimo tento krok: N
+(nesparovano s baseline <stary port>)` (jen když krok existuje a nějaké takové služby jsou).
+Výjimka: nespárovaný L2 scope, jehož propojený L3 protějšek (`scopes[].link`, viz „Vazba
+L2+L3" níže) se **spároval** s baseline tohoto kroku, se filtrem nevylučuje — jde s ním jako
+s jednou entitou. Ve výsledku `evaluate` (`docs/cs/files/reporting.md` a
+[oddíl 5](#5-formát-výsledku)) to nese JSON klíč `excluded_services` — přítomný jen s `step`.
 
 ### Ping z baseline při `--phase post`
 
@@ -695,10 +714,15 @@ Doplňuje [oddíl 4](#4-formát-snapshotu), pole `probes.ping[].resolved_from`.
 
 | `resolved_from` | zdroj cíle | kdy se použije |
 |---|---|---|
-| `baseline-arp` | IPv4 ARP z `pre` snímku spárovaného starého portu | `--phase post` uvnitř `--run`, pár existuje a jeho `pre` snímek je na disku |
-| `baseline-nd` | IPv6 ND z téhož `pre` snímku | totéž, rodina IPv6 |
+| `baseline-arp` | IPv4 ARP z `pre` snímku (snímků) spárovaného starého portu (portů) | `--phase post` uvnitř `--run`, pár existuje a jeho `pre` snímek je na disku |
+| `baseline-nd` | IPv6 ND z týchž `pre` snímků | totéž, rodina IPv6 |
 | `arp` / `nd` | vlastní ARP/ND nového zařízení | baseline nedostupná (chybí pár, chybí `pre` snímek, nebo capture běží mimo `--run`) |
 | `subnet-fallback` | první volná adresa ze subnetu služby | ani vlastní ARP/ND nic nevrátily |
+
+Na N:1 mapovaném portu (víc starých portů → jeden nový LAG port) se cíle vezmou ze **všech**
+mapovaných `pre` snímků najednou: `_merged_baseline_entries()` sjednotí jejich ARP/ND
+záznamy a deduplikuje podle IP, první výskyt vyhrává (pořadí dané pořadím mappingů v
+`run.yml`). U 1:1 mapování je to degenerovaný případ jednoho snímku beze změny chování.
 
 Baseline záznamy se mapují na scope přes **shodu IP se subnetem rozhraní**, ne přes jméno
 portu — jména rozhraní starého boxu na novém neexistují. Link-local ND záznamy z baseline se

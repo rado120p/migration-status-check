@@ -541,6 +541,13 @@ Properties:
   within the same EVPN instance, see "L2+L3 linking" below. Without a link, the key is absent
   from the scope entirely (an additive key, same rule as the other optional fields in this
   format).
+- **`step` and `excluded_services` are additive keys from `evaluate --run` on a migration
+  step** (see [section 8](#8-run-management---run)). `step` carries
+  `{"old": {"node", "port"}, "new": {"node", "port"}}`; without a step it is absent entirely.
+  `excluded_services` is a list shaped like `unmatched.subject` (`scope_id`, `description`,
+  `service_type`, `reason`) — services on a shared LAG port that belong to another step
+  (unmatched against this step's baseline); populated **only** with `step`, and an empty list
+  still means "the filter ran".
 
 ### L2+L3 linking
 
@@ -639,3 +646,97 @@ Two more arguments that look cosmetic and are not:
   `bfd-client` nor `remote-state`, so the collector would silently gather data from which
   there is no way to tell that BGP holds the session and that the far end shut it down
   administratively.
+
+---
+
+## 8. Run management (`--run`)
+
+Operator-facing walkthrough with the directory tree and a full `run.yml` example is in
+[README.md, section 3a](README.md#3a-run-management---run) (this reference section only
+covers what mirrors the cs docs; it does not attempt full parity with `docs/cs/reference.md`
+section 8 — see the note at the end).
+
+### `run.yml` (`schema_version: 1`)
+
+| section | keys | note |
+|---|---|---|
+| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch` |
+| `interface_mapping` | list of `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | pairs logical units (`ge-0/0/0`), same shape as the `mapping.yml` `interface` selector. **Several entries may share the same `new`** — N:1 (LAG) mapping: multiple old ports migrating onto one new LAG port |
+| `captures` | list of `{phase, device, port, snapshot, taken}` | `port: all` in the file corresponds to `port: null` in the model (whole-box capture); the application maintains this section, not the operator |
+
+Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
+(`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,
+`snapshot_<pre|post|rollback>_<node>_<port|all>.json`.
+
+### `capture` flags (`--run` mode)
+
+| flag | default | note |
+|---|---|---|
+| `--run` | — | mutually exclusive with `--output` |
+| `--run-root` | `runs` | root of the run directories |
+| `--port` | — | logical/physical unit for `--run` mode (`ge-0/0/0`); **only with `--run`** |
+| `--maps-to` | — | `NODE:PORT`, requires `--port`; writes the pair into `interface_mapping` as this capture's counterpart |
+| `--parse-services` | — | requires `--run`; builds the inventory from the running config and **always regenerates** an existing file, printing a delta: `inventory pregenerovana: <path> (N sluzeb, +X nove, -Y odebrane)`; the first time, `inventory vyrobena: <path> (N sluzeb)` |
+| `--overwrite` | — | only in `--run` mode (`_capture_into_run`); allows overwriting an existing `pre` snapshot for the same node/port. Without it, a second `--phase pre` on the same node/port fails with `pre snimek uz existuje: <path>; prepis povol s --overwrite` |
+| `--ssh-port` | `22` | renamed from `--port`, so `--port` can mean the network port in `--run` mode |
+
+### `evaluate` flags (`--run` mode)
+
+| flag | default | note |
+|---|---|---|
+| `--run` | — | mutually exclusive with `--snapshot` and `--output`; evaluates the paired snapshots from the manifest |
+| `--run-root` | `runs` | root of the run directories |
+| `--ports` | — | comma-separated port filter for `--run` mode; on an N:1-mapped (LAG) step, filters by the step's **old** port, not the shared new port |
+
+### Pairing rules
+
+One evaluation per **migration step** (a `pre` capture is only a baseline source and forms no
+evaluation on its own). On an N:1-mapped (LAG) port — several `interface_mapping` entries
+sharing the same `new` — this means one `post` evaluation per mapping, i.e. one report per
+migration step, not one for the whole `post` capture.
+
+| subject phase | baseline (in order, first hit wins) | when nothing matches |
+|---|---|---|
+| `post` (per step) | 1. `pre` of the step's old port, paired via `interface_mapping` 2. `pre` of the whole old box (portless capture) | evaluated without a baseline, stderr: `chybi pre snimek stareho boxu` |
+| `rollback` | `pre` of the **same** device and **same** port | evaluated without a baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
+
+Each evaluation prints the header `=== <subject snapshot> vs <baseline snapshot|"bez
+baseline">{step} ===`; for a step with a baseline, `{step}` is
+`[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]` (empty without a baseline). The exit code of
+`evaluate --run` is the worst across all evaluations.
+
+**Filter-through-baseline (N:1).** When services belonging to more than one step share a LAG
+port, a given step's report only evaluates the services that matched **its own** baseline —
+the rest is excluded from the checks, and the report prints only a summary line: `Dalsi
+sluzby na <new port> mimo tento krok: N (nesparovano s baseline <old port>)` (only when a
+step exists and there are such services). Exception: an unmatched L2 scope whose linked L3
+counterpart (`scopes[].link`) matched this step's baseline is **not** excluded — it travels
+with its L3 peer as one entity. In the `evaluate` result this is the additive `step` /
+`excluded_services` pair — see [section 5](#5-result-format).
+
+### Ping from baseline on `--phase post`
+
+Extends [section 4](#4-snapshot-format), field `probes.ping[].resolved_from`.
+
+| `resolved_from` | target source | when used |
+|---|---|---|
+| `baseline-arp` | IPv4 ARP from the paired old port's `pre` snapshot(s) | `--phase post` inside `--run`, the pair exists and its `pre` snapshot is on disk |
+| `baseline-nd` | IPv6 ND from the same `pre` snapshot(s) | same, IPv6 family |
+| `arp` / `nd` | the new device's own ARP/ND | baseline unavailable (no pair, no `pre` snapshot, or capture runs outside `--run`) |
+| `subnet-fallback` | first free address in the service's subnet | even the device's own ARP/ND returned nothing |
+
+On an N:1-mapped port (several old ports → one new LAG port) targets are drawn from **all**
+mapped `pre` snapshots at once: `_merged_baseline_entries()` merges their ARP/ND records and
+deduplicates by IP, first occurrence wins (order given by the mapping order in `run.yml`).
+For a 1:1 mapping this degenerates to the single-snapshot case with unchanged behaviour.
+
+Program strings quoted above (`pre snimek uz existuje: ...`, `inventory pregenerovana: ...`,
+`Dalsi sluzby na ... mimo tento krok: ...`, `[krok ...]`) are Czech without diacritics and
+intentionally left untranslated — that is what the tool actually prints.
+
+**Coverage note.** This section mirrors the LAG-step behaviour added on top of run management
+(N:1 mapping, the baseline filter, `--parse-services`/`--overwrite`, and merged ping
+baselines). It is a compact companion to `docs/cs/reference.md` section 8, not a full
+translation — the `status` subcommand table and a few narrower details were left out
+deliberately. Closing that residual EN/CS gap is tracked as follow-up debt, not part of the
+LAG-migration-steps feature.

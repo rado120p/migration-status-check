@@ -161,6 +161,76 @@ Comparison checks return `SKIP` with the reason `porovnavaci check bez baseline 
 
 ---
 
+## 3a. Run management (`--run`)
+
+Since phase 4 there is a second path alongside manual `--output`/`--snapshot`/`--baseline`: a
+named **run directory** that remembers by itself which devices belong to the migration, how
+their ports pair up, and which snapshots have already been captured. It suits port-by-port
+migration (LAG by LAG, customer by customer), multi-phase runs (`pre` → `post`, and
+`rollback` when a migration is reverted), and anywhere manual tracking of `pre.json`/
+`post.json` files would stop being manageable.
+
+Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
+(`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,
+`snapshot_<pre|post|rollback>_<node>_<port|all>.json`. A capture without `--port`
+(whole-box mode) uses `all` instead of a port name.
+
+`run.yml` is the **single source of truth** for the migration; it can be written by hand as a
+migration plan (`mig-validate` then only reads it and fills in `captures`), or it can grow
+incrementally from `capture --run ...` calls. **Several `interface_mapping` entries may share
+the same `new` port** — N:1 (LAG) mapping, several old ports migrating onto one new LAG port:
+
+```yaml
+schema_version: 1
+
+devices:
+  MX1-POP1:  {host: 172.20.20.4, platform: junos,     role: old}
+  PTX1-POP1: {host: 172.20.20.5, platform: junos-evo, role: new}
+
+interface_mapping:
+  - old: {node: MX1-POP1, port: ge-0/0/0}
+    new: {node: PTX1-POP1, port: ae0}
+  # a second old port migrating onto the same new LAG port ae0
+  - old: {node: MX1-POP1, port: ge-0/0/1}
+    new: {node: PTX1-POP1, port: ae0}
+
+captures:                          # the application maintains this section
+  - phase: pre
+    device: MX1-POP1
+    port: ge-0/0/0
+    snapshot: snapshot_pre_MX1-POP1_ge_0_0_0.json
+    taken: "2026-08-06T09:12:03Z"
+```
+
+Full flag tables, pairing rules and the `status` subcommand are in
+[reference.md, section 8](reference.md#8-run-management---run). Highlights of the
+LAG-migration-steps behaviour added on top of run management:
+
+- **N:1 mapping.** `evaluate --run` produces **one report per migration step** (one per
+  `interface_mapping` entry), not one per `post` capture on the shared LAG port. Each report's
+  header, and the `===` separator above it, carry
+  `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]`. `evaluate --run`'s `--ports` filter matches
+  the step's **old** port, not the shared new one.
+- **Filter-through-baseline.** Services on the LAG port that did not pair with a given step's
+  baseline are excluded from that step's checks; the report adds a summary line
+  `Dalsi sluzby na <port> mimo tento krok: N (nesparovano s baseline <old port>)`. The JSON
+  result carries the additive `step` and `excluded_services` keys (only when a step exists).
+- **`--parse-services`** always regenerates the inventory now and prints a delta
+  (`inventory pregenerovana: ...`/`inventory vyrobena: ...`) — the old "generation skipped"
+  behaviour is gone.
+- **`capture --run --phase pre`** on an already-captured node/port now fails with
+  `pre snimek uz existuje: ...; prepis povol s --overwrite`; the new `--overwrite` flag allows
+  the replacement.
+- **Ping targets for a post capture on a mapped LAG port** are the union of ARP/ND across all
+  of that port's mapped `pre` snapshots, deduplicated by IP.
+
+*Coverage note:* this section is a compact companion to `docs/cs/README.md` section 3a, not a
+full translation (e.g. it omits `run.yml`'s device-discovery and inventory-source details).
+Closing that residual EN/CS gap is tracked as follow-up debt, not part of the
+LAG-migration-steps feature.
+
+---
+
 ## 4. Reading the output
 
 Real output from a lab run (trimmed — the summary table actually has 11 rows, only a

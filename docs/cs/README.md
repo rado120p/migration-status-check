@@ -248,7 +248,8 @@ fáze 5. `interface_mapping` páruje **logické jednotky** (`ge-0/0/0`), stejně
 | `--phase` | `pre`, `post` nebo `rollback` — v `--run` režimu je to uzavřený výčet, ne volný text |
 | `--port` | logická/fyzická jednotka, na kterou se capture omezí, např. `ge-0/0/0`; bez něj celoboxový režim (`all`) |
 | `--maps-to NODE:PORT` | zapíše pár do `interface_mapping`; jen s `--port`. `NODE:PORT` je vždy **protistrana** téhle capture — u `pre`/`rollback` (role `old`) se zapíše jako `old: <tahle capture>, new: NODE:PORT`, u `post` (role `new`) obráceně. Je-li pár v `run.yml` už zapsaný, flag není potřeba |
-| `--parse-services` | chybějící inventory pro `--run` vyrobí z konfigurace (samostatné krátké spojení) místo hlášky „spusť s --parse-services" |
+| `--parse-services` | inventory pro `--run` vyrobí z konfigurace (samostatné krátké spojení) místo hlášky „spusť s --parse-services" |
+| `--overwrite` | povolí přepis existujícího `pre` snímku ve stejném run adresáři; bez něj druhý `capture --phase pre` na stejný node/port skončí chybou. Uplatní se jen v `--run` režimu |
 
 **Zjištění node.** `--device` je IP/hostname, které se přihlašuje; `run.yml` k němu hledá node
 podle `devices[*].host`. Najde-li shodu, použije se jméno node (`MX1-POP1`) ve jménech
@@ -256,24 +257,41 @@ souborů; nenajde-li, použije se přímo hodnota `--device`. Role node podle f�
 `rollback` čekají zařízení s rolí `old`, `post` s rolí `new` — capture samo `devices` doplní,
 pokud tam node ještě není.
 
-**Odkud se vezme inventory** (v tomhle pořadí, první, co vyjde, vyhrává):
+**Odkud se vezme inventory:**
 
-1. `--inventory <soubor>` — explicitně zadaný soubor jako mimo `--run` režim;
-2. `runs/<nazev>/inventory_<node>_<port>.yml` — per-port soubor, pokud existuje;
-3. `runs/<nazev>/inventory_<node>_all.yml` — celoboxový soubor, pokud existuje;
-4. bez shody: chyba `inventory nenalezena - spust s --parse-services`, pokud navíc nebyl
-   zadaný `--parse-services`.
+1. `--inventory <soubor>` — explicitně zadaný soubor jako mimo `--run` režim, má přednost
+   před vším ostatním;
+2. jinak s `--parse-services` — vždy `runs/<nazev>/inventory_<node>_<port>.yml` (per-port
+   cesta), bez ohledu na to, jestli tam už soubor je; celoboxová cesta (`..._all.yml`) se
+   v tomhle případě vůbec nezkouší;
+3. jinak (bez `--parse-services`) — `runs/<nazev>/inventory_<node>_<port>.yml`, pokud
+   existuje, jinak `runs/<nazev>/inventory_<node>_all.yml`, pokud existuje ten;
+4. bez shody v kroku 3: chyba `inventory nenalezena - spust s --parse-services`.
 
 **`--parse-services`** stáhne konfiguraci **samostatným krátkým spojením** (odděleně od
-capture spojení, které sbírá operační stav) a vyrobí inventory na místo podle pravidla 2 výš.
-Existující soubor má vždy přednost — `--parse-services` ho **nikdy nepřepíše**, jen na stderr
-oznámí, že generování přeskočil.
+capture spojení, které sbírá operační stav) a vyrobí inventory na per-port cestu podle
+pravidla 2 výš. Na rozdíl od dřívějšího chování existující soubor **vždy přegeneruje** — konfigurace nového
+boxu se mění každou vlnou a `--parse-services` je explicitní žádost o čerstvý stav, ne jen
+o doplnění chybějícího. Vypíše deltu proti předchozímu obsahu:
 
-**Ping při `--phase post`.** Cíle pingu se odvodí z ARP/ND záznamů **`pre` snímku
-spárovaného starého portu** (dohledaného přes `interface_mapping`) místo z vlastního ARP
+```
+inventory pregenerovana: runs/mig01/inventory_PTX1-POP1_ae0.yml (42 sluzeb, +3 nove, -1 odebrane)
+```
+
+Poprvé (soubor ještě neexistoval) vypíše `inventory vyrobena: <cesta> (N sluzeb)` bez delty.
+
+**Přepis `pre` snímku.** Druhé `capture --run ... --phase pre` na stejný node a port skončí
+chybou `pre snimek uz existuje: <cesta>; prepis povol s --overwrite` — ochrana proti
+nechtěnému přepsání baseline. `--overwrite` přepis povolí.
+
+**Ping při `--phase post`.** Cíle pingu se odvodí z ARP/ND záznamů **`pre` snímků
+spárovaných starých portů** (dohledaných přes `interface_mapping`) místo z vlastního ARP
 nového zařízení — čerstvě přepojený box ARP tabulku ještě nemá naplněnou, zvlášť u větších
-/24 rozsahů s mnoha hosty. Ve výsledném snapshotu má takový cíl `resolved_from: baseline-arp`
-(IPv4) nebo `baseline-nd` (IPv6), na rozdíl od běžného `arp`/`nd`. Když `pre` snímek
+/24 rozsahů s mnoha hosty. U N:1 mapování (víc starých portů sdílí jeden nový LAG port, viz
+`interface_mapping` výš) se cíle vezmou ze **všech** mapovaných `pre` snímků najednou —
+sjednocení ARP/ND záznamů, dedup podle IP (první výskyt vyhrává, pořadí dané pořadím
+mappingů v `run.yml`). Ve výsledném snapshotu má takový cíl `resolved_from: baseline-arp`
+(IPv4) nebo `baseline-nd` (IPv6), na rozdíl od běžného `arp`/`nd`. Když žádný `pre` snímek
 spárovaného portu neexistuje (nebo capture běží mimo `--run`), spadne se na dnešní chování —
 vlastní ARP/ND nového zařízení, případně `subnet-fallback` — a na stderr se vypíše `pre
 snimek nenalezen, ping cile z vlastni ARP`. Vlastní adresy a virtual-gateway se z cílů
@@ -289,29 +307,42 @@ vylučují jako dosud, ať jsou zdrojem baseline nebo vlastní tabulky.
 |---|---|
 | `--run` | název run adresáře; vzájemně vylučné s `--snapshot` i s `--output` |
 | `--run-root` | kořen run adresářů, výchozí `runs` |
-| `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí |
+| `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí. U `post` capture na N:1 mapovaném (LAG) portu filtruje podle **starého** portu kroku, ne podle nového LAG portu |
 
 Než začne párovat, `evaluate --run` ověří, že **soubory ze všech záznamů `captures`
 v manifestu existují** — chybí-li nějaký, skončí chybou `chybejici soubory snimku: ...` a
 nevyhodnotí nic (radši žádný výsledek než výsledek nad neúplnou sadou).
 
-**Párování je jedna evaluace na každou `post`/`rollback` capture** (`pre` capture sama o sobě
-evaluaci netvoří, je jen zdroj baseline):
+**Párování je jedna evaluace na každý migrační krok** (`pre` capture sama o sobě evaluaci
+netvoří, je jen zdroj baseline):
 
-- **`post`** — baseline je `pre` snímek **starého portu spárovaného přes
-  `interface_mapping`**. Není-li capture vázaná na port, nebo pár v mapování chybí, spadne se
-  na `pre` **celého starého boxu** (capture bez portu). Nenajde-li se ani ten, capture se
-  vyhodnotí **bez baseline** (jen stavové checky) a na stderr jde důvod `chybi pre snimek
-  stareho boxu`.
+- **`post`** — na N:1 mapovaném portu (víc starých portů sdílí jeden nový LAG port,
+  `interface_mapping` viz výš) `evaluate --run` vyrobí **jednu evaluaci na každý mapping**,
+  tedy jeden report na migrační krok, ne jeden na celý LAG port. Baseline každého kroku je
+  `pre` snímek **jeho starého portu**. Není-li capture vázaná na port, nebo pár v mapování
+  chybí, spadne se na `pre` **celého starého boxu** (capture bez portu). Nenajde-li se ani ten,
+  krok se vyhodnotí **bez baseline** (jen stavové checky) a na stderr jde důvod `chybi pre
+  snimek stareho boxu`.
 - **`rollback`** — baseline je `pre` snímek **téhož zařízení a téhož portu** (rollback se
   porovnává sám se sebou před migrací, ne s protějškem na druhé straně). Chybí-li, stejně tak
   se vyhodnotí bez baseline s důvodem `chybi puvodni pre snimek stejneho zarizeni a portu`.
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
-baseline"> ===` a pod ním normální výstup `evaluate` (text nebo `--format json`, `--filter`,
-`--status`, `--detail`, `--mapping`, `--config` fungují stejně jako mimo `--run`). Návratový
-kód je **nejhorší ze všech evaluací** — jeden FAIL v kterékoliv z nich vrátí kód 1, i když
-zbytek runu prošel.
+baseline"> ===`; u kroku s baseline (`post`/`rollback` na mapovaném portu) záhlaví nese navíc
+`[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]`, stejné rozlišení, jaké tiskne i vlastní
+text report (viz `docs/cs/files/reporting.md`). Pod záhlavím normální výstup `evaluate` (text
+nebo `--format json`, `--filter`, `--status`, `--detail`, `--mapping`, `--config` fungují
+stejně jako mimo `--run`). Návratový kód je **nejhorší ze všech evaluací** — jeden FAIL
+v kterékoliv z nich vrátí kód 1, i když zbytek runu prošel.
+
+**Filtr přes baseline u N:1 mapování.** Když je na jednom LAG portu potkáno víc služeb, než
+kolik jich patří ke kroku (baseline starého portu), krok vyhodnotí jen ty, které se s baseline
+spárovaly — zbytek (služby patřící jiným krokům na stejném LAG portu) se nevyhodnocuje a
+report o nich vypíše jen souhrnný řádek:
+
+```
+  Dalsi sluzby na ae0 mimo tento krok: 7 (nesparovano s baseline ge-0/0/0)
+```
 
 ### Přehled runu (`status`)
 
