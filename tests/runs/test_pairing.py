@@ -68,7 +68,8 @@ def test_post_without_any_pre_has_reason():
     assert len(evaluations) == 1
     evaluation = evaluations[0]
     assert evaluation.baseline is None
-    assert evaluation.reason == "chybi pre snimek stareho boxu"
+    assert evaluation.reason == "chybi pre snimek MX1-POP1:ge-0/0/0"
+    assert evaluation.step is not None
 
 
 def test_rollback_pairs_with_pre_of_same_device_and_port():
@@ -108,7 +109,7 @@ def test_ports_filter_keeps_only_matching_and_drops_whole_box():
     post_whole_box = CaptureRecord("post", "PTX1-POP1", None, "post3.json", "T2")
     manifest.captures = [pre, post_matching, post_other, post_whole_box]
 
-    evaluations = plan_evaluations(manifest, ports=["et-0/0/0"])
+    evaluations = plan_evaluations(manifest, ports=["ge-0/0/0"])
 
     assert len(evaluations) == 1
     assert evaluations[0].subject == post_matching

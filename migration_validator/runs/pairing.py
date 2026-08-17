@@ -79,23 +79,6 @@ def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> list[Evaluation
             ]
         return [Evaluation(subject=subject, baseline=baseline)]
 
-    # For 1:1 cases, use old behavior (single evaluation without step)
-    if len(steps) == 1:
-        mapping = steps[0]
-        baseline = manifest.find_capture(
-            "pre", mapping.old.node, mapping.old.port
-        ) or manifest.find_capture("pre", mapping.old.node, None)
-        if baseline is None:
-            return [
-                Evaluation(
-                    subject=subject,
-                    baseline=None,
-                    reason="chybi pre snimek stareho boxu",
-                )
-            ]
-        return [Evaluation(subject=subject, baseline=baseline)]
-
-    # For N:1 cases (N > 1), emit one evaluation per mapping
     evaluations: list[Evaluation] = []
     for mapping in steps:
         baseline = manifest.find_capture(
