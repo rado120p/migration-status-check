@@ -749,7 +749,7 @@ def test_evaluate_run_without_baseline_still_runs_and_warns(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert f"=== {post_path.name} vs bez baseline ===" in captured.out
-    assert "chybi pre snimek stareho boxu" in captured.err
+    assert "chybi pre snimek MX1-POP1:ge-0/0/0" in captured.err
     # subject se sam o sobe vyhodnoti (bez baseline porovnani neni fail)
     assert code == EXIT_OK
     assert "L3VPN" in captured.out
@@ -806,7 +806,7 @@ def test_evaluate_run_ports_filter(tmp_path, capsys):
     code = main(
         [
             "evaluate", "--run", "mig01", "--run-root", str(tmp_path),
-            "--ports", "et-0/0/1",
+            "--ports", "ge-0/0/1",
         ]
     )
 
