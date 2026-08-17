@@ -423,6 +423,7 @@ def evaluate_snapshots(
     now: str | None = None,
     service_types: list[str] | None = None,
     profile_name: str | None = None,
+    step: dict[str, Any] | None = None,
 ) -> RunResult:
     config = config or default_config()
     mapping = mapping or empty_mapping()
@@ -448,6 +449,7 @@ def evaluate_snapshots(
     unmatched: dict[str, list[dict[str, Any]]] = {"baseline": [], "subject": []}
     matched_count = 0
     skipped_total = 0
+    excluded: list[dict[str, Any]] = []
 
     if baseline is None:
         for scope in subject_scopes:
@@ -465,6 +467,7 @@ def evaluate_snapshots(
         baseline_services = [s for s in baseline_scopes if s.kind != "layer1"]
         matches = match_scopes(baseline_services, subject_services, mapping)
         matched_count = len(matches.pairs)
+        matched_subject_ids = {pair.subject.id for pair in matches.pairs}
 
         for pair in matches.pairs:
             if not _in_profile(pair.subject):
@@ -483,6 +486,19 @@ def evaluate_snapshots(
             )
 
         for item in matches.unmatched_subject:
+            link = link_payloads.get(item.scope.id)
+            partner_matched = bool(
+                link and link.get("peer_scope_id") in matched_subject_ids
+            )
+            if (
+                step is not None
+                and item.scope.kind == "service"
+                and not partner_matched
+            ):
+                # Cizi vlna na sdilenem portu: mimo tento migracni krok.
+                # Nejde pres checky ani do NESPAROVANO - jen do JSON.
+                excluded.append(_unmatched_entry(item.scope, item.reason))
+                continue
             # `unmatched["subject"]` seznam se nefiltruje - NESPAROVANO je
             # pojistka proti prehlednuti a filtr ji smi zuzit jen v tom, co
             # jde do check smycky (scope_results), ne co je videt v sekci.
@@ -561,4 +577,6 @@ def evaluate_snapshots(
         },
         filtered=filtered,
         profile=profile_name,
+        step=step,
+        excluded_services=excluded if step is not None else None,
     )

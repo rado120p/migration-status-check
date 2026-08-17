@@ -1093,3 +1093,110 @@ def test_identity_nese_physical_interfaces():
     result = evaluate_snapshots(_snapshot_with([_svc("S", "ae0.14", "ae0"), _l1("ae0")]))
     svc = next(r for r in result.scopes if r.scope_id.startswith("svc:"))
     assert svc.identity["physical_interfaces"] == ["ae0"]
+
+
+STEP = {
+    "old": {"node": "MX1-POP1", "port": "ge-0/0/4"},
+    "new": {"node": "PTX1-POP1", "port": "ae0"},
+}
+
+
+def test_step_filters_unmatched_subject_into_excluded_services():
+    """Sluzby cizich vln na LAGu nejdou pres checky, skonci v excluded."""
+    baseline = _snapshot(
+        "172.20.20.4",
+        "ge-0/0/4.0",
+        [_scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ge-0/0/4.0")],
+    )
+    subject = _snapshot(
+        "172.20.20.5",
+        "ae0.15",
+        [
+            _scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ae0.15"),
+            _scope("svc:VLNA2:Internet", "VLNA2", "Internet", "ae0.16"),
+        ],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    shown_ids = {scope.scope_id for scope in result.scopes}
+    assert "svc:VLNA1:Internet" in shown_ids
+    assert "svc:VLNA2:Internet" not in shown_ids
+    assert result.step == STEP
+    assert result.excluded_services == [
+        {
+            "scope_id": "svc:VLNA2:Internet",
+            "description": "VLNA2",
+            "service_type": "Internet",
+            "reason": "nova sluzba, chybi baseline",
+        }
+    ]
+
+
+def test_step_keeps_unmatched_baseline_visible():
+    """Chybejici sluzba stareho portu je hlavni nalez - filtr ji nesmi vzit."""
+    baseline = _snapshot(
+        "172.20.20.4",
+        "ge-0/0/4.0",
+        [
+            _scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ge-0/0/4.0"),
+            _scope("svc:ZTRACENA:Internet", "ZTRACENA", "Internet", "ge-0/0/4.1"),
+        ],
+    )
+    subject = _snapshot(
+        "172.20.20.5",
+        "ae0.15",
+        [_scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ae0.15")],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    assert [e["description"] for e in result.unmatched["baseline"]] == ["ZTRACENA"]
+
+
+def test_step_none_changes_nothing():
+    """Bez step je vysledek bit-po-bitu dnesni (klice v JSON chybi)."""
+    baseline = _snapshot(
+        "172.20.20.4", "ge-0/0/4.0",
+        [_scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ge-0/0/4.0")],
+    )
+    subject = _snapshot(
+        "172.20.20.5", "ae0.15",
+        [
+            _scope("svc:VLNA1:Internet", "VLNA1", "Internet", "ae0.15"),
+            _scope("svc:VLNA2:Internet", "VLNA2", "Internet", "ae0.16"),
+        ],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW)
+
+    shown_ids = {scope.scope_id for scope in result.scopes}
+    assert "svc:VLNA2:Internet" in shown_ids  # dnesni NESPAROVANO
+    payload = result.to_dict()
+    assert "step" not in payload
+    assert "excluded_services" not in payload
+
+
+def test_step_pulls_linked_partner_of_matched_scope():
+    """Napul sparovany L2/L3 par: nesparovany partner se pritahne."""
+    # Subject = _linked_snapshot() (irb.15 IPVPN + ae0.15 E-LAN v jedne
+    # instanci, helper v tomto souboru). Baseline nese JEN L3 polovinu
+    # (description "L3VPN-CPE14-UNI") -> L2 "EVPN-VLAN-AWARE-CPE14" se
+    # nesparuje, ale link na sparovany irb.15 ho musi udrzet v reportu.
+    subject = _linked_snapshot()
+    baseline = _snapshot(
+        "172.20.20.4",
+        "ge-0/0/4.0",
+        [_scope("svc:L3VPN-CPE14-UNI:IPVPN", "L3VPN-CPE14-UNI", "IPVPN", "ge-0/0/4.0")],
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    shown_ids = {scope.scope_id for scope in result.scopes}
+    assert "svc:EVPN-VLAN-AWARE-CPE14:E-LAN" in shown_ids
+    assert "svc:OTHER:Internet" not in shown_ids
+    excluded_ids = {e["scope_id"] for e in result.excluded_services}
+    assert excluded_ids == {"svc:OTHER:Internet"}

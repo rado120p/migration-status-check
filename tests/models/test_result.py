@@ -160,3 +160,16 @@ def test_run_result_to_dict_omits_profile_when_none():
 def test_run_result_to_dict_carries_profile_name():
     payload = _run_result(profile="core-only.yml").to_dict()
     assert payload["profile"] == "core-only.yml"
+
+
+def test_run_result_to_dict_omits_step_when_none():
+    payload = _run_result().to_dict()
+    assert "step" not in payload
+    assert "excluded_services" not in payload
+
+
+def test_run_result_to_dict_carries_step_and_excluded_services():
+    step = {"old": {"node": "MX1", "port": "ge-0/0/4"}, "new": {"node": "PTX1", "port": "ae0"}}
+    payload = _run_result(step=step, excluded_services=[]).to_dict()
+    assert payload["step"] == step
+    assert payload["excluded_services"] == []

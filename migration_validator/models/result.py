@@ -231,6 +231,12 @@ class RunResult:
     # ktery se plni jen pri aktivnim filtrovani sluzeb, tohle ma byt v
     # kazdem behu s profilem, aby report vzdy rekl, pod cim vznikl.
     profile: str | None = None
+    # Migracni krok (old/new endpoint), pod kterym vysledek vznikl -
+    # aditivni klic, stejne pravidlo jako `profile`.
+    step: dict[str, Any] | None = None
+    # Sluzby subjektu potlacene filtrem pres baseline (cizi vlny na LAGu).
+    # Plni se jen se `step` - i prazdny seznam rika "filtr bezel".
+    excluded_services: list[dict[str, Any]] | None = None
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -252,4 +258,8 @@ class RunResult:
         # presne tim tvarem, ktery uz cte okoli.
         if self.profile is not None:
             payload["profile"] = self.profile
+        if self.step is not None:
+            payload["step"] = self.step
+        if self.excluded_services is not None:
+            payload["excluded_services"] = self.excluded_services
         return payload
