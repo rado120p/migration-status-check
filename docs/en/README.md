@@ -210,11 +210,19 @@ LAG-migration-steps behaviour added on top of run management:
   `interface_mapping` entry), not one per `post` capture on the shared LAG port. Each report's
   header, and the `===` separator above it, carry
   `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]`. `evaluate --run`'s `--ports` filter matches
-  the step's **old** port, not the shared new one.
+  the step's **old** port on any mapped step (1:1 included, not just N:1/LAG), not the new
+  port; unmapped/whole-box evaluations are filtered by the snapshot's own port.
 - **Filter-through-baseline.** Services on the LAG port that did not pair with a given step's
   baseline are excluded from that step's checks; the report adds a summary line
   `Dalsi sluzby na <port> mimo tento krok: N (nesparovano s baseline <old port>)`. The JSON
-  result carries the additive `step` and `excluded_services` keys (only when a step exists).
+  result carries the additive `step` key whenever a step exists, and the additive
+  `excluded_services` key only when a step exists **and** a baseline was found for it.
+- **Whole-box `pre` as a shared baseline.** When a step's own old-port `pre` snapshot is
+  missing and the whole-box `pre` snapshot of the old device is used instead (see pairing
+  rules above), that same whole-box snapshot becomes the baseline for **every** step sharing
+  the LAG port — so services belonging to other waves can pair up in more than one step's
+  report at once. Nothing is being hidden; the filter-through-baseline just cannot narrow the
+  step, because a whole-box baseline does not distinguish ports.
 - **`--parse-services`** always regenerates the inventory now and prints a delta
   (`inventory pregenerovana: ...`/`inventory vyrobena: ...`) — the old "generation skipped"
   behaviour is gone.

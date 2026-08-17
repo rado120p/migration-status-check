@@ -546,8 +546,9 @@ Properties:
   `{"old": {"node", "port"}, "new": {"node", "port"}}`; without a step it is absent entirely.
   `excluded_services` is a list shaped like `unmatched.subject` (`scope_id`, `description`,
   `service_type`, `reason`) — services on a shared LAG port that belong to another step
-  (unmatched against this step's baseline); populated **only** with `step`, and an empty list
-  still means "the filter ran".
+  (unmatched against this step's baseline); populated **only** with `step` and only when a
+  baseline was found for the step (without a baseline no filter ran, so the key is absent),
+  and an empty list still means "the filter ran".
 
 ### L2+L3 linking
 
@@ -686,7 +687,7 @@ Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
 |---|---|---|
 | `--run` | — | mutually exclusive with `--snapshot` and `--output`; evaluates the paired snapshots from the manifest |
 | `--run-root` | `runs` | root of the run directories |
-| `--ports` | — | comma-separated port filter for `--run` mode; on an N:1-mapped (LAG) step, filters by the step's **old** port, not the shared new port |
+| `--ports` | — | comma-separated port filter for `--run` mode; on any mapped step (1:1 included, not just N:1/LAG), filters by the step's **old** port, not the new port; unmapped/whole-box evaluations are filtered by the snapshot's own port |
 
 ### Pairing rules
 
@@ -717,7 +718,8 @@ sluzby na <new port> mimo tento krok: N (nesparovano s baseline <old port>)` (on
 step exists and there are such services). Exception: an unmatched L2 scope whose linked L3
 counterpart (`scopes[].link`) matched this step's baseline is **not** excluded — it travels
 with its L3 peer as one entity. In the `evaluate` result this is the additive `step` /
-`excluded_services` pair — see [section 5](#5-result-format).
+`excluded_services` pair — `excluded_services` only appears when a baseline was found for the
+step, see [section 5](#5-result-format).
 
 ### Ping from baseline on `--phase post`
 

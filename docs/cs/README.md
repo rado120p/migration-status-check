@@ -307,7 +307,7 @@ vylučují jako dosud, ať jsou zdrojem baseline nebo vlastní tabulky.
 |---|---|
 | `--run` | název run adresáře; vzájemně vylučné s `--snapshot` i s `--output` |
 | `--run-root` | kořen run adresářů, výchozí `runs` |
-| `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí. U `post` capture na N:1 mapovaném (LAG) portu filtruje podle **starého** portu kroku, ne podle nového LAG portu |
+| `--ports` | čárkou oddělený seznam portů — omezí, které `post`/`rollback` capture se vyhodnotí. U jakéhokoli mapovaného kroku (včetně 1:1, nejen N:1/LAG) filtruje podle **starého** portu kroku, ne podle nového portu; nemapované/celoboxové evaluace filtruje podle portu snímku |
 
 Než začne párovat, `evaluate --run` ověří, že **soubory ze všech záznamů `captures`
 v manifestu existují** — chybí-li nějaký, skončí chybou `chybejici soubory snimku: ...` a
@@ -347,6 +347,12 @@ report o nich vypíše jen souhrnný řádek:
 ```
   Dalsi sluzby na ae0 mimo tento krok: 7 (nesparovano s baseline ge-0/0/0)
 ```
+
+Pokud pro daný krok neexistuje `pre` snímek jeho vlastního starého portu a použije se
+náhradou celoboxový `pre` snímek starého boxu (viz párování výš), je tento celoboxový
+snímek baseline pro **každý** krok na sdíleném LAG portu zvlášť — služby patřící jiným
+vlnám se tak mohou spárovat v obou (všech) reportech najednou. Nic se tím neskrývá, jen se
+krok nezúží filtrem přes baseline, protože baseline sama o sobě porty nerozlišuje.
 
 ### Přehled runu (`status`)
 

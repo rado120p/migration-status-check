@@ -532,7 +532,8 @@ Vlastnosti:
   `{"old": {"node", "port"}, "new": {"node", "port"}}`; bez kroku chybí úplně. `excluded_services`
   je seznam ve tvaru `unmatched.subject` (`scope_id`, `description`, `service_type`, `reason`)
   — služby na sdíleném LAG portu, které patří jinému kroku (nesparovaly se s baseline tohoto
-  kroku); plní se **jen** s `step`, i prázdný seznam znamená „filtr proběhl".
+  kroku); plní se **jen** s `step` a jen když se pro krok našla baseline (bez baseline žádný
+  filtr neproběhl, klíč chybí úplně), i prázdný seznam pak znamená „filtr proběhl".
 
 ### Vazba L2+L3
 
@@ -666,7 +667,7 @@ text, viz [oddíl 4](#4-formát-snapshotu) — pole `capture.phase` ve snapshotu
 |---|---|---|
 | `--run` | — | vzájemně vylučné s `--snapshot` i s `--output`; vyhodnotí sparovane snimky z manifestu |
 | `--run-root` | `runs` | kořen run adresářů |
-| `--ports` | — | čárkou oddělený filtr portů pro `--run` režim; u kroku na N:1 mapovaném (LAG) portu filtruje podle **starého** portu kroku |
+| `--ports` | — | čárkou oddělený filtr portů pro `--run` režim; u jakéhokoli mapovaného kroku (včetně 1:1, nejen N:1/LAG) filtruje podle **starého** portu kroku; nemapované/celoboxové evaluace filtruje podle portu snímku |
 
 `evaluate --run` nejdřív ověří, že soubory všech `captures` z manifestu existují
 (`RunStore.missing_snapshots`) — chybí-li jeden, skončí chybou a nevyhodnotí nic.
@@ -710,7 +711,9 @@ report o nich jen vypíše souhrnný řádek `Dalsi sluzby na <novy port> mimo t
 Výjimka: nespárovaný L2 scope, jehož propojený L3 protějšek (`scopes[].link`, viz „Vazba
 L2+L3" níže) se **spároval** s baseline tohoto kroku, se filtrem nevylučuje — jde s ním jako
 s jednou entitou. Ve výsledku `evaluate` (`docs/cs/files/reporting.md` a
-[oddíl 5](#5-formát-výsledku)) to nese JSON klíč `excluded_services` — přítomný jen s `step`.
+[oddíl 5](#5-formát-výsledku)) to nese JSON klíč `excluded_services` — přítomný jen s `step`
+a jen když se pro krok našla baseline (bez baseline klíč chybí, filtr neměl podle čeho
+filtrovat).
 
 ### Ping z baseline při `--phase post`
 
