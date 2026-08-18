@@ -330,7 +330,8 @@ Zrcadlí `arp_present` pro IPv6:
   - odpověděl aspoň jeden paket → `ok`, zpráva `<cil>: odpovedelo N z M`,
   - neodpověděl žádný → `broken`, zpráva `<cil>: neodpovedel (M paketu)`.
 
-`value` je `<received>/<sent>` a u úspěšné odpovědi ještě `  <rtt> ms`; u neúspěchu
+`value` je `<received>/<sent>` a u úspěšné odpovědi ještě `  <rtt> ms` (chybí, pokud se
+nepodařilo změřit RTT), pak vždy `  <cil>` — např. `5/5  2.1 ms  10.1.1.1`. U neúspěchu
 `  <cil> neodpovedel`. `details` nese `resolved_from` (`arp` | `nd` | `subnet-fallback`) a
 `address` (`owning_prefix()`), takže je z výsledku vidět, který nakonfigurovaný rozsah cíl
 zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.

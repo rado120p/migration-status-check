@@ -8,7 +8,7 @@ Ping je **jediný aktivní test** v nástroji — proto má vlastní kategorii m
 |---|---|---|
 | povaha | pasivní čtení stavu | aktivní generování provozu |
 | rozsah | device-scoped (jedno RPC na celé zařízení) | per cíl |
-| závislost na inventory | žádná | **ano** — bez scope není znám cíl ani source adresa |
+| závislost na inventory | žádná | **ano** — bez scope není znám cíl |
 | kdy běží | v první fázi `capture` | až po bulk sběru (cíle se odvozují z ARP/ND) |
 
 Ve fázi `evaluate` je výsledek pingu obyčejná data ve snapshotu. Díky tomu jsou checky
@@ -20,32 +20,24 @@ navzájem nezávislé a dají se pouštět v libovolném pořadí.
 
 ### `PingTarget`
 
-Frozen dataclass: `scope_id`, `target`, `source`, `routing_instance`, `resolved_from`
+Frozen dataclass: `scope_id`, `target`, `routing_instance`, `resolved_from`
 (`arp` | `nd` | `subnet-fallback`), `family` (4 | 6), `interface` (jen pro IPv6 link-local
 cíle — viz níže). `to_dict()` z ní udělá základ záznamu ve snapshotu, do kterého se pak
 doplní naměřené hodnoty.
 
 `scope_id` je důležitý: podle něj `Scope.select()` později přiřadí probe zpátky ke službě.
 
-### `source_address(scope, family)`
-
-Adresa dané rodiny, ze které se pinguje — rodina zdroje musí odpovídat rodině cíle, jinak ji
-Junos ping odmítne:
-
-1. **`virtual_gw_v4`/`virtual_gw_v6` má přednost** — u IRB rozhraní je správný zdroj
-   virtual-gateway adresa, ne fyzická adresa boxu,
-2. jinak první `local_ipv4`/`local_ipv6`,
-3. jinak `None` (ping poběží bez `source`).
-
-Prefix se odřízne (`198.11.13.1/30` → `198.11.13.1`).
+Source adresa se explicitně nenastavuje — router si sám zvolí egress adresu podle
+routovací tabulky pro daný cíl. Dřívější explicitní volba source adresy (VGW, jinak první
+lokální adresa) na rozhraních s víc rozsahy mířila mimo subnet cíle a ping s ní padal na
+`bind: Can't assign requested address` (ověřeno proti produkci, 2026-08).
 
 ### `subnet_fallback(addresses, family, owned=None)`
 
 Když je ARP/ND tabulka pro rozhraní prázdná, zkusí se **první použitelná adresa ze
-subnetu**, která není naše vlastní. `owned` jsou další adresy, které scope vlastní a které se
-nesmí vrátit jako cíl — typicky virtual-gateway adresa IRB rozhraní; bez toho by fallback
-vrátil VGW jako cíl, zatímco `source_address()` už VGW použila jako zdroj, a výsledkem by byl
-ping sám na sebe.
+subnetu**, která není naše vlastní. `owned` nese všechny vlastní adresy scope — lokální
+adresy i virtual-gateway IRB rozhraní; bez toho by fallback mohl vrátit vlastní IP jako
+cíl a výsledkem by byl ping sám na sebe.
 
 Network a broadcast adresa se přeskakují jen u **IPv4** sítí širších než /31 — u p2p linek
 (/31) jsou obě adresy legitimní hosty a v IPv6 je adresa se samými nulami subnet-router
@@ -79,6 +71,11 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
   název rozhraní ND záznamu, kdykoli je cíl link-local;
 - u obou rodin: neplatí typicky, ale kdyby ARP/ND vrátila naši vlastní adresu, cíl se
   vynechá (ping sám na sebe je nesmyslný výsledek);
+- **`_is_remote_learned(entry)`** vyřadí záznamy naučené přes `.local` (EVPN VLAN-aware:
+  `learned_via` začínající `.local` značí souseda za vzdáleným PE) — lokální ping na něj nic
+  nemeří, takže se nepingují v žádném tieru (live ARP, live ND i baseline). Prefixový test,
+  ne substring: `learned_via` typu `ae0.14` je platný lokální L2 protějšek a projde. Ve
+  faktech a v checkách `arp_present`/`nd_present` tyto záznamy dál zůstávají vidět;
 - když ARP/ND nic nedá, použije `subnet_fallback()` a označí `resolved_from:
   "subnet-fallback"`.
 
@@ -90,7 +87,7 @@ Management rozhraní se sem nedostanou, protože se z nich vůbec nestane scope
 
 ### `run_ping(device, target, count)`
 
-Spustí `device.rpc.ping(host=..., count=..., rapid=True, [source=...],
+Spustí `device.rpc.ping(host=..., count=..., rapid=True,
 [routing_instance=...], [interface=...])`. `rapid=True` zkracuje běh z ~5 s na ~0,3 s na cíl
 (ověřeno proti laborce, že tvar odpovědi — `probe-results-summary` a jeho pole — zůstává
 stejný, takže `parse_ping_result()` se nemění). `interface` se předá jen u link-local cílů.
