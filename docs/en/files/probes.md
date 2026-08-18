@@ -81,7 +81,10 @@ The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) 
   `learned_via` of `ae0.14` is a legitimate local L2 peer and passes. They remain visible in
   the facts and in the `arp_present`/`nd_present` checks;
 - falls back to `subnet_fallback()` when ARP/ND yields nothing, marking the record
-  `resolved_from: "subnet-fallback"`.
+  `resolved_from: "subnet-fallback"`. But if ARP/ND for a given scope and family did contain
+  entries and every one of them was `.local`, the fallback does not run — the hosts
+  demonstrably live behind a remote PE, and a fabricated target would produce a false FAIL;
+  empty tables still let the fallback run, and the suppression is always per family.
 
 Within one scope, IPv4 targets come before IPv6; across scopes the order no longer holds —
 nothing depends on it, checks read the family from the `family` field, not from position in

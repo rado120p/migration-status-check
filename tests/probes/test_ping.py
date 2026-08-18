@@ -176,6 +176,59 @@ def test_baseline_skips_local_learned_entries():
     assert targets[0].resolved_from == "baseline-arp"
 
 
+def test_all_local_arp_suppresses_subnet_fallback():
+    """Kdyz je jedinym dukazem .local zaznam, hosti ziji za vzdalenym PE -
+    subnet-fallback by vyrobil cil, ktery nikdo nevlastni, a report by lhal
+    cervenym radkem. Zadny cil je pravdivejsi (SKIP 'bez cile')."""
+    arp = [{"ip": "198.11.13.2", "interface": "ge-0/0/2.113", "learned_via": ".local..9"}]
+
+    targets = resolve_targets([_scope()], arp)
+
+    assert targets == []
+
+
+def test_all_local_baseline_suppresses_subnet_fallback():
+    scope = _scope(interfaces=("irb.14",), addresses=("152.11.14.1/29",))
+    baseline_arp = [
+        {"ip": "152.11.14.4", "interface": "irb.14", "learned_via": ".local..5"}
+    ]
+
+    targets = resolve_targets([scope], [], baseline_arp=baseline_arp)
+
+    assert targets == []
+
+
+def test_local_nd_does_not_suppress_ipv4_fallback():
+    """Potlaceni je per rodina: .local dukaz v ND (IPv6) nesmi vypnout
+    IPv4 subnet-fallback."""
+    scope = _scope(addresses=("198.11.13.1/30",), local_ipv6=("2001:db8::/126",))
+    nd = [
+        {
+            "ip": "2001:db8::2",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "ge-0/0/2.113",
+            "state": "reachable",
+            "learned_via": ".local..3",
+        }
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [(t.family, t.target) for t in targets] == [(4, "198.11.13.2")]
+
+
+def test_foreign_subnet_local_baseline_does_not_suppress_fallback():
+    """.local zaznam z ciziho subnetu neni dukaz o tomto scope - fallback bezi."""
+    baseline_arp = [
+        {"ip": "10.99.99.9", "interface": "irb.99", "learned_via": ".local..7"}
+    ]
+
+    targets = resolve_targets([_scope()], [], baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["198.11.13.2"]
+    assert targets[0].resolved_from == "subnet-fallback"
+
+
 def test_internet_service_has_no_routing_instance():
     targets = resolve_targets(
         [_scope(service_type="Internet", routing_instance=None)],

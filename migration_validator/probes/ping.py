@@ -128,6 +128,25 @@ def _networks_for(local: list[str]) -> list[ipaddress.IPv4Network | ipaddress.IP
     return networks
 
 
+def _ip_in_scope_networks(
+    ip: Any,
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+    family: int,
+) -> bool:
+    """Padne adresa do nekterou ze siti scope a odpovida rodine.
+
+    Stejna scoping logika jako `_baseline_addresses` - .local zaznam z
+    ciziho subnetu neni dukaz o tomto scope a nesmi potlacit jeho fallback.
+    """
+    try:
+        address = ipaddress.ip_address(str(ip))
+    except ValueError:
+        return False
+    if address.version != family:
+        return False
+    return any(address in network for network in networks)
+
+
 def _baseline_addresses(
     entries: list[dict[str, Any]],
     networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
@@ -253,10 +272,25 @@ def resolve_targets(
                 )
                 continue
 
+            # Sleduje, jestli ARP/ND pro tenhle scope+rodinu obsahovaly
+            # nejaky zaznam, ktery byl vyfiltrovan jako .local (vzdaleny PE).
+            # Prazdne tabulky (zadny dukaz) fallback nezastavi - jen dukaz
+            # o vzdalenem hostu.
+            remote_learned_seen = False
+
+            baseline_networks = _networks_for(local)
+            if any(
+                entry.get("ip")
+                and _is_remote_learned(entry)
+                and _ip_in_scope_networks(entry["ip"], baseline_networks, family)
+                for entry in baseline_entries
+            ):
+                remote_learned_seen = True
+
             baseline_addresses = [
                 address
                 for address in _baseline_addresses(
-                    baseline_entries, _networks_for(local), family, nd=baseline_is_nd
+                    baseline_entries, baseline_networks, family, nd=baseline_is_nd
                 )
                 if not _is_own(address, own_addresses)
             ]
@@ -269,6 +303,13 @@ def resolve_targets(
                 continue
 
             if family == 4:
+                if any(
+                    scope.selectors.matches_interface(str(entry.get("interface", "")))
+                    and entry.get("ip")
+                    and _is_remote_learned(entry)
+                    for entry in arp_entries
+                ):
+                    remote_learned_seen = True
                 addresses = [
                     (str(entry["ip"]), None)
                     for entry in arp_entries
@@ -278,6 +319,13 @@ def resolve_targets(
                 ]
                 origin = "arp"
             else:
+                if any(
+                    scope.selectors.matches_interface(str(entry.get("interface", "")))
+                    and entry.get("ip")
+                    and _is_remote_learned(entry)
+                    for entry in nd_entries
+                ):
+                    remote_learned_seen = True
                 addresses = [
                     (
                         str(entry["ip"]),
@@ -306,7 +354,11 @@ def resolve_targets(
                 continue
 
             fallback = subnet_fallback(local, family, owned=[*local, *owned])
-            if fallback:
+            # Kdyz jediny dukaz o hostech v tomhle scope+rodine byl .local
+            # (host za vzdalenym PE), fallback se nespousti - vyrobil by cil,
+            # ktery nikdo nevlastni, a report by lhal cervenym radkem.
+            # Overeno v produkci 2026-08.
+            if fallback and not remote_learned_seen:
                 targets.append(
                     PingTarget(scope.id, fallback, instance, "subnet-fallback", family)
                 )

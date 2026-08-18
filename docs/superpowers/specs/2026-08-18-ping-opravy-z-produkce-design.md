@@ -91,6 +91,13 @@ Aplikuje se na třech místech `resolve_targets`:
 Fakta (`facts["arp"]`, `facts["nd"]`) a checky `arp_present` /
 `nd_present` se nemění — záznamy zůstávají v reportu vidět.
 
+Rozhodnutí doplněno po produkční otázce: pokud jsou pro scope a rodinu
+jediným ARP/ND důkazem `.local` záznamy, subnet-fallback se nespouští —
+fabrikovaný cíl by generoval falešný FAIL, i když hosti demonstrativně
+žijí za vzdáleným PE. Prázdné tabulky (žádný důkaz) fallback pouštějí
+dál beze změny. Potlačení je per rodina — `.local` důkaz v ND (IPv6)
+nesmí zastavit IPv4 fallback a naopak.
+
 ## Testy (TDD)
 
 - OK řádek pingu nese cíl; s RTT i bez RTT; BROKEN beze změny.

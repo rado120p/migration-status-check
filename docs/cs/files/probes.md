@@ -77,7 +77,10 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
   ne substring: `learned_via` typu `ae0.14` je platný lokální L2 protějšek a projde. Ve
   faktech a v checkách `arp_present`/`nd_present` tyto záznamy dál zůstávají vidět;
 - když ARP/ND nic nedá, použije `subnet_fallback()` a označí `resolved_from:
-  "subnet-fallback"`.
+  "subnet-fallback"`. Pokud ale ARP/ND pro daný scope a rodinu obsahovaly záznamy a všechny
+  byly `.local`, fallback se nespouští — hosti prokazatelně žijí za vzdáleným PE a fabrikovaný
+  cíl by vygeneroval falešný FAIL; prázdné tabulky fallback pouštějí dál a potlačení je vždy
+  per rodina.
 
 V rámci jednoho scope přijdou cíle IPv4 před IPv6; napříč více scopy už pořadí neplatí — na
 pořadí nic nezávisí, checky rodinu čtou z pole `family`, ne z pozice v seznamu.
