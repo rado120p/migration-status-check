@@ -157,13 +157,15 @@ class InterfaceErrorsCheck(Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         link = _l3_link_without_transit(ctx)
         if link is not None:
-            peer = link["peer_interface"]
+            peers = link.get("peers") or []
+            peer = ", ".join(p["interface"] for p in peers)
+            blocks = "bloky nize" if len(peers) > 1 else "blok nize"
             return [
                 Finding(
                     outcome=Outcome.INFO,
                     message=f"errors/traffic se meri na L2 casti ({peer})",
                     label="Interface errors / traffic",
-                    value=f"mereno na L2 ({peer}) - viz blok nize",
+                    value=f"mereno na L2 ({peer}) - viz {blocks}",
                 )
             ]
 

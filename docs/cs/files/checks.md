@@ -321,8 +321,13 @@ Zrcadlí `arp_present` pro IPv6:
 Čte hotové výsledky ze snapshotu — cíle se resolvovaly už při `capture` (ARP/ND → ping,
 `probes/ping.py`).
 
-- ve snapshotu nejsou pro tenhle scope žádné cíle → `SKIP` (`pro tento scope nejsou ve
-  snapshotu zadne cile pingu`);
+- lokální subnet nad P2P prahem (IPv4 širší než `/30`, IPv6 širší než `/126`), do kterého
+  nepadl žádný cíl → `SKIP` na subnet (`<sit>: zadny cil - subnet vetsi nez /30, fallback by
+  cil jen hadal`, `value` `<sit>  bez cile (subnet > /30)`) — resolver tam fallback vědomě
+  nepouští (viz `IPV4_FALLBACK_MIN_PREFIX` v `probes/ping.py`) a mlčení by se četlo jako
+  „zkontrolováno OK";
+- ve snapshotu nejsou pro tenhle scope žádné cíle a žádný takový subnet to nevysvětluje →
+  `SKIP` (`pro tento scope nejsou ve snapshotu zadne cile pingu`);
 - probe bez rozpoznané rodiny (`family` mimo `4`/`6`) → vlastní `SKIP` jmenující cíle
   (`probe bez rodiny nelze vyhodnotit: ...`) — jinak by probe z výsledku tiše zmizel, místo
   aby řekl, že se nevyhodnotil;

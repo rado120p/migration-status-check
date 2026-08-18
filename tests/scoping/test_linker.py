@@ -154,6 +154,29 @@ def test_l2_interface_reports_the_interface_whose_unit_matched():
     assert links[0].l2_interface == "ae0.15"
 
 
+def test_one_l3_links_every_l2_scope_in_the_bridge_domain():
+    """Lab 172.20.20.4, BD-4094: dva L2 scopy (ge-0/0/2.4094, ge-0/0/6.4094)
+    v teze instanci sdileji jedno irb.4094. Vazba je N L2 : 1 L3 - drivejsi
+    first-wins nechal druhy L2 scope bez paru."""
+    l2a = _l2_scope(
+        scope_id="svc:MGMT-DEVICE4:E-LAN", interface="ge-0/0/2.4094", vlans=("4094",)
+    )
+    l2b = _l2_scope(
+        scope_id="svc:MGMT-VLAN:E-LAN", interface="ge-0/0/6.4094", vlans=("4094",)
+    )
+    l3 = _l3_scope(
+        scope_id="svc:irb.4094:IPVPN", interface="irb.4094", instances=("MGMT",)
+    )
+    facts = _facts(irb="irb.4094", context="MGMT")
+
+    links = link_scopes([l3, l2a, l2b], facts)
+
+    assert [(link.l3_scope_id, link.l2_scope_id, link.l2_interface) for link in links] == [
+        ("svc:irb.4094:IPVPN", "svc:MGMT-DEVICE4:E-LAN", "ge-0/0/2.4094"),
+        ("svc:irb.4094:IPVPN", "svc:MGMT-VLAN:E-LAN", "ge-0/0/6.4094"),
+    ]
+
+
 def test_each_scope_links_at_most_once():
     # jedna instance se dvema IRB, ale jen jeden L2 scope - druha vazba nevznikne
     facts = _facts()

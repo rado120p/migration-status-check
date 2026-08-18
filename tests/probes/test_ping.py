@@ -52,12 +52,25 @@ def _scope(
         ("198.11.13.2/30", "198.11.13.1"),
         ("10.1.2.1/31", "10.1.2.0"),
         ("10.1.2.0/31", "10.1.2.1"),
-        ("152.11.14.1/29", "152.11.14.2"),
+        ("152.11.14.1/29", None),
         ("150.0.0.11/32", None),
     ],
 )
 def test_subnet_fallback(address, expected):
     assert subnet_fallback([address], 4) == expected
+
+
+def test_ipv4_fallback_only_on_point_to_point():
+    """Na /30 a /31 je protejsek jednoznacny, cokoliv vetsiho je hadani.
+
+    Rozhodnuti 2026-08-18 (lab 172.20.20.4, irb.4094): na 10.40.95.0/24 bez
+    ARP dukazu fallback drive vystrelil 10.40.95.2 - cerveny radek o nicem.
+    Vetsi subnet nez /30 -> zadny cil, report rekne proc (viz check).
+    """
+    assert subnet_fallback(["10.40.95.253/24"], 4) is None
+    assert subnet_fallback(["152.11.14.1/29"], 4) is None
+    assert subnet_fallback(["198.11.13.1/30"], 4) == "198.11.13.2"
+    assert subnet_fallback(["10.1.2.1/31"], 4) == "10.1.2.0"
 
 
 def test_ipv6_fallback_only_on_point_to_point():
@@ -67,18 +80,20 @@ def test_ipv6_fallback_only_on_point_to_point():
 
 
 def test_subnet_fallback_excludes_virtual_gateway_v4():
-    """Regrese na self-ping: irb.14 ma adresu .2/29 a VGW .1.
+    """Regrese na self-ping: IRB ma adresu .2/30 a VGW .1.
 
     Bez `owned` fallback vrati .1 (prvni kandidat po vynechani sitove .0),
     coz je presne adresa, kterou `source_address()` uz zvolila jako zdroj -
-    ping sam na sebe. Overeno proti realne laborce (172.20.20.5, EVO).
+    ping sam na sebe. Puvodne overeno proti realne laborce (172.20.20.5,
+    EVO) na /29; po zavedeni IPV4_FALLBACK_MIN_PREFIX prepnuto na /30, kde
+    po vylouceni VGW nezbyva zadny kandidat - "zadny cil" je porad lepsi
+    nez ping sam na sebe.
     """
-    without_fix = subnet_fallback(["152.11.14.2/29"], 4)
+    without_fix = subnet_fallback(["152.11.14.2/30"], 4)
     assert without_fix == "152.11.14.1"  # bug: to je VGW
 
-    with_fix = subnet_fallback(["152.11.14.2/29"], 4, owned=["152.11.14.1"])
-    assert with_fix == "152.11.14.3"
-    assert with_fix != "152.11.14.1"
+    with_fix = subnet_fallback(["152.11.14.2/30"], 4, owned=["152.11.14.1"])
+    assert with_fix is None
 
 
 def test_subnet_fallback_excludes_virtual_gateway_v6():
@@ -103,7 +118,7 @@ def test_subnet_fallback_excludes_virtual_gateway_v6():
 
 def test_subnet_fallback_without_owned_keeps_old_behaviour():
     """`owned` je volitelny - scopy bez VGW se chovaji jako drive."""
-    assert subnet_fallback(["152.11.14.1/29"], 4) == "152.11.14.2"
+    assert subnet_fallback(["152.11.14.1/30"], 4) == "152.11.14.2"
 
 
 def test_targets_come_from_arp():
@@ -188,9 +203,11 @@ def test_all_local_arp_suppresses_subnet_fallback():
 
 
 def test_all_local_baseline_suppresses_subnet_fallback():
-    scope = _scope(interfaces=("irb.14",), addresses=("152.11.14.1/29",))
+    # /30, aby fallback bez potlaceni skutecne mel co vratit (152.11.14.2)
+    # - na vetsim subnetu by test prosel uz jen diky IPV4_FALLBACK_MIN_PREFIX.
+    scope = _scope(interfaces=("irb.14",), addresses=("152.11.14.1/30",))
     baseline_arp = [
-        {"ip": "152.11.14.4", "interface": "irb.14", "learned_via": ".local..5"}
+        {"ip": "152.11.14.2", "interface": "irb.14", "learned_via": ".local..5"}
     ]
 
     targets = resolve_targets([scope], [], baseline_arp=baseline_arp)
@@ -244,27 +261,73 @@ def test_empty_arp_falls_back_to_subnet():
     assert targets[0].resolved_from == "subnet-fallback"
 
 
+def test_arp_in_one_subnet_does_not_block_fallback_in_another():
+    """Fallback je per-subnet, ne per-scope (lab 172.20.20.4, irb.4094).
+
+    IRB se dvema subnety: ve velkem (/24) ARP zaznamy jsou, v /30 zadny.
+    Drivejsi tierovani per scope+rodina se u neprazdneho ARP zastavilo a
+    /30 zustal uplne bez cile - presne subnet, kde je fallback deterministicky.
+    """
+    scope = _scope(
+        interfaces=("irb.4094",),
+        addresses=("10.40.94.253/24", "198.11.13.1/30"),
+    )
+    arp = [
+        {"ip": "10.40.94.2", "interface": "irb.4094"},
+        {"ip": "10.40.94.10", "interface": "irb.4094"},
+    ]
+
+    targets = resolve_targets([scope], arp)
+
+    by_origin = {t.target: t.resolved_from for t in targets}
+    assert by_origin["10.40.94.2"] == "arp"
+    assert by_origin["10.40.94.10"] == "arp"
+    assert by_origin["198.11.13.2"] == "subnet-fallback"
+
+
+def test_remote_learned_suppression_is_per_subnet():
+    """Dukaz o vzdalenem PE v jednom subnetu neumlci fallback jineho subnetu.
+
+    .local zaznam v subnetu A rika jen "hosti A ziji za vzdalenym PE" -
+    o subnetu B nerika nic, jeho /30 fallback musi probehnout.
+    """
+    scope = _scope(
+        interfaces=("irb.4094",),
+        addresses=("10.40.94.1/30", "198.11.13.1/30"),
+    )
+    arp = [
+        {"ip": "10.40.94.2", "interface": "irb.4094", "learned_via": ".local..9"},
+    ]
+
+    targets = resolve_targets([scope], arp)
+
+    assert [(t.target, t.resolved_from) for t in targets] == [
+        ("198.11.13.2", "subnet-fallback")
+    ]
+
+
 def test_irb_fallback_never_pings_own_virtual_gateway():
-    """Regrese na live nalez: irb.14, 152.11.14.2/29, VGW 152.11.14.1.
+    """Regrese na live nalez: IRB s vlastni adresou .2 a VGW .1.
 
     Bez opravy vraci ARP-prazdny scope fallback na 152.11.14.1 - presne tu
     adresu, kterou by scope pouzil jako VGW. Ping tak jde sam na sebe a
-    sluzba dostane verdikt o nicem. Overeno proti 172.20.20.5.
+    sluzba dostane verdikt o nicem. Puvodne overeno proti 172.20.20.5 na
+    /29; po IPV4_FALLBACK_MIN_PREFIX prepnuto na /30, kde po vylouceni
+    vlastni adresy a VGW nezbyva kandidat - spravny vysledek je zadny cil,
+    nikdy ne VGW.
     """
     scope = _scope(
         scope_id="svc:EVPN-VLAN-AWARE-INTERNET:Internet",
         service_type="Internet",
         interfaces=("irb.14",),
-        addresses=("152.11.14.2/29",),
+        addresses=("152.11.14.2/30",),
         virtual_gw_v4=("152.11.14.1",),
         routing_instance=None,
     )
 
     targets = resolve_targets([scope], [])
 
-    assert len(targets) == 1
-    assert targets[0].target == "152.11.14.3"
-    assert targets[0].target != "152.11.14.1"
+    assert targets == []
 
 
 def test_no_resolved_target_is_ever_own_address():

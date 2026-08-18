@@ -543,8 +543,10 @@ tuhle dvojici pozná a spáruje.
 
 Zdroj vazby: `l3_context` IRB rozhraní z `show evpn instance extensive` / `show mac-vrf routing
 instance extensive` (fakt `evpn_instance`, fáze 2.1) + shoda VLAN/unitu v téže instanci;
-`master` znamená inet.0 (Internet scope bez RI). Párování je 1:1 — víc kandidátů vazbu
-nevytvoří (raději žádný odkaz než špatný).
+`master` znamená inet.0 (Internet scope bez RI). Vazba je **N L2 : 1 L3** — jeden IRB
+obsluhuje všechny L2 scopy své bridge domain (lab 172.20.20.4, BD-4094 se dvěma access
+porty), každý L2 scope má právě jeden L3 protějšek. Nejednoznačnost na L3 straně (víc L3
+kandidátů pro jeden IRB) vazbu nevytvoří — raději žádný odkaz než špatný.
 
 **V textovém reportu** (`render`) se L2 blok (`E-LAN (L2 cast)`) vypíše hned za L3 blokem
 spárované služby a oba nesou v hlavičce vzájemný odkaz:
@@ -573,17 +575,27 @@ je v L2 bloku. Podrobnosti viz katalog checků výše.
 `scopes[].link`:
 
 ```jsonc
+// L3 (IRB) strana - seznam vsech L2 protejsku:
 "link": {
   "role": "l3",
-  "peer_scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
-  "peer_interface": "ae0.15",
-  "peer_instance": "EVPN-VLAN-AWARE-POP1"
+  "peers": [
+    {"scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
+     "interface": "ae0.15",
+     "instance": "EVPN-VLAN-AWARE-POP1"}
+  ]
+}
+// L2 (E-LAN) strana - protejsek je vzdy prave jeden:
+"link": {
+  "role": "l2",
+  "peer_scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
+  "peer_interface": "irb.15",
+  "peer_instance": "L3VPN-CPE14-UNI"
 }
 ```
 
-`role` je `"l3"` na IRB straně scope a `"l2"` na E-LAN straně; `peer_scope_id`,
-`peer_interface` a `peer_instance` popisují protistranu vazby. Bez vazby klíč `link`
-u scope chybí úplně.
+`role` je `"l3"` na IRB straně scope a `"l2"` na E-LAN straně. L3 strana nese seznam
+`peers` (N L2 : 1 L3); L2 strana má skalární `peer_scope_id`, `peer_interface` a
+`peer_instance`. Bez vazby klíč `link` u scope chybí úplně.
 
 ---
 

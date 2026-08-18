@@ -315,8 +315,13 @@ Mirrors `arp_present` for IPv6:
 Reads finished results from the snapshot — the targets were resolved back during `capture`
 (ARP/ND → ping, `probes/ping.py`).
 
-- the snapshot has no targets for this scope → `SKIP` (`pro tento scope nejsou ve snapshotu
-  zadne cile pingu`);
+- a local subnet above the P2P threshold (IPv4 wider than `/30`, IPv6 wider than `/126`)
+  that no target landed in → a per-subnet `SKIP` (`<net>: zadny cil - subnet vetsi nez /30,
+  fallback by cil jen hadal`, `value` `<net>  bez cile (subnet > /30)`) — the resolver
+  deliberately keeps the fallback out of it (see `IPV4_FALLBACK_MIN_PREFIX` in
+  `probes/ping.py`), and silence would read as "checked, OK";
+- the snapshot has no targets for this scope and no such subnet explains it → `SKIP`
+  (`pro tento scope nejsou ve snapshotu zadne cile pingu`);
 - a probe with no recognised family (`family` outside `4`/`6`) → its own `SKIP` naming the
   targets (`probe bez rodiny nelze vyhodnotit: ...`) — otherwise the probe would silently
   vanish from the result instead of saying it was never evaluated;

@@ -243,9 +243,14 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
     link_note = None
     if link is not None:
         if link_role == "l3":
-            link_note = (
-                f"L2 cast: {link['peer_interface']} v {link['peer_instance']} (blok nize)"
+            # Jeden IRB muze obsluhovat vic L2 scopu (N L2 : 1 L3) - poznamka
+            # vyjmenuje vsechny, at "blok nize" nelze cist jako jediny.
+            peers = link.get("peers") or []
+            parts = ", ".join(
+                f"{peer['interface']} v {peer['instance']}" for peer in peers
             )
+            blocks = "bloky nize" if len(peers) > 1 else "blok nize"
+            link_note = f"L2 cast: {parts} ({blocks})" if parts else None
         elif link_role == "l2":
             link_note = (
                 f"L3 cast: {link['peer_interface']} v {link['peer_instance']} (blok vyse)"

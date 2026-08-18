@@ -47,6 +47,12 @@ class PingTarget:
 # reportu cte jako nedostupne CPE.
 IPV6_FALLBACK_MIN_PREFIX = 126
 
+# Stejna uvaha pro IPv4 (rozhodnuti 2026-08-18): na /30 a /31 je protejsek
+# jednoznacny, na cemkoliv vetsim je to hadani - vystrel na nahodnou adresu
+# z /24 se v reportu cte jako nedostupne CPE. Vetsi subnet -> zadny cil,
+# duvod dopovi check (preskoceno, subnet > /30).
+IPV4_FALLBACK_MIN_PREFIX = 30
+
 
 def subnet_fallback(
     addresses: list[str], family: int, owned: list[str] | None = None
@@ -75,6 +81,8 @@ def subnet_fallback(
         if network.prefixlen >= network.max_prefixlen:
             continue
         if family == 6 and network.prefixlen < IPV6_FALLBACK_MIN_PREFIX:
+            continue
+        if family == 4 and network.prefixlen < IPV4_FALLBACK_MIN_PREFIX:
             continue
 
         for candidate in network:
@@ -272,20 +280,23 @@ def resolve_targets(
                 )
                 continue
 
-            # Sleduje, jestli ARP/ND pro tenhle scope+rodinu obsahovaly
-            # nejaky zaznam, ktery byl vyfiltrovan jako .local (vzdaleny PE).
-            # Prazdne tabulky (zadny dukaz) fallback nezastavi - jen dukaz
-            # o vzdalenem hostu.
-            remote_learned_seen = False
+            # Adresy zaznamu, ktere byly vyfiltrovany jako .local (host za
+            # vzdalenym PE). Sbiraji se jako IP, ne jako bool: dukaz o
+            # vzdalenem hostu umlcuje fallback jen v subnetu, kam padne -
+            # o ostatnich subnetech scope nerika nic. Prazdne tabulky
+            # (zadny dukaz) fallback nezastavi.
+            remote_learned_ips: list[
+                ipaddress.IPv4Address | ipaddress.IPv6Address
+            ] = []
 
             baseline_networks = _networks_for(local)
-            if any(
-                entry.get("ip")
-                and _is_remote_learned(entry)
-                and _ip_in_scope_networks(entry["ip"], baseline_networks, family)
-                for entry in baseline_entries
-            ):
-                remote_learned_seen = True
+            for entry in baseline_entries:
+                if (
+                    entry.get("ip")
+                    and _is_remote_learned(entry)
+                    and _ip_in_scope_networks(entry["ip"], baseline_networks, family)
+                ):
+                    remote_learned_ips.append(ipaddress.ip_address(str(entry["ip"])))
 
             baseline_addresses = [
                 address
@@ -303,13 +314,18 @@ def resolve_targets(
                 continue
 
             if family == 4:
-                if any(
-                    scope.selectors.matches_interface(str(entry.get("interface", "")))
-                    and entry.get("ip")
-                    and _is_remote_learned(entry)
-                    for entry in arp_entries
-                ):
-                    remote_learned_seen = True
+                for entry in arp_entries:
+                    if (
+                        scope.selectors.matches_interface(str(entry.get("interface", "")))
+                        and entry.get("ip")
+                        and _is_remote_learned(entry)
+                    ):
+                        try:
+                            remote_learned_ips.append(
+                                ipaddress.ip_address(str(entry["ip"]))
+                            )
+                        except ValueError:
+                            continue
                 addresses = [
                     (str(entry["ip"]), None)
                     for entry in arp_entries
@@ -319,13 +335,18 @@ def resolve_targets(
                 ]
                 origin = "arp"
             else:
-                if any(
-                    scope.selectors.matches_interface(str(entry.get("interface", "")))
-                    and entry.get("ip")
-                    and _is_remote_learned(entry)
-                    for entry in nd_entries
-                ):
-                    remote_learned_seen = True
+                for entry in nd_entries:
+                    if (
+                        scope.selectors.matches_interface(str(entry.get("interface", "")))
+                        and entry.get("ip")
+                        and _is_remote_learned(entry)
+                    ):
+                        try:
+                            remote_learned_ips.append(
+                                ipaddress.ip_address(str(entry["ip"]))
+                            )
+                        except ValueError:
+                            continue
                 addresses = [
                     (
                         str(entry["ip"]),
@@ -341,27 +362,52 @@ def resolve_targets(
                 ]
                 origin = "nd"
 
-            if addresses:
-                targets.extend(
-                    PingTarget(scope.id, address, instance, origin, family, interface)
-                    for address, interface in addresses
-                    # Neplati typicky, ale kdyby ARP/ND vratila nasi vlastni
-                    # adresu (gratuitous ARP / duplicitni adresa muze vlastni
-                    # IP dostat do tabulky na kterekoliv pozici), ping sam na
-                    # sebe je nesmyslny vysledek - radsi zadny cil nez lhavy.
-                    if not _is_own(address, own_addresses)
-                )
-                continue
+            kept = [
+                (address, interface)
+                for address, interface in addresses
+                # Neplati typicky, ale kdyby ARP/ND vratila nasi vlastni
+                # adresu (gratuitous ARP / duplicitni adresa muze vlastni
+                # IP dostat do tabulky na kterekoliv pozici), ping sam na
+                # sebe je nesmyslny vysledek - radsi zadny cil nez lhavy.
+                if not _is_own(address, own_addresses)
+            ]
+            targets.extend(
+                PingTarget(scope.id, address, instance, origin, family, interface)
+                for address, interface in kept
+            )
 
-            fallback = subnet_fallback(local, family, owned=[*local, *owned])
-            # Kdyz jediny dukaz o hostech v tomhle scope+rodine byl .local
-            # (host za vzdalenym PE), fallback se nespousti - vyrobil by cil,
-            # ktery nikdo nevlastni, a report by lhal cervenym radkem.
-            # Overeno v produkci 2026-08.
-            if fallback and not remote_learned_seen:
-                targets.append(
-                    PingTarget(scope.id, fallback, instance, "subnet-fallback", family)
-                )
+            # Fallback je per-subnet, ne per-scope (lab 172.20.20.4,
+            # irb.4094): ARP dukaz v jednom subnetu nesmi nechat druhy
+            # subnet uplne bez cile. Subnet dostane fallback, jen kdyz v
+            # nem zadny cil z ARP/ND neni a neni v nem ani .local dukaz -
+            # host za vzdalenym PE znamena, ze fallback by vyrobil cil,
+            # ktery nikdo nevlastni, a report by lhal cervenym radkem
+            # (overeno v produkci 2026-08).
+            emitted: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+            for address, _ in kept:
+                try:
+                    emitted.append(ipaddress.ip_address(address))
+                except ValueError:
+                    continue
+            for address in local:
+                try:
+                    network = ipaddress.ip_interface(address).network
+                except ValueError:
+                    continue
+                if any(ip in network for ip in emitted):
+                    continue
+                if any(ip in network for ip in remote_learned_ips):
+                    continue
+                fallback = subnet_fallback([address], family, owned=[*local, *owned])
+                if fallback:
+                    # Dve lokalni adresy v temze subnetu = jeden fallback,
+                    # ne dva - pridani do emitted druhou iteraci zastavi.
+                    emitted.append(ipaddress.ip_address(fallback))
+                    targets.append(
+                        PingTarget(
+                            scope.id, fallback, instance, "subnet-fallback", family
+                        )
+                    )
 
     return targets
 

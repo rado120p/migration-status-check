@@ -50,6 +50,12 @@ on `/126` networks and longer (point-to-point ranges). Guessing a random address
 `/64` makes no sense: it is a guaranteed failure that the report would read as an
 unreachable CPE.
 
+**IPv4 applies `IPV4_FALLBACK_MIN_PREFIX = 30`** (decision 2026-08-18) — the fallback runs
+only on `/30` and `/31`, where the far end is deterministic. Anything larger is guessing: on
+`10.40.95.0/24` with no ARP evidence the fallback used to fire at `.2`, and the report showed
+a red line about nothing. An oversized subnet left without a target is explained by the
+`ping_reachability` check with a `SKIP … bez cile (subnet > /30)` line.
+
 Typically: the PE is `.1`, so `.2` gets tried.
 
 ### `resolve_targets(scopes, arp_entries, nd_entries=None)`
@@ -80,11 +86,14 @@ The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) 
   tier (live ARP, live ND, or baseline). It is a prefix test, not a substring one:
   `learned_via` of `ae0.14` is a legitimate local L2 peer and passes. They remain visible in
   the facts and in the `arp_present`/`nd_present` checks;
-- falls back to `subnet_fallback()` when ARP/ND yields nothing, marking the record
-  `resolved_from: "subnet-fallback"`. But if ARP/ND for a given scope and family did contain
-  entries and every one of them was `.local`, the fallback does not run — the hosts
-  demonstrably live behind a remote PE, and a fabricated target would produce a false FAIL;
-  empty tables still let the fallback run, and the suppression is always per family.
+- **the fallback is per subnet, not per scope** (lab 172.20.20.4, irb.4094 with two
+  ranges): after the ARP/ND tier, `subnet_fallback()` runs for every local subnet that no
+  target landed in — ARP evidence in `10.40.94.0/24` therefore does not leave a neighbouring
+  `/30` without a target. The record is marked `resolved_from: "subnet-fallback"`. The
+  `.local` suppression is per subnet too: a `.local` entry only proves that hosts of *that*
+  subnet live behind a remote PE — a fabricated target there would produce a false FAIL —
+  but it says nothing about the other subnets and does not stop their fallback; empty
+  tables still let the fallback run.
 
 Within one scope, IPv4 targets come before IPv6; across scopes the order no longer holds —
 nothing depends on it, checks read the family from the `family` field, not from position in

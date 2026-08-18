@@ -225,6 +225,77 @@ def test_ping_without_targets_skips():
     assert "cile" in result.message
 
 
+def test_ping_oversized_subnet_without_target_says_why():
+    """irb.4094 (lab 172.20.20.4): 10.40.94/24 ma ARP cile, 10.40.95/24 nic.
+
+    Subnet vetsi nez /30 zadny fallback nedostane (hadani) - ale mlceni by
+    se cetlo jako "zkontrolovano OK". Report musi rict, ze subnet zustal
+    bez cile a proc.
+    """
+    scope = Scope(
+        id="svc:irb.4094:IPVPN",
+        kind="service",
+        key=ScopeKey("irb.4094", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["irb.4094"],
+            local_ipv4=["10.40.94.253/24", "10.40.95.253/24"],
+        ),
+    )
+    ctx = _ctx(
+        {
+            "ping": [
+                {
+                    "target": "10.40.94.2",
+                    "family": 4,
+                    "sent": 5,
+                    "received": 5,
+                    "loss_percent": 0,
+                }
+            ]
+        },
+        scope=scope,
+    )
+
+    findings = PingReachabilityCheck().run(ctx)
+
+    skips = [f for f in findings if f.outcome is Outcome.SKIP]
+    assert len(skips) == 1
+    assert "10.40.95.0/24" in skips[0].message
+    assert "subnet > /30" in skips[0].value
+    assert skips[0].family == 4
+
+
+def test_ping_no_probes_oversized_subnet_gets_reason_not_generic_skip():
+    scope = Scope(
+        id="svc:irb.4094:IPVPN",
+        kind="service",
+        key=ScopeKey("irb.4094", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["irb.4094"], local_ipv4=["10.40.95.253/24"]
+        ),
+    )
+    findings = PingReachabilityCheck().run(_ctx({"ping": []}, scope=scope))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
+    assert "subnet > /30" in findings[0].value
+
+
+def test_ping_oversized_ipv6_subnet_reason_uses_ipv6_threshold():
+    scope = Scope(
+        id="svc:irb.15:IPVPN",
+        kind="service",
+        key=ScopeKey("irb.15", "IPVPN", None),
+        selectors=Selectors(interfaces=["irb.15"], local_ipv6=["2001:db8::1/64"]),
+    )
+    findings = PingReachabilityCheck().run(_ctx({"ping": []}, scope=scope))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
+    assert "subnet > /126" in findings[0].value
+    assert findings[0].family == 6
+
+
 def test_ping_mimo_profil_je_skip_s_duvodem():
     """Prazdne pingy s markerem ping_skipped jsou vedomy vynechani profilem,
     ne chybejici cil - zprava musi rozlisit proc."""

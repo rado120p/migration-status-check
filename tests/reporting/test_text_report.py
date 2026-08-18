@@ -554,9 +554,13 @@ def _linked_pair(l3_status=Status.WARN, l2_status=Status.PASS):
         },
         link={
             "role": "l3",
-            "peer_scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
-            "peer_interface": "ae0.15",
-            "peer_instance": "EVPN-VLAN-AWARE-POP1",
+            "peers": [
+                {
+                    "scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+                    "interface": "ae0.15",
+                    "instance": "EVPN-VLAN-AWARE-POP1",
+                }
+            ],
         },
     )
     l2 = ScopeResult(

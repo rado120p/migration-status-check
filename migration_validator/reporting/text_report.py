@@ -87,6 +87,16 @@ def use_color(
 FAMILY_TITLE = {4: "IPv4", 6: "IPv6"}
 
 
+def _link_peer_ids(link) -> set[str]:
+    """Scope id protejsku vazby - L2 strana ma jeden, L3 strana seznam peers."""
+    if not link:
+        return set()
+    if link.get("role") == "l3":
+        return {peer["scope_id"] for peer in link.get("peers") or []}
+    peer = link.get("peer_scope_id")
+    return {peer} if peer else set()
+
+
 def _l1_parent_ids(all_scopes, kept_ids):
     """L1 rodice zobrazenych sluzeb - rodic jde s ditetem, aby seskupeni
     po portech nezustalo bez hlavicky portu."""
@@ -153,7 +163,7 @@ def filter_result(
             scope
             for scope in scopes
             if scope.scope_id in kept_ids
-            or (scope.link and scope.link["peer_scope_id"] in kept_ids)
+            or (_link_peer_ids(scope.link) & kept_ids)
         ]
 
     # L1 rodic jede s vybranou sluzbou dal - jinak by port zustal bez
@@ -531,8 +541,7 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
         if detail or view.status is not Status.PASS
     }
     for scope, _view in views:
-        link = scope.link
-        if link and link["peer_scope_id"] in shown:
+        if _link_peer_ids(scope.link) & shown:
             shown.add(scope.scope_id)
     shown |= _l1_parent_ids([scope for scope, _view in views], shown)
     for scope, view in views:

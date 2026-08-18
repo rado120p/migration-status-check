@@ -8,8 +8,10 @@ Prirazeni ke konkretnimu L2 scopu instance dela shoda unit-cisla IRB
 s VLAN (selectors.vlans), pripadne s unitem tranzitniho rozhrani.
 
 Vazba se pocita jen nad subject snapshotem - parovani baseline<->subject
-zustava na matcheru a description. Nejednoznacnost (vic kandidatu) vazbu
-nevytvori: spatny odkaz je horsi nez zadny.
+zustava na matcheru a description. Nejednoznacnost (vic L3 kandidatu pro
+jeden IRB) vazbu nevytvori: spatny odkaz je horsi nez zadny. Opacny smer
+nejednoznacny neni: jeden IRB obsluhuje vsechny L2 scopy sve bridge
+domain, vazba je tedy N L2 : 1 L3.
 """
 
 from __future__ import annotations
@@ -71,7 +73,6 @@ def link_scopes(
             l3_by_interface.setdefault(iface, []).append(scope)
 
     links: list[ScopeLink] = []
-    linked_l3: set[str] = set()
     linked_l2: set[str] = set()
     for scope in scopes:
         if scope.is_device or scope.service_type != L2_SERVICE_TYPE:
@@ -98,9 +99,11 @@ def link_scopes(
             if len(candidates) != 1:
                 continue
             l3_scope = candidates[0]
-            if l3_scope.id in linked_l3 or scope.id in linked_l2:
+            # Jen L2 strana se vaze nejvys jednou - jeden L3 (IRB) legitimne
+            # obsluhuje vsechny L2 scopy sve bridge domain (N L2 : 1 L3,
+            # lab 172.20.20.4, BD-4094 se dvema access porty).
+            if scope.id in linked_l2:
                 continue
-            linked_l3.add(l3_scope.id)
             linked_l2.add(scope.id)
             l2_interface = (
                 _matching_interface(scope, unit) or scope.selectors.interfaces[0]

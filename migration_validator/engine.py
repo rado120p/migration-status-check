@@ -150,18 +150,25 @@ def _identity(scope: Scope) -> dict[str, Any]:
 def _link_payloads(links: list[ScopeLink]) -> dict[str, dict[str, Any]]:
     """Slovnik scope_id -> vazba, jak ji ctou checky a renderer.
 
-    U L2 strany se "master" prepisuje na "inet.0" - hlavicka bloku ma
-    ukazovat routing tabulku, ne interni oznaceni z RPC vypisu.
+    L3 strana nese seznam `peers` - jeden IRB obsluhuje vsechny L2 scopy
+    sve bridge domain (N L2 : 1 L3). L2 strana ma peer_* skalarni, jeji
+    protejsek je vzdy prave jeden. U L2 strany se "master" prepisuje na
+    "inet.0" - hlavicka bloku ma ukazovat routing tabulku, ne interni
+    oznaceni z RPC vypisu.
     """
     payloads: dict[str, dict[str, Any]] = {}
     for link in links:
         l3_instance = "inet.0" if link.l3_context == "master" else link.l3_context
-        payloads[link.l3_scope_id] = {
-            "role": "l3",
-            "peer_scope_id": link.l2_scope_id,
-            "peer_interface": link.l2_interface,
-            "peer_instance": link.l2_instance,
-        }
+        l3_payload = payloads.setdefault(
+            link.l3_scope_id, {"role": "l3", "peers": []}
+        )
+        l3_payload["peers"].append(
+            {
+                "scope_id": link.l2_scope_id,
+                "interface": link.l2_interface,
+                "instance": link.l2_instance,
+            }
+        )
         payloads[link.l2_scope_id] = {
             "role": "l2",
             "peer_scope_id": link.l3_scope_id,
@@ -172,23 +179,21 @@ def _link_payloads(links: list[ScopeLink]) -> dict[str, dict[str, Any]]:
 
 
 def _reorder_linked(results: list[ScopeResult]) -> list[ScopeResult]:
-    """L2 blok patri hned za svuj L3 blok - jinak razeni z matcheru."""
-    l2_after: dict[str, ScopeResult] = {}
+    """L2 bloky patri hned za svuj L3 blok - jinak razeni z matcheru."""
+    l2_after: dict[str, list[ScopeResult]] = {}
     l2_ids: set[str] = set()
     ids = {result.scope_id for result in results}
     for result in results:
         link = result.link
         if link and link["role"] == "l2" and link["peer_scope_id"] in ids:
-            l2_after[link["peer_scope_id"]] = result
+            l2_after.setdefault(link["peer_scope_id"], []).append(result)
             l2_ids.add(result.scope_id)
     ordered: list[ScopeResult] = []
     for result in results:
         if result.scope_id in l2_ids:
             continue
         ordered.append(result)
-        partner = l2_after.get(result.scope_id)
-        if partner is not None:
-            ordered.append(partner)
+        ordered.extend(l2_after.get(result.scope_id, ()))
     return ordered
 
 
@@ -203,12 +208,16 @@ def _is_l1(result: ScopeResult) -> bool:
 
 def _parent_port(result: ScopeResult, by_id: dict[str, ScopeResult]) -> str | None:
     """L1 rodic bloku. L3 clen paru dedi rodice sve L2 casti - par ma stat
-    pod portem, na kterem sluzba fyzicky bezi (spec kap. 1)."""
+    pod portem, na kterem sluzba fyzicky bezi (spec kap. 1). Pri vic L2
+    peerech dedi od prvniho, ktery je ve vysledcich - pod jeho portem pak
+    stoji cela skupina (L3 + vsechny L2 bloky za nim)."""
     link = result.link
     if link and link["role"] == "l3":
-        peer = by_id.get(link["peer_scope_id"])
-        if peer is not None:
-            result = peer
+        for peer_ref in link.get("peers") or []:
+            peer = by_id.get(peer_ref["scope_id"])
+            if peer is not None:
+                result = peer
+                break
     parents = (result.identity or {}).get("physical_interfaces") or []
     return parents[0] if parents else None
 

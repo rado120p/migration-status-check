@@ -560,7 +560,10 @@ them.
 Source of the link: the IRB interface's `l3_context` from `show evpn instance extensive` /
 `show mac-vrf routing instance extensive` (fact `evpn_instance`, phase 2.1), plus a matching
 VLAN/unit within the same instance; `master` means inet.0 (an Internet scope with no RI).
-Pairing is 1:1 — multiple candidates produce no link at all (no link beats a wrong one).
+The link is **N L2 : 1 L3** — one IRB serves every L2 scope of its bridge domain (lab
+172.20.20.4, BD-4094 with two access ports), and each L2 scope has exactly one L3
+counterpart. Ambiguity on the L3 side (multiple L3 candidates for one IRB) produces no link
+at all — no link beats a wrong one.
 
 **In the text report** (`render`), the L2 block (`E-LAN (L2 cast)`) is printed immediately
 after the L3 block of a linked service, and both carry a mutual pointer in their headers:
@@ -591,17 +594,28 @@ check catalogue above for details.
 optional key `scopes[].link`:
 
 ```jsonc
+// L3 (IRB) side - a list of all its L2 counterparts:
 "link": {
   "role": "l3",
-  "peer_scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
-  "peer_interface": "ae0.15",
-  "peer_instance": "EVPN-VLAN-AWARE-POP1"
+  "peers": [
+    {"scope_id": "svc:EVPN-VLAN-AWARE-POP1:E-LAN",
+     "interface": "ae0.15",
+     "instance": "EVPN-VLAN-AWARE-POP1"}
+  ]
+}
+// L2 (E-LAN) side - the counterpart is always exactly one:
+"link": {
+  "role": "l2",
+  "peer_scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
+  "peer_interface": "irb.15",
+  "peer_instance": "L3VPN-CPE14-UNI"
 }
 ```
 
-`role` is `"l3"` on the IRB side of the scope and `"l2"` on the E-LAN side; `peer_scope_id`,
-`peer_interface` and `peer_instance` describe the other side of the link. Without a link, the
-`link` key is absent from the scope entirely.
+`role` is `"l3"` on the IRB side of the scope and `"l2"` on the E-LAN side. The L3 side
+carries the `peers` list (N L2 : 1 L3); the L2 side has scalar `peer_scope_id`,
+`peer_interface` and `peer_instance`. Without a link, the `link` key is absent from the
+scope entirely.
 
 ---
 

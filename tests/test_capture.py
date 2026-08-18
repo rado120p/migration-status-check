@@ -372,10 +372,13 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
     assert all(sid in skipped for sid in internet_scope_ids)
     assert not (pinged_scopes & internet_scope_ids)
     # pozitivni tvrzeni: filtr nesmi umlcet ping uplne - IPVPN sluzby, ktere
-    # v profilu jsou, se skutecne pingly.
+    # v profilu jsou, se skutecne pingly. irb.4094 je vyjimka bez cile:
+    # jediny subnet je /24 (IPV4_FALLBACK_MIN_PREFIX fallback nepusti)
+    # a fake ARP na irb.4094 nic nema.
     assert ipvpn_scope_ids  # sanity - fixture musi mit IPVPN sluzby
     assert pinged_scopes
-    assert ipvpn_scope_ids <= pinged_scopes
+    assert ipvpn_scope_ids - {"svc:irb.4094:IPVPN"} <= pinged_scopes
+    assert "svc:irb.4094:IPVPN" not in pinged_scopes
     # vsechny scopy jsou porad ve snapshotu (inventory se nefiltruje)
     assert {s.id for s in snapshot.scopes} == all_scope_ids
 

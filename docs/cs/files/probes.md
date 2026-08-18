@@ -48,6 +48,12 @@ se přeskočí úplně.
 `/126` a delších (point-to-point rozsahy). Střílet náhodnou adresu do `/64` nemá smysl: je to
 zaručený neúspěch, který se v reportu čte jako nedostupné CPE.
 
+**U IPv4 platí `IPV4_FALLBACK_MIN_PREFIX = 30`** (rozhodnutí 2026-08-18) — fallback jen na
+`/30` a `/31`, kde je protějšek deterministický. Na čemkoli větším je to hádání: na
+`10.40.95.0/24` bez ARP důkazu fallback dřív vystřelil `.2` a report ukázal červený řádek
+o ničem. Subnet větší než /30 bez cíle vysvětlí check `ping_reachability` řádkem
+`SKIP … bez cile (subnet > /30)`.
+
 Typicky: PE má `.1`, zkusí se `.2`.
 
 ### `resolve_targets(scopes, arp_entries, nd_entries=None)`
@@ -76,11 +82,13 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
   nemeří, takže se nepingují v žádném tieru (live ARP, live ND i baseline). Prefixový test,
   ne substring: `learned_via` typu `ae0.14` je platný lokální L2 protějšek a projde. Ve
   faktech a v checkách `arp_present`/`nd_present` tyto záznamy dál zůstávají vidět;
-- když ARP/ND nic nedá, použije `subnet_fallback()` a označí `resolved_from:
-  "subnet-fallback"`. Pokud ale ARP/ND pro daný scope a rodinu obsahovaly záznamy a všechny
-  byly `.local`, fallback se nespouští — hosti prokazatelně žijí za vzdáleným PE a fabrikovaný
-  cíl by vygeneroval falešný FAIL; prázdné tabulky fallback pouštějí dál a potlačení je vždy
-  per rodina.
+- **fallback je per subnet, ne per scope** (lab 172.20.20.4, irb.4094 se dvěma rozsahy):
+  po ARP/ND tieru dostane `subnet_fallback()` každý lokální subnet, do kterého nepadl žádný
+  cíl — ARP důkaz v `10.40.94.0/24` tedy nenechá sousední `/30` bez cíle. Označí se
+  `resolved_from: "subnet-fallback"`. Potlačení `.local` důkazem je také per subnet: `.local`
+  záznam říká jen „hosti *tohoto* subnetu žijí za vzdáleným PE" — fabrikovaný cíl by tam
+  vygeneroval falešný FAIL — ale o ostatních subnetech neříká nic a jejich fallback nezastaví;
+  prázdné tabulky fallback pouštějí dál.
 
 V rámci jednoho scope přijdou cíle IPv4 před IPv6; napříč více scopy už pořadí neplatí — na
 pořadí nic nezávisí, checky rodinu čtou z pole `family`, ne z pozice v seznamu.

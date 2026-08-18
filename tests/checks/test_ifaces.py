@@ -448,9 +448,13 @@ def test_traffic_ceased_skips_when_baseline_had_no_traffic():
 
 L3_LINK = {
     "role": "l3",
-    "peer_scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
-    "peer_interface": "ae0.15",
-    "peer_instance": "EVPN-VLAN-AWARE-POP1",
+    "peers": [
+        {
+            "scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+            "interface": "ae0.15",
+            "instance": "EVPN-VLAN-AWARE-POP1",
+        }
+    ],
 }
 
 
@@ -466,6 +470,30 @@ def test_errors_on_linked_l3_scope_point_to_l2_block():
     assert finding.outcome is Outcome.INFO
     assert finding.label == "Interface errors / traffic"
     assert finding.value == "mereno na L2 (ae0.15) - viz blok nize"
+
+
+def test_errors_on_l3_scope_with_two_l2_peers_lists_both():
+    # N L2 : 1 L3 (lab BD-4094): odkaz musi vyjmenovat vsechny L2 casti,
+    # ne jen prvni - mereni bezi v kazdem z tech bloku.
+    link = {
+        "role": "l3",
+        "peers": [
+            {"scope_id": "svc:A:E-LAN", "interface": "ge-0/0/2.4094",
+             "instance": "EVPN-VLAN-AWARE-POP1"},
+            {"scope_id": "svc:B:E-LAN", "interface": "ge-0/0/6.4094",
+             "instance": "EVPN-VLAN-AWARE-POP1"},
+        ],
+    }
+    ctx = _ctx(
+        {"interfaces": {"irb.4094": {"admin_status": "up", "oper_status": "up"}}},
+        interfaces=("irb.4094",),
+        link=link,
+    )
+    findings = InterfaceErrorsCheck().run(ctx)
+    assert len(findings) == 1
+    assert findings[0].value == (
+        "mereno na L2 (ge-0/0/2.4094, ge-0/0/6.4094) - viz bloky nize"
+    )
 
 
 def test_traffic_on_linked_l3_scope_emits_nothing():

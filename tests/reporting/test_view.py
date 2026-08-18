@@ -436,15 +436,46 @@ def test_l3_link_note_points_below():
         [_check("interface_state")],
         link={
             "role": "l3",
-            "peer_scope_id": "svc:X:E-LAN",
-            "peer_interface": "ae0.15",
-            "peer_instance": "EVPN-VLAN-AWARE-POP1",
+            "peers": [
+                {
+                    "scope_id": "svc:X:E-LAN",
+                    "interface": "ae0.15",
+                    "instance": "EVPN-VLAN-AWARE-POP1",
+                }
+            ],
         },
     )
     view = build_view(scope)
     assert view.link_role == "l3"
     assert view.link_note == "L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)"
     assert "(L2 cast)" not in view.service_type
+
+
+def test_l3_link_note_lists_every_l2_peer():
+    # N L2 : 1 L3 (lab BD-4094) - poznamka vyjmenuje vsechny L2 casti.
+    scope = _scope(
+        [_check("interface_state")],
+        link={
+            "role": "l3",
+            "peers": [
+                {
+                    "scope_id": "svc:A:E-LAN",
+                    "interface": "ge-0/0/2.4094",
+                    "instance": "EVPN-VLAN-AWARE-POP1",
+                },
+                {
+                    "scope_id": "svc:B:E-LAN",
+                    "interface": "ge-0/0/6.4094",
+                    "instance": "EVPN-VLAN-AWARE-POP1",
+                },
+            ],
+        },
+    )
+    view = build_view(scope)
+    assert view.link_note == (
+        "L2 cast: ge-0/0/2.4094 v EVPN-VLAN-AWARE-POP1, "
+        "ge-0/0/6.4094 v EVPN-VLAN-AWARE-POP1 (bloky nize)"
+    )
 
 
 def test_l2_link_note_points_above_and_marks_type():

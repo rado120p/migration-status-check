@@ -769,7 +769,7 @@ def test_l2_l3_link_renders_paired_blocks(synthetic_snapshot):
         scope for scope in result.scopes
         if scope.link and scope.link["role"] == "l3"
     )
-    l2_scope = by_id[l3_scope.link["peer_scope_id"]]
+    l2_scope = by_id[l3_scope.link["peers"][0]["scope_id"]]
     assert "irb.15" in l3_scope.identity["interfaces"]
     assert l2_scope.identity["interfaces"] == ["ae0.15"]
 

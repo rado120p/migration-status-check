@@ -962,9 +962,13 @@ def test_linked_scopes_carry_link_payload():
     l2 = by_id["svc:EVPN-VLAN-AWARE-CPE14:E-LAN"]
     assert l3.link == {
         "role": "l3",
-        "peer_scope_id": l2.scope_id,
-        "peer_interface": "ae0.15",
-        "peer_instance": "EVPN-VLAN-AWARE-POP1",
+        "peers": [
+            {
+                "scope_id": l2.scope_id,
+                "interface": "ae0.15",
+                "instance": "EVPN-VLAN-AWARE-POP1",
+            }
+        ],
     }
     assert l2.link == {
         "role": "l2",
@@ -973,6 +977,74 @@ def test_linked_scopes_carry_link_payload():
         "peer_instance": "L3VPN-CPE14-UNI",
     }
     assert by_id["svc:OTHER:Internet"].link is None
+
+
+def _fanout_snapshot():
+    """_linked_snapshot + druhy L2 scope v teze bridge domain (lab BD-4094)."""
+    snapshot = _linked_snapshot()
+    second = Scope(
+        id="svc:MGMT-VLAN:E-LAN",
+        kind="service",
+        key=ScopeKey("MGMT-VLAN", "E-LAN", "vlan-aware"),
+        selectors=Selectors(
+            interfaces=["ae1.15"],
+            routing_instances=["EVPN-VLAN-AWARE-POP1"],
+            vlans=["15"],
+        ),
+    )
+    snapshot.scopes.append(second)
+    snapshot.facts["interfaces"]["ae1.15"] = {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_pps": 10,
+        "output_pps": 10,
+    }
+    instance = snapshot.facts["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]
+    instance["local_interfaces"]["total"] = 2
+    instance["local_interfaces"]["up"] = 2
+    instance["local_interfaces"]["entries"].append(
+        {"name": "ae1.15", "status": "Up"}
+    )
+    return snapshot
+
+
+def test_l3_scope_links_every_l2_scope_of_its_bridge_domain():
+    result = evaluate_snapshots(_fanout_snapshot())
+    by_id = {scope.scope_id: scope for scope in result.scopes}
+    l3 = by_id["svc:L3VPN-CPE14-UNI:IPVPN"]
+
+    assert l3.link == {
+        "role": "l3",
+        "peers": [
+            {
+                "scope_id": "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+                "interface": "ae0.15",
+                "instance": "EVPN-VLAN-AWARE-POP1",
+            },
+            {
+                "scope_id": "svc:MGMT-VLAN:E-LAN",
+                "interface": "ae1.15",
+                "instance": "EVPN-VLAN-AWARE-POP1",
+            },
+        ],
+    }
+    for l2_id in ("svc:EVPN-VLAN-AWARE-CPE14:E-LAN", "svc:MGMT-VLAN:E-LAN"):
+        assert by_id[l2_id].link == {
+            "role": "l2",
+            "peer_scope_id": l3.scope_id,
+            "peer_interface": "irb.15",
+            "peer_instance": "L3VPN-CPE14-UNI",
+        }
+
+
+def test_all_linked_l2_blocks_follow_their_l3_scope():
+    result = evaluate_snapshots(_fanout_snapshot())
+    ids = [scope.scope_id for scope in result.scopes]
+    l3_index = ids.index("svc:L3VPN-CPE14-UNI:IPVPN")
+    assert ids[l3_index + 1 : l3_index + 3] == [
+        "svc:EVPN-VLAN-AWARE-CPE14:E-LAN",
+        "svc:MGMT-VLAN:E-LAN",
+    ]
 
 
 def test_linked_l2_scope_follows_its_l3_scope():
@@ -1059,8 +1131,8 @@ def test_l3_l2_par_drzi_pohromade_pod_portem_l2_rozhrani():
     # L3 blok (irb.14, bez fyzickeho rodice) dedi rodice sve L2 casti:
     # par stoji pod l1:ae0, L3 pred L2 (vstup uz prosel _reorder_linked).
     l3 = _result("svc:INET:Internet", "Internet", interfaces=["irb.14"],
-                 link={"role": "l3", "peer_scope_id": "svc:ELAN:E-LAN",
-                       "peer_interface": "ae0.14", "peer_instance": "POP1"})
+                 link={"role": "l3", "peers": [{"scope_id": "svc:ELAN:E-LAN",
+                       "interface": "ae0.14", "instance": "POP1"}]})
     l2 = _result("svc:ELAN:E-LAN", "E-LAN", interfaces=["ae0.14"],
                  parents=["ae0"],
                  link={"role": "l2", "peer_scope_id": "svc:INET:Internet",

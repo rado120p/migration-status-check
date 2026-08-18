@@ -17,6 +17,10 @@ from migration_validator.addressing import is_link_local, link_local_is_configur
 from migration_validator.checks.base import Check, CheckContext, Mode
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
+from migration_validator.probes.ping import (
+    IPV4_FALLBACK_MIN_PREFIX,
+    IPV6_FALLBACK_MIN_PREFIX,
+)
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 
@@ -187,18 +191,23 @@ class PingReachabilityCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         probes: list[dict[str, Any]] = ctx.subject.get("ping", [])
-        if not probes:
-            if ctx.subject.get("ping_skipped"):
-                # Odfiltrovano profilem pri capture - vedome nesbirano,
-                # ne chybejici cil. Stav se nefabuluje: rekneme proc.
-                return [
-                    Finding(
-                        Outcome.SKIP,
-                        "ping neproveden - mimo profil",
-                        label="Ping",
-                        value="mimo profil",
-                    )
-                ]
+        if not probes and ctx.subject.get("ping_skipped"):
+            # Odfiltrovano profilem pri capture - vedome nesbirano,
+            # ne chybejici cil. Stav se nefabuluje: rekneme proc.
+            return [
+                Finding(
+                    Outcome.SKIP,
+                    "ping neproveden - mimo profil",
+                    label="Ping",
+                    value="mimo profil",
+                )
+            ]
+
+        # Subnet vetsi nez P2P prah bez jedineho cile: resolver tam fallback
+        # vedome nepousti (hadani cile z /24 vyrabi cerveny radek o nicem) -
+        # ale mlceni by se cetlo jako "zkontrolovano". Report rekne proc.
+        oversized = _oversized_subnets_without_targets(ctx.scope, probes)
+        if not probes and not oversized:
             return [
                 Finding(
                     Outcome.SKIP,
@@ -208,7 +217,17 @@ class PingReachabilityCheck(Check):
                 )
             ]
 
-        findings: list[Finding] = []
+        findings: list[Finding] = [
+            Finding(
+                Outcome.SKIP,
+                f"{network}: zadny cil - subnet vetsi nez /{threshold}, "
+                "fallback by cil jen hadal",
+                label="Ping",
+                family=family,
+                value=f"{network}  bez cile (subnet > /{threshold})",
+            )
+            for network, family, threshold in oversized
+        ]
         for family in (4, 6):
             batch = [probe for probe in probes if probe.get("family") == family]
             if not batch:
@@ -235,6 +254,45 @@ class PingReachabilityCheck(Check):
             )
 
         return findings
+
+
+def _oversized_subnets_without_targets(
+    scope: Any, probes: list[dict[str, Any]]
+) -> list[tuple[str, int, int]]:
+    """Subnety scope nad P2P prahem, do kterych nepadl zadny cil pingu.
+
+    Vraci (sit, rodina, prah) - prah jde do textu nalezu, aby IPv4 (/30)
+    a IPv6 (/126) mluvily kazdy svym cislem. Poradi drzi poradi selektoru.
+    """
+    result: list[tuple[str, int, int]] = []
+    seen: set[str] = set()
+    for family, prefixes, threshold in (
+        (4, scope.selectors.local_ipv4, IPV4_FALLBACK_MIN_PREFIX),
+        (6, scope.selectors.local_ipv6, IPV6_FALLBACK_MIN_PREFIX),
+    ):
+        targets = []
+        for probe in probes:
+            if probe.get("family") != family:
+                continue
+            try:
+                targets.append(ipaddress.ip_address(str(probe.get("target"))))
+            except ValueError:
+                continue
+        for prefix in prefixes:
+            try:
+                network = ipaddress.ip_interface(prefix).network
+            except ValueError:
+                continue
+            if network.prefixlen >= threshold:
+                continue
+            if any(target in network for target in targets):
+                continue
+            key = str(network)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append((key, family, threshold))
+    return result
 
 
 def _ping_findings(
