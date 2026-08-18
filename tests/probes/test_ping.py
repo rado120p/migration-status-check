@@ -1,3 +1,5 @@
+import ipaddress
+
 import pytest
 from lxml import etree
 
@@ -188,9 +190,18 @@ def test_no_resolved_target_is_ever_own_address():
 
     targets = resolve_targets(scopes, arp)
 
-    own = {"152.11.14.2", "152.11.14.1", "2001:db8:11:15::0", "2001:db8:11:15::1", "198.11.13.1"}
+    own = {
+        ipaddress.ip_address(address)
+        for address in (
+            "152.11.14.2",
+            "152.11.14.1",
+            "2001:db8:11:15::0",
+            "2001:db8:11:15::1",
+            "198.11.13.1",
+        )
+    }
     assert targets
-    assert all(target.target not in own for target in targets)
+    assert all(ipaddress.ip_address(target.target) not in own for target in targets)
 
 
 @pytest.mark.parametrize("position", (0, 1, 2))
@@ -201,10 +212,10 @@ def test_arp_guard_drops_own_address_at_any_position(position):
     tu self-ping brani, je own_addresses guard v resolve_targets.
 
     Vlastni adresa obchazi vsechny pozice v tabulce zamerne. Kdyz stala jen
-    na indexu 0, prosel mutant `if index > 0 or address != source`, ktery
-    pojistku plati jen na prvni prvek - test dokazoval, ze pojistka
-    existuje, ne ze plati na kazdy zaznam. Overeno spustenim proti temuz
-    mutantu: s parametrizaci pada na pozicich 1 a 2.
+    na indexu 0, prosel by mutant, ktery kontrolu own_addresses zkratkuje
+    hned po prvnim prvku (napr. `if index > 0 or not _is_own(...)`) - test
+    by pak dokazoval jen to, ze pojistka existuje, ne ze plati na kazdy
+    zaznam. Parametrizace pres pozice 0, 1, 2 tomuhle brani.
 
     Sousedi po obou stranach jsou tam i proto, aby test nemohl projit diky
     tomu, ze prazdny seznam po filtru spustil `if addresses:` vetev jako
@@ -212,7 +223,7 @@ def test_arp_guard_drops_own_address_at_any_position(position):
     """
     neighbours = ["198.11.13.2", "198.11.13.3"]
     ips = list(neighbours)
-    ips.insert(position, "198.11.13.1")  # vlastni zdrojova adresa scope
+    ips.insert(position, "198.11.13.1")  # vlastni adresa scope
     arp = [{"ip": ip, "interface": "ge-0/0/2.113"} for ip in ips]
 
     targets = resolve_targets([_scope(addresses=("198.11.13.1/24",))], arp)
@@ -238,7 +249,7 @@ def test_nd_guard_drops_own_address_at_any_position(position):
     )
     neighbours = ["2001:abcd:11:13::b", "2001:abcd:11:13::c"]
     ips = list(neighbours)
-    ips.insert(position, "2001:abcd:11:13::a")  # vlastni zdrojova adresa scope
+    ips.insert(position, "2001:abcd:11:13::a")  # vlastni adresa scope
     nd = [
         {
             "ip": ip,
