@@ -125,6 +125,34 @@ def test_ping_all_targets_reachable_passes():
     assert all(result.family == 4 for result in results)
 
 
+def test_ping_ok_value_carries_target():
+    """Produkce: u uspesneho radku nebylo poznat, KAM ping sel - cil
+    nesla jen message a BROKEN vetev. Hodnota ma tvar '5/5  2.1 ms  IP'."""
+    ctx = _ctx(
+        {
+            "ping": [
+                {
+                    "target": "198.11.13.2",
+                    "family": 4,
+                    "sent": 5,
+                    "received": 5,
+                    "rtt_avg_ms": 2.1,
+                }
+            ]
+        }
+    )
+    result = run_check(PingReachabilityCheck(), ctx)[0]
+    assert result.value == "5/5  2.1 ms  198.11.13.2"
+
+
+def test_ping_ok_value_without_rtt_still_carries_target():
+    ctx = _ctx(
+        {"ping": [{"target": "198.11.13.2", "family": 4, "sent": 5, "received": 5}]}
+    )
+    result = run_check(PingReachabilityCheck(), ctx)[0]
+    assert result.value == "5/5  198.11.13.2"
+
+
 def test_ping_partial_success_is_one_broken_finding_per_target():
     ctx = _ctx(
         {

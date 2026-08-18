@@ -263,7 +263,7 @@ def _ping_findings(
                     f"{target}: odpovedelo {received} z {sent}",
                     label="Ping",
                     family=family,
-                    value=value,
+                    value=f"{value}  {target}",
                     subject={"target": target, "sent": sent, "received": received},
                     details=details,
                 )
