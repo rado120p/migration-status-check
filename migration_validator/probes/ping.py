@@ -98,6 +98,13 @@ def _usable_nd(entry: dict[str, Any]) -> bool:
     return bool(mac) and mac != "none" and state not in ("unreachable", "incomplete")
 
 
+def _is_remote_learned(entry: dict[str, Any]) -> bool:
+    """EVPN VLAN-AWARE: zaznam nauceny pres '.local..N' je host za vzdalenym
+    PE - lokalni ping na nej nic nemeri. Prefix, ne substring: learned_via
+    'ae0.14' je platny lokalni L2 protejsek a projit musi."""
+    return (entry.get("learned_via") or "").startswith(".local")
+
+
 def _is_own(address: str, own: set[ipaddress.IPv4Address | ipaddress.IPv6Address]) -> bool:
     """Textove porovnani nestaci - zkraceny IPv6 zapis by proklouzl."""
     try:
@@ -143,6 +150,8 @@ def _baseline_addresses(
             continue
         ip = str(ip)
         if is_link_local(ip):
+            continue
+        if _is_remote_learned(entry):
             continue
         if nd and not _usable_nd(entry):
             continue
@@ -265,6 +274,7 @@ def resolve_targets(
                     for entry in arp_entries
                     if scope.selectors.matches_interface(str(entry.get("interface", "")))
                     and entry.get("ip")
+                    and not _is_remote_learned(entry)
                 ]
                 origin = "arp"
             else:
@@ -279,6 +289,7 @@ def resolve_targets(
                     and entry.get("ip")
                     and _usable_nd(entry)
                     and (keep_link_local or not is_link_local(str(entry["ip"])))
+                    and not _is_remote_learned(entry)
                 ]
                 origin = "nd"
 

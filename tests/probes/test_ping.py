@@ -120,6 +120,62 @@ def test_targets_come_from_arp():
     assert all(target.routing_instance == "L3VPN-CPE13-NNI" for target in targets)
 
 
+def test_local_learned_arp_entry_is_not_a_target():
+    """EVPN VLAN-AWARE: zaznam nauceny pres .local..N je host za vzdalenym
+    PE - pingat ho nema smysl (produkce 2026-08). Prefix, ne substring:
+    learned_via 'ae0.14' projit musi."""
+    arp = [
+        {"ip": "198.11.13.2", "interface": "ge-0/0/2.113", "learned_via": ".local..9"},
+        {"ip": "198.11.13.3", "interface": "ge-0/0/2.113", "learned_via": "ae0.14"},
+        {"ip": "198.11.13.4", "interface": "ge-0/0/2.113", "learned_via": None},
+    ]
+
+    targets = resolve_targets([_scope()], arp)
+
+    assert [t.target for t in targets] == ["198.11.13.3", "198.11.13.4"]
+
+
+def test_local_learned_nd_entry_is_not_a_target():
+    scope = _scope(
+        interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/64",)
+    )
+    nd = [
+        {
+            "ip": "2001:abcd:11:13::b",
+            "mac": "0c:00:ef:5e:df:01",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+            "learned_via": ".local..7",
+        },
+        {
+            "ip": "2001:abcd:11:13::c",
+            "mac": "0c:00:ef:5e:df:02",
+            "interface": "et-0/0/8.13",
+            "state": "reachable",
+            "learned_via": None,
+        },
+    ]
+
+    targets = resolve_targets([scope], [], nd)
+
+    assert [t.target for t in targets] == ["2001:abcd:11:13::c"]
+
+
+def test_baseline_skips_local_learned_entries():
+    """Baseline paruje jen podle subnetu - bez filtru by remote-PE hosty ze
+    stareho boxu vratil presne pri cutoveru, kdy se baseline pouziva."""
+    scope = _scope(interfaces=("irb.14",), addresses=("152.11.14.1/29",))
+    baseline_arp = [
+        {"ip": "152.11.14.4", "interface": "irb.14", "learned_via": ".local..5"},
+        {"ip": "152.11.14.5", "interface": "irb.14", "learned_via": "ae0.14"},
+    ]
+
+    targets = resolve_targets([scope], [], baseline_arp=baseline_arp)
+
+    assert [t.target for t in targets] == ["152.11.14.5"]
+    assert targets[0].resolved_from == "baseline-arp"
+
+
 def test_internet_service_has_no_routing_instance():
     targets = resolve_targets(
         [_scope(service_type="Internet", routing_instance=None)],
