@@ -153,6 +153,29 @@ def test_ping_ok_value_without_rtt_still_carries_target():
     assert result.value == "5/5  198.11.13.2"
 
 
+def test_ping_old_snapshot_record_with_source_key_still_evaluates():
+    """Schema zustava 9: stare snimky maji v ping zaznamech klic 'source',
+    nove uz ne - smiseny par pre(se source) x post(bez) musi vyhodnotit
+    stejne. Klic nikdo necte, tenhle test to prikovava."""
+    ctx = _ctx(
+        {
+            "ping": [
+                {
+                    "target": "198.11.13.2",
+                    "source": "198.11.13.1",
+                    "family": 4,
+                    "sent": 5,
+                    "received": 5,
+                    "rtt_avg_ms": 2.1,
+                }
+            ]
+        }
+    )
+    result = run_check(PingReachabilityCheck(), ctx)[0]
+    assert result.status is Status.PASS
+    assert result.value == "5/5  2.1 ms  198.11.13.2"
+
+
 def test_ping_partial_success_is_one_broken_finding_per_target():
     ctx = _ctx(
         {

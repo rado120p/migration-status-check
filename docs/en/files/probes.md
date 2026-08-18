@@ -8,7 +8,7 @@ Ping is the **only active test** in the tool — hence its own category outside 
 |---|---|---|
 | nature | passive state reading | active traffic generation |
 | scope | device-scoped (one RPC for the whole device) | per target |
-| inventory dependency | none | **yes** — without a scope, neither target nor source address is known |
+| inventory dependency | none | **yes** — without a scope, the target is not known |
 | when it runs | in the first phase of `capture` | after bulk collection (targets come from ARP/ND) |
 
 At `evaluate` time the ping result is ordinary data in the snapshot. That is what makes the
@@ -20,32 +20,25 @@ checks mutually independent and runnable in any order.
 
 ### `PingTarget`
 
-A frozen dataclass: `scope_id`, `target`, `source`, `routing_instance`, `resolved_from`
+A frozen dataclass: `scope_id`, `target`, `routing_instance`, `resolved_from`
 (`arp` | `nd` | `subnet-fallback`), `family` (4 | 6), `interface` (only for IPv6 link-local
 targets — see below). `to_dict()` produces the base of the snapshot record, into which the
 measured values are then merged.
 
 `scope_id` matters: it is how `Scope.select()` later attributes the probe back to its service.
 
-### `source_address(scope, family)`
-
-The address of the given family to ping from — the source family must match the target's,
-otherwise Junos ping rejects it:
-
-1. **`virtual_gw_v4`/`virtual_gw_v6` takes precedence** — on an IRB interface the correct
-   source is the virtual-gateway address, not the box's own address,
-2. otherwise the first `local_ipv4`/`local_ipv6` entry,
-3. otherwise `None` (ping runs without `source`).
-
-The prefix is stripped (`198.11.13.1/30` → `198.11.13.1`).
+No explicit source address is set — the router picks the egress address itself, based on
+its routing table, for the given target. The earlier explicit choice (VGW, otherwise the
+first local address) picked the wrong subnet on interfaces with multiple address ranges,
+and the ping failed with `bind: Can't assign requested address` (verified against
+production, 2026-08).
 
 ### `subnet_fallback(addresses, family, owned=None)`
 
 When the ARP/ND table for the interface is empty, the **first usable address in the
-subnet** that is not our own is tried. `owned` are other addresses the scope owns that must
-never come back as a target — typically an IRB interface's virtual-gateway address; without
-it the fallback would return the VGW as a target while `source_address()` already used the
-VGW as the source, producing a ping at itself.
+subnet** that is not our own is tried. `owned` carries all addresses the scope owns —
+local addresses as well as an IRB interface's virtual-gateway address; without it the
+fallback could return one of our own IPs as a target, producing a ping at itself.
 
 Network and broadcast addresses are skipped only for **IPv4** networks wider than /31 — on
 point-to-point links (/31) both addresses are legitimate hosts, and in IPv6 the
@@ -81,6 +74,12 @@ The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) 
   link-local;
 - for both families: not typical, but should ARP/ND ever return our own address, the target
   is dropped (a ping at yourself is a meaningless result);
+- **`_is_remote_learned(entry)`** filters out entries learned via `.local` (EVPN
+  VLAN-aware: a `learned_via` starting with `.local` marks a neighbour behind a remote PE) —
+  a local ping cannot measure anything about it, so these are never ping targets in any
+  tier (live ARP, live ND, or baseline). It is a prefix test, not a substring one:
+  `learned_via` of `ae0.14` is a legitimate local L2 peer and passes. They remain visible in
+  the facts and in the `arp_present`/`nd_present` checks;
 - falls back to `subnet_fallback()` when ARP/ND yields nothing, marking the record
   `resolved_from: "subnet-fallback"`.
 
@@ -93,7 +92,7 @@ Management interfaces never reach this point, because they never become scopes a
 
 ### `run_ping(device, target, count)`
 
-Runs `device.rpc.ping(host=..., count=..., rapid=True, [source=...],
+Runs `device.rpc.ping(host=..., count=..., rapid=True,
 [routing_instance=...], [interface=...])`. `rapid=True` cuts the run from ~5 s to ~0.3 s per
 target (verified against the lab that the response shape — `probe-results-summary` and its
 fields — stays the same, so `parse_ping_result()` needs no change). `interface` is passed

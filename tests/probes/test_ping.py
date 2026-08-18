@@ -322,7 +322,7 @@ def test_nd_guard_drops_own_address_at_any_position(position):
     assert all(t.resolved_from == "nd" for t in targets)
 
 
-def test_fallback_guard_catches_self_ping_owned_does_not_cover():
+def test_fallback_owned_covers_self_ping_from_overlapping_local_ranges():
     """Fallback shape, kde `owned` (prazdny - zadny VGW) self-ping nechyti,
     ale volani subnet_fallback s owned=[*local, *owned] ano.
 

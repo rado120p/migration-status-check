@@ -258,7 +258,7 @@ def resolve_targets(
                 for address in _baseline_addresses(
                     baseline_entries, _networks_for(local), family, nd=baseline_is_nd
                 )
-                if ipaddress.ip_address(address) not in own_addresses
+                if not _is_own(address, own_addresses)
             ]
             if baseline_addresses:
                 origin = "baseline-nd" if baseline_is_nd else "baseline-arp"

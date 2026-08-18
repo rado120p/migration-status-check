@@ -324,8 +324,9 @@ Reads finished results from the snapshot — the targets were resolved back duri
   - at least one packet answered → `ok`, message `<target>: odpovedelo N z M`,
   - none answered → `broken`, message `<target>: neodpovedel (M paketu)`.
 
-`value` is `<received>/<sent>` plus `  <rtt> ms` on a successful reply; on failure it is
-`  <target> neodpovedel`. `details` carries `resolved_from` (`arp` | `nd` |
+`value` is `<received>/<sent>` plus `  <rtt> ms` on a successful reply (omitted when the RTT
+could not be measured), then always `  <target>` — e.g. `5/5  2.1 ms  10.1.1.1`. On failure
+it is `  <target> neodpovedel`. `details` carries `resolved_from` (`arp` | `nd` |
 `subnet-fallback`) and `address` (`owning_prefix()`), so the result shows which configured
 range the target belongs to and whether it came from ARP/ND or was derived from the subnet.
 
