@@ -3,8 +3,8 @@
 Jediny aktivni test - proto vlastni kategorie mimo collectory. Bezi az po
 bulk sberu, protoze cile se odvozuji z ARP.
 
-Ping bezi jen v service rezimu: bez inventory neni znam cil ani source
-adresa, takze snapshot ma probes.ping prazdne.
+Ping bezi jen v service rezimu: bez inventory neni znam cil, takze snapshot
+ma probes.ping prazdne.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ DEFAULT_COUNT = 5
 class PingTarget:
     scope_id: str
     target: str
-    source: str | None
     routing_instance: str | None
     resolved_from: str  # bgp | arp | nd | subnet-fallback | baseline-arp | baseline-nd
     family: int
@@ -36,29 +35,11 @@ class PingTarget:
         return {
             "scope_id": self.scope_id,
             "target": self.target,
-            "source": self.source,
             "routing_instance": self.routing_instance,
             "resolved_from": self.resolved_from,
             "family": self.family,
             "interface": self.interface,
         }
-
-
-def source_address(scope: Scope, family: int) -> str | None:
-    """Adresa rozhrani v dane rodine. U IRB se pouziva virtual-gw.
-
-    Rodina zdroje musi odpovidat rodine cile - jinak Junos ping odmitne.
-    """
-    if family == 6:
-        gateway, local = scope.selectors.virtual_gw_v6, scope.selectors.local_ipv6
-    else:
-        gateway, local = scope.selectors.virtual_gw_v4, scope.selectors.local_ipv4
-
-    if gateway:
-        return gateway[0].split("/")[0]
-    if local:
-        return local[0].split("/")[0]
-    return None
 
 
 # Kratsi prefix nez tohle uz neni point-to-point linka. V IPv6 nema smysl
@@ -73,9 +54,9 @@ def subnet_fallback(
     """Prvni pouzitelna adresa ze subnetu, ktera neni nase vlastni.
 
     `owned` jsou dalsi adresy, ktere scope vlastni a ktere se nesmi vratit
-    jako cil - typicky virtual-gateway adresa IRB rozhrani. Bez tohohle
-    fallback vraci VGW jako cil, zatimco `source_address()` uz VGW pouzila
-    jako zdroj - vysledkem je ping sam na sebe (overeno proti laborce).
+    jako cil - typicky virtual-gateway adresa IRB rozhrani a vlastni local
+    adresy scope. Bez tohohle fallback vraci vlastni adresu jako cil -
+    vysledkem je ping sam na sebe (overeno proti laborce).
     """
     owned_ips: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
     for own in owned or ():
@@ -115,6 +96,14 @@ def _usable_nd(entry: dict[str, Any]) -> bool:
     mac = (entry.get("mac") or "").strip().lower()
     state = (entry.get("state") or "").strip().lower()
     return bool(mac) and mac != "none" and state not in ("unreachable", "incomplete")
+
+
+def _is_own(address: str, own: set[ipaddress.IPv4Address | ipaddress.IPv6Address]) -> bool:
+    """Textove porovnani nestaci - zkraceny IPv6 zapis by proklouzl."""
+    try:
+        return ipaddress.ip_address(address) in own
+    except ValueError:
+        return False
 
 
 def _networks_for(local: list[str]) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
@@ -208,8 +197,6 @@ def resolve_targets(
         keep_link_local = link_local_is_configured(scope)
 
         for family in (4, 6):
-            source = source_address(scope, family)
-
             if family == 4:
                 local = scope.selectors.local_ipv4
                 owned = scope.selectors.virtual_gw_v4
@@ -252,7 +239,7 @@ def resolve_targets(
                     bgp_addresses.append(str(neighbor_ip))
             if bgp_addresses:
                 targets.extend(
-                    PingTarget(scope.id, address, source, instance, "bgp", family)
+                    PingTarget(scope.id, address, instance, "bgp", family)
                     for address in bgp_addresses
                 )
                 continue
@@ -262,12 +249,12 @@ def resolve_targets(
                 for address in _baseline_addresses(
                     baseline_entries, _networks_for(local), family, nd=baseline_is_nd
                 )
-                if address != source and ipaddress.ip_address(address) not in own_addresses
+                if ipaddress.ip_address(address) not in own_addresses
             ]
             if baseline_addresses:
                 origin = "baseline-nd" if baseline_is_nd else "baseline-arp"
                 targets.extend(
-                    PingTarget(scope.id, address, source, instance, origin, family)
+                    PingTarget(scope.id, address, instance, origin, family)
                     for address in baseline_addresses
                 )
                 continue
@@ -297,21 +284,20 @@ def resolve_targets(
 
             if addresses:
                 targets.extend(
-                    PingTarget(scope.id, address, source, instance, origin, family, interface)
+                    PingTarget(scope.id, address, instance, origin, family, interface)
                     for address, interface in addresses
                     # Neplati typicky, ale kdyby ARP/ND vratila nasi vlastni
-                    # adresu, ping sam na sebe je nesmyslny vysledek - radsi
-                    # zadny cil nez lhavy.
-                    if address != source
+                    # adresu (gratuitous ARP / duplicitni adresa muze vlastni
+                    # IP dostat do tabulky na kterekoliv pozici), ping sam na
+                    # sebe je nesmyslny vysledek - radsi zadny cil nez lhavy.
+                    if not _is_own(address, own_addresses)
                 )
                 continue
 
-            fallback = subnet_fallback(local, family, owned=owned)
-            if fallback and fallback != source:
+            fallback = subnet_fallback(local, family, owned=[*local, *owned])
+            if fallback:
                 targets.append(
-                    PingTarget(
-                        scope.id, fallback, source, instance, "subnet-fallback", family
-                    )
+                    PingTarget(scope.id, fallback, instance, "subnet-fallback", family)
                 )
 
     return targets
@@ -386,8 +372,6 @@ def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dic
         # poli - takze parse_ping_result se nemeni.
         "rapid": True,
     }
-    if target.source:
-        kwargs["source"] = target.source
     if target.routing_instance:
         kwargs["routing_instance"] = target.routing_instance
     if target.interface:

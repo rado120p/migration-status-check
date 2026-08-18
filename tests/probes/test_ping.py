@@ -3,9 +3,10 @@ from lxml import etree
 
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.probes.ping import (
+    PingTarget,
     parse_ping_result,
     resolve_targets,
-    source_address,
+    run_ping,
     subnet_fallback,
 )
 
@@ -40,42 +41,6 @@ def _scope(
             bgp_neighbors_inactive=list(bgp_neighbors_inactive),
         ),
     )
-
-
-def test_source_is_interface_address():
-    assert source_address(_scope(), 4) == "198.11.13.1"
-
-
-def test_source_prefers_virtual_gw_on_irb():
-    scope = _scope(
-        interfaces=("irb.14",),
-        addresses=("152.11.14.2/29",),
-        virtual_gw_v4=("152.11.14.1",),
-    )
-    assert source_address(scope, 4) == "152.11.14.1"
-
-
-def test_source_none_when_no_address():
-    assert source_address(_scope(addresses=()), 4) is None
-
-
-def test_source_follows_target_family():
-    scope = _scope(
-        addresses=("152.11.13.1/30",),
-        local_ipv6=("2001:abcd:11:13::a/127",),
-    )
-
-    assert source_address(scope, 4) == "152.11.13.1"
-    assert source_address(scope, 6) == "2001:abcd:11:13::a"
-
-
-def test_virtual_gateway_wins_over_interface_address():
-    scope = _scope(
-        addresses=("152.11.14.2/29",),
-        virtual_gw_v4=("152.11.14.1",),
-    )
-
-    assert source_address(scope, 4) == "152.11.14.1"
 
 
 @pytest.mark.parametrize(
@@ -149,7 +114,7 @@ def test_targets_come_from_arp():
 
     assert [target.target for target in targets] == ["198.11.13.2", "198.11.13.3"]
     assert all(target.resolved_from == "arp" for target in targets)
-    assert all(target.source == "198.11.13.1" for target in targets)
+    assert "source" not in targets[0].to_dict()
     assert all(target.routing_instance == "L3VPN-CPE13-NNI" for target in targets)
 
 
@@ -172,8 +137,8 @@ def test_irb_fallback_never_pings_own_virtual_gateway():
     """Regrese na live nalez: irb.14, 152.11.14.2/29, VGW 152.11.14.1.
 
     Bez opravy vraci ARP-prazdny scope fallback na 152.11.14.1 - presne tu
-    adresu, kterou `source_address()` zvolila jako zdroj. Ping tak jde sam
-    na sebe a sluzba dostane verdikt o nicem. Overeno proti 172.20.20.5.
+    adresu, kterou by scope pouzil jako VGW. Ping tak jde sam na sebe a
+    sluzba dostane verdikt o nicem. Overeno proti 172.20.20.5.
     """
     scope = _scope(
         scope_id="svc:EVPN-VLAN-AWARE-INTERNET:Internet",
@@ -187,13 +152,13 @@ def test_irb_fallback_never_pings_own_virtual_gateway():
     targets = resolve_targets([scope], [])
 
     assert len(targets) == 1
-    assert targets[0].source == "152.11.14.1"
-    assert targets[0].target != targets[0].source
     assert targets[0].target == "152.11.14.3"
+    assert targets[0].target != "152.11.14.1"
 
 
-def test_no_resolved_target_ever_equals_its_own_source():
-    """Invariant, ne implementacni detail: ping zdroj == cil je vzdy nesmysl.
+def test_no_resolved_target_is_ever_own_address():
+    """Invariant, ne implementacni detail: ping na vlastni adresu je vzdy
+    nesmysl - guard je own_addresses, ne source.
 
     Pinuje se pres vsechny cesty, ktere resolve_targets muze vzit - ARP,
     ND i subnet-fallback, s i bez virtual-gw - aby regrese kdekoliv v
@@ -223,8 +188,9 @@ def test_no_resolved_target_ever_equals_its_own_source():
 
     targets = resolve_targets(scopes, arp)
 
-    assert targets  # sanity - test by jinak proslo prazdnym seznamem
-    assert all(target.target != target.source for target in targets)
+    own = {"152.11.14.2", "152.11.14.1", "2001:db8:11:15::0", "2001:db8:11:15::1", "198.11.13.1"}
+    assert targets
+    assert all(target.target not in own for target in targets)
 
 
 @pytest.mark.parametrize("position", (0, 1, 2))
@@ -232,7 +198,7 @@ def test_arp_guard_drops_own_address_at_any_position(position):
     """Gratuitous ARP / duplicitni adresa: vlastni zdrojova adresa se muze
     objevit primo v ARP tabulce, ne jen dojit z owned/VGW smeru. `owned` na
     tohle nema dosah - ARP vetev vubec nevola subnet_fallback. Jedine, co
-    tu self-ping brani, je filtr `if address != source` v resolve_targets.
+    tu self-ping brani, je own_addresses guard v resolve_targets.
 
     Vlastni adresa obchazi vsechny pozice v tabulce zamerne. Kdyz stala jen
     na indexu 0, prosel mutant `if index > 0 or address != source`, ktery
@@ -252,7 +218,6 @@ def test_arp_guard_drops_own_address_at_any_position(position):
     targets = resolve_targets([_scope(addresses=("198.11.13.1/24",))], arp)
 
     assert [t.target for t in targets] == neighbours
-    assert all(t.target != t.source for t in targets)
 
 
 @pytest.mark.parametrize("position", (0, 1, 2))
@@ -260,7 +225,7 @@ def test_nd_guard_drops_own_address_at_any_position(position):
     """IPv6 obdoba: IRB muze odpovidat za svou vlastni adresu v ND (nebo jde
     o duplicate-address stav behem cutoveru) - vlastni adresa se objevi
     primo v ND tabulce. Zase mimo dosah `owned` (ND vetev take nevola
-    subnet_fallback) - chrani jen `if address != source`.
+    subnet_fallback) - chrani jen own_addresses guard v resolve_targets.
 
     Adresa scope je /64, ne /127: pri /127 vratil subnet_fallback presne
     tehoz souseda, ktery se ocekaval z ND, takze i uplne smazana ND vetev
@@ -288,20 +253,19 @@ def test_nd_guard_drops_own_address_at_any_position(position):
 
     assert [t.target for t in targets] == neighbours
     assert all(t.resolved_from == "nd" for t in targets)
-    assert all(t.target != t.source for t in targets)
 
 
 def test_fallback_guard_catches_self_ping_owned_does_not_cover():
     """Fallback shape, kde `owned` (prazdny - zadny VGW) self-ping nechyti,
-    ale obecny strazce `fallback != source` ano.
+    ale volani subnet_fallback s owned=[*local, *owned] ano.
 
-    Scope ma dve IPv4 adresy: "10.0.0.1/32" (source_address bere prvni v
-    poradi jako zdroj - zadny VGW) a "10.0.0.2/30". Prvni adresa je /32,
-    subnet_fallback ji preskoci (network.prefixlen >= max_prefixlen). Padne
-    to na druhou adresu, jejiz sit 10.0.0.0/30 obsahuje 10.0.0.1 jako
-    validniho kandidata - a ten je presne roven zdroji. `owned` o tomhle
-    prekryvu nic nevi (neni to VGW), takze bez obecneho strazce by fallback
-    tuhle adresu vratil jako cil.
+    Scope ma dve IPv4 adresy: "10.0.0.1/32" a "10.0.0.2/30" (zadny VGW).
+    Prvni adresa je /32, subnet_fallback ji preskoci (network.prefixlen >=
+    max_prefixlen). Padne to na druhou adresu, jejiz sit 10.0.0.0/30
+    obsahuje 10.0.0.1 jako validniho kandidata - a ten je presne jedna z
+    local adres scope. Puvodni `owned` o tomhle prekryvu nic nevi (neni to
+    VGW), ale kdyz resolve_targets poslal do subnet_fallback i local adresy
+    jako owned, fallback vrati zadny cil.
     """
     scope = _scope(addresses=("10.0.0.1/32", "10.0.0.2/30"), virtual_gw_v4=())
 
@@ -581,7 +545,6 @@ def test_bgp_neighbor_wins_over_baseline_and_arp():
 
     assert [t.target for t in targets] == ["198.11.13.2"]
     assert targets[0].resolved_from == "bgp"
-    assert targets[0].source == "198.11.13.1"
 
 
 def test_bgp_neighbors_split_by_family():
@@ -778,3 +741,36 @@ def test_parse_ping_result_handles_total_loss():
     result = parse_ping_result(xml)
     assert result["received"] == 0
     assert result["rtt_avg_ms"] is None
+
+
+class _RpcRecorder:
+    def __init__(self):
+        self.kwargs = None
+
+    def ping(self, **kwargs):
+        self.kwargs = kwargs
+        return etree.fromstring(
+            "<ping-results><probe-results-summary>"
+            "<probes-sent>5</probes-sent><responses-received>5</responses-received>"
+            "<packet-loss>0</packet-loss><rtt-average>2100</rtt-average>"
+            "</probe-results-summary></ping-results>"
+        )
+
+
+class _RpcDevice:
+    def __init__(self):
+        self.rpc = _RpcRecorder()
+
+
+def test_run_ping_never_sets_source():
+    """Router voli egress adresu sam - explicitni source u multi-range irb
+    miril mimo subnet cile a ping padal (produkce 2026-08)."""
+    device = _RpcDevice()
+    target = PingTarget("svc:X:IPVPN", "198.11.13.2", "L3VPN-CPE13-NNI", "arp", 4)
+
+    record = run_ping(device, target)
+
+    assert "source" not in device.rpc.kwargs
+    assert device.rpc.kwargs["host"] == "198.11.13.2"
+    assert device.rpc.kwargs["routing_instance"] == "L3VPN-CPE13-NNI"
+    assert "source" not in record
