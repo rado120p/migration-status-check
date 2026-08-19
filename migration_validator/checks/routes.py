@@ -13,6 +13,12 @@ Identita routy je (RIB, prefix), next-hop je hodnota. Diky tomu se zmena
 next-hopu cte jako zmenena routa - jeden radek se sloupcem ZMENA - ne jako
 routa zmizela a jina pribyla.
 
+Check cte jen zaznamy s `protocol == "static"` (fakta) / `route_type ==
+"static"` (zamer) - agregaty ma od 2026-08-19 QNH vlastni
+`aggregate_route_status`. Klicovani `(rib, prefix)` se s per-hop zaznamy
+nemeni: casteci deaktivace (nektere next-hopy vypnute, jine ne) zije uvnitr
+jednoho zaznamu, ne jako druha identita.
+
 Zapsany predpoklad: jmena RIB migraci prezijou. `_aligned_baseline_data`
 v enginu preslovnuje mezi baseline a subjectem jen oblast `interfaces`;
 `routes` jsou klicovane table -> prefix a preslovneni nedostanou. V laborce
@@ -64,12 +70,22 @@ def _next_hop_text(data: dict[str, Any] | None) -> str | None:
     return ", ".join(sorted(next_hops)) if next_hops else "-"
 
 
-def _flatten(routes: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
+def _flatten(
+    routes: dict[str, Any] | None, protocol: str
+) -> dict[tuple[str, str], dict[str, Any]]:
+    # Chybejici klic 'protocol' je zaznam ze snapshotu pred schematem 10 -
+    # tehdy se sbiraly jen statiky, takze default je 'static', ne chyba.
     return {
         (table, prefix): data
         for table, prefixes in (routes or {}).items()
         for prefix, data in prefixes.items()
+        if str(data.get("protocol", "static")) == protocol
     }
+
+
+def _hop_text(hop: dict[str, Any]) -> str:
+    interface = hop.get("interface")
+    return f"{hop['to']} via {interface}" if interface else str(hop["to"])
 
 
 @register
@@ -82,9 +98,14 @@ class StaticRouteStatusCheck(Check):
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        static_selectors = [
+            route
+            for route in ctx.scope.selectors.static_routes
+            if route.get("route_type", "static") == "static"
+        ]
         configured = {
             (str(route.get("rib")), str(route.get("prefix")))
-            for route in ctx.scope.selectors.static_routes
+            for route in static_selectors
         }
         # Chybejici klic 'active' znamena zamer od parseru pred vlnou 8.
         # Snapshot i inventory maji od te vlny schema 5, takze se takovy
@@ -93,26 +114,34 @@ class StaticRouteStatusCheck(Check):
         #
         # Klicovani jen dvojici (rib, prefix) je bezpecne, ne opomenuti:
         # duplicitni identita s ruznymi priznaky by umlcela i tu aktivni
-        # routu, ale parser dva zaznamy pro tentyz prefix nevydava. Zmereno
-        # 2026-08-04 na zive laborce konfiguraci s holym next-hopem a dvema
-        # qualified-next-hopy (jeden deaktivovany): parser vydal jediny
-        # zaznam. `configured` je klicovana stejne - je to sdileny dusledek,
-        # ne nekonzistence mezi dvema mnozinami.
+        # routu, ale parser dva zaznamy pro tentyz prefix nevydava. Od
+        # 2026-08-19 QNH pro qualified next-hopy drzi jeden zaznam na
+        # (rib, prefix) konstrukce `_static_routes_under` v parseru -
+        # castecna deaktivace zije uvnitr `next_hops`, ne jako druha
+        # identita.
         deactivated = {
             (str(route.get("rib")), str(route.get("prefix")))
-            for route in ctx.scope.selectors.static_routes
+            for route in static_selectors
             if route.get("active", True) is False
+        }
+        hops_by_identity = {
+            (str(route.get("rib")), str(route.get("prefix"))): route.get("next_hops") or []
+            for route in static_selectors
         }
         # Baseline ZAMER, ne baseline mereni. Priznak deaktivace je v
         # inventory, takze `ctx.baseline` (fakta) o nem nevi nic.
         # `ctx.baseline_scope` je None v behu bez baselinu i u nesparovane
         # sluzby - v obou pripadech je spravna odpoved "neni s cim
         # porovnat", ne "v baselinu byla aktivni".
-        baseline_routes = (
-            ctx.baseline_scope.selectors.static_routes
-            if ctx.baseline_scope is not None
-            else []
-        )
+        baseline_routes = [
+            route
+            for route in (
+                ctx.baseline_scope.selectors.static_routes
+                if ctx.baseline_scope is not None
+                else []
+            )
+            if route.get("route_type", "static") == "static"
+        ]
         baseline_deactivated = {
             (str(route.get("rib")), str(route.get("prefix")))
             for route in baseline_routes
@@ -122,8 +151,12 @@ class StaticRouteStatusCheck(Check):
             (str(route.get("rib")), str(route.get("prefix")))
             for route in baseline_routes
         }
-        subject = _flatten(ctx.subject.get("routes"))
-        baseline = _flatten((ctx.baseline or {}).get("routes"))
+        baseline_hops_by_identity = {
+            (str(route.get("rib")), str(route.get("prefix"))): route.get("next_hops") or []
+            for route in baseline_routes
+        }
+        subject = _flatten(ctx.subject.get("routes"), "static")
+        baseline = _flatten((ctx.baseline or {}).get("routes"), "static")
 
         findings = []
         for identity in sorted(configured | set(subject) | set(baseline)):
@@ -140,6 +173,8 @@ class StaticRouteStatusCheck(Check):
                         if identity in baseline_configured
                         else None
                     ),
+                    hops=hops_by_identity.get(identity, ()),
+                    baseline_hops=baseline_hops_by_identity.get(identity, ()),
                 )
             )
         return findings
@@ -153,12 +188,45 @@ class StaticRouteStatusCheck(Check):
         is_device: bool,
         deactivated: bool,
         baseline_deactivated: bool | None,
+        hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+        baseline_hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
     ) -> Finding:
         rib, prefix = identity
         label = f"{rib} {prefix}"
         group = "Staticke routy"
         family = prefix_family(prefix)
         was = _next_hop_text(baseline)
+
+        inactive_hops = [h for h in hops if not h.get("active", True)]
+        active_hops = [h for h in hops if h.get("active", True)]
+
+        if hops and not active_hops and subject is None and not deactivated:
+            # Zadny hop nema forwardovat - zamer je stejny jako u routy
+            # deaktivovane cele (vetev nize), jen na urovni next-hopu.
+            # Absence v tabulce je tu ocekavana, ne rozpor - nejde tedy o
+            # BROKEN vetev 'neni v tabulce', ale o informacni stav pres
+            # sdilenou deactivation_outcome semantiku.
+            if baseline_hops:
+                baseline_all_hops_off = all(
+                    not h.get("active", True) for h in baseline_hops
+                )
+            else:
+                baseline_all_hops_off = None
+            outcome = deactivation_outcome(True, baseline_all_hops_off)
+            message = (
+                f"{rib} {prefix}: vsechny next-hopy jsou deaktivovane"
+                + (" - migrace nedokoncena" if outcome is Outcome.BROKEN else "")
+            )
+            return Finding(
+                outcome,
+                message,
+                label=label,
+                group=group,
+                family=family,
+                value="deaktivovana",
+                baseline_value=was,
+                baseline=baseline,
+            )
 
         if deactivated and subject is None:
             # Radek 4 tabulky (aktivni ted, vypnuta v baselinu) se sem
@@ -295,9 +363,15 @@ class StaticRouteStatusCheck(Check):
             )
 
         if was is not None and was != now:
-            return Finding(
+            outcome, message = self._annotate_inactive_hops(
                 Outcome.DEGRADED,
                 f"{rib} {prefix}: next-hop se zmenil {was} -> {now}",
+                inactive_hops,
+                baseline_hops,
+            )
+            return Finding(
+                outcome,
+                message,
                 label=label,
                 group=group,
                 family=family,
@@ -307,9 +381,15 @@ class StaticRouteStatusCheck(Check):
                 subject=subject,
             )
 
-        return Finding(
+        outcome, message = self._annotate_inactive_hops(
             Outcome.OK,
             f"{rib} {prefix}: {now}",
+            inactive_hops,
+            baseline_hops,
+        )
+        return Finding(
+            outcome,
+            message,
             label=label,
             group=group,
             family=family,
@@ -318,3 +398,50 @@ class StaticRouteStatusCheck(Check):
             baseline=baseline,
             subject=subject,
         )
+
+    @staticmethod
+    def _annotate_inactive_hops(
+        outcome: Outcome,
+        message: str,
+        inactive_hops: list[dict[str, Any]],
+        baseline_hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+    ) -> tuple[Outcome, str]:
+        """Zdravy/zmeneny radek s deaktivovanym next-hopem se nesmi tvarit
+        zdrave (R-2 to nezakazuje - deaktivovany prvek je nalez sam o sobe,
+        stejne jako u cele routy). Kazdy deaktivovany next-hop eskaluje
+        vysledek radku pres sdilenou `deactivation_outcome`; vyhrava
+        nejhorsi (BROKEN > DEGRADED > puvodni vysledek), do zpravy se
+        pripoji vypis deaktivovanych hopu a jedna souhrnna pripominka.
+        """
+        if not inactive_hops:
+            return outcome, message
+
+        baseline_hop_map = {
+            (h.get("to"), h.get("interface")): h for h in baseline_hops
+        }
+        rank = {Outcome.OK: 0, Outcome.DEGRADED: 1, Outcome.BROKEN: 2}
+        worst = outcome
+        newly_deactivated = False
+        same_as_baseline = False
+        for hop in inactive_hops:
+            baseline_hop = baseline_hop_map.get((hop.get("to"), hop.get("interface")))
+            hop_baseline_off = (
+                not baseline_hop.get("active", True) if baseline_hop is not None else None
+            )
+            hop_outcome = deactivation_outcome(True, hop_baseline_off)
+            if hop_baseline_off is False:
+                newly_deactivated = True
+            elif hop_baseline_off is True:
+                same_as_baseline = True
+            if hop_outcome is not None and rank[hop_outcome] > rank[worst]:
+                worst = hop_outcome
+
+        message += "; deaktivovany next-hop: " + ", ".join(
+            _hop_text(h) for h in inactive_hops
+        )
+        if worst is Outcome.BROKEN or newly_deactivated:
+            message += " - migrace nedokoncena"
+        elif same_as_baseline:
+            message += " (stejne jako v baseline)"
+
+        return worst, message

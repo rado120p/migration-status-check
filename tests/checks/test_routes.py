@@ -13,17 +13,47 @@ from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 CONFIGURED = [
-    {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]},
+    {
+        "rib": "inet.0",
+        "prefix": "198.62.1.0/29",
+        "route_type": "static",
+        "next_hops": [
+            {"to": "152.11.13.2", "interface": None,
+             "qualified": False, "active": True},
+        ],
+    },
 ]
 
 CONFIGURED_TWO_RIBS = [
-    {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]},
+    {
+        "rib": "inet.0",
+        "prefix": "198.62.1.0/29",
+        "route_type": "static",
+        "next_hops": [
+            {"to": "152.11.13.2", "interface": None,
+             "qualified": False, "active": True},
+        ],
+    },
     {
         "rib": "L3VPN-CPE13-NNI.inet6.0",
         "prefix": "2001:eeee::/64",
-        "next_hop": ["2001:db8:11:13::b"],
+        "route_type": "static",
+        "next_hops": [
+            {"to": "2001:db8:11:13::b", "interface": None,
+             "qualified": False, "active": True},
+        ],
     },
 ]
+
+
+def _route_with_hops(hops, rib="inet.0", prefix="198.62.1.0/29"):
+    """CONFIGURED-tvar selektoru s danymi next-hopy."""
+    return {
+        "rib": rib,
+        "prefix": prefix,
+        "route_type": "static",
+        "next_hops": list(hops),
+    }
 
 
 def _scope(static_routes=None) -> Scope:
@@ -35,11 +65,14 @@ def _scope(static_routes=None) -> Scope:
     )
 
 
-def _ctx(subject_routes, baseline_routes=None, scope=None) -> CheckContext:
+def _ctx(
+    subject_routes, baseline_routes=None, scope=None, baseline_scope=None
+) -> CheckContext:
     return CheckContext(
         scope=scope or _scope(CONFIGURED),
         subject={"routes": subject_routes},
         baseline={"routes": baseline_routes} if baseline_routes is not None else None,
+        baseline_scope=baseline_scope,
         config=default_config(),
     )
 
@@ -637,3 +670,90 @@ def test_deactivated_route_still_in_the_table_is_not_hidden_by_deactivation_bran
     finding = findings[0]
     assert finding.outcome is Outcome.OK
     assert finding.value == "4.4.4.4"
+
+
+def test_aggregate_zaznamy_static_check_ignoruje():
+    subject = {
+        "inet.0": {
+            "198.62.0.0/16": {"next_hop": [], "via": [],
+                              "active": True, "protocol": "aggregate"},
+        }
+    }
+    findings = StaticRouteStatusCheck().run(_ctx(subject, scope=_scope([])))
+    assert findings == []
+
+
+def test_stary_baseline_bez_protocol_se_cte_jako_static():
+    baseline = {
+        "inet.0": {
+            "198.62.1.0/29": {"next_hop": ["152.11.13.2"], "via": [],
+                              "active": True},
+        }
+    }
+    findings = StaticRouteStatusCheck().run(_ctx(_installed(), baseline))
+    assert [f.outcome for f in findings] == [Outcome.OK]
+
+
+def test_deaktivovany_hop_se_anotuje_na_ok_radku():
+    configured = [_route_with_hops([
+        {"to": "152.11.13.2", "interface": None,
+         "qualified": False, "active": True},
+        {"to": "152.11.13.3", "interface": None,
+         "qualified": True, "active": False},
+    ])]
+    ctx = _ctx(_installed(), scope=_scope(configured))
+    (finding,) = StaticRouteStatusCheck().run(ctx)
+    # hop deaktivovany, baseline neni k porovnani -> DEGRADED (R-2 drzi:
+    # deaktivovany prvek je nalez, baseline urcuje jen JAK NAHLAS)
+    assert finding.outcome is Outcome.DEGRADED
+    assert "deaktivovany next-hop: 152.11.13.3" in finding.message
+
+
+def test_hop_deaktivovany_i_v_baseline_zamer_je_degraded_s_tichou_zpravou():
+    configured = [_route_with_hops([
+        {"to": "152.11.13.2", "interface": None,
+         "qualified": False, "active": True},
+        {"to": "152.11.13.3", "interface": None,
+         "qualified": True, "active": False},
+    ])]
+    ctx = _ctx(
+        _installed(),
+        scope=_scope(configured),
+        baseline_scope=_scope(configured),
+        baseline_routes=_installed(),
+    )
+    (finding,) = StaticRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.DEGRADED
+    assert "stejne jako v baseline" in finding.message
+
+
+def test_hop_nove_deaktivovany_vs_baseline_je_broken():
+    active_hops = [
+        {"to": "152.11.13.2", "interface": None,
+         "qualified": False, "active": True},
+        {"to": "152.11.13.3", "interface": None,
+         "qualified": True, "active": True},
+    ]
+    now_hops = [dict(active_hops[0]), {**active_hops[1], "active": False}]
+    ctx = _ctx(
+        _installed(),
+        scope=_scope([_route_with_hops(now_hops)]),
+        baseline_scope=_scope([_route_with_hops(active_hops)]),
+        baseline_routes=_installed(),
+    )
+    (finding,) = StaticRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.BROKEN
+    assert "migrace nedokoncena" in finding.message
+
+
+def test_vsechny_hopy_deaktivovane_a_neni_v_tabulce_neni_broken():
+    configured = [_route_with_hops([
+        {"to": "152.11.13.2", "interface": None,
+         "qualified": True, "active": False},
+    ])]
+    ctx = _ctx({}, scope=_scope(configured))
+    (finding,) = StaticRouteStatusCheck().run(ctx)
+    # zadny aktivni hop = zamer neforwardovat; absence v tabulce je
+    # informacni stav pres deactivation_outcome, ne BROKEN
+    assert finding.outcome is Outcome.DEGRADED
+    assert finding.value == "deaktivovana"
