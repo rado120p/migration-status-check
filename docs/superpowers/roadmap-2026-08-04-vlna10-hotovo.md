@@ -189,6 +189,11 @@ adresu, nebo `interface-name`, nikdy nic jiného), necvičí žádná fixture �
 drží ho jen jednorázové měření na živé laborce 2026‑08‑04, ne regresní
 test.
 
+Uzavřeno 2026‑08‑19 specem `2026-08-19-qnh-a-agregatni-routy-design.md`:
+parser drží per-hop záznamy (aktivní i deaktivované next-hopy pohromadě v
+jednom zázname), takže bod 17 (klíčování `(rib, prefix)`) se vyřešil beze
+změny — žádné překlíčování nebylo potřeba.
+
 ### 21. Dual-homed ESI a neasertovaná DF role
 
 Nový bod, změřený při resyncu fixtures. Dual-homed ESI

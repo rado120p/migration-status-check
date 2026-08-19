@@ -171,7 +171,18 @@ def test_inactive_route_without_baseline_is_degraded():
 def test_route_that_became_active_passes():
     """Zlepseni neni nalez (R-2).
 
-    Zabiji mutanta: porovnani na nerovnost misto na smer zmeny.
+    Upresneno 2026-08-19 (checks/routes.py po QNH prepisu, puvodni popis
+    "porovnani na nerovnost misto na smer zmeny" uz neodpovida kodu):
+    testovana dvojice ma stejny next-hop v subjektu i baselinu ("was ==
+    now"), lisi se jen priznakem aktivity. Tenhle test proto nehlida
+    zadne porovnavani aktivity - tu je OK zarucene strukturalne, kdyz je
+    subject aktivni, _presence_finding vetev "neaktivni" se nevyvolava.
+    Chyta ale mutaci ZMENA vetve v `_finding`: kdyby se podminka
+    `was is not None and was != now` zmutovala tak, aby platila i pri
+    rovnosti (napr. vypusteni `!= now`), tenhle test by ZMENA vetev
+    vyvolal falesne (was == now, ale hlaska by rikala "next-hop se
+    zmenil X -> X") a dostal by DEGRADED misto OK. Overeno rucne: nahrada
+    `was != now` za `True` shodi presne tenhle test.
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed(), _installed_inactive())
@@ -614,9 +625,19 @@ def test_route_active_now_deactivated_in_baseline_gets_no_deactivation_row():
     zadny deaktivovany prvek v konfiguraci nema. Jeji stav nese normalni
     stavovy radek, ne radek o deaktivaci.
 
-    Zabiji mutanta: volani deactivation_outcome() i pro routu s
-    `active is not False`. S nim by kazda znovuzapnuta routa pridala WARN na
-    zdravou sluzbu.
+    Zastarale tvrzeni o mutantovi (2026-08-19, checks/routes.py po QNH
+    prepisu): route v teto scene je v aktualnim zameru aktivni
+    (`{**route, "active": True}`), takze uz vstupni `deactivated` pro tuhle
+    identitu vychazi False - podminka `if deactivated and subject is
+    None:` je nepravda diky obema konjunktum nezavisle. Mutace, ktera by
+    odebrala jeden z nich (`if subject is None:` nebo `if deactivated:`),
+    tenhle test neshodi - overeno rucne oboje. Test skutecne overuje jen
+    to, ze OK radek u znovuzapnute routy neobsahuje "deaktivovan" v
+    hlasce, coz plati uz diky `deactivated=False`. Konjunkt `subject is
+    None` hlida
+    test_deactivated_route_still_in_the_table_is_not_hidden_by_deactivation_branch,
+    konjunkt `deactivated` hlida
+    test_deactivated_route_warns_on_own_row_and_sibling_stays_ok.
     """
     route = {"rib": "inet.0", "prefix": "10.0.0.0/8", "next_hop": ["1.1.1.1"]}
     scope, baseline_scope = _scope_with_baseline_routes(
