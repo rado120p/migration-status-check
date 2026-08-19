@@ -146,11 +146,16 @@ class InterfaceConfig:
 
 @dataclass
 class StaticRoute:
-    """Jedna statická routa z konfigurace — záměr, ne stav routovací tabulky."""
+    """Jedna routa z konfigurace — záměr, ne stav routovací tabulky."""
 
     rib: str
     prefix: str
-    next_hop: list[str] = field(default_factory=list)
+    route_type: str = "static"  # "static" | "aggregate"
+    # Per-hop záznamy: {"to", "interface", "qualified", "active"}.
+    # qualified-next-hop jde deaktivovat individuálně, takže aktivita
+    # patří hopu; route-level `active` níž nese deaktivaci routy nebo
+    # kontejneru. Agregát hopy nemá — porovnává se přítomnost.
+    next_hops: list[dict[str, Any]] = field(default_factory=list)
     # Deaktivovaná routa se ze záměru **nevypouští**. Kdyby zmizela, check
     # by neměl co přeskočit a operátor by z reportu nepoznal, že v
     # konfiguraci vůbec je. Příznak se čte na listu, protože `_is_inactive`
@@ -626,8 +631,10 @@ class JunosServiceParserCore:
 
         default_rib = f"{instance_name}.inet.0" if instance_name else "inet.0"
 
-        containers: list[tuple[str, etree._Element]] = [
-            (default_rib, static_node) for static_node in options_node.xpath("./static")
+        containers: list[tuple[str, str, etree._Element]] = [
+            (default_rib, kind, node)
+            for kind in ("static", "aggregate")
+            for node in options_node.xpath(f"./{kind}")
         ]
 
         for rib_node in options_node.xpath("./rib"):
@@ -637,13 +644,15 @@ class JunosServiceParserCore:
                 continue
 
             containers.extend(
-                (rib_name, static_node) for static_node in rib_node.xpath("./static")
+                (rib_name, kind, node)
+                for kind in ("static", "aggregate")
+                for node in rib_node.xpath(f"./{kind}")
             )
 
         routes: list[StaticRoute] = []
 
-        for rib_name, static_node in containers:
-            for route_node in static_node.xpath("./route"):
+        for rib_name, route_type, container_node in containers:
+            for route_node in container_node.xpath("./route"):
                 prefix = first_text(route_node, "./name/text()")
 
                 if not prefix:
@@ -653,23 +662,50 @@ class JunosServiceParserCore:
                     StaticRoute(
                         rib=rib_name,
                         prefix=prefix,
-                        # Jen holý next-hop. discard, reject a next-table
-                        # adresu k porovnání se subnetem rozhraní nemají,
-                        # takže se na službu nenamapují.
-                        #
-                        # qualified-next-hop ji naopak má — nese buď adresu,
-                        # nebo interface-name — a do výčtu výš nepatří.
-                        # Vynechává se vědomě a odloženě, ne proto, že by
-                        # adresu neměl: routa směrovaná výhradně přes něj
-                        # dostane prázdný next_hop, na službu se nenamapuje
-                        # a nenainstalovaná zmizí beze stopy. Zapsáno jako
-                        # otevřený bod roadmapy vlny 10.
-                        next_hop=all_texts(route_node, "./next-hop/text()"),
+                        route_type=route_type,
+                        next_hops=(
+                            self._parse_next_hops(route_node)
+                            if route_type == "static"
+                            else []
+                        ),
                         active=not self._is_inactive(route_node),
                     )
                 )
 
         return routes
+
+    def _parse_next_hops(self, route_node: etree._Element) -> list[dict[str, Any]]:
+        """Per-hop záznamy. discard, reject a next-table adresu nemají,
+        takže hop nevydávají — u agregátu se <discard/> ignoruje ze
+        stejného důvodu.
+
+        Holý next-hop nejde deaktivovat individuálně — jeho deaktivace je
+        deaktivace routy a nese ji route-level `active`. qualified-next-hop
+        individuálně deaktivovat jde (změřeno 2026-08-19: `inactive` sedí
+        přímo na jeho uzlu); `_is_inactive` chodí po předcích, takže hop
+        pod deaktivovanou routou vyjde neaktivní taky.
+        """
+        hops = [
+            {"to": text, "interface": None, "qualified": False, "active": True}
+            for text in all_texts(route_node, "./next-hop/text()")
+        ]
+
+        for qnh_node in route_node.xpath("./qualified-next-hop"):
+            to = first_text(qnh_node, "./name/text()")
+
+            if not to:
+                continue
+
+            hops.append(
+                {
+                    "to": to,
+                    "interface": first_text(qnh_node, "./interface/text()"),
+                    "qualified": True,
+                    "active": not self._is_inactive(qnh_node),
+                }
+            )
+
+        return hops
 
     def _bfd_node(self, node: etree._Element | None) -> etree._Element | None:
         """Element bfd-liveness-detection přímo pod daným uzlem, bez sestupu.
@@ -1208,10 +1244,11 @@ class JunosServiceParserCore:
             matched = [
                 route
                 for route in self.static_routes
-                if rib_instance(route.rib) == service.routing_instance
+                if route.route_type == "static"
+                and rib_instance(route.rib) == service.routing_instance
                 and any(
-                    self._ip_in_interface_subnet(next_hop, interface)
-                    for next_hop in route.next_hop
+                    self._ip_in_interface_subnet(hop["to"], interface)
+                    for hop in route.next_hops
                 )
             ]
 

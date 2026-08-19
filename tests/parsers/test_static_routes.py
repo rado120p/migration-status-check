@@ -232,11 +232,15 @@ def test_next_hop_is_carried_as_value(parser_class):
     by_interface = {service.interface: service for service in services}
 
     routes = {
-        route["prefix"]: route["next_hop"]
+        route["prefix"]: route["next_hops"]
         for route in by_interface["et-0/0/8.113"].static_route
     }
-    assert routes["172.26.1.0/29"] == ["198.11.13.2"]
-    assert routes["2001:eeee::/64"] == ["2001:db8:11:13::b"]
+    assert routes["172.26.1.0/29"] == [
+        {"to": "198.11.13.2", "interface": None, "qualified": False, "active": True}
+    ]
+    assert routes["2001:eeee::/64"] == [
+        {"to": "2001:db8:11:13::b", "interface": None, "qualified": False, "active": True}
+    ]
 
 
 @pytest.mark.parametrize("parser_class", PARSERS)
@@ -429,3 +433,109 @@ def test_deactivated_instance_routing_options_marks_routes_inactive(parser_class
     found = _configured_by_identity(parser_class, DEACTIVATED_ROUTING_OPTIONS)
 
     assert found[("L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29")] is False
+
+
+QNH_MIX = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet6><address><name>2001:abcd:11:14::a/64</name></address></inet6>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <rib>
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:aaaa::/64</name>
+          <next-hop>2001:abcd:11:14::4</next-hop>
+          <qualified-next-hop inactive="inactive">
+            <name>2001:db8::ffff</name>
+          </qualified-next-hop>
+        </route>
+        <route>
+          <name>2001:abcd:11:13::/64</name>
+          <qualified-next-hop>
+            <name>fe80::2</name>
+            <interface>et-0/0/8.13</interface>
+          </qualified-next-hop>
+        </route>
+      </static>
+      <aggregate>
+        <route>
+          <name>2001:abcd::/32</name>
+          <discard/>
+        </route>
+      </aggregate>
+    </rib>
+    <aggregate>
+      <route>
+        <name>198.62.0.0/16</name>
+        <discard/>
+      </route>
+    </aggregate>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>L3VPN-CPE13-NNI</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>et-0/0/8.13</name></interface>
+      <routing-options>
+        <aggregate>
+          <route>
+            <name>172.26.0.0/16</name>
+            <discard/>
+          </route>
+        </aggregate>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_qualified_next_hop_ma_vlastni_zaznam_a_active(parser_cls):
+    parser = parser_cls(etree.fromstring(QNH_MIX))
+    parser.parse()
+    routes = {r.prefix: r for r in parser.static_routes}
+
+    mixed = routes["2001:aaaa::/64"]
+    assert mixed.route_type == "static"
+    assert mixed.next_hops == [
+        {"to": "2001:abcd:11:14::4", "interface": None,
+         "qualified": False, "active": True},
+        {"to": "2001:db8::ffff", "interface": None,
+         "qualified": True, "active": False},
+    ]
+
+    qnh_only = routes["2001:abcd:11:13::/64"]
+    assert qnh_only.next_hops == [
+        {"to": "fe80::2", "interface": "et-0/0/8.13",
+         "qualified": True, "active": True},
+    ]
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_aggregate_routy_se_parsuji_globalne_v_rib_i_v_instanci(parser_cls):
+    parser = parser_cls(etree.fromstring(QNH_MIX))
+    parser.parse()
+    aggregates = {
+        (r.rib, r.prefix): r
+        for r in parser.static_routes
+        if r.route_type == "aggregate"
+    }
+    assert set(aggregates) == {
+        ("inet.0", "198.62.0.0/16"),
+        ("inet6.0", "2001:abcd::/32"),
+        ("L3VPN-CPE13-NNI.inet.0", "172.26.0.0/16"),
+    }
+    assert all(r.next_hops == [] for r in aggregates.values())
+    assert all(r.active for r in aggregates.values())
