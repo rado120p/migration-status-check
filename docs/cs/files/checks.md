@@ -475,7 +475,7 @@ ačkoliv obojí je pořád „routa v tabulce".
 | v tabulce, ale bez hvězdičky, bez baseline | `degraded` | WARN | `neni aktivni` |
 | nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
 | v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
-| nakonfigurovaná a v konfiguraci deaktivovaná | `deactivation_outcome(...)` | podle baseline | `deaktivovana` |
+| nakonfigurovaná, v konfiguraci deaktivovaná a není v tabulce | `deactivation_outcome(...)` | podle baseline | `deaktivovana` |
 
 ---
 

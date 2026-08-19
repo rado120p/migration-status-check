@@ -230,8 +230,10 @@ XML, což drží testy jednoduché.
 ## `routes.py` — statické a agregátní routy z routovací tabulky
 
 RPC: `get_route_information`, **dvakrát** za sebou — jednou s `{"protocol": "static"}`,
-podruhé s `{"protocol": "aggregate"}` (obě platformy). Vzorem je `EvpnMacCollector`
-(`extensive` + `terse`), jen tady se místo dvou tvarů odpovědi mění filtr na protokol.
+podruhé s `{"protocol": "aggregate"}` (obě platformy). Vzorem je `InterfacesCollector`
+(`extensive` + `terse` — dvakrát totéž RPC jméno, jen s jinými kwargs), ne `EvpnMacCollector`
+(ten volá dvě **různá** jména RPC se stejnými kwargs) — tady se místo tvaru odpovědi mění
+filtr na protokol.
 `rpc_calls()` — nová autoritativní metoda z `collectors/base.py`, sdílená všemi collectory
 s víc než jedním RPC voláním — vrátí obě dvojice `(rpc_name, kwargs)`; `record` a
 `--record-raw` z ní nahrají **obě** odpovědi, takže fixtures nesou `routes.xml`

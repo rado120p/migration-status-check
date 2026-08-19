@@ -474,7 +474,7 @@ report, even though both are still "a route in the table".
 | in the table but unstarred, no baseline | `degraded` | WARN | `neni aktivni` |
 | configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
 | present in baseline, absent from subject | `broken` | FAIL | `chybi` |
-| configured and deactivated in the configuration | `deactivation_outcome(...)` | depends on baseline | `deaktivovana` |
+| configured, deactivated in the configuration, and absent from the table | `deactivation_outcome(...)` | depends on baseline | `deaktivovana` |
 
 ---
 

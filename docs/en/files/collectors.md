@@ -227,9 +227,11 @@ which keeps the tests simple.
 ## `routes.py` — static and aggregate routes from the routing table
 
 RPC: `get_route_information`, called **twice** — once with `{"protocol": "static"}`, once
-with `{"protocol": "aggregate"}` (both platforms). The pattern is `EvpnMacCollector`
-(`extensive` + `terse`), just here it is the protocol filter that changes instead of the
-response shape. `rpc_calls()` — the new authoritative method on `collectors/base.py`, shared
+with `{"protocol": "aggregate"}` (both platforms). The pattern is `InterfacesCollector`
+(`extensive` + `terse` — the same RPC name twice, just with different kwargs), not
+`EvpnMacCollector` (which calls two **different** RPC names with identical kwargs) — here it
+is the protocol filter that changes instead of the response shape. `rpc_calls()` — the new
+authoritative method on `collectors/base.py`, shared
 by every collector with more than one RPC call — returns both `(rpc_name, kwargs)` pairs;
 `record` and `--record-raw` use it to store **both** responses, so the fixtures carry
 `routes.xml` (protocol=static) and `routes.2.xml` (protocol=aggregate).
