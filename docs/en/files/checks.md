@@ -337,12 +337,21 @@ range the target belongs to and whether it came from ARP/ND or was derived from 
 
 ---
 
-## `routes.py` — static routes
+## `routes.py` — static and aggregate routes
 
 ### `static_route_status` (both, critical)
 
 The only check that **compares configured intent against measured reality**. Every other
 check asks "is it up?"; this one asks "is what you ordered actually there?".
+
+**It only reads records with `protocol == "static"` (facts) / `route_type == "static"`
+(intent).** Since the 2026-08-19 QNH wave an aggregate route has its own check
+(`aggregate_route_status` below) — this one filters aggregates out of both the configuration
+and the facts up front, so the two comparison mechanisms (next-hop for a static, presence-only
+for an aggregate) never mix inside one loop. A missing `protocol`/`route_type` key means a
+record from before schema 10/6, when only statics were collected/parsed — the default there
+is "static", not an error, so an old baseline against a new subject degrades gracefully
+instead of crashing.
 
 **It iterates over the union of three sources** (AR‑14) — the subject's configuration
 (`Selectors.static_routes`), the subject's measurement (`facts["routes"]`) and the
@@ -356,7 +365,11 @@ baseline's measurement. Each closes one gap:
 
 **A route's identity is the pair (RIB, prefix); the next hop is the value.** That way a
 next-hop change reads as a *changed* route — one row with a `ZMENA` column — rather than
-"one route vanished and another appeared".
+"one route vanished and another appeared". The identity stays a plain pair even after
+per-hop next hops (QNH): a partial deactivation (some next hops off, others not) lives
+inside a single record's `next_hops`, not as a second identity — the parser
+(`_static_routes_under`) emits one `StaticRoute` per `(rib, prefix)` regardless of how many
+next hops a route has or how many of them are active.
 
 **Under ECMP the value is the whole *set* of next hops, not their order in the XML.** That is
 why `_next_hop_text()` is `", ".join(sorted(...))`: Junos guarantees no `<nh>` ordering across
@@ -404,6 +417,64 @@ name, because the name need not carry a family at all (`bgp.l3vpn.0`).
 engine re-keys only the `interfaces` area between baseline and subject; `routes` are keyed
 `table -> prefix` and get no re-keying. Should a future migration rename a VRF, every route
 in it would read as "missing" plus "new".
+
+#### Annotating a deactivated next hop
+
+The configuration can leave a route active as a whole while deactivating just **one** of its
+next hops (a `qualified-next-hop` can be deactivated individually — see
+[parsers.md](parsers.md#static-routes-per-hop-next-hops-and-aggregates-qnh-schema-6)). Such a
+row must not read as healthy just because the route otherwise landed in the table with
+activity — a deactivated piece of configuration is itself a finding (a user decision from
+2026-08-04, shared with `checks/deactivation.py`).
+
+`_annotate_inactive_hops()` runs over every row that reached the active table (both the
+`ZMENA` branch and the ordinary OK/WARN/FAIL branches shared with `aggregate_route_status`
+via `_presence_finding`), and for every deactivated next hop calls the shared
+`deactivation_outcome()` — the same function `deactivation_state` uses for a whole service.
+The worst outcome across hops wins (`BROKEN > DEGRADED > original`); the message gains
+`; deaktivovany next-hop: <to[ via <interface>]>` for every off hop and one summary note —
+`- migrace nedokoncena` when the outcome is `BROKEN` or a hop was still active in the baseline
+(newly deactivated), otherwise `(stejne jako v baseline)` when it was already off there.
+
+**No active next hop means the intent is not to forward, not a discrepancy.** When **every**
+next hop of a route is deactivated and the route is simply absent from the table, that is an
+informational state with the same semantics as a fully deactivated route
+(`deactivation_outcome`), not a `BROKEN … neni v tabulce`: the operator deliberately turned
+off the next hops, so absence from the table is expected, not a conflict. The message reads
+`<rib> <prefix>: vsechny next-hopy jsou deaktivovane`, with `- migrace nedokoncena` appended
+when the route was still alive in the baseline. This branch is tested **before** the ordinary
+`neni v tabulce` branch — the other order would let the more general branch catch it first and
+manufacture a FAIL for next hops nobody wanted active.
+
+---
+
+### `aggregate_route_status` (both, critical)
+
+An aggregate route (`route_type == "aggregate"` / `protocol == "aggregate"`) **has no next
+hop** — in the configuration it carries `discard`/`reject`, not a next hop, so it is compared
+against the table only on presence and activity, not on a next hop like a static (see
+[parsers.md](parsers.md#static-routes-per-hop-next-hops-and-aggregates-qnh-schema-6)). It
+shares with `static_route_status` the union of three sources and the "missing"/"deactivated"
+branches (both via the common `_presence_finding()`); it does not share the next-hop
+comparison or the hop-level annotation — an aggregate has no next hop, so `was` and `now`
+always come out equal and the `ZMENA` branch would never trigger.
+
+A customer aggregate that vanishes after the migration is a signal of an outage — hence
+`CRITICAL`, same as for statics, not `advisory`.
+
+The label is `<RIB> <prefix>`, same as for a static, but the identity goes into its own group,
+`group="Agregatni routy"` — aggregates do not get mixed into the same group as statics in the
+report, even though both are still "a route in the table".
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| in the table and active | `ok` | PASS | `v tabulce` |
+| in the table but unstarred (`active: false`), baseline also inactive | `ok` | PASS | `neni aktivni` |
+| in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
+| in the table but unstarred, no baseline | `degraded` | WARN | `neni aktivni` |
+| configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
+| present in baseline, absent from subject | `broken` | FAIL | `chybi` |
+| configured and deactivated in the configuration | `deactivation_outcome(...)` | depends on baseline | `deaktivovana` |
 
 ---
 

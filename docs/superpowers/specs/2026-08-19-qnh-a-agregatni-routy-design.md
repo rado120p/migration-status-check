@@ -178,8 +178,8 @@ struktury `tables`; každý záznam dostane `"protocol": "static" | "aggregate"`
   flagnutý beztak.
 - **Fixtures:** conftest hardcoduje `active: True` — testy deaktivovaného
   hopu/routy musí ručně upravit i `facts["routes"]`.
-- **Docs:** `docs/cs+en/files/parsers.md`, `checks.md`, `probes.md`
-  (routes proba nově střílí dvě RPC); en strana se drží v synchronu.
+- **Docs:** `docs/cs+en/files/parsers.md`, `checks.md`, `collectors.md`
+  (routes collector nově střílí dvě RPC); en strana se drží v synchronu.
 
 ## 6. Testy a ověření
 

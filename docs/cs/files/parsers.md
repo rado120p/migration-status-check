@@ -131,6 +131,50 @@ viz [../reference.md](../reference.md#5-formát-výsledku).
 
 ---
 
+## Statické routy: per-hop next-hopy a agregáty (QNH, schema 6)
+
+`StaticRoute.next_hops` je od schema 6 seznam **per-hop záznamů**, ne plochý seznam next-hop
+adres: `{"to", "interface", "qualified", "active"}`. Důvod je qualified-next-hop
+(`qualified-next-hop`) — na rozdíl od holého `next-hop` jde deaktivovat **individuálně**
+(ověřeno na laborce 2026-08-19: `inactive` sedí přímo na jeho uzlu), takže routa může mít
+část next-hopů živých a část vypnutých zároveň. Plochý seznam adres by tohle nešlo vyjádřit;
+proto nese aktivitu hop, ne routa.
+
+`_parse_next_hops()`:
+
+- holý `next-hop` vydá `{"to": adresa, "interface": None, "qualified": False, "active": True}`
+  — deaktivovat ho jde jen jako celou routu (`route_type`/route-level `active`), takže hop sám
+  je vždy aktivní;
+- `qualified-next-hop` vydá navíc `interface` (pokud ho stanza nese) a vlastní `active`
+  (`not self._is_inactive(qnh_node)`); protože `_is_inactive` chodí po předcích, hop pod
+  deaktivovanou routou vyjde neaktivní taky;
+- `discard`, `reject` a next-table next-hop (adresa tabulky místo IP) žádný hop nevydávají —
+  nemají `to`, takže je není co porovnávat s next-hopem v routovací tabulce.
+
+**Mapování na službu má precedenci, ne fallback** (`_route_matches_service()`): hop s
+`interface` se mapuje **jen** podle jména rozhraní, subnet adresy se u něj vůbec nezkouší.
+Bez toho by link-local next-hop (`fe80::...`), nakonfigurovaný typicky na víc rozhraních
+najednou (změřeno na `et-0/0/8.13`, 2026-08-19), rozstřelil routu i na služby, kterých se
+netýká. Hop bez `interface`, jehož `to` navíc není platná IP adresa, se čte jako jméno
+rozhraní místo adresy (měření z vlny 10) — i pak se hledá jen shoda jména, žádný subnet.
+Teprve hop bez `interface` a s platnou IP adresou zkouší subnet rozhraní. **Matchují se i
+neaktivní hopy** — routa, jejíž jediný next-hop operátor deaktivoval, musí zůstat u své
+služby, jinak by spadla do `unassigned.static_routes` přesně ve chvíli, kdy má report hlásit
+nedokončenou migraci na úrovni next-hopu, ne díru v inventáři.
+
+**Agregáty** (`route_type == "aggregate"`) parsuje tatáž `_static_routes_under()` — containery
+`./aggregate` vedle `./static`, globálně pod `routing-options` i uvnitř každé
+`routing-instances/instance`, s týmž odvozením jména RIB. Agregát nemá next-hopy
+(`next_hops == []`) — v konfiguraci nese `discard`/`reject`, ne next-hop, a ty se stejně jako
+u statiky neparsují. Mapování na službu proto neběží přes next-hop, ale přes RIB samotnou:
+VRF (`rib_instance(route.rib)` není `None`) mapuje na **všechny** služby té instance, globální
+RIB (`rib_instance` je `None`) mapuje **jen** na Core `lo0.0` — ne na libovolné tranzitní
+rozhraní (rozhodnutí uživatele 2026-08-19). Zápis do `detection_reason` má vlastní větu
+(„Agregátní routa patří této službě: …"), oddělenou od věty pro statiky, protože jde
+o odlišný mechanismus přiřazení, ne o variantu téhož.
+
+---
+
 ## BFD: dědění hierarchií BGP
 
 `_parse_bfd()` čte `bfd-liveness-detection` na třech úrovních a specifičtější přepisuje
@@ -229,6 +273,13 @@ Hlubší úrovně (deaktivovaná jednotlivá `route`, `bfd-liveness-detection` n
 záměru pořád vypouští beze stopy — bez vlastního příznaku jako `interface_active`. Rozšířit
 příznaky i na tuhle úroveň je vědomě odložené, mimo rozsah téhle vlny.
 
+**Výjimka od schema 6: `qualified-next-hop` má vlastní `active`.** Na rozdíl od `route` výš
+tenhle uzel *se* svojí deaktivací ven pouští stopu — hop, ne jen routa jako celek, protože
+qualified-next-hop jde deaktivovat nezávisle na sourozencích ve stejné routě (routa se dvěma
+next-hopy může mít jeden živý a jeden vypnutý). Bez per-hop `active` by check neměl jak
+rozlišit „next-hop se přestal používat" od „routa je pořád v tabulce, ale s jiným next-hopem" —
+viz sekci „Statické routy: per-hop next-hopy a agregáty" výš. Holý `next-hop` výjimku nemá — nejde deaktivovat samostatně, jen jako celá routa.
+
 ---
 
 ## Kde se ty dva soubory liší
@@ -291,7 +342,7 @@ laborce v AR-29 je tam `ge-0/0/2` deaktivované — pro ukázku běžného, akti
 proto zdrojem `.5`, kde stejná služba běží na `et-0/0/8.113`.)
 
 ```yaml
-schema_version: 4
+schema_version: 6
 device: 172.20.20.5
 interfaces:
 - interface: et-0/0/8.113
@@ -315,18 +366,29 @@ interfaces:
   bgp_neighbor:
   - 198.11.13.2
   - 2001:db8:11:13::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '113'
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
     prefix: 172.26.1.0/29
-    next_hop:
-    - 198.11.13.2
+    active: true
+    route_type: static
+    next_hops:
+    - to: 198.11.13.2
+      interface: null
+      qualified: false
+      active: true
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
-    next_hop:
-    - 2001:db8:11:13::b
+    active: true
+    route_type: static
+    next_hops:
+    - to: 2001:db8:11:13::b
+      interface: null
+      qualified: false
+      active: true
   bfd:
   - peer: 198.11.13.2
     minimum_interval: 3000
@@ -343,9 +405,15 @@ interfaces:
 routing instance nebo rozhraní té služby — viz sekci „Deaktivovaná konfigurace nevyrábí záměr"
 výš. Zdravá, plně aktivní služba jako tahle má oba `true`.
 
+**`static_route` je od schema 6 seznam per-hop záznamů, ne plochý `next_hop`.** Každý prvek
+nese `route_type` (`static`/`aggregate`), route-level `active` a `next_hops` — u statiky
+seznam hopů se svým vlastním `to`/`interface`/`qualified`/`active` (viz sekci „Statické routy: per-hop next-hopy a agregáty" výš), u agregátu prázdný seznam. Bez inventáře k ukázce agregátní routy — laboratorní služby
+výš žádnou nemají namapovanou — ale tvar je stejný jako u statiky, jen s `route_type: aggregate`
+a `next_hops: []`.
+
 Adresy jsou rozdělené podle rodiny — `ipv4_address`/`ipv6_address` a
 `virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — a nezávisle na obsahu se do YAML vždy
-zapíše top-level klíč `schema_version: 4`. Validator jinou hodnotu `schema_version` **tvrdě
+zapíše top-level klíč `schema_version: 6`. Validator jinou hodnotu `schema_version` **tvrdě
 odmítne** (`models/inventory.py::load_inventory()`), místo aby starou inventory tiše přečetl
 jako službu bez adres nebo bez záměru — viz [models.md](models.md#inventorypy--vstup-z-parserů).
 

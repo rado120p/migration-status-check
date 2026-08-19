@@ -27,6 +27,7 @@ class Collector(ABC):
     def rpc_name(self, platform) -> str          # povinné
     def rpc_names(self, platform) -> tuple[str]  # default: (rpc_name(),)
     def rpc_kwargs(self, platform) -> dict       # default: {}
+    def rpc_calls(self, platform) -> tuple[tuple[str, dict]]  # default: rpc_names × rpc_kwargs
     def parse(self, xml, platform) -> Any        # povinné
     def collect(self, device, platform) -> Any   # šablona: RPC + parse
 ```
@@ -45,7 +46,12 @@ s hláškou, která říká který collector, které RPC a co se stalo:
 
 **`rpc_names()` je pojistka pro nahrávání fixtures.** Collector s více RPC ji musí přepsat,
 jinak `record` a `--record-raw` uloží jen první z nich a nahrané fixtures budou tiše
-nekompletní. Jediný takový je zatím `EvpnMacCollector` na MX.
+nekompletní. Takové jsou `EvpnMacCollector` na MX (dva různé tvary odpovědi) a od 2026-08-19
+QNH i `RoutesCollector` (dvakrát totéž RPC s jiným `protocol`) — viz sekci
+[„`routes.py`"](#routespy--statické-a-agregátní-routy-z-routovací-tabulky) níž. Autoritou pro
+`record` je ve skutečnosti `rpc_calls()` (RPC jméno + kwargs dohromady, v pořadí volání);
+`rpc_names()`/`rpc_kwargs()` zůstávají jako pohodlnější rozhraní pro collectory, jejichž volání
+se liší jen jménem RPC, ne kwargs.
 
 ## `registry.py` — registr
 
@@ -221,35 +227,57 @@ XML, což drží testy jednoduché.
   (`_is_no_domain()` chytá obojí: prefix `__` i suffix `NONE`). VLAN id ale obě platformy
   uvedou, takže podle něj samotného by vlan-based instance nesedly.
 
-## `routes.py` — statické routy z routovací tabulky
+## `routes.py` — statické a agregátní routy z routovací tabulky
 
-RPC: `get_route_information` s `rpc_kwargs` `{"protocol": "static"}` (obě platformy).
+RPC: `get_route_information`, **dvakrát** za sebou — jednou s `{"protocol": "static"}`,
+podruhé s `{"protocol": "aggregate"}` (obě platformy). Vzorem je `EvpnMacCollector`
+(`extensive` + `terse`), jen tady se místo dvou tvarů odpovědi mění filtr na protokol.
+`rpc_calls()` — nová autoritativní metoda z `collectors/base.py`, sdílená všemi collectory
+s víc než jedním RPC voláním — vrátí obě dvojice `(rpc_name, kwargs)`; `record` a
+`--record-raw` z ní nahrají **obě** odpovědi, takže fixtures nesou `routes.xml`
+(protocol=static) i `routes.2.xml` (protocol=aggregate).
 
 Filtr na protokol drží odpověď malou i na zařízení s plnou internetovou tabulkou.
 `all=True` se **nepoužívá** — přidává jen `__juniper_private*` tabulky, což je šum.
 
-Výstup je dvouúrovňový slovník `{RIB: {prefix: {next_hop, via, active}}}`, tak jak ho
-vyrobí collector z nahrávky `tests/fixtures/rpc/junos-evo/routes.xml`:
+`collect()` slučuje výsledky obou průchodů do jedné tabulky — **přísně přídavně**: druhý
+průchod (`aggregate`) jen doplňuje prefixy, které první (`static`) nepřinesl
+(`target.setdefault(prefix, data)`), nikdy nepřepisuje. Prefix nemůže být v jedné RIB
+zároveň static i aggregate, takže kolize identity by znamenala poškozená data, ne legitimní
+update. Selhání **kteréhokoliv** z obou průchodů je chyba celého collectoru (`CollectorError`)
+— stejný důvod jako u `EvpnMacCollector`: částečná data (jen statiky bez agregátů) by check
+přečetl jako „agregát zmizel", což je falešný poplach.
+
+Výstup je dvouúrovňový slovník `{RIB: {prefix: {next_hop, via, active, protocol}}}`, tak jak
+ho vyrobí collector ze sloučení nahrávek `tests/fixtures/rpc/junos-evo/routes.xml` (static) a
+`routes.2.xml` (aggregate):
 
 ```json
 {
   "inet.0": {
-    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true },
-    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true }
+    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
+    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
+    "10.1.0.0/23": { "next_hop": [], "via": [], "active": true, "protocol": "aggregate" }
   },
   "inet6.0": {
-    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true }
+    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" }
   },
   "L3VPN-CPE13-NNI.inet.0": {
-    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true }
+    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
   },
   "L3VPN-CPE13-NNI.inet6.0": {
-    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true }
+    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
   }
 }
 ```
 
-Tři věci ověřené proti laborce:
+Klíč `protocol` nese hodnotu `protocol-name` z RPC, malými písmeny (`"static"` / `"aggregate"`)
+— checky ho čtou při rozdělování na `static_route_status` a `aggregate_route_status`. Chybějící
+klíč `protocol` znamená snapshot pořízený před schema 10, kdy collector sbíral jen statiky;
+`checks/routes.py::_flatten()` v tom případě defaultuje na `"static"`, takže staré snapshoty se
+čtou beze změny chování.
+
+Čtyři věci ověřené proti laborce:
 
 - **`table-name` nese jméno RIB včetně rodiny** (`L3VPN-CPE13-NNI.inet6.0`). Asymetrie,
   kterou má mezi IPv4 a IPv6 konfigurace (`routing-options` vs. `rib inet6.0`), se v RPC
@@ -258,11 +286,14 @@ Tři věci ověřené proti laborce:
   nad next-hopem. Toho využívá `engine.py` při plnění `unassigned.static_routes`.
 - **`to` a `via` sedí uvnitř `<nh>`, ne přímo pod `<rt-entry>`** — proto `_texts()` používá
   `iter()`, ne `find()`.
+- **Agregátní `rt-entry` nemá žádné `<nh>`** — `<nh-type>` (`Discard`/`Reject`) sedí přímo
+  pod `<rt-entry>`, takže `next_hop` i `via` vyjdou u agregátu vždy prázdné (`[]`). `protocol-
+  name` u něj nese přesně `"Aggregate"`.
 
 Tři pojistky, které vypadají zbytečně a nejsou:
 
 - **Filtr na `protocol-name` v `parse()`** je druhá obrana za filtrem v RPC. Nasazení, které
-  by RPC zavolalo bez `protocol`, by jinak zapsalo BGP routy jako statické.
+  by RPC zavolalo bez `protocol`, by jinak zapsalo BGP routy jako statické nebo agregátní.
 - **Prázdné tabulky se zahazují.** RPC vrací přes dvacet tabulek, většinu prázdných;
   ukládat je znamená nafouknout každý snímek o řádky, které nic neříkají.
 - **`.strip()` v `_texts()`** je parita se sousedními collectory (`interfaces.py:32`,

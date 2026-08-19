@@ -27,6 +27,7 @@ class Collector(ABC):
     def rpc_name(self, platform) -> str          # required
     def rpc_names(self, platform) -> tuple[str]  # default: (rpc_name(),)
     def rpc_kwargs(self, platform) -> dict       # default: {}
+    def rpc_calls(self, platform) -> tuple[tuple[str, dict]]  # default: rpc_names × rpc_kwargs
     def parse(self, xml, platform) -> Any        # required
     def collect(self, device, platform) -> Any   # template: RPC + parse
 ```
@@ -45,8 +46,12 @@ whose message says which collector, which RPC and what happened:
 
 **`rpc_names()` is a safeguard for fixture recording.** A collector with several RPCs must
 override it, otherwise `record` and `--record-raw` would store only the first one and the
-recorded fixtures would be silently incomplete. So far the only such collector is
-`EvpnMacCollector` on MX.
+recorded fixtures would be silently incomplete. `EvpnMacCollector` on MX (two different
+response shapes) and, since the 2026-08-19 QNH wave, `RoutesCollector` (the same RPC twice,
+with a different `protocol`) both do — see the [`routes.py`](#routespy--static-and-aggregate-routes-from-the-routing-table)
+section below. The actual authority for `record` is `rpc_calls()` (RPC name + kwargs together,
+in call order); `rpc_names()`/`rpc_kwargs()` stay as the simpler interface for a collector
+whose calls differ only in RPC name, not in kwargs.
 
 ## `registry.py` — the registry
 
@@ -219,35 +224,57 @@ which keeps the tests simple.
   report a VLAN id, though, so keying on that alone would leave vlan-based instances
   mismatched.
 
-## `routes.py` — static routes from the routing table
+## `routes.py` — static and aggregate routes from the routing table
 
-RPC: `get_route_information` with `rpc_kwargs` `{"protocol": "static"}` (both platforms).
+RPC: `get_route_information`, called **twice** — once with `{"protocol": "static"}`, once
+with `{"protocol": "aggregate"}` (both platforms). The pattern is `EvpnMacCollector`
+(`extensive` + `terse`), just here it is the protocol filter that changes instead of the
+response shape. `rpc_calls()` — the new authoritative method on `collectors/base.py`, shared
+by every collector with more than one RPC call — returns both `(rpc_name, kwargs)` pairs;
+`record` and `--record-raw` use it to store **both** responses, so the fixtures carry
+`routes.xml` (protocol=static) and `routes.2.xml` (protocol=aggregate).
 
 The protocol filter keeps the response small even on a device carrying a full internet table.
 `all=True` is **not** used — it only adds `__juniper_private*` tables, which is noise.
 
-The output is a two-level dictionary `{RIB: {prefix: {next_hop, via, active}}}`, exactly as
-the collector produces it from the `tests/fixtures/rpc/junos-evo/routes.xml` recording:
+`collect()` merges the results of both passes into one table — **strictly additive**: the
+second pass (`aggregate`) only fills in prefixes the first pass (`static`) did not bring
+(`target.setdefault(prefix, data)`), it never overwrites. A prefix cannot be both static and
+aggregate in the same RIB at once, so a collision in identity would mean corrupted data, not a
+legitimate update. Failure of **either** pass is an error for the whole collector
+(`CollectorError`) — the same reasoning as `EvpnMacCollector`: partial data (statics without
+aggregates) would let a check read "the aggregate disappeared", a false alarm.
+
+The output is a two-level dictionary `{RIB: {prefix: {next_hop, via, active, protocol}}}`,
+exactly as the collector produces it by merging the `tests/fixtures/rpc/junos-evo/routes.xml`
+(static) and `routes.2.xml` (aggregate) recordings:
 
 ```json
 {
   "inet.0": {
-    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true },
-    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true }
+    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
+    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
+    "10.1.0.0/23": { "next_hop": [], "via": [], "active": true, "protocol": "aggregate" }
   },
   "inet6.0": {
-    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true }
+    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" }
   },
   "L3VPN-CPE13-NNI.inet.0": {
-    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true }
+    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
   },
   "L3VPN-CPE13-NNI.inet6.0": {
-    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true }
+    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
   }
 }
 ```
 
-Three things verified against the lab:
+The `protocol` key carries `protocol-name` from the RPC, lower-cased (`"static"` /
+`"aggregate"`) — the checks read it to split into `static_route_status` and
+`aggregate_route_status`. A missing `protocol` key means a snapshot taken before schema 10,
+when the collector only gathered statics; `checks/routes.py::_flatten()` defaults it to
+`"static"` in that case, so old snapshots read with unchanged behaviour.
+
+Four things verified against the lab:
 
 - **`table-name` carries the RIB name including the family** (`L3VPN-CPE13-NNI.inet6.0`). The
   asymmetry the configuration has between IPv4 and IPv6 (`routing-options` vs. `rib inet6.0`)
@@ -257,12 +284,15 @@ Three things verified against the lab:
   `unassigned.static_routes`.
 - **`to` and `via` sit inside `<nh>`, not directly under `<rt-entry>`** — hence `_texts()`
   uses `iter()`, not `find()`.
+- **An aggregate `rt-entry` has no `<nh>` at all** — `<nh-type>` (`Discard`/`Reject`) sits
+  directly under `<rt-entry>`, so `next_hop` and `via` always come out empty (`[]`) for it.
+  Its `protocol-name` carries exactly `"Aggregate"`.
 
 Three safeguards that look redundant and are not:
 
 - **The `protocol-name` filter in `parse()`** is a second line of defence behind the RPC
   filter. A deployment calling the RPC without `protocol` would otherwise record BGP routes
-  as static ones.
+  as static or aggregate ones.
 - **Empty tables are dropped.** The RPC returns over twenty tables, most of them empty;
   storing them means inflating every snapshot with rows that say nothing.
 - **The `.strip()` in `_texts()`** is parity with the sibling collectors

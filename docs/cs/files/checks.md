@@ -343,12 +343,20 @@ zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.
 
 ---
 
-## `routes.py` — statické routy
+## `routes.py` — statické a agregátní routy
 
 ### `static_route_status` (both, critical)
 
 Jediný check, který **porovnává konfigurační záměr proti naměřené realitě**. Ostatní checky
 se ptají jen „je to nahoře?"; tenhle se ptá „je tam to, co jsi si objednal?".
+
+**Čte jen záznamy s `protocol == "static"` (fakta) / `route_type == "static"` (záměr).**
+Od 2026-08-19 QNH má agregátní routa vlastní check (`aggregate_route_status` níž) — tenhle
+si z konfigurace i z faktů předem odfiltruje agregáty, aby se dva mechanismy porovnání
+(next-hop u statiky, jen přítomnost u agregátu) nemíchaly v jednom cyklu. Chybějící klíč
+`protocol`/`route_type` znamená záznam z doby před schema 10/6, kdy se sbíraly/parsovaly jen
+statiky — default je tam „static", ne chyba, takže starý baseline proti novému subjektu
+degraduje elegantně místo pádu.
 
 **Iteruje přes sjednocení tří zdrojů** (AR‑14) — konfigurace subjektu (`Selectors.static_routes`),
 měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zavírá jednu díru:
@@ -361,7 +369,10 @@ měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zav�
 
 **Identita routy je dvojice (RIB, prefix), next-hop je hodnota.** Díky tomu se změna
 next-hopu čte jako *změněná* routa — jeden řádek se sloupcem `ZMENA` — ne jako „routa zmizela
-a jiná přibyla".
+a jiná přibyla". Klíčování zůstává jen dvojicí i po zavedení per-hop next-hopů (QNH):
+částečná deaktivace (některé next-hopy vypnuté, jiné ne) žije uvnitř jednoho záznamu, v jeho
+`next_hops`, ne jako druhá identita — parser (`_static_routes_under`) vydá jeden `StaticRoute`
+na `(rib, prefix)` bez ohledu na to, kolik next-hopů routa má a kolik z nich je aktivních.
 
 **Při ECMP je hodnotou celá množina next-hopů, ne jejich pořadí v XML.** `_next_hop_text()`
 je proto `", ".join(sorted(...))`: Junos pořadí `<nh>` negarantuje ani mezi platformami, ani
@@ -408,6 +419,63 @@ rodinu nést nemusí (`bgp.l3vpn.0`).
 přeslovňuje mezi baseline a subjektem jen oblast `interfaces`; `routes` jsou klíčované
 `table -> prefix` a přeslovnění nedostanou. Kdyby budoucí migrace přejmenovala VRF, každá
 routa v ní by se přečetla jako „chybí" + „nová".
+
+#### Anotace deaktivovaného next-hopu
+
+Konfigurace může routu nechat aktivní jako celek a přitom deaktivovat jen **jeden**
+z jejích next-hopů (`qualified-next-hop` jde deaktivovat individuálně — viz
+[parsers.md](parsers.md#statické-routy-per-hop-next-hopy-a-agregáty-qnh-schema-6)). Takový
+řádek se nesmí tvářit zdravě jen proto, že routa jinak dorazila do tabulky s aktivitou —
+deaktivovaný prvek konfigurace je sám o sobě nález (rozhodnutí uživatele 2026-08-04, sdílené
+se `checks/deactivation.py`).
+
+`_annotate_inactive_hops()` běží nad každým řádkem, který dosáhl aktivní tabulky (`ZMENA` i
+běžné OK/WARN/FAIL větve sdílené s `aggregate_route_status` přes `_presence_finding`), a
+pro každý deaktivovaný next-hop zavolá sdílenou `deactivation_outcome()` — stejnou funkci,
+jakou používá `deactivation_state` pro celou službu. Vyhrává nejhorší výsledek napříč hopy
+(`BROKEN > DEGRADED > původní`); ke zprávě se připojí `; deaktivovany next-hop: <to[ via
+<interface>]>` pro každý vypnutý hop a jedna souhrnná poznámka — `- migrace nedokoncena`, když
+je výsledek `BROKEN` nebo hop byl v baselinu ještě aktivní (nově deaktivovaný), jinak
+`(stejne jako v baseline)`, když byl vypnutý už tam.
+
+**Žádný aktivní next-hop = záměr neforwardovat, ne rozpor.** Když jsou **všechny** next-hopy
+routy deaktivované a routa přitom v tabulce vůbec není, je to informační stav se stejnou
+sémantikou jako deaktivovaná routa jako celek (`deactivation_outcome`), ne `BROKEN … neni v
+tabulce`: operátor next-hopy vědomě vypnul, takže absence v tabulce je očekávaná, ne rozpor.
+Zpráva zní `<rib> <prefix>: vsechny next-hopy jsou deaktivovane`, případně s `- migrace
+nedokoncena`, pokud byla routa v baselinu ještě naživu. Tahle větev se testuje **před**
+běžnou `neni v tabulce` větví, jinak by ji ta obecnější odchytila první a vyrobila falešný
+FAIL za next-hopy, které nikdo nechtěl mít aktivní.
+
+---
+
+### `aggregate_route_status` (both, critical)
+
+Agregátní routa (`route_type == "aggregate"` / `protocol == "aggregate"`) **nemá next-hop** —
+v konfiguraci nese `discard`/`reject`, ne next-hop, takže se s tabulkou porovnává jen
+přítomnost a aktivita, ne next-hop jako u statiky (viz
+[parsers.md](parsers.md#statické-routy-per-hop-next-hopy-a-agregáty-qnh-schema-6)). Sdílí se
+`static_route_status` sjednocení tří zdrojů i větve „chybí"/„deaktivovaná" (obojí přes
+společnou `_presence_finding()`); nesdílí se porovnání next-hopu a hop-level anotaci — u
+agregátu žádný next-hop není, takže `was` a `now` vždy vyjdou stejné a `ZMENA` větev by
+nikdy nenastala.
+
+Zmizelý zákaznický agregát po migraci je signál výpadku — proto `CRITICAL`, stejně jako u
+statik, ne `advisory`.
+
+Label je `<RIB> <prefix>` stejně jako u statiky, ale identita jde do vlastní skupiny
+`group="Agregatni routy"` — agregáty se v reportu nemíchají do stejné skupiny se statikami,
+ačkoliv obojí je pořád „routa v tabulce".
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| v tabulce a aktivní | `ok` | PASS | `v tabulce` |
+| v tabulce, ale bez hvězdičky (`active: false`), baseline taky neaktivní | `ok` | PASS | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, v baseline byla aktivní | `broken` | FAIL | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, bez baseline | `degraded` | WARN | `neni aktivni` |
+| nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
+| v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
+| nakonfigurovaná a v konfiguraci deaktivovaná | `deactivation_outcome(...)` | podle baseline | `deaktivovana` |
 
 ---
 

@@ -137,6 +137,54 @@ nowhere in the inventory. In the validation result it shows up under
 
 ---
 
+## Static routes: per-hop next hops and aggregates (QNH, schema 6)
+
+Since schema 6, `StaticRoute.next_hops` is a list of **per-hop records**, not a flat list of
+next-hop addresses: `{"to", "interface", "qualified", "active"}`. The reason is the
+qualified-next-hop (`qualified-next-hop`) — unlike a bare `next-hop`, it can be deactivated
+**individually** (verified against the lab on 2026-08-19: `inactive` sits directly on its
+node), so a route can have some next hops live and others turned off at the same time. A flat
+list of addresses could not express that; that is why activity belongs to the hop, not the
+route.
+
+`_parse_next_hops()`:
+
+- a bare `next-hop` yields `{"to": address, "interface": None, "qualified": False, "active":
+  True}` — it can only be deactivated as the whole route (`route_type`/route-level `active`),
+  so the hop itself is always active;
+- a `qualified-next-hop` additionally yields `interface` (if the stanza carries one) and its
+  own `active` (`not self._is_inactive(qnh_node)`); because `_is_inactive` walks ancestors, a
+  hop under a deactivated route also comes out inactive;
+- `discard`, `reject` and a next-table next hop (a table name instead of an IP) yield no hop
+  at all — they have no `to`, so there is nothing to compare against a next hop in the
+  routing table.
+
+**Mapping onto a service is precedence, not fallback** (`_route_matches_service()`): a hop
+with an `interface` is mapped **only** by that interface name — the address subnet is never
+tried for it. Without this, a link-local next hop (`fe80::...`), which is typically configured
+on more than one interface at once (measured on `et-0/0/8.13`, 2026-08-19), would scatter the
+route onto services it has nothing to do with. A hop without `interface` whose `to` is not a
+valid IP address is read as an interface name instead of an address (measured in wave 10) —
+even then, only a name match is tried, never a subnet. Only a hop without `interface` and with
+a valid IP address tries the interface's subnet. **Inactive hops still match** — a route whose
+only next hop the operator deactivated must stay with its service, otherwise it would fall
+into `unassigned.static_routes` exactly when the report is supposed to flag an incomplete
+migration at the next-hop level, not a gap in the inventory.
+
+**Aggregates** (`route_type == "aggregate"`) are parsed by the same `_static_routes_under()`
+— `./aggregate` containers next to `./static`, both globally under `routing-options` and
+inside every `routing-instances/instance`, with the same RIB-name derivation. An aggregate has
+no next hops (`next_hops == []`) — in the configuration it carries `discard`/`reject`, not a
+next hop, and those are not parsed, same as for statics. Mapping onto a service therefore does
+not go through the next hop but through the RIB itself: a VRF RIB (`rib_instance(route.rib)`
+is not `None`) maps onto **every** service of that instance, the global RIB
+(`rib_instance` is `None`) maps **only** onto the Core `lo0.0` — not onto any transit interface
+(a user decision from 2026-08-19). The `detection_reason` entry has its own sentence
+("Agregátní routa patří této službě: …"), separate from the static-route sentence, because it
+is a different attribution mechanism, not a variant of the same one.
+
+---
+
 ## BFD: inheritance through the BGP hierarchy
 
 `_parse_bfd()` reads `bfd-liveness-detection` at three levels, the more specific overriding
@@ -242,6 +290,15 @@ Deeper levels (an individually deactivated `route`, `bfd-liveness-detection`, or
 still dropped from intent without a trace — without a flag of their own like `interface_active`.
 Extending the flags to that level is deliberately deferred, out of scope for this wave.
 
+**Exception since schema 6: `qualified-next-hop` has its own `active`.** Unlike `route` above,
+this node *does* leave a trace of its deactivation — on the hop, not just on the route as a
+whole, because a qualified-next-hop can be deactivated independently of its siblings on the
+same route (a route with two next hops can have one live and one off). Without a per-hop
+`active`, the check would have no way to tell "this next hop stopped being used" apart from
+"the route is still in the table, just with a different next hop" — see the section "Static
+routes: per-hop next hops and aggregates" above. A bare `next-hop` has no such exception — it
+cannot be deactivated on its own, only as the whole route.
+
 ---
 
 ## Where the two files differ
@@ -305,7 +362,7 @@ regeneration against the lab `ge-0/0/2` there is deactivated — so for a sample
 active shape of a record the source is `.5`, where the same service runs on `et-0/0/8.113`.)
 
 ```yaml
-schema_version: 4
+schema_version: 6
 device: 172.20.20.5
 interfaces:
 - interface: et-0/0/8.113
@@ -329,18 +386,29 @@ interfaces:
   bgp_neighbor:
   - 198.11.13.2
   - 2001:db8:11:13::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '113'
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
     prefix: 172.26.1.0/29
-    next_hop:
-    - 198.11.13.2
+    active: true
+    route_type: static
+    next_hops:
+    - to: 198.11.13.2
+      interface: null
+      qualified: false
+      active: true
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
-    next_hop:
-    - 2001:db8:11:13::b
+    active: true
+    route_type: static
+    next_hops:
+    - to: 2001:db8:11:13::b
+      interface: null
+      qualified: false
+      active: true
   bfd:
   - peer: 198.11.13.2
     minimum_interval: 3000
@@ -359,9 +427,16 @@ interfaces:
 the interface of that service is deactivated — see "Deactivated configuration produces no
 intent" above. A healthy, fully active service like this one has both `true`.
 
+**Since schema 6, `static_route` is a list of per-hop records, not a flat `next_hop`.** Each
+element carries `route_type` (`static`/`aggregate`), a route-level `active`, and `next_hops`
+— for a static, a list of hops each with their own `to`/`interface`/`qualified`/`active` (see
+the section "Static routes: per-hop next hops and aggregates" above); for an aggregate, an
+empty list. There is no aggregate route in the lab services shown here to sample from, but the
+shape is the same as for a static, just with `route_type: aggregate` and `next_hops: []`.
+
 Addresses are now split by family — `ipv4_address`/`ipv6_address` and
 `virtual_gw_ipv4_address`/`virtual_gw_ipv6_address` — and the YAML always carries a
-top-level `schema_version: 4` key. The validator **rejects any other `schema_version`
+top-level `schema_version: 6` key. The validator **rejects any other `schema_version`
 outright** (`models/inventory.py::load_inventory()`) instead of silently reading a stale
 file as a service with no addresses or no intent — see
 [models.md](models.md#inventorypy--the-input-from-the-parsers).
