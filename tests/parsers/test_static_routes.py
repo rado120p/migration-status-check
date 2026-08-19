@@ -539,3 +539,163 @@ def test_aggregate_routy_se_parsuji_globalne_v_rib_i_v_instanci(parser_cls):
     }
     assert all(r.next_hops == [] for r in aggregates.values())
     assert all(r.active for r in aggregates.values())
+
+
+# ---------------------------------------------------------------------------
+# Precedence interface a agregaty na sluzby (Task 3)
+# ---------------------------------------------------------------------------
+
+QNH_LINK_LOCAL = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet6>
+            <address><name>2001:abcd:11:13::a/64</name></address>
+            <address><name>fe80::1/64</name></address>
+          </inet6>
+        </family>
+      </unit>
+      <unit>
+        <name>14</name>
+        <description>CPE14-NNI</description>
+        <family>
+          <inet6>
+            <address><name>2001:abcd:11:14::a/64</name></address>
+            <address><name>fe80::3/64</name></address>
+          </inet6>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <rib>
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:abcd:11:13::/64</name>
+          <qualified-next-hop>
+            <name>fe80::2</name>
+            <interface>et-0/0/8.13</interface>
+          </qualified-next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+</configuration>
+"""
+
+QNH_INACTIVE_ONLY = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet6><address><name>2001:abcd:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <rib>
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:aaaa::/64</name>
+          <qualified-next-hop inactive="inactive">
+            <name>2001:abcd:11:13::b</name>
+          </qualified-next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+</configuration>
+"""
+
+AGGREGATE_WITH_CORE = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>lo0</name>
+      <unit>
+        <name>0</name>
+        <family>
+          <inet><address><name>150.0.0.11/32</name></address></inet>
+          <iso/>
+        </family>
+      </unit>
+    </interface>
+    <interface>
+      <name>et-0/0/1</name>
+      <unit>
+        <name>0</name>
+        <description>CORE-UPLINK</description>
+        <family>
+          <inet><address><name>10.0.0.1/31</name></address></inet>
+          <mpls/>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <aggregate>
+      <route>
+        <name>198.62.0.0/16</name>
+        <discard/>
+      </route>
+    </aggregate>
+  </routing-options>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_hop_s_interface_se_mapuje_jen_podle_rozhrani(parser_cls):
+    # et-0/0/8.13 ma nakonfigurovany link-local subnet; kdyby bezel subnet
+    # match, fe80::2 by matchnul i jina rozhrani s fe80::/64. Interface
+    # je autoritativni (spec, bod 2).
+    parser = parser_cls(etree.fromstring(QNH_LINK_LOCAL))
+    by_iface = {s.interface: s for s in parser.parse()}
+
+    assert [r["prefix"] for r in by_iface["et-0/0/8.13"].static_route] == [
+        "2001:abcd:11:13::/64"
+    ]
+    # Druhe rozhrani s tymz link-local subnetem routu nedostane.
+    assert by_iface["et-0/0/8.14"].static_route == []
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_routa_s_deaktivovanym_jedinym_hopem_zustava_u_sluzby(parser_cls):
+    parser = parser_cls(etree.fromstring(QNH_INACTIVE_ONLY))
+    service = next(s for s in parser.parse() if s.interface == "et-0/0/8.13")
+    assert [r["prefix"] for r in service.static_route] == ["2001:aaaa::/64"]
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_vrf_aggregate_se_mapuje_na_sluzby_instance(parser_cls):
+    parser = parser_cls(etree.fromstring(QNH_MIX))
+    service = next(s for s in parser.parse() if s.interface == "et-0/0/8.13")
+    prefixes = [r["prefix"] for r in service.static_route
+                if r["route_type"] == "aggregate"]
+    assert prefixes == ["172.26.0.0/16"]
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_globalni_aggregate_se_mapuje_jen_na_core_lo0(parser_cls):
+    parser = parser_cls(etree.fromstring(AGGREGATE_WITH_CORE))
+    by_iface = {s.interface: s for s in parser.parse()}
+
+    core_prefixes = [r["prefix"] for r in by_iface["lo0.0"].static_route]
+    assert core_prefixes == ["198.62.0.0/16"]
+    # Tranzitni Core rozhrani globalni agregat nedostane.
+    assert all(
+        r["route_type"] != "aggregate"
+        for r in by_iface["et-0/0/1.0"].static_route
+    )

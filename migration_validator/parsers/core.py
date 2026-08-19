@@ -1244,22 +1244,76 @@ class JunosServiceParserCore:
             matched = [
                 route
                 for route in self.static_routes
-                if route.route_type == "static"
-                and rib_instance(route.rib) == service.routing_instance
-                and any(
-                    self._ip_in_interface_subnet(hop["to"], interface)
-                    for hop in route.next_hops
-                )
+                if self._route_matches_service(route, service, interface)
             ]
 
             if not matched:
                 continue
 
             service.static_route = [asdict(route) for route in matched]
-            service.detection_reason.append(
-                "Statická routa odpovídá subnetu rozhraní: "
-                + ", ".join(route.prefix for route in matched)
-            )
+
+            statics = [r.prefix for r in matched if r.route_type == "static"]
+            aggregates = [r.prefix for r in matched if r.route_type == "aggregate"]
+            if statics:
+                service.detection_reason.append(
+                    "Statická routa odpovídá subnetu rozhraní: " + ", ".join(statics)
+                )
+            if aggregates:
+                service.detection_reason.append(
+                    "Agregátní routa patří této službě: " + ", ".join(aggregates)
+                )
+
+    def _route_matches_service(
+        self,
+        route: StaticRoute,
+        service: InterfaceService,
+        interface: InterfaceConfig,
+    ) -> bool:
+        """Precedence, ne fallback: hop s interface se mapuje jen podle
+        jména rozhraní. Link-local subnet bývá nakonfigurovaný na víc
+        rozhraních (změřeno na et-0/0/8.13, 2026-08-19), takže subnet match
+        na fe80 adresu by routu rozstřelil na služby, kterých se netýká.
+
+        Matchují se i neaktivní hopy: routa, jejíž jediný hop operátor
+        deaktivoval, musí zůstat u své služby — jinak by spadla do
+        NEZARAZENO přesně ve chvíli, kdy ji report má hlásit.
+
+        Agregát hopy nemá a mapuje se podle RIB: VRF na služby instance,
+        globální jen na Core lo0.0 (rozhodnutí uživatele 2026-08-19 — ne na
+        tranzitní rozhraní).
+        """
+        if rib_instance(route.rib) != service.routing_instance:
+            return False
+
+        if route.route_type == "aggregate":
+            if rib_instance(route.rib) is not None:
+                return True
+            return service.service_type == "Core" and service.interface == "lo0.0"
+
+        for hop in route.next_hops:
+            target = hop["interface"]
+
+            if target is None and self._parse_ip(hop["to"]) is None:
+                # <name> vyjimecne nese jmeno rozhrani misto adresy
+                # (mereni z vlny 10) - nic vic se nehada.
+                target = hop["to"]
+
+            if target is not None:
+                if target == service.interface:
+                    return True
+                continue
+
+            if self._ip_in_interface_subnet(hop["to"], interface):
+                return True
+
+        return False
+
+    @staticmethod
+    def _parse_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+        try:
+            return ipaddress.ip_address(value)
+        except ValueError:
+            return None
 
     def _assign_bfd(self, services: list[InterfaceService]) -> None:
         """BFD se připíná jen k peerům, které služba už má v bgp_neighbor.
