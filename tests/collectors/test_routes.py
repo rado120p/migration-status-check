@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 from lxml import etree
 
+from migration_validator.collectors.base import CollectorError
 from migration_validator.collectors.routes import RoutesCollector
 
 PLATFORMS = ("junos", "junos-evo")
@@ -138,13 +139,19 @@ def test_parse_tagne_static_zaznam_protokolem():
 
 class _FakeRoutesRpc:
     """Vraci nahrane XML podle hodnoty kwargu `protocol` - stejne RPC,
-    jina varianta stejne jako u InterfacesCollector."""
+    jina varianta stejne jako u InterfacesCollector.
+
+    Hodnota v `by_protocol` muze byt i vyjimka - simuluje selhani jednoho
+    z pruchodu (RpcError, sitova chyba)."""
 
     def __init__(self, by_protocol):
         self._by_protocol = by_protocol
 
     def get_route_information(self, **kwargs):
-        return etree.fromstring(self._by_protocol[kwargs["protocol"]])
+        outcome = self._by_protocol[kwargs["protocol"]]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return etree.fromstring(outcome)
 
 
 class _FakeDevice:
@@ -167,3 +174,16 @@ def test_rpc_calls_stril_static_a_aggregate():
         ("get_route_information", {"protocol": "static"}),
         ("get_route_information", {"protocol": "aggregate"}),
     )
+
+
+def test_collect_selhani_druheho_pruchodu_je_chyba_celeho_collectoru():
+    """Bez agregatniho pruchodu by check cetl chybejici agregat jako
+    zmizely - castecna data nesmi vypadat jako zmerena. Selhani
+    kterehokoliv pruchodu proto musi shodit CollectorError, ne tise vratit
+    jen to, co se stihlo nasbirat."""
+    device = _FakeDevice({
+        "static": STATIC_XML,
+        "aggregate": RuntimeError("timeout"),
+    })
+    with pytest.raises(CollectorError, match=r"protocol=aggregate.*timeout"):
+        RoutesCollector().collect(device, "junos-evo")

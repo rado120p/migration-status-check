@@ -608,14 +608,20 @@ def _cmd_record(args: argparse.Namespace) -> int:
             target.mkdir(parents=True, exist_ok=True)
 
             for collector in collectors_for(platform):
-                # Collector muze mit vic RPC (EVPN MAC tabulka na MX).
+                # Collector muze mit vic RPC (EVPN MAC tabulka na MX) a
+                # jednotliva volani se muzou lisit jen v kwargs (interfaces:
+                # extensive/terse, routes: protocol=static/aggregate).
+                # rpc_calls() je podle base.py autorita presne pro tenhle
+                # pripad - rpc_names()+jedno rpc_kwargs() by druhe a dalsi
+                # volani zopakovalo se stejnymi kwargs jako prvni a nahravka
+                # by tise obsahovala dvakrat totez misto druhe varianty.
                 # Prvni se uklada pod jmenem oblasti, dalsi s poradovym
                 # cislem - jinak by fixture obsahovala jen pulku dat.
-                for index, rpc_name in enumerate(collector.rpc_names(platform)):
+                for index, (rpc_name, rpc_kwargs) in enumerate(
+                    collector.rpc_calls(platform)
+                ):
                     try:
-                        xml = getattr(device.rpc, rpc_name)(
-                            **collector.rpc_kwargs(platform)
-                        )
+                        xml = getattr(device.rpc, rpc_name)(**rpc_kwargs)
                     except Exception as error:  # noqa: BLE001
                         print(
                             f"  {collector.name} ({rpc_name}): SELHALO - {error}",

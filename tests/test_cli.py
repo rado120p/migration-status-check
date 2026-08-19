@@ -664,6 +664,73 @@ def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
     assert calls["output_path"].exists()
 
 
+def test_record_command_pouziva_rpc_calls_ne_rpc_names_a_jedno_kwargs(
+    tmp_path, monkeypatch
+):
+    """_cmd_record musi jit pres rpc_calls(), ne rpc_names()+jedno
+    rpc_kwargs() - base.py:47 rika, ze rpc_calls() je autorita "pro record
+    i pro vice-RPC collect". Kolektory jako routes (protocol=static pak
+    protocol=aggregate) nebo interfaces (extensive pak terse) maji druhe
+    RPC s JINYMI kwargs nez prvni; rpc_names()+jedno rpc_kwargs() by obe
+    volani poslalo se stejnymi kwargs jako prvni, takze <name>.2.xml by
+    tise byla kopie <name>.xml misto druhe varianty.
+    """
+    from contextlib import contextmanager
+
+    import migration_validator.collectors.all  # noqa: F401  (registrace)
+    from lxml import etree
+
+    class _FakeRpc:
+        def __getattr__(self, rpc_name):
+            def call(**kwargs):
+                marker = f"{rpc_name}:" + ",".join(
+                    f"{k}={v}" for k, v in sorted(kwargs.items())
+                )
+                return etree.fromstring(f"<r><marker>{marker}</marker></r>".encode())
+
+            return call
+
+    class _FakeDevice:
+        def __init__(self):
+            self.rpc = _FakeRpc()
+
+    @contextmanager
+    def fake_connect(options):
+        yield _FakeDevice()
+
+    def fake_detect_platform(device):
+        return "junos-evo"
+
+    monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
+    monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
+
+    code = main(
+        [
+            "record",
+            "--device", "172.20.20.4",
+            "--output-dir", str(tmp_path),
+        ]
+    )
+
+    assert code == 0
+
+    target = tmp_path / "junos-evo"
+    routes_xml = (target / "routes.xml").read_bytes()
+    routes_2_xml = (target / "routes.2.xml").read_bytes()
+
+    # Obe fixtures existuji, ale nesmi byt totozne - druhy pruchod je
+    # protocol=aggregate, ne opakovani prvniho protocol=static.
+    assert routes_xml != routes_2_xml
+    assert b"protocol=static" in routes_xml
+    assert b"protocol=aggregate" in routes_2_xml
+
+    interfaces_xml = (target / "interfaces.xml").read_bytes()
+    interfaces_2_xml = (target / "interfaces.2.xml").read_bytes()
+    assert interfaces_xml != interfaces_2_xml
+    assert b"extensive=True" in interfaces_xml
+    assert b"terse=True" in interfaces_2_xml
+
+
 def test_parse_services_requires_run(monkeypatch, capsys):
     _refuse_capture(monkeypatch)
 
