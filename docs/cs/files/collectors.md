@@ -276,8 +276,10 @@ ho vyrobí collector ze sloučení nahrávek `tests/fixtures/rpc/junos-evo/route
 Klíč `protocol` nese hodnotu `protocol-name` z RPC, malými písmeny (`"static"` / `"aggregate"`)
 — checky ho čtou při rozdělování na `static_route_status` a `aggregate_route_status`. Chybějící
 klíč `protocol` znamená snapshot pořízený před schema 10, kdy collector sbíral jen statiky;
-`checks/routes.py::_flatten()` v tom případě defaultuje na `"static"`, takže staré snapshoty se
-čtou beze změny chování.
+`checks/routes.py::_flatten()` v tom případě defaultuje na `"static"`. Tenhle default chrání
+jen vnitřek checku — reálný starý soubor snapshotu se přes `Snapshot.from_dict` nedostane vůbec
+(`schema_version != SCHEMA_VERSION` skončí na `SnapshotVersionError`), takže starý baseline
+stejně vyžaduje novou capturu.
 
 Čtyři věci ověřené proti laborce:
 

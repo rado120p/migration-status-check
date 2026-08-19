@@ -54,7 +54,7 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
-The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 4`).
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 6`).
 `load_inventory()` **rejects any other value outright** rather than tolerating it.
 
 The reason is the same for every bump: a missing field would not surface as an error but as

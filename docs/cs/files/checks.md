@@ -355,8 +355,10 @@ Od 2026-08-19 QNH má agregátní routa vlastní check (`aggregate_route_status`
 si z konfigurace i z faktů předem odfiltruje agregáty, aby se dva mechanismy porovnání
 (next-hop u statiky, jen přítomnost u agregátu) nemíchaly v jednom cyklu. Chybějící klíč
 `protocol`/`route_type` znamená záznam z doby před schema 10/6, kdy se sbíraly/parsovaly jen
-statiky — default je tam „static", ne chyba, takže starý baseline proti novému subjektu
-degraduje elegantně místo pádu.
+statiky — default je tam „static", ne chyba. Chrání to jen vnitřek checku (ručně sestavená
+fakta v testech, kde se check volá přímo bez `Snapshot.from_dict`) — reálný starý soubor
+baseline stejně skončí na `SnapshotVersionError` (`models/snapshot.py`, `schema_version !=
+SCHEMA_VERSION`) dřív, než se k tomuhle checku vůbec dostane, takže je potřeba nová captura.
 
 **Iteruje přes sjednocení tří zdrojů** (AR‑14) — konfigurace subjektu (`Selectors.static_routes`),
 měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zavírá jednu díru:

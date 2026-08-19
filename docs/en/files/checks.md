@@ -350,8 +350,10 @@ check asks "is it up?"; this one asks "is what you ordered actually there?".
 and the facts up front, so the two comparison mechanisms (next-hop for a static, presence-only
 for an aggregate) never mix inside one loop. A missing `protocol`/`route_type` key means a
 record from before schema 10/6, when only statics were collected/parsed — the default there
-is "static", not an error, so an old baseline against a new subject degrades gracefully
-instead of crashing.
+is "static", not an error. That only protects the check's internals (hand-built facts in
+tests, calling the check directly without going through `Snapshot.from_dict`) — a real old
+baseline file still hits `SnapshotVersionError` (`models/snapshot.py`, `schema_version !=
+SCHEMA_VERSION`) before it ever reaches this check, so it still needs a fresh capture.
 
 **It iterates over the union of three sources** (AR‑14) — the subject's configuration
 (`Selectors.static_routes`), the subject's measurement (`facts["routes"]`) and the

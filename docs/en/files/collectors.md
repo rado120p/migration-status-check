@@ -274,7 +274,10 @@ The `protocol` key carries `protocol-name` from the RPC, lower-cased (`"static"`
 `"aggregate"`) — the checks read it to split into `static_route_status` and
 `aggregate_route_status`. A missing `protocol` key means a snapshot taken before schema 10,
 when the collector only gathered statics; `checks/routes.py::_flatten()` defaults it to
-`"static"` in that case, so old snapshots read with unchanged behaviour.
+`"static"` in that case. That default only protects the check's internals — a real old
+snapshot file never gets this far, because `Snapshot.from_dict` rejects any
+`schema_version != SCHEMA_VERSION` with `SnapshotVersionError`, so an old baseline still
+needs a fresh capture.
 
 Four things verified against the lab:
 

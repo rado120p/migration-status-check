@@ -137,6 +137,50 @@ def test_parse_tagne_static_zaznam_protokolem():
     assert entry["protocol"] == "static"
 
 
+FOREIGN_PROTOCOL_XML = b"""
+<route-information>
+  <route-table>
+    <table-name>inet6.0</table-name>
+    <rt>
+      <rt-destination>2001:aaaa::/64</rt-destination>
+      <rt-entry>
+        <active-tag>*</active-tag>
+        <protocol-name>Static</protocol-name>
+        <preference>5</preference>
+        <nh>
+          <to>2001:abcd:11:13::b</to>
+          <via>et-0/0/8.13</via>
+        </nh>
+      </rt-entry>
+    </rt>
+    <rt>
+      <rt-destination>2001:bbbb::/64</rt-destination>
+      <rt-entry>
+        <active-tag>*</active-tag>
+        <protocol-name>BGP</protocol-name>
+        <preference>170</preference>
+        <nh>
+          <to>2001:abcd:11:13::c</to>
+          <via>et-0/0/8.14</via>
+        </nh>
+      </rt-entry>
+    </rt>
+  </route-table>
+</route-information>
+"""
+
+
+def test_parse_filtruje_cizi_protokol_ale_neztraci_static():
+    """Pojistka v parse() (`if protocol not in PROTOCOLS: continue`) musi
+    zahodit zaznam s protokolem mimo static/aggregate (napr. BGP), zatimco
+    sousedni static zaznam ve stejne tabulce zustane netknuty - filtr je
+    selektivni, ne rozbity."""
+    parsed = RoutesCollector().parse(etree.fromstring(FOREIGN_PROTOCOL_XML), "junos-evo")
+
+    assert "2001:bbbb::/64" not in parsed["inet6.0"]
+    assert parsed["inet6.0"]["2001:aaaa::/64"]["protocol"] == "static"
+
+
 class _FakeRoutesRpc:
     """Vraci nahrane XML podle hodnoty kwargu `protocol` - stejne RPC,
     jina varianta stejne jako u InterfacesCollector.

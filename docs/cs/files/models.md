@@ -54,7 +54,7 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 4`).
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 6`).
 `load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
 
 Důvod je u všech zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
@@ -177,7 +177,7 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 6` (`models/snapshot.py`). Zvýšení z 5 nese normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 10` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
 `peers` místo plochého `status`/`local_sid`/`remote_sid`). Stará snapshot data se proto musí
