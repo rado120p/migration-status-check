@@ -226,9 +226,12 @@ def _facts_for(scopes, pps: int) -> dict:
         # routa je v tabulce se stejnym next-hopem, session je Up.
         for route in scope.selectors.static_routes:
             routes.setdefault(str(route["rib"]), {})[str(route["prefix"])] = {
-                "next_hop": list(route.get("next_hop") or []),
+                "next_hop": [
+                    hop["to"] for hop in route.get("next_hops") or [] if hop["active"]
+                ],
                 "via": list(scope.selectors.interfaces[:1]),
                 "active": True,
+                "protocol": str(route.get("route_type", "static")),
             }
 
         for intent in scope.selectors.bfd_peers:

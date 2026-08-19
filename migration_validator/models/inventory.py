@@ -137,7 +137,7 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 5
+INVENTORY_SCHEMA_VERSION = 6
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -150,6 +150,10 @@ def load_inventory(path: str | Path) -> Inventory:
     Verze 3 pridala static_route a bfd. Tolerantni cteni ma tady stejnou
     cenu: sluzba by prisla bez zameru, takze by check nemel co porovnat
     s routovaci tabulkou a rozpor mezi konfiguraci a stavem by zmizel.
+
+    Verze 6 nahradila u static_route ploche next_hop per-hop zaznamy
+    next_hops (+ route_type). Tolerantni cteni by vratilo zamer bez hopu,
+    mapovani i anotace deaktivace by tise zmizely.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

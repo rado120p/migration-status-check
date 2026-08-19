@@ -639,7 +639,7 @@ def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
         calls["output_path"] = output_path
         calls["port"] = port
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text("schema_version: 5\ndevice: x\ninterfaces: []\n")
+        output_path.write_text("schema_version: 6\ndevice: x\ninterfaces: []\n")
 
     monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
     monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
@@ -705,14 +705,14 @@ def test_parse_services_regenerates_existing_inventory_and_prints_delta(
     inventory_path = store.inventory_path("172.20.20.5", "ae0")
     inventory_path.parent.mkdir(parents=True, exist_ok=True)
     inventory_path.write_text(
-        "schema_version: 5\ndevice: x\ninterfaces:\n"
+        "schema_version: 6\ndevice: x\ninterfaces:\n"
         "  - interface: ae0.15\n"
     )
 
     def fake_generate_inventory(device, platform, output_path, port):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
-            "schema_version: 5\ndevice: x\ninterfaces:\n"
+            "schema_version: 6\ndevice: x\ninterfaces:\n"
             "  - interface: ae0.15\n"
             "  - interface: ae0.16\n"
         )

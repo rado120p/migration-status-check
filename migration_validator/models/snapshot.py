@@ -18,7 +18,10 @@ from migration_validator.models.scope import Scope
 # 9: evpn_esi zaznamy nesou resolved_status (popisny 'Resolved by IFL ...'
 #    pro radek "ESI Status") a nekonecne floaty se na disku serializuji
 #    jako string tokeny ('-Inf'), ne jako neplatny JSON token -Infinity.
-SCHEMA_VERSION = 9
+# 10: route zaznamy nesou klic 'protocol' (static | aggregate) a selektory
+#     static_routes maji per-hop next_hops + route_type misto plocheho
+#     next_hop.
+SCHEMA_VERSION = 10
 
 
 class SnapshotVersionError(Exception):

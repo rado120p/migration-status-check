@@ -1,4 +1,4 @@
-schema_version: 5
+schema_version: 6
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
@@ -192,18 +192,30 @@ interfaces:
   - rib: inet.0
     prefix: 198.62.1.0/29
     active: true
-    next_hop:
-    - 152.11.13.2
+    route_type: static
+    next_hops:
+    - to: 152.11.13.2
+      interface: null
+      qualified: false
+      active: true
   - rib: inet.0
     prefix: 198.62.2.0/24
     active: true
-    next_hop:
-    - 152.11.13.2
+    route_type: static
+    next_hops:
+    - to: 152.11.13.2
+      interface: null
+      qualified: false
+      active: true
   - rib: inet6.0
     prefix: 2001:aaaa::/64
     active: true
-    next_hop:
-    - 2001:abcd:11:13::b
+    route_type: static
+    next_hops:
+    - to: 2001:abcd:11:13::b
+      interface: null
+      qualified: false
+      active: true
   bfd:
   - peer: 152.11.13.2
     minimum_interval: 3000
@@ -243,13 +255,21 @@ interfaces:
   - rib: L3VPN-CPE13-NNI.inet.0
     prefix: 172.26.1.0/29
     active: true
-    next_hop:
-    - 198.11.13.2
+    route_type: static
+    next_hops:
+    - to: 198.11.13.2
+      interface: null
+      qualified: false
+      active: true
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
     active: true
-    next_hop:
-    - 2001:db8:11:13::b
+    route_type: static
+    next_hops:
+    - to: 2001:db8:11:13::b
+      interface: null
+      qualified: false
+      active: true
   bfd:
   - peer: 198.11.13.2
     minimum_interval: 3000
@@ -571,8 +591,12 @@ interfaces:
   - rib: MGMT.inet.0
     prefix: 10.40.95.0/24
     active: true
-    next_hop:
-    - 10.40.94.10
+    route_type: static
+    next_hops:
+    - to: 10.40.94.10
+      interface: null
+      qualified: false
+      active: true
   bfd: []
   detection_confidence: high
   detection_reason:
