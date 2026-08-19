@@ -1,4 +1,4 @@
-"""Sber statickych rout z routovaci tabulky.
+"""Sber statickych a agregatnich rout z routovaci tabulky.
 
 Collector nerozhoduje, jestli routa chybi nebo prebyva - jen zapise, co
 v tabulce je. Porovnani se zamerem z konfigurace patri do checku.
@@ -7,6 +7,16 @@ Overeno proti laborce: `table-name` nese jmeno RIB vcetne rodiny
 (`L3VPN-CPE13-NNI.inet6.0`), takze asymetrie, kterou ma konfigurace mezi
 IPv4 a IPv6, se v RPC nevyskytuje. `via` nese vystupni rozhrani, takze
 mapovani na sluzbu nepotrebuje aritmetiku nad next-hopem.
+
+Sber jede dvema pruchody stejneho RPC (protocol=static, protocol=aggregate)
+- vzor je InterfacesCollector (extensive + terse). Merge v collect() druhym
+pruchodem jen priresava, nikdy neprepisuje: prefix nemuze byt v jedne RIB
+soucasne static i aggregate, takze kolize by znamenala poskozena data, ne
+legitimni update.
+
+Overeno proti laborce (routes.2.xml): agregatni zaznam nema zadny <nh> -
+<nh-type> (Discard/Reject) sedi primo pod <rt-entry>, takze next_hop i via
+jsou pro nej vzdy prazdne. protocol-name nese presne "Aggregate".
 """
 
 from __future__ import annotations
@@ -15,11 +25,13 @@ from typing import Any
 
 from lxml import etree
 
-from migration_validator.collectors.base import Collector
+from migration_validator.collectors.base import Collector, CollectorError
 from migration_validator.collectors.interfaces import _text
 from migration_validator.collectors.registry import register
 
 STATIC = "static"
+AGGREGATE = "aggregate"
+PROTOCOLS = (STATIC, AGGREGATE)
 ACTIVE_TAG = "*"
 
 
@@ -49,11 +61,64 @@ class RoutesCollector(Collector):
     def rpc_name(self, platform: str) -> str:
         return "get_route_information"
 
+    def rpc_names(self, platform: str) -> tuple[str, ...]:
+        # Dvakrat totez RPC (static + aggregate) - record tak ulozi obe
+        # nahravky (routes.xml, routes.2.xml).
+        return ("get_route_information", "get_route_information")
+
     def rpc_kwargs(self, platform: str) -> dict[str, Any]:
         # Bez `all=True`: ta varianta pridava jen __juniper_private*
         # tabulky, coz je sum. Filtr na protokol drzi odpoved malou i na
         # zarizeni s plnou internetovou tabulkou.
         return {"protocol": STATIC}
+
+    def rpc_calls(self, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
+        return tuple(
+            ("get_route_information", {"protocol": protocol})
+            for protocol in PROTOCOLS
+        )
+
+    def collect(self, device: Any, platform: str) -> Any:
+        # Selhani ktereholiv pruchodu je chyba celeho collectoru (stejny
+        # duvod jako u interfaces): bez aggregate pruchodu by check cetl
+        # chybejici agregat jako zmizely, castecna data nesmi vypadat
+        # jako zmerena.
+        if not self.supports(platform):
+            raise CollectorError(
+                f"collector '{self.name}' nepodporuje platformu '{platform}'"
+            )
+
+        tables: dict[str, dict[str, dict[str, Any]]] = {}
+        failures: list[str] = []
+
+        for rpc_name, rpc_kwargs in self.rpc_calls(platform):
+            variant = f"{rpc_name}(protocol={rpc_kwargs['protocol']})"
+            try:
+                xml = getattr(device.rpc, rpc_name)(**rpc_kwargs)
+            except Exception as error:  # noqa: BLE001 - RpcError i sitove chyby
+                failures.append(f"{variant}: {type(error).__name__}: {error}")
+                continue
+
+            try:
+                parsed = self.parse(xml, platform)
+            except Exception as error:  # noqa: BLE001
+                failures.append(f"{variant}: parsovani selhalo - {error}")
+                continue
+
+            for table, prefixes in parsed.items():
+                target = tables.setdefault(table, {})
+                for prefix, data in prefixes.items():
+                    # Druhy pruchod jen pridava: prefix nemuze byt v jedne
+                    # RIB zaroven static a aggregate, a last-write-wins by
+                    # jeden z nich tise schoval.
+                    target.setdefault(prefix, data)
+
+        if failures:
+            raise CollectorError(
+                f"collector '{self.name}': RPC selhalo - " + "; ".join(failures)
+            )
+
+        return tables
 
     def parse(
         self, xml: etree._Element, platform: str
@@ -73,15 +138,17 @@ class RoutesCollector(Collector):
 
                 for entry in route.iter("rt-entry"):
                     # Filtr na protokol uz je v RPC, tohle je pojistka:
-                    # nasazeni s jinym filtrem by jinak zapsalo BGP routy
-                    # jako staticke.
-                    if (_text(entry, "protocol-name") or "").lower() != STATIC:
+                    # nasazeni s jinym filtrem (nebo neocekavana odpoved)
+                    # by jinak zapsalo BGP routy jako staticke/agregatni.
+                    protocol = (_text(entry, "protocol-name") or "").lower()
+                    if protocol not in PROTOCOLS:
                         continue
 
                     prefixes[prefix] = {
                         "next_hop": _texts(entry, "to"),
                         "via": _texts(entry, "via"),
                         "active": _text(entry, "active-tag") == ACTIVE_TAG,
+                        "protocol": protocol,
                     }
 
             # RPC vraci pres dvacet tabulek, vetsina prazdna. Ukladat je
