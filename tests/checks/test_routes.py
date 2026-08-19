@@ -178,11 +178,12 @@ def test_route_that_became_active_passes():
     zadne porovnavani aktivity - tu je OK zarucene strukturalne, kdyz je
     subject aktivni, _presence_finding vetev "neaktivni" se nevyvolava.
     Chyta ale mutaci ZMENA vetve v `_finding`: kdyby se podminka
-    `was is not None and was != now` zmutovala tak, aby platila i pri
-    rovnosti (napr. vypusteni `!= now`), tenhle test by ZMENA vetev
-    vyvolal falesne (was == now, ale hlaska by rikala "next-hop se
-    zmenil X -> X") a dostal by DEGRADED misto OK. Overeno rucne: nahrada
-    `was != now` za `True` shodi presne tenhle test.
+    `reached_active_table and was is not None and was != now` zmutovala
+    tak, aby platila i pri rovnosti (napr. vypusteni `!= now`), tenhle
+    test by ZMENA vetev vyvolal falesne (was == now, ale hlaska by
+    rikala "next-hop se zmenil X -> X") a dostal by DEGRADED misto OK.
+    Overeno rucne: nahrada `was != now` za `True` shodi presne tenhle
+    test.
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed(), _installed_inactive())
