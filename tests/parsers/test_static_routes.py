@@ -671,6 +671,61 @@ def test_hop_s_interface_se_mapuje_jen_podle_rozhrani(parser_cls):
     assert by_iface["et-0/0/8.14"].static_route == []
 
 
+QNH_NAME_AS_INTERFACE = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/8</name>
+      <unit>
+        <name>13</name>
+        <description>CPE13-NNI</description>
+        <family>
+          <inet6><address><name>2001:abcd:11:13::a/64</name></address></inet6>
+        </family>
+      </unit>
+      <unit>
+        <name>14</name>
+        <description>CPE14-NNI</description>
+        <family>
+          <inet6><address><name>2001:abcd:11:14::a/64</name></address></inet6>
+        </family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <rib>
+      <name>inet6.0</name>
+      <static>
+        <route>
+          <name>2001:bbbb::/64</name>
+          <qualified-next-hop>
+            <name>et-0/0/8.13</name>
+          </qualified-next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_qnh_jmeno_rozhrani_v_name_bez_interface_elementu_mapuje_podle_jmena(
+    parser_cls,
+):
+    # Zmereno na vlne 10: <name> qualified-next-hopu vyjimecne nese jmeno
+    # rozhrani misto adresy a chybi <interface>. _parse_ip na tom selze,
+    # takze se "to" pouzije primo jako cil - musi sednout jen na
+    # et-0/0/8.13, ne na et-0/0/8.14 se stejnou fyzickou predponou.
+    parser = parser_cls(etree.fromstring(QNH_NAME_AS_INTERFACE))
+    by_iface = {s.interface: s for s in parser.parse()}
+
+    assert [r["prefix"] for r in by_iface["et-0/0/8.13"].static_route] == [
+        "2001:bbbb::/64"
+    ]
+    assert by_iface["et-0/0/8.14"].static_route == []
+
+
 @pytest.mark.parametrize("parser_cls", PARSERS)
 def test_routa_s_deaktivovanym_jedinym_hopem_zustava_u_sluzby(parser_cls):
     parser = parser_cls(etree.fromstring(QNH_INACTIVE_ONLY))
