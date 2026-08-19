@@ -41,6 +41,7 @@ from migration_validator.models.result import Finding, Outcome, Severity
 MISSING_FROM_TABLE = "neni v tabulce"
 MISSING_ENTIRELY = "chybi"
 NOT_ACTIVE = "neni aktivni"
+IN_TABLE = "v tabulce"
 
 
 def prefix_family(prefix: str) -> int | None:
@@ -84,6 +85,19 @@ def _flatten(
     }
 
 
+def _presence_text(data: dict[str, Any] | None) -> str | None:
+    """Baseline hodnota agregatu v reci pritomnosti, ne next-hopu.
+
+    Agregat next-hopy nema, takze _next_hop_text by vratil "-" a report
+    by proti value "v tabulce" tiskl falesne "bylo -" na kazdem
+    nezmenenem radku. None = v baseline zaznam neni (view.py pak resi
+    "bez baseline" sam).
+    """
+    if data is None:
+        return None
+    return IN_TABLE if data.get("active", True) else NOT_ACTIVE
+
+
 def _hop_text(hop: dict[str, Any]) -> str:
     interface = hop.get("interface")
     return f"{hop['to']} via {interface}" if interface else str(hop["to"])
@@ -100,6 +114,7 @@ def _presence_finding(
     label_prefix: str,
     group: str,
     value_ok: str,
+    baseline_value: str | None,
 ) -> Finding:
     """Vetve sdilene StaticRouteStatusCheck a AggregateRouteStatusCheck.
 
@@ -122,7 +137,13 @@ def _presence_finding(
     rib, prefix = identity
     label = f"{rib} {prefix}"
     family = prefix_family(prefix)
-    was = _next_hop_text(baseline)
+    # baseline_value dodava volajici, protoze musi mluvit stejnou reci
+    # jako `value` sve strany: statika mnozinou next-hopu, agregat
+    # pritomnosti ("v tabulce"). Kdyby se tu pocital z next-hopu pro oba,
+    # nezmeneny agregat by dostal baseline_value "-" proti value
+    # "v tabulce" a report by na kazdy radek tiskl falesne "bylo -"
+    # (view.py tiskne sufix pri baseline_value != value).
+    was = baseline_value
 
     if deactivated and subject is None:
         # Radek 4 tabulky (aktivni ted, vypnuta v baselinu) se sem
@@ -425,6 +446,7 @@ class StaticRouteStatusCheck(Check):
             label_prefix=self.label,
             group=group,
             value_ok=now or "",
+            baseline_value=was,
         )
 
         if not reached_active_table:
@@ -550,7 +572,8 @@ class AggregateRouteStatusCheck(Check):
                 ),
                 label_prefix=self.label,
                 group="Agregatni routy",
-                value_ok="v tabulce",
+                value_ok=IN_TABLE,
+                baseline_value=_presence_text(baseline.get(identity)),
             )
             for identity in sorted(configured | set(subject) | set(baseline))
         ]

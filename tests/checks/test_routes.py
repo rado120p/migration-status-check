@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.routes import (
+    NOT_ACTIVE,
     AggregateRouteStatusCheck,
     StaticRouteStatusCheck,
 )
@@ -820,6 +821,41 @@ def test_aggregate_zmizely_proti_baseline():
     (finding,) = AggregateRouteStatusCheck().run(ctx)
     assert finding.outcome is Outcome.BROKEN
     assert "v baseline byla, v subjektu neni" in finding.message
+
+
+def test_nezmeneny_aggregate_nedostane_bylo_sufix():
+    """baseline_value musi mluvit stejnou reci jako value (pritomnost).
+
+    Reporting (view.py) tiskne "bylo <baseline_value>" pri
+    baseline_value != value. Agregat s baseline z _next_hop_text dostaval
+    "-" (prazdna mnozina next-hopu) proti value "v tabulce", takze kazdy
+    nezmeneny agregat ukazoval falesne "bylo -". Zmereno uzivatelem na
+    behu pre/post 2026-08-19.
+    """
+    ctx = _ctx(
+        _aggregate_installed(),
+        baseline_routes=_aggregate_installed(),
+        scope=_scope([_aggregate()]),
+    )
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.OK
+    assert finding.baseline_value == finding.value
+
+
+def test_aggregate_bez_baseline_zaznamu_ma_baseline_value_none():
+    ctx = _ctx(_aggregate_installed(), scope=_scope([_aggregate()]))
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.baseline_value is None
+
+
+def test_aggregate_neaktivni_v_baseline_ukaze_bylo_neni_aktivni():
+    ctx = _ctx(
+        _aggregate_installed(),
+        baseline_routes=_aggregate_installed(active=False),
+        scope=_scope([_aggregate()]),
+    )
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.baseline_value == NOT_ACTIVE
 
 
 def test_static_zaznamy_aggregate_check_ignoruje():
