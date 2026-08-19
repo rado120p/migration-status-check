@@ -569,6 +569,37 @@ def test_management_static_route_lands_in_unassigned():
             "prefix": "0.0.0.0/0",
             "next_hop": ["10.0.0.2"],
             "via": ["fxp0.0"],
+            "protocol": "static",
+            "snapshot": "subject",
+        }
+    ]
+
+
+def test_nezarazeny_aggregate_nese_protokol():
+    """Agregat bez odpovidajici sluzby (VRF bez sluzeb, box bez Core lo0.0)
+    spadne do NEZARAZENO stejne jako statika - a nese protocol, aby report
+    poznal, ze jde o agregat, ne o klasickou statiku."""
+    subject = _new()
+    subject.facts["routes"] = {
+        "inet6.0": {
+            "2001:abcd::/32": {
+                "next_hop": [],
+                "via": [],
+                "active": True,
+                "protocol": "aggregate",
+            }
+        }
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["static_routes"] == [
+        {
+            "rib": "inet6.0",
+            "prefix": "2001:abcd::/32",
+            "next_hop": [],
+            "via": [],
+            "protocol": "aggregate",
             "snapshot": "subject",
         }
     ]
@@ -618,6 +649,7 @@ def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
             "prefix": "0.0.0.0/0",
             "next_hop": ["10.0.0.2"],
             "via": ["fxp0.0"],
+            "protocol": "static",
             "snapshot": "subject",
         }
     ]

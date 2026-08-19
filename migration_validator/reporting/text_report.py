@@ -408,7 +408,10 @@ def _unassigned_row(kind: str, item: dict[str, object]) -> tuple[str, str]:
             if hops
             else f"via {', '.join(item.get('via') or ['-'])}"
         )
-        return f"{item['rib']} {item['prefix']}", detail
+        # Agregat bez sluzby (VRF bez sluzeb, box bez Core lo0.0) vypada
+        # jinak nez zbla statika - sufix operatorovi rekne, co mu vypadlo.
+        suffix = " (aggregate)" if item.get("protocol") == "aggregate" else ""
+        return f"{item['rib']} {item['prefix']}{suffix}", detail
     return item["peer"], f"{item.get('interface') or '-'}   {item.get('state') or '-'}"
 
 

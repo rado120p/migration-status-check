@@ -1238,6 +1238,39 @@ def test_unassigned_objects_reach_the_text_report():
     assert "-> et-0/0/8.13" not in out
 
 
+def test_unassigned_aggregate_route_gets_a_suffix():
+    """Agregat bez sluzby (protocol=aggregate) se od bezne statiky odlisi
+    sufixem, aby operator nemusel hadat, ktera routa mu tise vypadla."""
+    result = _grouped_result([_grouped_check("a", label="x")])
+    result.unassigned = {
+        "bgp_peers": [],
+        "static_routes": [
+            {
+                "rib": "inet6.0",
+                "prefix": "2001:abcd::/32",
+                "next_hop": [],
+                "via": [],
+                "protocol": "aggregate",
+                "snapshot": "subject",
+            }
+        ],
+        "bfd_sessions": [],
+    }
+
+    out = render(result)
+
+    assert "inet6.0 2001:abcd::/32 (aggregate)" in out
+
+
+def test_unassigned_static_route_without_protocol_has_no_suffix():
+    """Stara statika (bez agregatu) zustava bez sufixu - ne kazdy radek
+    NEZARAZENO je najednou (aggregate)."""
+    out = render(_unassigned_result())
+
+    assert "inet.0 10.0.0.0/8 (aggregate)" not in out
+    assert "inet.0 10.0.0.0/8" in out
+
+
 def test_unassigned_section_is_printed_even_when_empty():
     """Zabiji mutanta, ktery `(nic)` z prazdne vetve `_unassigned_lines` vynecha.
 

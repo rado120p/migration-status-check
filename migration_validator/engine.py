@@ -366,7 +366,8 @@ def _unassigned_static_routes(
     nestane, takze routa nema ke ktere sluzbe patrit. A taky routa, kterou
     parser neumel precist: kdyz konfiguracni tvar nezname, do selektoru se
     nedostane, ale v tabulce ji videt je. Je to tedy i pojistka proti
-    mezeram v parsovani.
+    mezeram v parsovani. Sem spadne i agregat bez odpovidajici sluzby (VRF
+    bez sluzeb, box bez Core lo0.0) - pojistka ze specu, bod 2.
     """
     assigned = {
         (str(route.get("rib")), str(route.get("prefix")))
@@ -381,6 +382,7 @@ def _unassigned_static_routes(
             "prefix": prefix,
             "next_hop": data.get("next_hop", []),
             "via": data.get("via", []),
+            "protocol": str(data.get("protocol", "static")),
             "snapshot": "subject",
         }
         for table, prefixes in sorted((subject.facts.get("routes") or {}).items())
