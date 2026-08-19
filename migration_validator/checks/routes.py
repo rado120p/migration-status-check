@@ -1,4 +1,4 @@
-"""Check statickych rout.
+"""Checky statickych a agregatnich rout.
 
 Iteruje pres sjednoceni tri zdroju (AR-14): konfigurace subjektu, mereni
 subjektu a mereni baseline. Kazdy z nich zavira jednu diru:
@@ -30,6 +30,7 @@ prejmenovala VRF, kazda routa v ni se precte jako chybejici + nova.
 from __future__ import annotations
 
 import ipaddress
+from dataclasses import replace
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
@@ -86,6 +87,159 @@ def _flatten(
 def _hop_text(hop: dict[str, Any]) -> str:
     interface = hop.get("interface")
     return f"{hop['to']} via {interface}" if interface else str(hop["to"])
+
+
+def _presence_finding(
+    identity: tuple[str, str],
+    configured: bool,
+    subject: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    is_device: bool,
+    deactivated: bool,
+    baseline_deactivated: bool | None,
+    label_prefix: str,
+    group: str,
+    value_ok: str,
+) -> Finding:
+    """Vetve sdilene StaticRouteStatusCheck a AggregateRouteStatusCheck.
+
+    Kryje sjednoceni tri zdroju a chybejici/deaktivovanou routu -
+    identicke pro obe rouceni, protoze ani jedno z toho nezavisi na
+    next-hopu. Vraci vzdy Finding (ne None): rozliseni ZMENA vetve (was
+    != now next-hop), ktera existuje jen u statik, dela volajici
+    _finding sam PRED timhle volanim - tahle funkce uz jen skladá OK
+    radek. Kdyby tu ZMENA zustala jako "vrat None a nech volajiciho
+    dodelat", agregat (bez ZMENA vetve, next-hop nema) by mohl dostat
+    None do sveho `list[Finding]` a spadnout do siroke `except Exception`
+    v run_check pri sestavovani CheckResultu - proto je bezpecnejsi mit
+    tu funkci totalni.
+
+    `label_prefix` (check.label, napr. "Agregatni routa") se do popisku
+    radku nepromita - `findings[0].label == "inet.0 prefix"` je zamrzly
+    kontrakt statickeho checku (test_routes.py). Parametr drzi jen
+    stejny volaci tvar z obou checku.
+    """
+    rib, prefix = identity
+    label = f"{rib} {prefix}"
+    family = prefix_family(prefix)
+    was = _next_hop_text(baseline)
+
+    if deactivated and subject is None:
+        # Radek 4 tabulky (aktivni ted, vypnuta v baselinu) se sem
+        # nedostane a nedostat se nema: taková routa zadny deaktivovany
+        # prvek v konfiguraci nenese a jeji stav nese normalni radek.
+        # Zlepseni neni varovani (R-2).
+        #
+        # Kdyz deaktivovana routa v tabulce presto je, sem se nedostane
+        # taky - to uz je skutecny rozpor konfigurace se stavem a chova
+        # se jako dosud.
+        outcome = deactivation_outcome(True, baseline_deactivated)
+        message = (
+            f"{rib} {prefix}: v baseline bezela, ted je v konfiguraci "
+            "deaktivovana - migrace nedokoncena"
+            if outcome is Outcome.BROKEN
+            else f"{rib} {prefix}: routa je v konfiguraci deaktivovana"
+        )
+        return Finding(
+            outcome,
+            message,
+            label=label,
+            group=group,
+            family=family,
+            value="deaktivovana",
+            baseline_value=was,
+            baseline=baseline,
+        )
+
+    if subject is None:
+        # Bez inventory neni zamer znam, takze se rozpor nehlasi
+        # (AR-17). Sem se v device scope dostane jen routa, ktera byla
+        # v baseline a v subjektu neni.
+        value = MISSING_FROM_TABLE if configured and not is_device else MISSING_ENTIRELY
+        message = (
+            f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
+            if value == MISSING_FROM_TABLE
+            else f"{rib} {prefix}: v baseline byla, v subjektu neni"
+        )
+        return Finding(
+            Outcome.BROKEN,
+            message,
+            label=label,
+            group=group,
+            family=family,
+            value=value,
+            baseline_value=was,
+            baseline=baseline,
+        )
+
+    if "active" not in subject:
+        return Finding(
+            Outcome.SKIP,
+            f"{rib} {prefix}: mereni neobsahuje aktivitu routy",
+            label=label,
+            group=group,
+            family=family,
+            value="bez dat",
+            baseline=baseline,
+            subject=subject,
+        )
+
+    if not subject["active"]:
+        was_active = baseline.get("active") if baseline else None
+
+        if was_active is False:
+            return Finding(
+                Outcome.OK,
+                f"{rib} {prefix}: neni aktivni, stejne jako v baseline",
+                label=label,
+                group=group,
+                family=family,
+                value=NOT_ACTIVE,
+                baseline_value=NOT_ACTIVE,
+                baseline=baseline,
+                subject=subject,
+            )
+
+        # Bez baseline neni z ceho poznat, ze neaktivni byla i predtim -
+        # podle R-2 se nejednoznacnost na FAIL neeskaluje.
+        if was_active is True:
+            outcome = Outcome.BROKEN
+            message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
+        elif baseline:
+            outcome = Outcome.DEGRADED
+            message = (
+                f"{rib} {prefix}: je v tabulce, ale neni aktivni; "
+                "baseline aktivitu neuvadi"
+            )
+        else:
+            outcome = Outcome.DEGRADED
+            message = f"{rib} {prefix}: je v tabulce, ale neni aktivni"
+        return Finding(
+            outcome,
+            message,
+            label=label,
+            group=group,
+            family=family,
+            value=NOT_ACTIVE,
+            baseline_value=was,
+            baseline=baseline,
+            subject=subject,
+        )
+
+    # Sem se dostane jen "routa je v tabulce a aktivni" - u statiky s
+    # `was != now` uz vetev ZMENA odbavil volajici (_finding) pred timhle
+    # volanim, takze tady zbyva jen OK.
+    return Finding(
+        Outcome.OK,
+        f"{rib} {prefix}: {value_ok}",
+        label=label,
+        group=group,
+        family=family,
+        value=value_ok,
+        baseline_value=was,
+        baseline=baseline,
+        subject=subject,
+    )
 
 
 @register
@@ -228,141 +382,20 @@ class StaticRouteStatusCheck(Check):
                 baseline=baseline,
             )
 
-        if deactivated and subject is None:
-            # Radek 4 tabulky (aktivni ted, vypnuta v baselinu) se sem
-            # nedostane a nedostat se nema: taková routa zadny deaktivovany
-            # prvek v konfiguraci nenese a jeji stav nese normalni radek.
-            # Zlepseni neni varovani (R-2).
-            #
-            # Kdyz deaktivovana routa v tabulce presto je, sem se nedostane
-            # taky - to uz je skutecny rozpor konfigurace se stavem a chova
-            # se jako dosud.
-            outcome = deactivation_outcome(True, baseline_deactivated)
-            message = (
-                f"{rib} {prefix}: v baseline bezela, ted je v konfiguraci "
-                "deaktivovana - migrace nedokoncena"
-                if outcome is Outcome.BROKEN
-                else f"{rib} {prefix}: routa je v konfiguraci deaktivovana"
-            )
-            return Finding(
-                outcome,
-                message,
-                label=label,
-                group=group,
-                family=family,
-                value="deaktivovana",
-                baseline_value=was,
-                baseline=baseline,
-            )
-
-        if subject is None:
-            # Bez inventory neni zamer znam, takze se rozpor nehlasi
-            # (AR-17). Sem se v device scope dostane jen routa, ktera byla
-            # v baseline a v subjektu neni.
-            #
-            # `not is_device` je tady necinny: device_scope() ma vzdy prazdne
-            # selektory, takze `configured` uz samo znamena ne-device. Drzi se
-            # jako zapsany zamer AR-17, ne jako prace. Totez plati o obdobne
-            # vetvi v bfd.py: device scope se nikdy nesparuje (device_scope()
-            # ma key=None a klicovaci funkce v scoping/matcher.py na None
-            # vraci prazdno), takze mu engine baseline vubec nepreda a vetev
-            # je necinna i tam. Ani jednu nemazat - obe kryji AR-17 pro
-            # pripad, ze by budouci format snapshotu device scope baseline
-            # dal.
-            value = MISSING_FROM_TABLE if configured and not is_device else MISSING_ENTIRELY
-            message = (
-                f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
-                if value == MISSING_FROM_TABLE
-                else f"{rib} {prefix}: v baseline byla, v subjektu neni"
-            )
-            return Finding(
-                Outcome.BROKEN,
-                message,
-                label=label,
-                group=group,
-                family=family,
-                value=value,
-                baseline_value=was,
-                baseline=baseline,
-            )
-
         now = _next_hop_text(subject)
+        # Aktivni tabulka = subject existuje, ma klic "active" a je True.
+        # Presne tenhle stav ma next-hop anotaci (viz nize) - vsechny ostatni
+        # vetve (chybi/deaktivovana/skip/neaktivni, sdilene s agregatem pres
+        # _presence_finding) ji nemaji, protoze next-hop tam nic nerika.
+        reached_active_table = (
+            subject is not None and "active" in subject and subject["active"]
+        )
 
-        # Routa v tabulce bez hvezdicky forwarding nedela. Neni to totez co
-        # "neni v tabulce": nedosazitelny next-hop routu z tabulky vyhodi
-        # uplne, takze tenhle stav znamena, ze ji prebil jiny zdroj.
-        # Default "aktivni" tady byl jedine misto v repu, kde by se regrese
-        # collectoru precetla jako PASS misto jako chybejici kontrola.
-        # `subject` vzdy pochazi z aktualniho collectoru (collectors/routes.py
-        # vzdy nastavuje "active"), takze chybejici klic tady muze znamenat
-        # jedine regresi collectoru - proto SKIP.
-        if "active" not in subject:
-            return Finding(
-                Outcome.SKIP,
-                f"{rib} {prefix}: mereni neobsahuje aktivitu routy",
-                label=label,
-                group=group,
-                family=family,
-                value="bez dat",
-                baseline=baseline,
-                subject=subject,
-            )
-
-        if not subject["active"]:
-            was_active = baseline.get("active") if baseline else None
-
-            if was_active is False:
-                return Finding(
-                    Outcome.OK,
-                    f"{rib} {prefix}: neni aktivni, stejne jako v baseline",
-                    label=label,
-                    group=group,
-                    family=family,
-                    value=NOT_ACTIVE,
-                    baseline_value=NOT_ACTIVE,
-                    baseline=baseline,
-                    subject=subject,
-                )
-
-            # Bez baseline neni z ceho poznat, ze neaktivni byla i predtim -
-            # podle R-2 se nejednoznacnost na FAIL neeskaluje. Baseline, ktery
-            # klic "active" nema, je tataz nejednoznacnost, jen z jineho
-            # duvodu: neni to porucha mereni jako u `subject` vyse (ten vzdy
-            # vyrabi aktualni collector), ale starsi artefakt, ktery o stavu
-            # sveta mlci. Proto DEGRADED, ale s vlastni zpravou - jinak by
-            # operator nepoznal, ktery z tech dvou duvodu nastal.
-
-            # Symetricky s `was_active is False` vyse: pravdivostni test by
-            # kazdou nebool hodnotu (napr. retezec "false") precetl jako
-            # "forwardovala" a eskaloval nejednoznacnost na FAIL, coz R-2
-            # zakazuje. Takova hodnota dnes nenastane - proto zprisneni, ne
-            # oprava vady: R-2 ma platit konstrukci, ne argumentem o
-            # nedosazitelnosti.
-            if was_active is True:
-                outcome = Outcome.BROKEN
-                message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
-            elif baseline:
-                outcome = Outcome.DEGRADED
-                message = (
-                    f"{rib} {prefix}: je v tabulce, ale neni aktivni; "
-                    "baseline aktivitu neuvadi"
-                )
-            else:
-                outcome = Outcome.DEGRADED
-                message = f"{rib} {prefix}: je v tabulce, ale neni aktivni"
-            return Finding(
-                outcome,
-                message,
-                label=label,
-                group=group,
-                family=family,
-                value=NOT_ACTIVE,
-                baseline_value=was,
-                baseline=baseline,
-                subject=subject,
-            )
-
-        if was is not None and was != now:
+        # ZMENA se resi tady, ne v _presence_finding: ta funkce je totalni
+        # (vzdy vraci Finding, nikdy None) prave proto, aby ji smel volat i
+        # AggregateRouteStatusCheck, ktery zadnou ZMENA vetev nema (agregat
+        # next-hop nenese, `was` a `now` mu vzdy vyjdou stejne).
+        if reached_active_table and was is not None and was != now:
             outcome, message = self._annotate_inactive_hops(
                 Outcome.DEGRADED,
                 f"{rib} {prefix}: next-hop se zmenil {was} -> {now}",
@@ -381,23 +414,25 @@ class StaticRouteStatusCheck(Check):
                 subject=subject,
             )
 
-        outcome, message = self._annotate_inactive_hops(
-            Outcome.OK,
-            f"{rib} {prefix}: {now}",
-            inactive_hops,
-            baseline_hops,
-        )
-        return Finding(
-            outcome,
-            message,
-            label=label,
-            group=group,
-            family=family,
-            value=now,
-            baseline_value=was,
-            baseline=baseline,
+        presence = _presence_finding(
+            identity,
+            configured=configured,
             subject=subject,
+            baseline=baseline,
+            is_device=is_device,
+            deactivated=deactivated,
+            baseline_deactivated=baseline_deactivated,
+            label_prefix=self.label,
+            group=group,
+            value_ok=now or "",
         )
+
+        if not reached_active_table:
+            return presence
+        outcome, message = self._annotate_inactive_hops(
+            presence.outcome, presence.message, inactive_hops, baseline_hops
+        )
+        return replace(presence, outcome=outcome, message=message)
 
     @staticmethod
     def _annotate_inactive_hops(
@@ -445,3 +480,77 @@ class StaticRouteStatusCheck(Check):
             message += " (stejne jako v baseline)"
 
         return worst, message
+
+
+@register
+class AggregateRouteStatusCheck(Check):
+    """Agregat nema next-hop - porovnava se pritomnost a aktivita.
+
+    Sdili se StaticRouteStatusCheck sjednoceni tri zdroju i vetve
+    chybi/deaktivovana; nesdili porovnani next-hopu, protoze zadny neni.
+    Zmizely zakaznicky agregat po migraci je signal vypadku - proto
+    CRITICAL jako u statik.
+    """
+
+    id = "aggregate_route_status"
+    title = "Stav agregatnich rout"
+    label = "Agregatni routa"
+    mode = Mode.BOTH
+    requires = ("routes",)
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        selected = [
+            route
+            for route in ctx.scope.selectors.static_routes
+            if route.get("route_type", "static") == "aggregate"
+        ]
+        configured = {
+            (str(route.get("rib")), str(route.get("prefix"))) for route in selected
+        }
+        deactivated = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in selected
+            if route.get("active", True) is False
+        }
+        baseline_routes = (
+            ctx.baseline_scope.selectors.static_routes
+            if ctx.baseline_scope is not None
+            else []
+        )
+        baseline_selected = [
+            route
+            for route in baseline_routes
+            if route.get("route_type", "static") == "aggregate"
+        ]
+        baseline_deactivated = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in baseline_selected
+            if route.get("active", True) is False
+        }
+        baseline_configured = {
+            (str(route.get("rib")), str(route.get("prefix")))
+            for route in baseline_selected
+        }
+        subject = _flatten(ctx.subject.get("routes"), "aggregate")
+        baseline = _flatten((ctx.baseline or {}).get("routes"), "aggregate")
+
+        return [
+            _presence_finding(
+                identity,
+                configured=identity in configured,
+                subject=subject.get(identity),
+                baseline=baseline.get(identity),
+                is_device=ctx.scope.is_device,
+                deactivated=identity in deactivated,
+                baseline_deactivated=(
+                    identity in baseline_deactivated
+                    if identity in baseline_configured
+                    else None
+                ),
+                label_prefix=self.label,
+                group="Agregatni routy",
+                value_ok="v tabulce",
+            )
+            for identity in sorted(configured | set(subject) | set(baseline))
+        ]

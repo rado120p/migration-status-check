@@ -7,7 +7,10 @@ Check na XML nesaha - fakta se skladaji rucne, protoze prave kombinace
 from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
-from migration_validator.checks.routes import StaticRouteStatusCheck
+from migration_validator.checks.routes import (
+    AggregateRouteStatusCheck,
+    StaticRouteStatusCheck,
+)
 from migration_validator.config import default_config
 from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
@@ -757,3 +760,46 @@ def test_vsechny_hopy_deaktivovane_a_neni_v_tabulce_neni_broken():
     # informacni stav pres deactivation_outcome, ne BROKEN
     assert finding.outcome is Outcome.DEGRADED
     assert finding.value == "deaktivovana"
+
+
+def _aggregate(rib="inet6.0", prefix="2001:abcd::/32", active=True):
+    return {"rib": rib, "prefix": prefix, "route_type": "aggregate",
+            "next_hops": [], "active": active}
+
+
+def _aggregate_installed(active=True):
+    return {"inet6.0": {"2001:abcd::/32": {
+        "next_hop": [], "via": [], "active": active, "protocol": "aggregate"}}}
+
+
+def test_aggregate_v_tabulce_je_ok():
+    ctx = _ctx(_aggregate_installed(), scope=_scope([_aggregate()]))
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.OK
+    assert finding.group == "Agregatni routy"
+
+
+def test_aggregate_nakonfigurovany_mimo_tabulku_je_broken():
+    ctx = _ctx({}, scope=_scope([_aggregate()]))
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.BROKEN
+    assert "neni v routovaci tabulce" in finding.message
+
+
+def test_aggregate_deaktivovany_v_konfiguraci():
+    ctx = _ctx({}, scope=_scope([_aggregate(active=False)]))
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.DEGRADED
+    assert finding.value == "deaktivovana"
+
+
+def test_aggregate_zmizely_proti_baseline():
+    ctx = _ctx({}, baseline_routes=_aggregate_installed(), scope=_scope([]))
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.BROKEN
+    assert "v baseline byla, v subjektu neni" in finding.message
+
+
+def test_static_zaznamy_aggregate_check_ignoruje():
+    ctx = _ctx(_installed(), scope=_scope(CONFIGURED))
+    assert AggregateRouteStatusCheck().run(ctx) == []

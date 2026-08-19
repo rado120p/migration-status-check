@@ -639,11 +639,11 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     Tvrzeni o konkretnim mutantovi (presun slevani do engine.py) neni
     overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
     sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
-    neobjevi a vsech osm deaktivacnich SKIPu (BFD, EVPN ESI status,
-    EVPN instance, EVPN MAC count, Interface errors, Interface status,
-    Interface traffic, Staticka routa - zmereno na tomto snimku), ktere se
-    v textovem reportu slevaji do jedineho radku, je v JSON pritomno
-    jednotlive.
+    neobjevi a vsech devet deaktivacnich SKIPu (Agregatni routa, BFD,
+    EVPN ESI status, EVPN instance, EVPN MAC count, Interface errors,
+    Interface status, Interface traffic, Staticka routa - zmereno na tomto
+    snimku), ktere se v textovem reportu slevaji do jedineho radku, je
+    v JSON pritomno jednotlive.
 
     Oprava vlny 10, nalez 3: JSON take musi nest znacku `skipped_because`
     (klic SKIPPED_BECAUSE v CheckResult.details) - spec ji chtel propsat
@@ -675,6 +675,7 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
         if check.get("details", {}).get("skipped_because") == "service_deactivated"
     }
     assert skipped_labels == {
+        "Agregatni routa",
         "BFD",
         "EVPN ESI status",
         "EVPN instance",
