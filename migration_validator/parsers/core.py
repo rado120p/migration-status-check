@@ -405,6 +405,7 @@ class JunosServiceParserCore:
         self._parse_default_bgp_neighbors()
         self._parse_global_eline_interfaces("l2circuit", self.global_l2circuits)
         self._parse_global_eline_interfaces("connections", self.global_ccc_interfaces)
+        self._parse_global_protocol_interfaces("pim")
 
         interface_configs = self._parse_interfaces()
         interface_configs_by_name = {
@@ -881,6 +882,25 @@ class JunosServiceParserCore:
         for interface_name in interface_names:
             self.global_protocols_by_interface.setdefault(interface_name, set()).add(
                 hierarchy
+            )
+
+    def _parse_global_protocol_interfaces(self, protocol: str) -> None:
+        """Rozhraní pod globálním protokolem (protocols <protocol> interface X).
+
+        PIM: protocols pim interface ge-0/0/0.0 - zamer, ze na teto
+        logicke jednotce se ceka PIM soused (spec 2026-08-26, check je
+        az Task 10). RI-PIM (routing-instances X protocols pim ...) tudy
+        neprochazi - tam uz RoutingInstance.protocols nese "pim" samo
+        (child_names nad ./protocols/*) a _collect_protocols ho pripoji.
+        """
+
+        interface_names = all_texts(
+            self.config_xml, f"./protocols/{protocol}/interface/name/text()"
+        )
+
+        for interface_name in interface_names:
+            self.global_protocols_by_interface.setdefault(interface_name, set()).add(
+                protocol
             )
 
     # ------------------------------------------------------------------
