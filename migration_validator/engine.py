@@ -411,7 +411,19 @@ def _unassigned_bfd_sessions(
     # neni' (BFD se na teto vlne zamerne nemenilo). NEZARAZENO je tedy
     # jedine misto, kde takova session muze zustat videt; pricist inactive
     # by znamenalo, ze zmizi uplne.
-    assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    # Core-loopback bgp_neighbors se vynechavaji zamerne: peer je tam interni
+    # (iBGP) a jeho BFD session zadny check nemeri - bfd_session_state uz na
+    # Core scope vubec nebezi (checks/bfd.py) a bfd_transit_state se tyka jen
+    # transitu. Vedome odlozene rozhodnuti (2026-08-26, nalez finalniho
+    # review): session zustava v NEZARAZENO, dokud nevznikne loopback BFD
+    # zamer. Kdyby se peer presto pripsal do `assigned`, session by z reportu
+    # zmizela uplne.
+    assigned = {
+        peer
+        for scope in scopes
+        if not (scope.service_type == "Core" and scope.service_subtype == "loopback")
+        for peer in scope.selectors.bgp_neighbors
+    }
     bfd_facts = subject.facts.get("bfd") or {}
     # Core transit nema BGP peery ani BFD zamer - Scope.select (models/scope.py)
     # session zarazuje podle rozhrani. Stejne pravidlo tady, jinak by se

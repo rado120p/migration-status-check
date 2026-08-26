@@ -18,14 +18,14 @@ Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loop
 | `arp_present` | state | advisory | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
 | `nd_present` | state | advisory | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
 | `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
-| `bgp_session_state` | both | critical | Internet, IPVPN | state is `Established`; with a baseline it also reports a state change |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active against tolerance — **per RIB** |
+| `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | state is `Established`; with a baseline it also reports a state change — on Core it runs only on the loopback scope (iBGP on lo0.0), transit has no peers |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active against tolerance — **per RIB**; on Core it runs only on the loopback scope |
 | `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
 | `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration) |
 | `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
-| `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established`; does not run at all on Core transit (see `bfd_transit_state`) |
+| `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established`; **does not run on any Core scope at all** — transit is measured by `bfd_transit_state`, and iBGP BFD on the loopback is a deliberately deferred decision (2026-08-26) |
 | `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency is `Up`, neighbor and addresses match the baseline; interface missing from output = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 configured, level 1 not; passive flag is role-aware (loopback requires it, transit forbids it) |
@@ -559,6 +559,10 @@ Properties:
   read: it never reaches the selectors, yet it is plainly visible in the table.
 - **`unassigned.bfd_sessions`** holds sessions of peers absent from every `bgp_neighbors` —
   typically BFD held by a client other than BGP, whose intent the parser does not read at all.
+  Core-loopback `bgp_neighbors` (internal iBGP peers on lo0.0) never count as "assigned" here
+  at all — a deliberately deferred decision (2026-08-26, finding from the final review): no
+  check measures their BFD session (`bfd_session_state` does not run on any Core scope), so it
+  must stay visible here until loopback BFD gets its own check.
 - **Internal BGP peers (2026-08-26 wave) do not fall into `unassigned.bgp_peers`.** The
   parser recognizes an internal peer from an explicit `type internal` on the neighbor/group;
   without that statement it falls back to `peer-as == local-as` (respecting `local-as`

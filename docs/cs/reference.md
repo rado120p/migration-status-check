@@ -18,14 +18,14 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/lo
 | `arp_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu |
 | `nd_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
 | `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture` |
-| `bgp_session_state` | both | critical | Internet, IPVPN | stav je `Established`; s baseline navíc hlásí změnu stavu |
-| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť** |
+| `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | stav je `Established`; s baseline navíc hlásí změnu stavu — na Core běží jen na loopback scope (iBGP na lo0.0), transit žádné peery nemá |
+| `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť**; na Core běží jen na loopback scope |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF |
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline: pokles EVPN neighbors = WARN, počty local/IRB interfaců se na rovnost neporovnávají (rozdíl ukazuje sloupec ZMENA — konsolidace do jedné mac-vrf instance je při migraci mění) |
 | `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
-| `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established`; na Core transitu neběží vůbec (viz `bfd_transit_state`) |
+| `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established`; **na žádném Core scope neběží vůbec** — transit měří `bfd_transit_state`, iBGP BFD na loopbacku je vědomě odložené rozhodnutí (2026-08-26) |
 | `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency je `Up`, soused a adresy sedí proti baseline; chybějící rozhraní v outputu = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 nakonfigurován, level 1 ne; Passive flag role-aware (loopback ho vyžaduje, transit ne) |
@@ -546,7 +546,11 @@ Vlastnosti:
   scopem nikdy nestane), ale i routa, jejíž konfigurační tvar parser neuměl přečíst: do
   selektorů se nedostane, v tabulce ji ale vidět je.
 - **`unassigned.bfd_sessions`** obsahuje session peeru, který není v žádném `bgp_neighbors` —
-  typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte.
+  typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte. Core-loopback
+  `bgp_neighbors` (interní iBGP peeři na lo0.0) se do „přiřazeno" nepočítají vůbec — vědomě
+  odložené rozhodnutí (2026-08-26, nález finálního review): žádný check jejich BFD session
+  neměří (`bfd_session_state` na Core scope neběží), takže musí zůstat viditelná tady, dokud
+  pro loopback BFD nevznikne vlastní check.
 - **Interní BGP peeři (vlna 2026-08-26) nespadají do `unassigned.bgp_peers`.** Parser
   pozná interní peer podle explicitního `type internal` na neighbor/group; bez příkazu
   fallback na `peer-as == local-as` (s respektem k `local-as` overridům). Takový peer se

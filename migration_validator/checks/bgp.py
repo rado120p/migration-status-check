@@ -54,6 +54,16 @@ class _AppliesToCoreLoopback:
             return scope.service_subtype == "loopback"
         return super().applies_to(scope)
 
+    def describe(self) -> dict[str, Any]:
+        # `service_types` samo o sobe rika jen "Internet, IPVPN" (nalez
+        # finalniho review) - applies_to() ale Core loopback taky pousti.
+        # Strojovy vystup by jinak lhal o tom, kde check bezi, stejne jako
+        # by lhal, kdyby tohle prozrazoval jen textovy docstring.
+        info = super().describe()
+        info["service_types"] = sorted(self.service_types | {"Core"})
+        info["service_subtypes_by_type"] = {"Core": ["loopback"]}
+        return info
+
 
 # Popisek radku je vzdycky "BGP status (adresa)", i kdyz ma sekce jedineho
 # peera a adresa je tam potreti. Podminit ho poctem peeru v sekci se

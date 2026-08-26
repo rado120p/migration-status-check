@@ -563,6 +563,44 @@ def test_core_transit_bfd_session_claimed_by_interface_is_not_unassigned():
     assert _unassigned_bfd_sessions(snapshot, [scope]) == []
 
 
+def test_core_loopback_ibgp_bfd_session_stays_visible_in_unassigned():
+    """iBGP BFD na lo0.0 je vedome odlozene rozhodnuti (2026-08-26, nalez
+    finalniho review): `bfd_session_state` uz na Core-loopback scope nebezi
+    (checks/bfd.py) a `bfd_transit_state` mu taky nepatri (jen transit) -
+    zadny check session interniho peera nemeri. Kdyby ji `assigned` presto
+    pohltilo (protoze peer je v Core-loopback bgp_neighbors), zmizela by
+    z reportu uplne. Musi tedy zustat v NEZARAZENO stejne jako pred touto
+    vlnou."""
+    scope = Scope(
+        id="svc:core-loopback:Core",
+        kind="service",
+        key=ScopeKey(None, "Core", "loopback"),
+        selectors=Selectors(bgp_neighbors=["150.0.0.1"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bfd": {"150.0.0.1": {"state": "Up", "interface": "lo0.0"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == [
+        {
+            "peer": "150.0.0.1",
+            "interface": "lo0.0",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
+
+
 MGMT_ROUTE = {
     "mgmt_junos.inet.0": {
         "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}

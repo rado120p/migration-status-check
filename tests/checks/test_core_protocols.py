@@ -710,6 +710,18 @@ def test_bfd_transit_down_is_fail():
     assert findings[0].value == "Down"
 
 
+def test_bfd_transit_admindown_state_is_rendered_raw_not_capitalized():
+    """AdminDown je platny stav BFD (tests/fixtures/rpc/junos/bfd.xml). `.capitalize()`
+    by z nej udelal "Admindown" - sesterky check v bfd.py:113 vypisuje stav syrovy,
+    takze `bfd_transit_state` ma delat totez (nalez finalniho review)."""
+    findings = BfdTransitStateCheck().run(
+        _ctx_area("bfd", {"10.0.0.9": {"state": "AdminDown", "interface": IFACE}})
+    )
+
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "AdminDown"
+
+
 def test_bfd_transit_missing_session_is_fail_down():
     """Mutant kill (2026-08-26, overeno spustenim) v BfdTransitStateCheck.run:
     spustena varianta `entries = by_interface.get(name) or []` (literalni
@@ -756,6 +768,18 @@ def test_old_bfd_check_does_not_apply_to_core_transit_scope():
     transit_scope = _scope(service_subtype="transit")
 
     assert old_check.applies_to(transit_scope) is False
+
+
+def test_old_bfd_check_does_not_apply_to_core_loopback_scope():
+    """iBGP BFD na loopbacku je vedome odlozene rozhodnuti (2026-08-26,
+    nalez finalniho review) - Scope.select ted tahne interni peery i do
+    lo0.0 scope, ale zadny check jejich session nemeri. Kdyby tu
+    `bfd_session_state` bezel dal, kazda takova session by dostala
+    nepravdive WARN "bez konfigurace"."""
+    old_check = BfdSessionStateCheck()
+    loopback_scope = _scope(service_subtype="loopback")
+
+    assert old_check.applies_to(loopback_scope) is False
 
 
 def test_old_bfd_check_still_applies_to_internet_and_device_scope():

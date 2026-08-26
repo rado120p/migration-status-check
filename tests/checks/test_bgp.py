@@ -122,6 +122,17 @@ def test_bgp_checks_customer_service_types_unchanged():
         assert check.applies_to(_typed_scope("E-Line")) is False
 
 
+def test_bgp_checks_describe_discloses_core_loopback_applicability():
+    """Finalni review: describe() drive tvrdil `service_types: ["IPVPN",
+    "Internet"]`, i kdyz applies_to() (_AppliesToCoreLoopback) tyto checky
+    pousti i na Core loopback scope. Strojovy vystup (`mig-validate checks`,
+    api.py:list_checks) to musi prozradit stejne jako textova dokumentace."""
+    for check in (BgpSessionStateCheck(), BgpPrefixCountsCheck()):
+        info = check.describe()
+        assert info["service_types"] == ["Core", "IPVPN", "Internet"]
+        assert info["service_subtypes_by_type"] == {"Core": ["loopback"]}
+
+
 def test_session_findings_carry_peer_family():
     """Rodina se odvozuje z adresy peera, ne ze jmena RIB.
 

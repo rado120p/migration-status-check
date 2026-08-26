@@ -47,9 +47,17 @@ class BfdSessionStateCheck(Check):
     default_severity = Severity.CRITICAL
 
     def applies_to(self, scope) -> bool:
-        if scope.service_type == "Core" and scope.service_subtype == "transit":
-            # Tranzitni BFD meri bfd_transit_state; zamerova logika by tu
-            # vypisovala WARN "bez konfigurace" za kazdou session.
+        if scope.service_type == "Core":
+            # Transit meri bfd_transit_state (session se paruje podle
+            # rozhrani, ne podle peer adresy ze zamerove konfigurace).
+            #
+            # iBGP BFD na lo0.0 je vedome odlozene rozhodnuti (2026-08-26):
+            # Scope.select ted tahne interni peery i do Core-loopback scope,
+            # ale zadny check jejich session nemeri. Kdyby tu tenhle check
+            # bezel dal, kazda takova session (zamer v konfiguraci existuje)
+            # by dostala nepravdive WARN "bez konfigurace" - loopback BFD
+            # zamer se totiz z inventory neparsuje. Radeji zadny check nez
+            # lhavy.
             return False
         return super().applies_to(scope)
 

@@ -189,7 +189,17 @@ baseline carried no traffic at all — in which case ceasing cannot be verified.
 
 ## `bgp.py`
 
-Both checks run only on `Internet` and `IPVPN` and return `SKIP` when the scope has no peers.
+Both checks have `service_types={"Internet", "IPVPN"}`, but **since the 2026-08-26 wave they
+also run on the Core loopback scope** (`service_subtype == "loopback"`) — the internal iBGP
+peers on lo0.0. The `_AppliesToCoreLoopback` mixin does this by overriding `applies_to()`: for
+`service_type == "Core"` it returns `True` only when `service_subtype == "loopback"` (Core
+transit has no BGP peers and would get empty SKIP/FAIL rows), otherwise it defers to
+`super().applies_to()` (i.e. to `service_types`). The machine-readable catalog (`describe()`,
+`mig-validate checks`) discloses this extended applicability too —
+`_AppliesToCoreLoopback.describe()` adds `"Core"` to `service_types` and adds
+`service_subtypes_by_type: {"Core": ["loopback"]}`, since bare `service_types` alone would
+misstate where the check runs (finding from the final review). With no peers in scope, it
+returns `SKIP`.
 
 ### `bgp_session_state` (both, critical)
 
@@ -497,13 +507,22 @@ service without BFD carries no mention of BFD in the report at all.
 
 The check requires **two areas**: `("bfd", "bgp")`.
 
-**This check does not run at all on Core transit** — `applies_to()` is overridden and returns
-`False` for `service_type == "Core"` + `service_subtype == "transit"` before ever calling
-`super().applies_to()`. Transit BFD is measured by the new `core_protocols.bfd_transit_state`
-(2026-08-26 wave), which matches sessions by **interface**, not by peer address from intent
-configuration — transit has no such intent. Without this gate `bfd_session_state` would keep
-running and print `WARN | bez konfigurace` for every transit session, since it would never
-find a matching `Selectors.bfd_peers` entry.
+**This check does not run on any Core scope at all** — `applies_to()` is overridden and
+returns `False` for `scope.service_type == "Core"` before ever calling
+`super().applies_to()`, regardless of `service_subtype`. Transit BFD is measured by the new
+`core_protocols.bfd_transit_state` (2026-08-26 wave), which matches sessions by **interface**,
+not by peer address from intent configuration — transit has no such intent. Without this gate
+`bfd_session_state` would keep running and print `WARN | bez konfigurace` for every transit
+session, since it would never find a matching `Selectors.bfd_peers` entry.
+
+The loopback scope (`service_subtype == "loopback"`) was added to the gate **during the
+branch's final review** (2026-08-26): as of this wave `Scope.select` also assigns internal
+(iBGP) peers on lo0.0 into that scope's `bgp_neighbors`, so without the gate that session
+would get the same false `WARN | bez konfigurace` — the intent exists in the configuration,
+but `Selectors.bfd_peers` never parses it. Testing iBGP BFD on the loopback is a deliberately
+deferred decision, not a gap; such a session stays visible in NEZAŘAZENO
+(`engine.py:_unassigned_bfd_sessions` deliberately leaves it there) until it gets its own
+check.
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
@@ -555,8 +574,9 @@ decisions:
 - **A missing interface in an output is a measurement, not a hole.** The collector never
   synthesizes a "Down" row — if the interface is missing from the output, its key is simply
   absent from the facts. What that means is decided by the check, and it is almost always
-  `FAIL | ... : chybí v outputu` (same philosophy as `mpls_interface_state`'s handling of
-  absence in `routes.py`).
+  `FAIL | ... : chybí v outputu` (the same "missing from the table" vs. "missing
+  entirely" distinction `static_route_status` makes in `routes.py` via
+  `MISSING_FROM_TABLE`/`MISSING_ENTIRELY`).
 - **The measured units come from the selector (intent), not from the facts** —
   `_scope_transit_interfaces` returns transit interfaces from `Scope.selectors.interfaces`,
   not keys from the subject. An interface that vanished entirely from an output still gets a
@@ -647,7 +667,7 @@ outcome).
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `bfd`. **A separate check
 next to `bfd.py`**, so the intent-based customer logic of `bfd_session_state` stays untouched
-— and that check does not run at all on Core transit anyway (see the gate in the `bfd.py`
+— and that check does not run on any Core scope at all anyway (see the gate in the `bfd.py`
 section above).
 
 Sessions are matched by **interface**, not by peer address — `by_interface` is built from
@@ -656,7 +676,7 @@ Sessions are matched by **interface**, not by peer address — `by_interface` is
 | situation | Outcome | value |
 |---|---|---|
 | no session on the interface | FAIL | `Down` |
-| session exists, state `Up` | PASS | `Up` (capitalized state) |
+| session exists, state `Up` | PASS | `Up` (raw state, same vocabulary as `bfd.py:113`) |
 | session exists, other state | FAIL | the measured state |
 
 Multiple sessions on the same interface get multiple rows (sorted by peer).

@@ -185,7 +185,16 @@ provoz — utichnutí se pak nedá ověřit.
 
 ## `bgp.py`
 
-Oba checky běží jen na `Internet` a `IPVPN` a bez peerů ve scope vrací `SKIP`.
+Oba checky mají `service_types={"Internet", "IPVPN"}`, ale **od vlny 2026-08-26 běží i na
+Core loopback scope** (`service_subtype == "loopback"`) — interní iBGP peery na lo0.0.
+Zajišťuje to mixin `_AppliesToCoreLoopback`, který `applies_to()` přetěžuje: pro
+`service_type == "Core"` vrací `True` jen když je `service_subtype == "loopback"` (Core
+transit žádné BGP peery nemá a dostal by prázdné SKIP/FAIL řádky), jinak deleguje na
+`super().applies_to()` (tedy na `service_types`). Strojový katalog (`describe()`, `mig-validate
+checks`) tuhle rozšířenou platnost taky přiznává — `_AppliesToCoreLoopback.describe()` dopočítá
+`service_types` o `"Core"` a přidá `service_subtypes_by_type: {"Core": ["loopback"]}`, protože
+holé `service_types` samo o sobě prostor pravdu neřekne (nalez finálního review). Bez peerů ve
+scope vrací `SKIP`.
 
 ### `bgp_session_state` (both, critical)
 
@@ -496,13 +505,21 @@ z konfigurace (`Selectors.bfd_peers`), session v subjektu a session v baseline.
 **Peer, který BFD nikdy neměl, řádek nedostane** (rozhodnutí R‑1) — služba bez BFD tedy
 v reportu nemá o BFD ani zmínku.
 
-**Na Core transitu tenhle check vůbec neběží** — `applies_to()` je přetížené a pro
-`service_type == "Core"` + `service_subtype == "transit"` vrací `False` ještě před voláním
-`super().applies_to()`. Tranzitní BFD měří nový `core_protocols.bfd_transit_state` (vlna
+**Na žádném Core scope tenhle check vůbec neběží** — `applies_to()` je přetížené a pro
+`scope.service_type == "Core"` vrací `False` ještě před voláním `super().applies_to()`, bez
+ohledu na `service_subtype`. Tranzitní BFD měří nový `core_protocols.bfd_transit_state` (vlna
 2026-08-26), který session páruje podle **rozhraní**, ne podle peer adresy ze záměrové
 konfigurace — na tranzitu žádný takový záměr není. Bez téhle brány by `bfd_session_state`
 běžel dál a za každou tranzitní session vypsal `WARN | bez konfigurace`, protože žádný
 `Selectors.bfd_peers` záznam by nenašel.
+
+Loopback scope (`service_subtype == "loopback"`) je v bráně **od finálního review branch**
+(2026-08-26): `Scope.select` od téhle vlny zařazuje interní (iBGP) peery na lo0.0 i do jejich
+`bgp_neighbors`, takže by bez brány dostala i tahle session falešný `WARN | bez konfigurace` —
+záměr v konfiguraci existuje, ale `Selectors.bfd_peers` ho neparsuje. Testovat iBGP BFD na
+loopbacku je vědomě odložené rozhodnutí, ne mezera; taková session zůstává viditelná
+v NEZAŘAZENO (`engine.py:_unassigned_bfd_sessions` ji tam schválně nechává), dokud pro ni
+nevznikne vlastní check.
 
 Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 
@@ -554,7 +571,8 @@ rozhodnutí:
 - **Absence rozhraní ve výpisu je měření, ne díra.** Collector nikdy nesyntetizuje
   „Down" řádek — pokud rozhraní ve výpisu chybí, je to prostě chybějící klíč ve faktech.
   Co to znamená, vykládá až check, a skoro vždy je to `FAIL | ... : chybí v outputu`
-  (stejná filosofie jako `mpls_interface_state` u absence z `routes.py`).
+  (stejné rozlišení „chybí v tabulce" vs. „chybí úplně", jaké `static_route_status`
+  dělá v `routes.py` přes `MISSING_FROM_TABLE`/`MISSING_ENTIRELY`).
 - **Měřené jednotky se berou ze selektoru (záměr), ne z faktů** — `_scope_transit_interfaces`
   vrací tranzitní rozhraní ze `Scope.selectors.interfaces`, ne klíče ze subjektu. Rozhraní,
   které z výpisu úplně zmizelo, tak pořád dostane řádek (FAIL „chybí v outputu"), místo aby
@@ -642,7 +660,7 @@ outcome).
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `bfd`. **Samostatný check
 vedle `bfd.py`**, aby záměrová zákaznická logika `bfd_session_state` zůstala nedotčená — a ta
-se navíc na Core transitu vůbec nespustí (viz gate v sekci `bfd.py` výše).
+se navíc na žádném Core scope vůbec nespustí (viz gate v sekci `bfd.py` výše).
 
 Session se páruje podle **rozhraní**, ne podle peer adresy — `by_interface` je postavené
 z `data.get("interface")` každé BFD session v subjektu.
@@ -650,7 +668,7 @@ z `data.get("interface")` každé BFD session v subjektu.
 | situace | Outcome | value |
 |---|---|---|
 | na rozhraní není žádná session | FAIL | `Down` |
-| session existuje, stav `Up` | PASS | `Up` (case-capitalized ze stavu) |
+| session existuje, stav `Up` | PASS | `Up` (syrový stav, stejný slovník jako `bfd.py:113`) |
 | session existuje, jiný stav | FAIL | naměřený stav |
 
 Víc session na stejném rozhraní dostane víc řádků (setříděných podle peera).

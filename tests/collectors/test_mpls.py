@@ -27,7 +27,7 @@ def test_mpls_interface_rpc_name_and_kwargs(platform):
     assert collector.rpc_kwargs(platform) == {}
 
 
-# --- Synteticke varianty (XML odvozeny z nahranych fixtres) --------------
+# --- Synteticke varianty (XML odvozeny z nahranych fixtures) --------------
 
 EMPTY_MPLS = "<mpls-interface-information/>"
 

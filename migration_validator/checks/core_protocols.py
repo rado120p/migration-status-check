@@ -387,6 +387,9 @@ class BfdTransitStateCheck(Check):
                     Outcome.OK if state == "Up" else Outcome.BROKEN,
                     f"{name}: BFD session s {peer} {state}",
                     label=qualified(self.label, name),
-                    value=state.capitalize(), subject=data,
+                    # Syrovy stav, ne .capitalize() - to by z "AdminDown"
+                    # udelalo "Admindown" (nalez finalniho review). Sesterky
+                    # check bfd.py:113 vypisuje stav taky syrovy - stejny slovnik.
+                    value=state, subject=data,
                 ))
         return findings
