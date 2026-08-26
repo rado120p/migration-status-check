@@ -349,3 +349,44 @@ class IsisOverviewCheck(Check):
             if overload else "overload bit neni nastaveny",
             value="nastaven" if overload else "nenastaven",
         )]
+
+
+@register
+class BfdTransitStateCheck(Check):
+    id = "bfd_transit_state"
+    title = "Stav BFD na tranzitnim rozhrani"
+    label = "BFD"
+    mode = Mode.BOTH
+    requires = ("bfd",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"transit"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        sessions: dict[str, Any] = ctx.subject.get("bfd", {})
+        by_interface: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        for peer, data in sessions.items():
+            by_interface.setdefault(str(data.get("interface", "")), []).append((peer, data))
+
+        findings: list[Finding] = []
+        for name in _scope_transit_interfaces(ctx):
+            entries = by_interface.get(name)
+            if not entries:
+                # BFD je na tranzitu ocekavane vzdy (rozhodnuti
+                # 2026-08-26) - zadny zamer se neparsuje.
+                findings.append(Finding(
+                    Outcome.BROKEN,
+                    f"{name}: zadna BFD session",
+                    label=qualified(self.label, name), value="Down",
+                ))
+                continue
+            for peer, data in sorted(entries):
+                state = str(data.get("state", "unknown"))
+                findings.append(Finding(
+                    Outcome.OK if state == "Up" else Outcome.BROKEN,
+                    f"{name}: BFD session s {peer} {state}",
+                    label=qualified(self.label, name),
+                    value=state.capitalize(), subject=data,
+                ))
+        return findings

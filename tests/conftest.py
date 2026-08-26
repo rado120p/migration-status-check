@@ -303,6 +303,32 @@ def _facts_for(scopes, pps: int) -> dict:
                 # MPLS na tranzitu musi byt Up ze stejneho duvodu jako LDP -
                 # jinak by mpls_interface_state hlasil FAIL a rozbil AR-29.
                 mpls_interface[name] = {"state": "Up"}
+                # BFD na tranzitu je ocekavany vzdy (Task 11, zadny gate na
+                # zamer) - bez zaznamu by bfd_transit_state hlasil FAIL
+                # "zadna BFD session" na kazdem zdravem tranzitnim rozhrani
+                # a rozbil AR-29. Peer se odvozuje ze site stejne jako u
+                # IS-IS/LDP (_neighbour_for), aby zustal stabilni mezi
+                # pre/post fixturami - klic je peer adresa, ne jmeno
+                # rozhrani, protoze bfd dict je sdileny napric scopy.
+                # POZOR: v4 (a tedy bfd_peer) je odvozeny z prvniho
+                # local_ipv4 scopu, ne z jednotliveho rozhrani - se dvema
+                # tranzitnimi rozhranimi ve stejnem scopu by druha iterace
+                # prepsala zaznam prvni pod stejnym klicem. Sdilena inventory
+                # ma vzdy jedno tranzitni rozhrani na Core transit scope
+                # (overeno), takze se to dnes neprojevi; druhe rozhrani ve
+                # scopu by potrebovalo vlastni v4/peer, ne tento kod beze zmeny.
+                bfd_peer = _neighbour_for(v4) if v4 else None
+                if bfd_peer:
+                    bfd[bfd_peer] = {
+                        "state": "Up",
+                        "interface": name,
+                        "remote_state": "Up",
+                        "local_diagnostic": "None",
+                        "clients": ["ISIS"],
+                        "detection_time": "9.000",
+                        "transmission_interval": "3.000",
+                        "multiplier": 3,
+                    }
                 # pim_neighbor se NEsyntetizuje: sdilene inventory ymly
                 # (172.20.20.4/.5) nenesou "pim" v protocol u zadneho Core
                 # tranzitniho rozhrani (overeno), takze pim_neighbor_state

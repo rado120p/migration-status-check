@@ -46,6 +46,13 @@ class BfdSessionStateCheck(Check):
     requires = ("bfd", "bgp")
     default_severity = Severity.CRITICAL
 
+    def applies_to(self, scope) -> bool:
+        if scope.service_type == "Core" and scope.service_subtype == "transit":
+            # Tranzitni BFD meri bfd_transit_state; zamerova logika by tu
+            # vypisovala WARN "bez konfigurace" za kazdou session.
+            return False
+        return super().applies_to(scope)
+
     def run(self, ctx: CheckContext) -> list[Finding]:
         # Zaznam bez `peer` se preskoci. str(item.get("peer")) by z nej udelal
         # doslovny string "None", tedy radek "BFD (None)" s family=None, ktery

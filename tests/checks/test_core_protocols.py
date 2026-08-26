@@ -7,8 +7,10 @@ interfaces, CheckContext, primy run() checku.
 from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
+from migration_validator.checks.bfd import BfdSessionStateCheck
 from migration_validator.checks.core_protocols import (
     MISSING,
+    BfdTransitStateCheck,
     IsisAdjacencyStateCheck,
     IsisInterfaceInfoCheck,
     IsisOverviewCheck,
@@ -666,4 +668,85 @@ def test_ldp_neighbor_missing_row_baseline_derived_from_uptime_not_presence():
         )
     )
 
-    assert findings[0].baseline_value == "Down"
+
+# --- BfdTransitStateCheck + gate na stary BfdSessionStateCheck ---
+
+
+def test_bfd_transit_up_is_pass_with_peer_in_message():
+    findings = BfdTransitStateCheck().run(
+        _ctx_area("bfd", {"10.0.0.9": {"state": "Up", "interface": IFACE}})
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "Up"
+    assert findings[0].label == f"BFD ({IFACE})"
+    assert "10.0.0.9" in findings[0].message
+
+
+def test_bfd_transit_down_is_fail():
+    findings = BfdTransitStateCheck().run(
+        _ctx_area("bfd", {"10.0.0.9": {"state": "Down", "interface": IFACE}})
+    )
+
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "Down"
+
+
+def test_bfd_transit_missing_session_is_fail_down():
+    findings = BfdTransitStateCheck().run(_ctx_area("bfd", {}))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "Down"
+    assert findings[0].label == f"BFD ({IFACE})"
+
+
+def test_bfd_transit_two_sessions_on_one_interface_two_rows_no_phantom_fail():
+    findings = BfdTransitStateCheck().run(
+        _ctx_area(
+            "bfd",
+            {
+                "10.0.0.9": {"state": "Up", "interface": IFACE},
+                "fe80::9": {"state": "Up", "interface": IFACE},
+            },
+        )
+    )
+
+    assert len(findings) == 2
+    assert all(f.outcome is Outcome.OK for f in findings)
+    assert all(f.value == "Up" for f in findings)
+
+
+def test_bfd_transit_does_not_apply_to_customer_scope():
+    check = BfdTransitStateCheck()
+    scope = Scope(
+        id="svc:CPE13:IPVPN",
+        kind="service",
+        key=ScopeKey(description="CPE13", service_type="IPVPN"),
+        selectors=Selectors(),
+    )
+
+    assert check.applies_to(scope) is False
+
+
+def test_old_bfd_check_does_not_apply_to_core_transit_scope():
+    old_check = BfdSessionStateCheck()
+    transit_scope = _scope(service_subtype="transit")
+
+    assert old_check.applies_to(transit_scope) is False
+
+
+def test_old_bfd_check_still_applies_to_internet_and_device_scope():
+    from migration_validator.models.scope import device_scope
+
+    old_check = BfdSessionStateCheck()
+    internet_scope = Scope(
+        id="svc:internet",
+        kind="service",
+        key=ScopeKey(description=None, service_type="Internet"),
+        selectors=Selectors(),
+    )
+
+    assert old_check.applies_to(internet_scope) is True
+    assert old_check.applies_to(device_scope()) is True
