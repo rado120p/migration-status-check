@@ -35,8 +35,11 @@ from migration_validator.collectors.isis import (
     IsisInterfaceCollector,
     IsisOverviewCollector,
 )
+from migration_validator.collectors.ldp import LdpNeighborCollector
+from migration_validator.collectors.mpls import MplsInterfaceCollector
 from migration_validator.collectors.nd import NdCollector
 from migration_validator.collectors.optics import OpticsCollector
+from migration_validator.collectors.pim import PimNeighborCollector
 from migration_validator.collectors.routes import RoutesCollector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
@@ -69,6 +72,9 @@ COLLECTORS = (
     IsisAdjacencyCollector(),
     IsisInterfaceCollector(),
     IsisOverviewCollector(),
+    LdpNeighborCollector(),
+    PimNeighborCollector(),
+    MplsInterfaceCollector(),
 )
 
 # optics na junos (vMX) nema fixture zamerne: RPC existuje, ale vMX na nej
