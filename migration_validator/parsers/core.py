@@ -396,6 +396,7 @@ class JunosServiceParserCore:
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.default_bgp_neighbors: list[str] = []
         self.default_bgp_neighbors_inactive: list[str] = []
+        self.default_bgp_neighbors_internal: list[str] = []
         self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
 
@@ -590,6 +591,42 @@ class JunosServiceParserCore:
                     neighbors.append(neighbor)
 
         return unique(neighbors), unique(inactive)
+
+    def _parse_internal_bgp_neighbors(self) -> list[str]:
+        """Interni peer podle explicitniho type, fallback peer-as == local-as.
+
+        Explicitni prikaz ma prednost (rozhodnuti 2026-08-26): AS porovnani
+        je zachrana pro skupiny spolehajici na implicitni typovani Junosu,
+        ne prvni instance pravdy.
+
+        Interni se poznavaji jen na globalnim `protocols bgp` - RI peeri
+        jsou zakaznicke sluzby a tag nepotrebuji.
+
+        Soused primo pod `bgp` bez group (`protocols bgp neighbor ...`) tu
+        neni osetren - v zachycenych lab konfiguracich v repu se tento tvar
+        neobjevuje, takze nejde overit. Az se objevi, patri sem druha
+        smycka analogicka k `_parse_bgp_neighbors`.
+        """
+        local_as = first_text(
+            self.config_xml, "./routing-options/autonomous-system/as-number/text()"
+        )
+        internal: list[str] = []
+        for group in self.config_xml.xpath("./protocols/bgp/group"):
+            group_type = first_text(group, "./type/text()")
+            group_peer_as = first_text(group, "./peer-as/text()")
+            for neighbor_node in group.xpath("./neighbor"):
+                name = first_text(neighbor_node, "./name/text()")
+                if not name or self._is_inactive(neighbor_node):
+                    continue
+                peer_type = first_text(neighbor_node, "./type/text()") or group_type
+                peer_as = (
+                    first_text(neighbor_node, "./peer-as/text()") or group_peer_as
+                )
+                if peer_type == "internal":
+                    internal.append(name)
+                elif peer_type is None and local_as and peer_as == local_as:
+                    internal.append(name)
+        return unique(internal)
 
     def _parse_static_routes(self) -> list[StaticRoute]:
         """Statiky z globálních routing-options i ze všech routing-instances.
@@ -864,6 +901,7 @@ class JunosServiceParserCore:
         (self.default_bgp_neighbors, self.default_bgp_neighbors_inactive) = (
             self._parse_bgp_neighbors(self.config_xml, "./protocols/bgp")
         )
+        self.default_bgp_neighbors_internal = self._parse_internal_bgp_neighbors()
         self.default_bfd = self._parse_bfd(self.config_xml, "./protocols/bgp")
 
     def _parse_global_eline_interfaces(self, hierarchy: str, target: set[str]) -> None:
@@ -1169,6 +1207,18 @@ class JunosServiceParserCore:
         interface_configs_by_name: dict[str, InterfaceConfig],
     ) -> None:
         for service in services:
+            if service.service_type == "Core" and service.service_subtype == "loopback":
+                if self.default_bgp_neighbors_internal:
+                    service.bgp_neighbor = unique(
+                        service.bgp_neighbor + self.default_bgp_neighbors_internal
+                    )
+                    service.protocol = unique(service.protocol + ["bgp"])
+                    service.detection_reason.append(
+                        "Interni BGP peeri (type internal / shoda AS): "
+                        + ", ".join(self.default_bgp_neighbors_internal)
+                    )
+                continue
+
             if service.service_type not in {"Internet", "IPVPN"}:
                 continue
 
@@ -1341,18 +1391,24 @@ class JunosServiceParserCore:
         Musí běžet **až po** `_assign_bgp_neighbors` — dřív je seznam
         peerů prázdný a nebylo by co spárovat.
 
-        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type.
-        Služba bez routing-instance sahá do `self.default_bfd`, což je
-        záměr z globálního `protocols bgp` — a to i tehdy, jde-li o Core
-        nebo E-LAN. Nevadí to, protože `_assign_bgp_neighbors` plní
-        `bgp_neighbor` jen u Internet a IPVPN, takže ostatním službám
-        prázdný seznam ukončí iteraci hned na začátku. Je to podmínka,
-        na které tahle metoda stojí, ne shoda náhod — kdyby se filtr
-        v `_assign_bgp_neighbors` rozšířil, patří sem gate.
+        Na rozdíl od `_assign_bgp_neighbors` tu není filtr na service_type —
+        až na jednu výjimku. Služba bez routing-instance sahá do
+        `self.default_bfd`, což je záměr z globálního `protocols bgp`.
+        `_assign_bgp_neighbors` teď ale plní `bgp_neighbor` i u Core
+        lo0.0 (interní peeři, Task 4), takže prázdný seznam už nestačí
+        jako jediná pojistka — proto explicitní gate níž: Core peeři BFD
+        záměr nedostávají nikdy, i když by peer v `self.default_bfd`
+        náhodou byl (rozhodnutí 2026-08-26 — BFD na transitu řeší
+        `bfd_transit_state` bez záměru).
         """
 
         for service in services:
             if not service.bgp_neighbor:
+                continue
+
+            if service.service_type == "Core":
+                # Interni peeri BFD zamery nedostavaji (rozhodnuti 2026-08-26);
+                # BFD na transitu resi bfd_transit_state bez zameru.
                 continue
 
             if service.routing_instance:
