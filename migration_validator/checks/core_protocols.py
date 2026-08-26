@@ -201,10 +201,17 @@ def _neighbor_findings(
         entry = subject.get(name)
         was = baseline.get(name)
         if entry is None:
+            # baseline_value se odvozuje ze stejneho pravidla jako sam check
+            # (uptime_seconds > 0), ne z pouhe pritomnosti zaznamu - baseline
+            # se seconds=0 by jinak tvrdil "Up", coz stav nemeril (stav se
+            # nikdy nefabuluje).
+            baseline_value = None
+            if was is not None:
+                baseline_value = "Up" if was.get("uptime_seconds") else "Down"
             findings.append(Finding(
                 Outcome.BROKEN, f"{name}: soused ve vypisu neni",
                 label=qualified(status_label, name), value="Down",
-                baseline_value="Up" if was else None,
+                baseline_value=baseline_value,
             ))
             continue
         seconds = entry.get("uptime_seconds")
@@ -297,7 +304,11 @@ class MplsInterfaceStateCheck(Check):
         for name in _scope_transit_interfaces(ctx):
             entry = subject.get(name)
             was = baseline.get(name)
-            was_state = str(was.get("state")) if was else None
+            # was.get("state") muze byt pritomny, ale None - str(None) by do
+            # sloupce baseline poslal doslovny retezec "None" (stejna stopka
+            # jako u isis_adjacency_state._rows).
+            was_raw_state = (was or {}).get("state")
+            was_state = str(was_raw_state) if was_raw_state is not None else None
             if entry is None:
                 findings.append(Finding(
                     Outcome.BROKEN,

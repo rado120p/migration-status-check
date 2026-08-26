@@ -627,3 +627,43 @@ def test_mpls_interface_missing_is_fail_chybi_v_outputu():
 
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == MISSING
+
+
+def test_mpls_interface_baseline_state_present_but_none_is_not_literal_none():
+    """was.get('state') muze byt pritomny, ale None - baseline_value nesmi
+    byt doslovny retezec 'None'."""
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area(
+            "mpls_interface",
+            {IFACE: {"state": "Up"}},
+            baseline_value={IFACE: {"state": None}},
+        )
+    )
+
+    assert findings[0].baseline_value is None
+
+
+def test_ldp_neighbor_address_none_is_missing_not_literal_none():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": None, "uptime_seconds": 60}},
+        )
+    )
+
+    address_row = findings[1]
+    assert address_row.value == MISSING
+
+
+def test_ldp_neighbor_missing_row_baseline_derived_from_uptime_not_presence():
+    """Baseline zaznam s uptime_seconds=0 znamenal Down, ne Up - baseline_value
+    se nesmi odvozovat jen z pritomnosti zaznamu (stav se nikdy nefabuluje)."""
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {},
+            baseline_value={IFACE: {"neighbor_address": "10.0.0.2", "uptime_seconds": 0}},
+        )
+    )
+
+    assert findings[0].baseline_value == "Down"
