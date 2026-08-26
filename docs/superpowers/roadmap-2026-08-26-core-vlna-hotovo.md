@@ -64,20 +64,27 @@ nevypisoval `WARN | bez konfigurace` za každou session bez záměrové konfigur
 ## Jak si vyrobit důkazy
 
 ```bash
-cd /home/rado/Desktop/scripts/migration-status-check/.claude/worktrees/core-transit-loopback-checks
-pyats-venv/bin/python -m pytest tests/ -q; echo $?
+# pyats-venv/ zije v hlavnim repu, ne v tomhle worktree - absolutni cesta
+WT=/home/rado/Desktop/scripts/migration-status-check/.claude/worktrees/core-transit-loopback-checks
+PY=/home/rado/Desktop/scripts/migration-status-check/pyats-venv/bin/python
+cd "$WT"
+"$PY" -m pytest tests/ -q; echo $?
   # exit 0; pyats 9.1.1 na tomhle stroji netiskne souhrnny radek,
   # pocet testu overuje --collect-only (viz nize)
-pyats-venv/bin/python -m pytest tests/ --collect-only -q | \
+"$PY" -m pytest tests/ --collect-only -q | \
   awk -F': ' '{sum+=$2} END{print sum}'   # 1220
 diff mx_parser.py evo_parser.py | wc -l   # 8
 head -1 172.20.20.4.yml                   # schema_version: 7
 head -1 172.20.20.5.yml                   # schema_version: 7
-grep schema_version runs/mig01/snapshot_pre_172.20.20.4_all.json \
-     runs/mig01/snapshot_post_172.20.20.5_all.json   # 11, 11
-grep schema_version runs/mig01/inventory_172.20.20.4_all.yml \
-     runs/mig01/inventory_172.20.20.5_all.yml         # 7, 7
-pyats-venv/bin/python -m migration_validator.cli evaluate --run mig01
+# runs/mig01 je gitignored - existuje jen lokalne v tomhle worktree,
+# po re-capture (postup v sekci "Co vlna prinesla" vys)
+grep '"schema_version"' runs/mig01/snapshot_pre_172.20.20.4_all.json
+grep '"schema_version"' runs/mig01/snapshot_post_172.20.20.5_all.json
+  # oba: "schema_version": 11,
+grep schema_version runs/mig01/inventory_172.20.20.4_all.yml
+grep schema_version runs/mig01/inventory_172.20.20.5_all.yml
+  # oba: schema_version: 7
+"$PY" -m migration_validator.cli evaluate --run mig01
 git log --oneline main..HEAD
 ```
 
