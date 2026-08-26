@@ -100,12 +100,9 @@ def test_type_internal_group_maps_to_core_loopback(parser_class):
     assert "150.0.0.12" in loopback.bgp_neighbor
     assert "bgp" in loopback.protocol
 
-    internet_like = [
-        s
-        for s in services
-        if s.service_type in {"Internet", "IPVPN"}
-    ]
-    for service in internet_like:
+    for service in services:
+        if service.interface == "lo0.0":
+            continue
         assert "150.0.0.12" not in service.bgp_neighbor
 
 
