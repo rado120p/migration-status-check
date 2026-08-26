@@ -91,6 +91,37 @@ def _by_label(results, label):
     return matches[0]
 
 
+def _core_scope(service_subtype):
+    return Scope(
+        id=f"svc:core:{service_subtype}",
+        kind="service",
+        key=ScopeKey("core", "Core", service_subtype),
+        selectors=Selectors(interfaces=["lo0.0"]),
+    )
+
+
+def _typed_scope(service_type):
+    return Scope(
+        id=f"svc:x:{service_type}",
+        kind="service",
+        key=ScopeKey("x", service_type, None),
+        selectors=Selectors(interfaces=["ge-0/0/2.113"]),
+    )
+
+
+def test_bgp_checks_apply_to_core_loopback_not_transit():
+    for check in (BgpSessionStateCheck(), BgpPrefixCountsCheck()):
+        assert check.applies_to(_core_scope("loopback")) is True
+        assert check.applies_to(_core_scope("transit")) is False
+
+
+def test_bgp_checks_customer_service_types_unchanged():
+    for check in (BgpSessionStateCheck(), BgpPrefixCountsCheck()):
+        assert check.applies_to(_typed_scope("Internet")) is True
+        assert check.applies_to(_typed_scope("IPVPN")) is True
+        assert check.applies_to(_typed_scope("E-Line")) is False
+
+
 def test_session_findings_carry_peer_family():
     """Rodina se odvozuje z adresy peera, ne ze jmena RIB.
 

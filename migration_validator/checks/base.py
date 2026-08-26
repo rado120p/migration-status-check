@@ -67,6 +67,9 @@ class Check(ABC):
     requires: ClassVar[tuple[str, ...]] = ()
     requires_inventory: ClassVar[bool] = False
     service_types: ClassVar[frozenset[str] | None] = None
+    # AND ke service_types - kdyz je nastaveny, musi sedet i subtype
+    # (napr. Core transit vs. Core loopback). Vychozi None nic nefiltruje.
+    service_subtypes: ClassVar[frozenset[str] | None] = None
     default_severity: ClassVar[Severity] = Severity.ADVISORY
     # Bezi check i na Layer1 scopu (fyzicky port)? Vychozi ne - vetsina
     # checku meri sluzbu, ne port, a SKIP radky by L1 blok jen zaplevelily.
@@ -78,9 +81,13 @@ class Check(ABC):
             return True
         if scope.kind == "layer1":
             return self.layer1
-        if self.service_types is None:
-            return True
-        return scope.service_type in self.service_types
+        if self.service_types is not None:
+            if scope.service_type not in self.service_types:
+                return False
+        if self.service_subtypes is not None:
+            if scope.service_subtype not in self.service_subtypes:
+                return False
+        return True
 
     @abstractmethod
     def run(self, ctx: CheckContext) -> list[Finding]:
@@ -95,6 +102,9 @@ class Check(ABC):
             "requires_inventory": self.requires_inventory,
             "service_types": (
                 sorted(self.service_types) if self.service_types else None
+            ),
+            "service_subtypes": (
+                sorted(self.service_subtypes) if self.service_subtypes else None
             ),
             "default_severity": self.default_severity.value,
         }

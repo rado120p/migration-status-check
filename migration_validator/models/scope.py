@@ -81,6 +81,11 @@ class Selectors:
     # ruzne veci a slevat je do jednoho seznamu by znamenalo drzet je
     # v synchronu.
     bfd_peers: list[dict[str, Any]] = field(default_factory=list)
+    # Zamer z konfigurace (Task 3: entry.protocol) - ktere IGP/signalizacni
+    # protokoly ma sluzba bezet. Zatim se do vyberu nepromita (per-interface
+    # areas se vybiraji podle rozhrani, ne podle tohoto pole), je to jen
+    # zaznam zameru pro budouci checky.
+    protocols: list[str] = field(default_factory=list)
 
     def matches_interface(self, name: str) -> bool:
         return name in self.interfaces or name in self.physical_interfaces
@@ -101,6 +106,7 @@ class Selectors:
             "lag_members": list(self.lag_members),
             "static_routes": [dict(route) for route in self.static_routes],
             "bfd_peers": [dict(intent) for intent in self.bfd_peers],
+            "protocols": list(self.protocols),
         }
 
     @classmethod
@@ -142,6 +148,10 @@ class Scope:
     @property
     def service_type(self) -> str | None:
         return self.key.service_type if self.key else None
+
+    @property
+    def service_subtype(self) -> str | None:
+        return self.key.service_subtype if self.key else None
 
     def select(
         self, facts: dict[str, Any], probes: dict[str, Any] | None = None
@@ -237,6 +247,13 @@ class Scope:
             peer: data
             for peer, data in (facts.get("bfd") or {}).items()
             if peer in self.selectors.bgp_neighbors
+            or (
+                # Transit Core nema BFD zamery ani peery v konfiguraci sluzby -
+                # session na nej patri podle rozhrani (spec 2026-08-26).
+                self.service_type == "Core"
+                and self.service_subtype == "transit"
+                and self.selectors.matches_interface(str(data.get("interface", "")))
+            )
         }
 
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
@@ -247,6 +264,26 @@ class Scope:
             if self.selectors.matches_interface(name)
             or name in self.selectors.lag_members
         }
+
+        per_interface_areas = (
+            "isis_adjacency", "isis_interface", "ldp_neighbor",
+            "pim_neighbor", "mpls_interface",
+        )
+        protocol_areas = {
+            area: {
+                name: data
+                for name, data in (facts.get(area) or {}).items()
+                if self.selectors.matches_interface(name)
+            }
+            for area in per_interface_areas
+        }
+        # Overview je tvrzeni o routeru, ne o lince - dostane ho jen scope,
+        # ktery router reprezentuje (lo0.0).
+        isis_overview = (
+            dict(facts.get("isis_overview") or {})
+            if self.service_subtype == "loopback"
+            else {}
+        )
 
         return {
             "interfaces": interfaces,
@@ -265,6 +302,8 @@ class Scope:
                 entry.get("scope_id") == self.id
                 for entry in probes.get("ping_skipped", [])
             ),
+            "isis_overview": isis_overview,
+            **protocol_areas,
         }
 
     def to_dict(self) -> dict[str, Any]:

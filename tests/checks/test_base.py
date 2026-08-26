@@ -130,6 +130,27 @@ def test_layer1_scope_pousti_jen_layer1_checky():
     assert ServiceOnly().applies_to(_scope())  # chovani sluzeb beze zmeny
 
 
+def _core_scope(service_subtype) -> Scope:
+    return Scope(
+        id=f"svc:core:{service_subtype}",
+        kind="service",
+        key=ScopeKey("core", "Core", service_subtype),
+        selectors=Selectors(interfaces=["ge-0/0/0.0"]),
+    )
+
+
+def test_check_with_service_subtypes_gates_on_subtype():
+    class TransitOnly(DummyCheck):
+        service_types = frozenset({"Core"})
+        service_subtypes = frozenset({"transit"})
+
+    check = TransitOnly()
+    assert check.applies_to(_core_scope("transit")) is True
+    assert check.applies_to(_core_scope("loopback")) is False
+    assert check.applies_to(_scope("Internet")) is False
+    assert check.applies_to(device_scope()) is True
+
+
 def test_exception_in_check_becomes_skip_not_crash():
     results = run_check(ExplodingCheck(), _ctx())
     assert results[0].status is Status.SKIP

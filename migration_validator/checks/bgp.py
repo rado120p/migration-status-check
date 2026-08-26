@@ -41,6 +41,20 @@ def peer_family(peer: str) -> int | None:
         return None
 
 
+class _AppliesToCoreLoopback:
+    """BGP checky meri i interni peery na lo0.0 (spec 2026-08-26).
+
+    service_types | {"Core"} nestaci - Core transit zadne peery nema a
+    dostal by prazdne SKIP/FAIL radky. Gate na subtype je proto v
+    applies_to, ne v datech.
+    """
+
+    def applies_to(self, scope):
+        if scope.service_type == "Core":
+            return scope.service_subtype == "loopback"
+        return super().applies_to(scope)
+
+
 # Popisek radku je vzdycky "BGP status (adresa)", i kdyz ma sekce jedineho
 # peera a adresa je tam potreti. Podminit ho poctem peeru v sekci se
 # nabizelo - zmereno, ze v laborce je redundantni ve vsech sedmi sekcich -
@@ -53,7 +67,7 @@ def peer_family(peer: str) -> int | None:
 # nerekly, ktery soused je rozbity. Fixtures tenhle tvar nemodeluji, takze
 # mereni ukazuje redundanci, ne cenu jejiho odstraneni.
 @register
-class BgpSessionStateCheck(Check):
+class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
     id = "bgp_session_state"
     title = "Stav BGP session"
     label = "BGP status"
@@ -223,7 +237,7 @@ class BgpSessionStateCheck(Check):
 
 
 @register
-class BgpPrefixCountsCheck(Check):
+class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
     id = "bgp_prefix_counts"
     title = "Pocty BGP prefixu"
     label = "BGP prefixy"

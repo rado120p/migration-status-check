@@ -535,6 +535,34 @@ def test_inactive_peer_bfd_session_stays_visible_in_unassigned():
     ]
 
 
+def test_core_transit_bfd_session_claimed_by_interface_is_not_unassigned():
+    """BFD session Core transit sluzby, ktera nema BGP peery, se do NEZARAZENO
+    nesmi dostat podruhe - Scope.select ji uz zarazuje podle rozhrani
+    (models/scope.py), takze `_unassigned_bfd_sessions` musi pouzit stejne
+    pravidlo, jinak by se v reportu objevila dvakrat."""
+    scope = Scope(
+        id="svc:core-transit:Core",
+        kind="service",
+        key=ScopeKey(None, "Core", "transit"),
+        selectors=Selectors(interfaces=["ge-0/0/0.0"], physical_interfaces=["ge-0/0/0"]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={"bfd": {"10.0.0.1": {"state": "Up", "interface": "ge-0/0/0.0"}}},
+        probes={},
+        scopes=[scope],
+        inventory=[],
+    )
+
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == []
+
+
 MGMT_ROUTE = {
     "mgmt_junos.inet.0": {
         "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}

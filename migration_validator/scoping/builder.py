@@ -95,6 +95,7 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
                     bridge_domains=list(entry.bridge_domain),
                     static_routes=[dict(route) for route in entry.static_route],
                     bfd_peers=[dict(intent) for intent in entry.bfd],
+                    protocols=list(entry.protocol),
                 ),
                 routing_instance_active=entry.routing_instance_active,
                 interface_active=entry.interface_active,

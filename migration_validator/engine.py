@@ -412,6 +412,17 @@ def _unassigned_bfd_sessions(
     # jedine misto, kde takova session muze zustat videt; pricist inactive
     # by znamenalo, ze zmizi uplne.
     assigned = {peer for scope in scopes for peer in scope.selectors.bgp_neighbors}
+    bfd_facts = subject.facts.get("bfd") or {}
+    # Core transit nema BGP peery ani BFD zamer - Scope.select (models/scope.py)
+    # session zarazuje podle rozhrani. Stejne pravidlo tady, jinak by se
+    # takova session objevila v reportu podruhe (u sluzby i v NEZARAZENO).
+    for scope in scopes:
+        if scope.service_type == "Core" and scope.service_subtype == "transit":
+            assigned |= {
+                peer
+                for peer, data in bfd_facts.items()
+                if scope.selectors.matches_interface(str(data.get("interface", "")))
+            }
     if any(scope.is_device for scope in scopes):
         return []
     return [
@@ -421,7 +432,7 @@ def _unassigned_bfd_sessions(
             "state": data.get("state"),
             "snapshot": "subject",
         }
-        for peer, data in sorted((subject.facts.get("bfd") or {}).items())
+        for peer, data in sorted(bfd_facts.items())
         if peer not in assigned
     ]
 
