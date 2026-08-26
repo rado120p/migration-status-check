@@ -6,6 +6,7 @@ import ipaddress
 
 import pytest
 
+from migration_validator.checks.ifaces import is_transit
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 from migration_validator.scoping.builder import build_scopes
@@ -148,6 +149,7 @@ def _facts_for(scopes, pps: int) -> dict:
     routes: dict[str, dict[str, dict]] = {}
     bfd = {}
     optics = {}
+    isis_adjacency = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -257,6 +259,23 @@ def _facts_for(scopes, pps: int) -> dict:
                 "multiplier": intent.get("multiplier"),
             }
 
+        # Zdrava IS-IS adjacency pro kazde tranzitni rozhrani Core sluzby -
+        # bez ni by isis_adjacency_state hlasil FAIL 'chybi v outputu' na
+        # kazde zdrave migraci a rozbil by test_full_migration_run_has_no_
+        # unexplained_fail_or_warn (AR-29).
+        if scope.key.service_type == "Core" and scope.service_subtype == "transit":
+            v4 = scope.selectors.local_ipv4[0] if scope.selectors.local_ipv4 else None
+            v6 = scope.selectors.local_ipv6[0] if scope.selectors.local_ipv6 else None
+            for name in scope.selectors.interfaces:
+                if not is_transit(name):
+                    continue
+                isis_adjacency[name] = {
+                    "system_name": f"P-{name}",
+                    "state": "Up",
+                    "ip_address": _neighbour_for(v4) if v4 else None,
+                    "ipv6_address": _neighbour_for(v6) if v6 else None,
+                }
+
         service_type = scope.key.service_type
         instance = (
             scope.selectors.routing_instances[0]
@@ -323,6 +342,7 @@ def _facts_for(scopes, pps: int) -> dict:
         "routes": routes,
         "bfd": bfd,
         "optics": optics,
+        "isis_adjacency": isis_adjacency,
     }
 
 

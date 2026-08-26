@@ -9,6 +9,7 @@ from __future__ import annotations
 from migration_validator.checks import (  # noqa: F401
     bfd,
     bgp,
+    core_protocols,
     deactivation,
     evpn,
     ifaces,
