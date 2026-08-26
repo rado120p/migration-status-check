@@ -711,9 +711,10 @@ def test_bfd_transit_down_is_fail():
 
 
 def test_bfd_transit_missing_session_is_fail_down():
-    """Mutant kill (2026-08-26, overeno spustenim): smazani vetve `if not
-    entries` v BfdTransitStateCheck.run necha tenhle test padnout (0 findings
-    misto 1x BROKEN)."""
+    """Mutant kill (2026-08-26, overeno spustenim) v BfdTransitStateCheck.run:
+    spustena varianta `entries = by_interface.get(name) or []` (literalni
+    smazani vetve `if not entries` by spadlo na TypeError v `sorted(None)`,
+    viz roadmap) necha tenhle test padnout (0 findings misto 1x BROKEN)."""
     findings = BfdTransitStateCheck().run(_ctx_area("bfd", {}))
 
     assert len(findings) == 1

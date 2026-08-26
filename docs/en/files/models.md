@@ -205,11 +205,15 @@ channel through which a failed collection turns into a `SKIP` in the checks
 printing both versions). No attempt is made to migrate old data: loud failure beats a silent
 misinterpretation.
 
-Current `SCHEMA_VERSION = 11` (`models/snapshot.py`). The bump from 10 to 11 (2026-08-26
-wave) added six new fact areas to `FACT_AREAS` (`isis_adjacency`, `isis_interface`,
-`isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) — see
-[collectors.md](collectors.md) for the shape of each area. Old snapshot data therefore has
-to be recaptured, not patched by hand.
+Current `SCHEMA_VERSION = 11` (`models/snapshot.py`). The bump from 5 to 6 carried the
+normalization of ARP/ND records learned over an IRB (`interface` + `learned_via` instead of
+the untrimmed `irb.14[ ae0.14 ]`, see `collectors.md`) and a new `evpn_vpws` schema
+(`interfaces`/`local_sid`/`remote_sid`/`peers` instead of a flat
+`status`/`local_sid`/`remote_sid`). The bump from 10 to 11 (2026-08-26 wave) added six new
+fact areas to `FACT_AREAS` (`isis_adjacency`, `isis_interface`, `isis_overview`,
+`ldp_neighbor`, `pim_neighbor`, `mpls_interface`) — see [collectors.md](collectors.md) for
+the shape of each area. Old snapshot data therefore has to be recaptured, not patched by
+hand.
 
 `save_snapshot()` / `load_snapshot()` write and read UTF‑8 JSON with `ensure_ascii=False` and
 create the target directory. The disk round-trip is asserted by

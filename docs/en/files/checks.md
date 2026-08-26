@@ -661,16 +661,22 @@ Sessions are matched by **interface**, not by peer address — `by_interface` is
 
 Multiple sessions on the same interface get multiple rows (sorted by peer).
 
-Mutant kill (2026-08-26, verified by running it): deleting the `if not entries` branch makes
+Mutant kill (2026-08-26, verified by running it): the variant actually run was `entries =
+by_interface.get(name) or []` (a literal deletion of the `if not entries` branch would crash
+with `TypeError` in `sorted(None)`, see the roadmap) — it makes
 `test_bfd_transit_missing_session_is_fail_down` fail.
 
 ### `isis_overview` (loopback, advisory)
 
 `service_types={"Core"}`, `service_subtypes={"loopback"}`. Requires `isis_overview` — a
 device-global fact that `Scope.select()` only lets through for Core loopback scopes (see
-`models.md`/`scoping.md`); on transit `ctx.subject["isis_overview"]` is therefore always an
-empty dict, so scoping and the check's subtype binding are two independent safety nets
-against the same mistake.
+`models.md`), so on transit `ctx.subject["isis_overview"]` is always an empty dict.
+Scoping (`Scope.select()`) and the check's binding (`service_subtypes`) are two
+**independent** safety nets against the same mistake: if scoping let the area through on
+transit too, the empty dict would always assert a false `PASS | nenastaven` there (the
+overload bit reading as never set, because the area is empty) — if only the check's
+binding failed, the subtype gate in `Scope.select()` would still keep the area off
+transit.
 
 A single row: `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (the router avoids
 transit traffic), else `PASS | IS-IS overload bit : nenastaven`. The baseline adds nothing

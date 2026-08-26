@@ -655,7 +655,9 @@ z `data.get("interface")` každé BFD session v subjektu.
 
 Víc session na stejném rozhraní dostane víc řádků (setříděných podle peera).
 
-Mutant kill (2026-08-26, ověřeno spuštěním): smazání větve `if not entries` nechá padnout
+Mutant kill (2026-08-26, ověřeno spuštěním): spuštěná varianta `entries =
+by_interface.get(name) or []` (literální smazání větve `if not entries` by spadlo na
+`TypeError` v `sorted(None)`, viz roadmap) nechá padnout
 `test_bfd_transit_missing_session_is_fail_down`.
 
 ### `isis_overview` (loopback, advisory)
