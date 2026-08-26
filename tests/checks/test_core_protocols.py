@@ -12,6 +12,9 @@ from migration_validator.checks.core_protocols import (
     IsisAdjacencyStateCheck,
     IsisInterfaceInfoCheck,
     IsisOverviewCheck,
+    LdpNeighborStateCheck,
+    MplsInterfaceStateCheck,
+    PimNeighborStateCheck,
 )
 from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
@@ -20,12 +23,12 @@ IFACE = "ge-0/0/1.0"
 LOOPBACK = "lo0.0"
 
 
-def _scope(interfaces=(IFACE,), service_subtype="transit") -> Scope:
+def _scope(interfaces=(IFACE,), service_subtype="transit", protocols=()) -> Scope:
     return Scope(
         id="svc:Core:transit",
         kind="service",
         key=ScopeKey(None, "Core", service_subtype),
-        selectors=Selectors(interfaces=list(interfaces)),
+        selectors=Selectors(interfaces=list(interfaces), protocols=list(protocols)),
     )
 
 
@@ -476,3 +479,151 @@ def test_isis_overview_does_not_apply_to_transit_scope():
     scope = _scope(service_subtype="transit")
 
     assert check.applies_to(scope) is False
+
+
+# --- LdpNeighborStateCheck / PimNeighborStateCheck / MplsInterfaceStateCheck --
+
+
+def _ctx_area(area, subject_value, baseline_value=None, scope=None):
+    """CheckContext s obecnou fact oblasti a volitelnym baselinem."""
+    return CheckContext(
+        scope=scope or _scope(),
+        subject={area: subject_value},
+        baseline=({area: baseline_value} if baseline_value is not None else None),
+        config=__import__(
+            "migration_validator.config", fromlist=["default_config"]
+        ).default_config(),
+    )
+
+
+def test_ldp_neighbor_up_is_pass_with_address_info():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.2", "uptime_seconds": 25210}},
+        )
+    )
+
+    assert len(findings) == 2
+    status_row, address_row = findings
+    assert status_row.outcome is Outcome.OK
+    assert status_row.label == f"LDP neighbor status ({IFACE})"
+    assert status_row.value == "Up for 7h 0m"
+
+    assert address_row.outcome is Outcome.INFO
+    assert address_row.label == f"LDP neighbor address ({IFACE})"
+    assert address_row.value == "10.0.0.2"
+
+
+def test_ldp_neighbor_zero_uptime_is_fail():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.2", "uptime_seconds": 0}},
+        )
+    )
+
+    status_row = findings[0]
+    assert status_row.outcome is Outcome.BROKEN
+    assert status_row.value == "Down"
+
+
+def test_ldp_neighbor_missing_row_is_fail_down():
+    findings = LdpNeighborStateCheck().run(_ctx_area("ldp_neighbor", {}))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "Down"
+    assert findings[0].label == f"LDP neighbor status ({IFACE})"
+
+
+def test_ldp_neighbor_baseline_address_changed_is_warn():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.2", "uptime_seconds": 25210}},
+            baseline_value={IFACE: {"neighbor_address": "10.0.0.9", "uptime_seconds": 100}},
+        )
+    )
+
+    address_row = findings[1]
+    assert address_row.outcome is Outcome.DEGRADED
+    assert address_row.value == "10.0.0.2"
+    assert address_row.baseline_value == "10.0.0.9"
+
+
+def test_pim_neighbor_with_intent_up_is_pass():
+    scope = _scope(protocols=("pim",))
+    findings = PimNeighborStateCheck().run(
+        _ctx_area(
+            "pim_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.3", "uptime_seconds": 60}},
+            scope=scope,
+        )
+    )
+
+    assert len(findings) == 2
+    status_row, address_row = findings
+    assert status_row.outcome is Outcome.OK
+    assert address_row.outcome is Outcome.INFO
+    assert address_row.value == "10.0.0.3"
+
+
+def test_pim_neighbor_with_intent_missing_is_fail():
+    scope = _scope(protocols=("pim",))
+    findings = PimNeighborStateCheck().run(_ctx_area("pim_neighbor", {}, scope=scope))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "Down"
+
+
+def test_pim_neighbor_without_intent_is_silent_not_skip():
+    scope = _scope(protocols=())
+    findings = PimNeighborStateCheck().run(_ctx_area("pim_neighbor", {}, scope=scope))
+
+    assert findings == []
+
+
+def test_pim_neighbor_baseline_address_changed_is_warn():
+    scope = _scope(protocols=("pim",))
+    findings = PimNeighborStateCheck().run(
+        _ctx_area(
+            "pim_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.3", "uptime_seconds": 60}},
+            baseline_value={IFACE: {"neighbor_address": "10.0.0.4", "uptime_seconds": 60}},
+            scope=scope,
+        )
+    )
+
+    address_row = findings[1]
+    assert address_row.outcome is Outcome.DEGRADED
+    assert address_row.value == "10.0.0.3"
+    assert address_row.baseline_value == "10.0.0.4"
+
+
+def test_mpls_interface_up_is_pass():
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area("mpls_interface", {IFACE: {"state": "Up"}})
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "Up"
+    assert findings[0].label == f"MPLS interface status ({IFACE})"
+
+
+def test_mpls_interface_down_is_fail():
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area("mpls_interface", {IFACE: {"state": "Dn"}})
+    )
+
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "Down"
+
+
+def test_mpls_interface_missing_is_fail_chybi_v_outputu():
+    findings = MplsInterfaceStateCheck().run(_ctx_area("mpls_interface", {}))
+
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == MISSING

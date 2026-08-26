@@ -188,6 +188,135 @@ class IsisInterfaceInfoCheck(Check):
         return findings
 
 
+def _neighbor_findings(
+    ctx: CheckContext, *, area: str, status_label: str, address_label: str,
+    names: list[str],
+) -> list[Finding]:
+    """Sdilena kostra pro LDP/PIM soused - checky se lisi jen gate na zamer
+    a labely, ne logikou."""
+    subject: dict[str, Any] = ctx.subject.get(area, {})
+    baseline: dict[str, Any] = (ctx.baseline or {}).get(area, {})
+    findings: list[Finding] = []
+    for name in names:
+        entry = subject.get(name)
+        was = baseline.get(name)
+        if entry is None:
+            findings.append(Finding(
+                Outcome.BROKEN, f"{name}: soused ve vypisu neni",
+                label=qualified(status_label, name), value="Down",
+                baseline_value="Up" if was else None,
+            ))
+            continue
+        seconds = entry.get("uptime_seconds")
+        up = bool(seconds and seconds > 0)
+        findings.append(Finding(
+            Outcome.OK if up else Outcome.BROKEN,
+            f"{name}: session {'bezi' if up else 'nebezi'}",
+            label=qualified(status_label, name),
+            value=f"Up for {format_uptime(seconds)}" if up else "Down",
+        ))
+        address = entry.get("neighbor_address")
+        was_address = was.get("neighbor_address") if was else None
+        changed = ctx.has_baseline and was is not None and address != was_address
+        # address muze byt None (klic pritomny, hodnota chybi) - str(None)
+        # by do sloupce hodnot poslalo doslovny retezec "None".
+        findings.append(Finding(
+            Outcome.DEGRADED if changed else Outcome.INFO,
+            f"{name}: adresa souseda {address}",
+            label=qualified(address_label, name),
+            value=str(address) if address is not None else MISSING,
+            baseline_value=str(was_address) if was_address is not None else None,
+        ))
+    return findings
+
+
+@register
+class LdpNeighborStateCheck(Check):
+    id = "ldp_neighbor_state"
+    title = "Stav LDP souseda"
+    label = "LDP neighbor status"
+    mode = Mode.BOTH
+    requires = ("ldp_neighbor",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"transit"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        # LDP na tranzitnim Core rozhrani je ocekavany vzdy
+        # (rozhodnuti 2026-08-26) - zadny gate na zamer.
+        return _neighbor_findings(
+            ctx, area="ldp_neighbor",
+            status_label="LDP neighbor status",
+            address_label="LDP neighbor address",
+            names=_scope_transit_interfaces(ctx),
+        )
+
+
+@register
+class PimNeighborStateCheck(Check):
+    id = "pim_neighbor_state"
+    title = "Stav PIM souseda"
+    label = "PIM neighbor status"
+    mode = Mode.BOTH
+    requires = ("pim_neighbor",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"transit"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        if "pim" not in ctx.scope.selectors.protocols:
+            # Bez zameru ticho, ne SKIP - sluzba bez PIM neni mene zdrava
+            # (rozhodnuti 2026-08-26).
+            return []
+        return _neighbor_findings(
+            ctx, area="pim_neighbor",
+            status_label="PIM neighbor status",
+            address_label="PIM neighbor address",
+            names=_scope_transit_interfaces(ctx),
+        )
+
+
+@register
+class MplsInterfaceStateCheck(Check):
+    id = "mpls_interface_state"
+    title = "Stav MPLS rozhrani"
+    label = "MPLS interface status"
+    mode = Mode.BOTH
+    requires = ("mpls_interface",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"transit"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        subject: dict[str, Any] = ctx.subject.get("mpls_interface", {})
+        baseline: dict[str, Any] = (ctx.baseline or {}).get("mpls_interface", {})
+        findings: list[Finding] = []
+        for name in _scope_transit_interfaces(ctx):
+            entry = subject.get(name)
+            was = baseline.get(name)
+            was_state = str(was.get("state")) if was else None
+            if entry is None:
+                findings.append(Finding(
+                    Outcome.BROKEN,
+                    f"{name}: rozhrani neni pod protocols mpls",
+                    label=qualified(self.label, name),
+                    value=MISSING, baseline_value=was_state,
+                ))
+                continue
+            state = str(entry.get("state", "unknown"))
+            findings.append(Finding(
+                Outcome.OK if state == "Up" else Outcome.BROKEN,
+                f"{name}: MPLS {state}",
+                label=qualified(self.label, name),
+                value="Up" if state == "Up" else "Down",
+                baseline_value=was_state,
+            ))
+        return findings
+
+
 @register
 class IsisOverviewCheck(Check):
     id = "isis_overview"

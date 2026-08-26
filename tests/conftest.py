@@ -152,6 +152,8 @@ def _facts_for(scopes, pps: int) -> dict:
     isis_adjacency = {}
     isis_interface = {}
     isis_overview = {}
+    ldp_neighbor = {}
+    mpls_interface = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -289,6 +291,23 @@ def _facts_for(scopes, pps: int) -> dict:
                 # (Task 9) hlasil FAIL "level 2 passive=ano" na kazdem
                 # zdravem tranzitnim rozhrani a rozbil AR-29.
                 isis_interface[name] = {"levels": {"2": {"passive": False}}}
+                # LDP je na tranzitu ocekavany vzdy (Task 10, zadny gate na
+                # zamer) - bez zaznamu by ldp_neighbor_state hlasil FAIL
+                # "Down" na kazdem zdravem tranzitnim rozhrani a rozbil AR-29.
+                # Soused se odvozuje stejne jako u IS-IS - ze site, ne ze
+                # jmena rozhrani, aby zustal stabilni mezi pre/post fixturami.
+                ldp_neighbor[name] = {
+                    "neighbor_address": _neighbour_for(v4) if v4 else None,
+                    "uptime_seconds": 25210,
+                }
+                # MPLS na tranzitu musi byt Up ze stejneho duvodu jako LDP -
+                # jinak by mpls_interface_state hlasil FAIL a rozbil AR-29.
+                mpls_interface[name] = {"state": "Up"}
+                # pim_neighbor se NEsyntetizuje: sdilene inventory ymly
+                # (172.20.20.4/.5) nenesou "pim" v protocol u zadneho Core
+                # tranzitniho rozhrani (overeno), takze pim_neighbor_state
+                # na e2e fixturach vzdy vraci [] (gate na zamer) a syntetizovana
+                # fakta by byla mrtvy kod.
 
         # lo0.* nese IS-IS jako pasivni level 2 - loopback nema souseda,
         # takze nepasivni level 2 by isis_interface_info hlasil FAIL.
@@ -368,6 +387,8 @@ def _facts_for(scopes, pps: int) -> dict:
         "isis_adjacency": isis_adjacency,
         "isis_interface": isis_interface,
         "isis_overview": isis_overview,
+        "ldp_neighbor": ldp_neighbor,
+        "mpls_interface": mpls_interface,
     }
 
 
