@@ -1,4 +1,4 @@
-schema_version: 6
+schema_version: 7
 device: 172.20.20.5
 interfaces:
 - interface: ae0
@@ -150,7 +150,7 @@ interfaces:
 - interface: et-0/0/0.0
   description: clab-pop-migration-P2;et-0/0/0
   service_type: Core
-  service_subtype: null
+  service_subtype: transit
   ipv4_address:
   - 10.1.1.3/31
   ipv6_address:
@@ -198,7 +198,7 @@ interfaces:
 - interface: et-0/0/1.0
   description: clab-pop-migration-MX1-POP1 ge-0/0/1
   service_type: Core
-  service_subtype: null
+  service_subtype: transit
   ipv4_address:
   - 10.1.0.5/31
   ipv6_address:
@@ -648,7 +648,7 @@ interfaces:
 - interface: lo0.0
   description: null
   service_type: Core
-  service_subtype: null
+  service_subtype: loopback
   ipv4_address:
   - 150.0.0.12/32
   ipv6_address:

@@ -137,7 +137,9 @@ class Inventory:
     entries: list[ServiceEntry] = field(default_factory=list)
 
 
-INVENTORY_SCHEMA_VERSION = 6
+# 7: Core entry nese service_subtype "transit" | "loopback" - lo0.* uz se
+#    v checku nevaze na stejnem profilu jako tranzitni port.
+INVENTORY_SCHEMA_VERSION = 7
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -154,6 +156,11 @@ def load_inventory(path: str | Path) -> Inventory:
     Verze 6 nahradila u static_route ploche next_hop per-hop zaznamy
     next_hops (+ route_type). Tolerantni cteni by vratilo zamer bez hopu,
     mapovani i anotace deaktivace by tise zmizely.
+
+    Verze 7 pridala u Core entry service_subtype "transit"/"loopback".
+    Tolerantni cteni stare (v6) inventory by vratilo Core zaznamy se
+    service_subtype None - checky vazane na subtype by nemely na co
+    naskocit a sluzba (loopback i transit) by tise prosla jako zelena.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

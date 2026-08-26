@@ -1500,7 +1500,12 @@ class JunosServiceParserCore:
         if {"iso", "mpls"} & family_set:
             reasons.append("Rozhraní používá family iso nebo family mpls.")
 
-            return ("Core", None, "high", reasons)
+            # lo0.* nese jen loopback adresu k IGP/BGP, zbytek Core rozhraní
+            # je tranzitní port - checky se od téhle chvíle váží na subtype,
+            # ne jen na service_type "Core".
+            subtype = "loopback" if interface.name.startswith("lo0") else "transit"
+
+            return ("Core", subtype, "high", reasons)
 
         # --------------------------------------------------------------
         # Internet
