@@ -1,0 +1,38 @@
+<isis-adjacency-information style="detail">
+  <isis-adjacency>
+    <system-name>clab-pop-migration-P1</system-name>
+    <interface-name>ge-0/0/0.0</interface-name>
+    <level>2</level>
+    <adjacency-state>Up</adjacency-state>
+    <holdtime>21</holdtime>
+    <interface-priority>0</interface-priority>
+    <transition-count>3</transition-count>
+    <last-transition-time seconds="3325">00:55:25</last-transition-time>
+    <circuit-type>2</circuit-type>
+    <adjacency-flag>Speaks: IP, IPv6</adjacency-flag>
+    <adjacency-topologies>Unicast, IPV4-Multicast, IPV6-Unicast</adjacency-topologies>
+    <adjacency-restart-capable>yes</adjacency-restart-capable>
+    <adjacency-advertisement>advertise</adjacency-advertisement>
+    <ip-address>10.1.2.0</ip-address>
+    <ipv6-address>fe80::bee8:97ff:fe17:0</ipv6-address>
+    <global-ipv6-address>2001:db8:2::1</global-ipv6-address>
+  </isis-adjacency>
+  <isis-adjacency>
+    <system-name>clab-pop-migration-PTX1-POP1</system-name>
+    <interface-name>ge-0/0/1.0</interface-name>
+    <level>2</level>
+    <adjacency-state>Up</adjacency-state>
+    <holdtime>26</holdtime>
+    <interface-priority>0</interface-priority>
+    <transition-count>3</transition-count>
+    <last-transition-time seconds="3325">00:55:25</last-transition-time>
+    <circuit-type>2</circuit-type>
+    <adjacency-flag>Speaks: IP, IPv6</adjacency-flag>
+    <adjacency-topologies>Unicast, IPV4-Multicast, IPV6-Unicast</adjacency-topologies>
+    <adjacency-restart-capable>yes</adjacency-restart-capable>
+    <adjacency-advertisement>advertise</adjacency-advertisement>
+    <ip-address>10.1.0.5</ip-address>
+    <ipv6-address>fe80::a44:b8ff:fe5a:9</ipv6-address>
+    <global-ipv6-address>2001:db8:6::2</global-ipv6-address>
+  </isis-adjacency>
+</isis-adjacency-information>

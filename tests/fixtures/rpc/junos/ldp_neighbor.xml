@@ -1,0 +1,42 @@
+<ldp-neighbor-information>
+  <ldp-neighbor>
+    <ldp-neighbor-address>150.0.0.1</ldp-neighbor-address>
+    <interface-name>lo0.0</interface-name>
+    <ldp-label-space-id>150.0.0.1:0</ldp-label-space-id>
+    <ldp-remaining-time>39</ldp-remaining-time>
+    <ldp-local-transport-address>150.0.0.11</ldp-local-transport-address>
+    <ldp-transport-address>150.0.0.1</ldp-transport-address>
+    <ldp-config-sequence>1</ldp-config-sequence>
+    <ldp-up-time seconds="4336">01:12:16</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>150.0.0.12</ldp-neighbor-address>
+    <interface-name>lo0.0</interface-name>
+    <ldp-label-space-id>150.0.0.12:0</ldp-label-space-id>
+    <ldp-remaining-time>40</ldp-remaining-time>
+    <ldp-local-transport-address>150.0.0.11</ldp-local-transport-address>
+    <ldp-transport-address>150.0.0.12</ldp-transport-address>
+    <ldp-config-sequence>2</ldp-config-sequence>
+    <ldp-up-time seconds="3326">00:55:26</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.2.0</ldp-neighbor-address>
+    <interface-name>ge-0/0/0.0</interface-name>
+    <ldp-label-space-id>150.0.0.1:0</ldp-label-space-id>
+    <ldp-remaining-time>10</ldp-remaining-time>
+    <ldp-local-transport-address>150.0.0.11</ldp-local-transport-address>
+    <ldp-transport-address>150.0.0.1</ldp-transport-address>
+    <ldp-config-sequence>1</ldp-config-sequence>
+    <ldp-up-time seconds="4398">01:13:18</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.0.5</ldp-neighbor-address>
+    <interface-name>ge-0/0/1.0</interface-name>
+    <ldp-label-space-id>150.0.0.12:0</ldp-label-space-id>
+    <ldp-remaining-time>14</ldp-remaining-time>
+    <ldp-local-transport-address>150.0.0.11</ldp-local-transport-address>
+    <ldp-transport-address>150.0.0.12</ldp-transport-address>
+    <ldp-config-sequence>2</ldp-config-sequence>
+    <ldp-up-time seconds="4391">01:13:11</ldp-up-time>
+  </ldp-neighbor>
+</ldp-neighbor-information>

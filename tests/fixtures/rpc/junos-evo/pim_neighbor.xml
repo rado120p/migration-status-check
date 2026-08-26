@@ -1,0 +1,45 @@
+<pim-neighbors-information style="basic">
+  <neighbor-option-banner>
+    <banner-first/>
+    <banner-second/>
+    <banner-third/>
+    <banner-fourth/>
+    <banner-fifth/>
+  </neighbor-option-banner>
+  <pim-instance>PIM.master</pim-instance>
+  <pim-interface>
+    <pim-neighbor>
+      <pim-interface-name>et-0/0/0.0</pim-interface-name>
+      <ip-protocol-version>4</ip-protocol-version>
+      <protocol-version>2</protocol-version>
+      <pim-neighbor-flags>
+        <pim-neighbor-hold-time-flag/>
+        <pim-neighbor-priority-flag/>
+        <pim-neighbor-lan-prune-flag/>
+        <pim-neighbor-generation-id-flag/>
+        <pim-neighbor-t-bit-flag/>
+        <pim-neighbor-a-bit-flag/>
+        <pim-neighbor-interface-id-flag/>
+      </pim-neighbor-flags>
+      <pim-neighbor-uptime seconds="4366">01:12:46</pim-neighbor-uptime>
+      <pim-neighbor-address>10.1.1.2</pim-neighbor-address>
+    </pim-neighbor>
+  </pim-interface>
+  <pim-interface>
+    <pim-neighbor>
+      <pim-interface-name>et-0/0/1.0</pim-interface-name>
+      <ip-protocol-version>4</ip-protocol-version>
+      <protocol-version>2</protocol-version>
+      <pim-neighbor-flags>
+        <pim-neighbor-hold-time-flag/>
+        <pim-neighbor-priority-flag/>
+        <pim-neighbor-lan-prune-flag/>
+        <pim-neighbor-generation-id-flag/>
+        <pim-neighbor-t-bit-flag/>
+        <pim-neighbor-a-bit-flag/>
+      </pim-neighbor-flags>
+      <pim-neighbor-uptime seconds="4375">01:12:55</pim-neighbor-uptime>
+      <pim-neighbor-address>10.1.0.4</pim-neighbor-address>
+    </pim-neighbor>
+  </pim-interface>
+</pim-neighbors-information>

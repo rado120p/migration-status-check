@@ -1,0 +1,91 @@
+<isis-interface-information style="detail">
+  <isis-interface heading="IS-IS interface database:">
+    <interface-name>ge-0/0/0.0</interface-name>
+    <interface-index>333</interface-index>
+    <interface-state-value>0x6</interface-state-value>
+    <circuit-id>0x1</circuit-id>
+    <circuit-type>2</circuit-type>
+    <lsp-interval>100</lsp-interval>
+    <csnp-interval>10</csnp-interval>
+    <hello-padding>Loose</hello-padding>
+    <max-hello-size>1492</max-hello-size>
+    <adjacency-advertisement>advertise</adjacency-advertisement>
+    <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
+    <interface-protection-type>Node Link</interface-protection-type>
+    <interface-level-data>
+      <level>2</level>
+      <adjacency-count>1</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>16777214</metric>
+      <te-metric>1000</te-metric>
+      <hello-time>9.000</hello-time>
+      <holdtime>27</holdtime>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>100</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>1000</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+  </isis-interface>
+  <isis-interface>
+    <interface-name>ge-0/0/1.0</interface-name>
+    <interface-index>334</interface-index>
+    <interface-state-value>0x6</interface-state-value>
+    <circuit-id>0x1</circuit-id>
+    <circuit-type>2</circuit-type>
+    <lsp-interval>100</lsp-interval>
+    <csnp-interval>10</csnp-interval>
+    <hello-padding>Loose</hello-padding>
+    <max-hello-size>1492</max-hello-size>
+    <adjacency-advertisement>advertise</adjacency-advertisement>
+    <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
+    <interface-protection-type>Node Link</interface-protection-type>
+    <interface-level-data>
+      <level>2</level>
+      <adjacency-count>1</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>16777214</metric>
+      <te-metric>1000</te-metric>
+      <hello-time>9.000</hello-time>
+      <holdtime>27</holdtime>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>100</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>1000</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+  </isis-interface>
+  <isis-interface>
+    <interface-name>lo0.0</interface-name>
+    <interface-index>320</interface-index>
+    <interface-state-value>0x6</interface-state-value>
+    <circuit-id>0x1</circuit-id>
+    <circuit-type>2</circuit-type>
+    <lsp-interval>100</lsp-interval>
+    <hello-padding>Loose</hello-padding>
+    <max-hello-size>1492</max-hello-size>
+    <adjacency-advertisement>advertise</adjacency-advertisement>
+    <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
+    <interface-level-data>
+      <level>2</level>
+      <adjacency-count>0</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>16777214</metric>
+      <passive>Passive</passive>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>0</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>0</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+  </isis-interface>
+</isis-interface-information>
