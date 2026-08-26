@@ -92,8 +92,8 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_ten():
-    assert SCHEMA_VERSION == 10
+def test_snapshot_version_is_eleven():
+    assert SCHEMA_VERSION == 11
 
 
 def test_nonfinite_optics_round_trip_as_strict_json(tmp_path):

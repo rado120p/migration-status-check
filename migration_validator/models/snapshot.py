@@ -21,7 +21,9 @@ from migration_validator.models.scope import Scope
 # 10: route zaznamy nesou klic 'protocol' (static | aggregate) a selektory
 #     static_routes maji per-hop next_hops + route_type misto plocheho
 #     next_hop.
-SCHEMA_VERSION = 10
+# 11: fact areas isis_adjacency/isis_interface/isis_overview/ldp_neighbor/
+#     pim_neighbor/mpls_interface (Core transit/loopback checky).
+SCHEMA_VERSION = 11
 
 
 class SnapshotVersionError(Exception):

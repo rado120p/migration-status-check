@@ -44,6 +44,12 @@ COLLECTOR_NAMES = (
     "routes",
     "bfd",
     "optics",
+    "isis_adjacency",
+    "isis_interface",
+    "isis_overview",
+    "ldp_neighbor",
+    "pim_neighbor",
+    "mpls_interface",
 )
 
 

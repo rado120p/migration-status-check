@@ -8,6 +8,7 @@ from migration_validator.collectors import (  # noqa: F401
     bgp,
     evpn,
     interfaces,
+    isis,
     nd,
     optics,
     routes,

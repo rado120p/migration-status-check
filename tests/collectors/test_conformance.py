@@ -30,6 +30,11 @@ from migration_validator.collectors.evpn import (
     EvpnVpwsCollector,
 )
 from migration_validator.collectors.interfaces import InterfacesCollector
+from migration_validator.collectors.isis import (
+    IsisAdjacencyCollector,
+    IsisInterfaceCollector,
+    IsisOverviewCollector,
+)
 from migration_validator.collectors.nd import NdCollector
 from migration_validator.collectors.optics import OpticsCollector
 from migration_validator.collectors.routes import RoutesCollector
@@ -61,6 +66,9 @@ COLLECTORS = (
     RoutesCollector(),
     BfdCollector(),
     OpticsCollector(),
+    IsisAdjacencyCollector(),
+    IsisInterfaceCollector(),
+    IsisOverviewCollector(),
 )
 
 # optics na junos (vMX) nema fixture zamerne: RPC existuje, ale vMX na nej

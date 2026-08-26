@@ -1,0 +1,195 @@
+"""Testy IS-IS collectoru proti nahranemu XML z laborky.
+
+Adjacency a interface maji na obou platformach stejny tvar - jen jina jmena
+rozhrani (ge-0/0/0.0 na junos, et-0/0/0.0 na junos-evo; lo0.0 na obou).
+Overview je zajimavy prave tim, ze se lisi: junos ma isis-overload-enabled
+(True), junos-evo overload informaci vubec nenese (False) - obe hodnoty
+kryji skutecne nahravky, synteticke overview neni potreba.
+"""
+
+from __future__ import annotations
+
+import pytest
+from lxml import etree
+
+from migration_validator.collectors.isis import (
+    IsisAdjacencyCollector,
+    IsisInterfaceCollector,
+    IsisOverviewCollector,
+    _seconds_attr,
+)
+
+PLATFORMS = ("junos", "junos-evo")
+
+# jmeno prvniho rozhrani z adjacency/interface fixture na kazde platforme
+FIRST_IFACE = {"junos": "ge-0/0/0.0", "junos-evo": "et-0/0/0.0"}
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_adjacency_parses_fixture(rpc_fixture, platform):
+    data = IsisAdjacencyCollector().parse(rpc_fixture(platform, "isis_adjacency"), platform)
+    entry = data[FIRST_IFACE[platform]]
+    assert entry["state"] == "Up"
+    assert entry["system_name"]
+    assert "ip_address" in entry and "ipv6_address" in entry
+    assert entry["ip_address"]
+    assert entry["ipv6_address"]
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_adjacency_has_two_entries(rpc_fixture, platform):
+    """Obe nahravky nesou dve sousedstvi (P<->PE mesh v laborce)."""
+    data = IsisAdjacencyCollector().parse(rpc_fixture(platform, "isis_adjacency"), platform)
+    assert len(data) == 2
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_interface_levels(rpc_fixture, platform):
+    data = IsisInterfaceCollector().parse(rpc_fixture(platform, "isis_interface"), platform)
+    lo0 = data["lo0.0"]
+    assert lo0["levels"]["2"]["passive"] is True  # dle lab konfigurace
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_interface_physical_is_not_passive(rpc_fixture, platform):
+    """Fyzicke rozhrani do meshe passive neni - jinak by adjacency nevznikla."""
+    data = IsisInterfaceCollector().parse(rpc_fixture(platform, "isis_interface"), platform)
+    entry = data[FIRST_IFACE[platform]]
+    assert entry["levels"]["2"]["passive"] is False
+
+
+def test_isis_overview_overload_flag_on_junos(rpc_fixture):
+    """Fixture nese <isis-overload-enabled/> - lab overload ma zapnute."""
+    data = IsisOverviewCollector().parse(rpc_fixture("junos", "isis_overview"), "junos")
+    assert data == {"overload_enabled": True}
+
+
+def test_isis_overview_overload_flag_missing_on_junos_evo(rpc_fixture):
+    """junos-evo fixture zadnou isis-overload-information vubec nenese."""
+    data = IsisOverviewCollector().parse(rpc_fixture("junos-evo", "isis_overview"), "junos-evo")
+    assert data == {"overload_enabled": False}
+
+
+# --- Synteticke varianty (XML odvozeny z nahranych fixtures) -------------
+
+ADJACENCY_DOWN = """
+<isis-adjacency-information style="detail">
+  <isis-adjacency>
+    <system-name>clab-pop-migration-P1</system-name>
+    <interface-name>ge-0/0/0.0</interface-name>
+    <level>2</level>
+    <adjacency-state>Down</adjacency-state>
+    <holdtime>0</holdtime>
+    <ip-address>10.1.2.0</ip-address>
+    <global-ipv6-address>2001:db8:2::1</global-ipv6-address>
+  </isis-adjacency>
+</isis-adjacency-information>
+"""
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_adjacency_down_state_is_recorded_verbatim(platform):
+    """Down neni chyba collectoru - to rozhoduje az check."""
+    data = IsisAdjacencyCollector().parse(
+        etree.fromstring(ADJACENCY_DOWN.encode()), platform
+    )
+    assert data["ge-0/0/0.0"]["state"] == "Down"
+
+
+ADJACENCY_NO_IPV6 = """
+<isis-adjacency-information style="detail">
+  <isis-adjacency>
+    <system-name>clab-pop-migration-P1</system-name>
+    <interface-name>ge-0/0/0.0</interface-name>
+    <level>2</level>
+    <adjacency-state>Up</adjacency-state>
+    <ip-address>10.1.2.0</ip-address>
+  </isis-adjacency>
+</isis-adjacency-information>
+"""
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_adjacency_missing_ipv6_is_none(platform):
+    """IPv4-only sousedstvi (adjacency-flag 'Speaks: IP' bez IPv6) - klic
+    zustava, hodnota je None, ne chybejici klic."""
+    data = IsisAdjacencyCollector().parse(
+        etree.fromstring(ADJACENCY_NO_IPV6.encode()), platform
+    )
+    entry = data["ge-0/0/0.0"]
+    assert "ipv6_address" in entry
+    assert entry["ipv6_address"] is None
+
+
+OVERVIEW_NO_OVERLOAD_INFORMATION = """
+<isis-overview-information>
+  <isis-overview>
+    <instance-name>master</instance-name>
+    <isis-router-id>150.0.0.11</isis-router-id>
+    <isis-routing>
+      <isis-routing-ipv4/>
+      <isis-routing-ipv6/>
+    </isis-routing>
+  </isis-overview>
+</isis-overview-information>
+"""
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_isis_overview_without_overload_information_is_false(platform):
+    data = IsisOverviewCollector().parse(
+        etree.fromstring(OVERVIEW_NO_OVERLOAD_INFORMATION.encode()), platform
+    )
+    assert data == {"overload_enabled": False}
+
+
+def test_isis_adjacency_passes_detail_flag():
+    assert IsisAdjacencyCollector().rpc_kwargs("junos") == {"detail": True}
+
+
+def test_isis_interface_passes_detail_flag():
+    assert IsisInterfaceCollector().rpc_kwargs("junos") == {"detail": True}
+
+
+def test_isis_overview_has_no_extra_kwargs():
+    assert IsisOverviewCollector().rpc_kwargs("junos") == {}
+
+
+def test_isis_rpc_names():
+    assert IsisAdjacencyCollector().rpc_name("junos") == "get_isis_adjacency_information"
+    assert IsisInterfaceCollector().rpc_name("junos") == "get_isis_interface_information"
+    assert IsisOverviewCollector().rpc_name("junos") == "get_isis_overview_information"
+
+
+# --- _seconds_attr: pomocnik, ktery Task 5 sam nepouziva, ale Task 6 ho
+# importuje (viz docstring modulu) - musi byt overen tady, jinak se poprve
+# zkusi az v Task 6. ------------------------------------------------------
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_seconds_attr_reads_unprefixed_attribute_from_fixture(rpc_fixture, platform):
+    """Nahravky nemaji zadny prefix - kryje vetev `key == 'seconds'`."""
+    root = rpc_fixture(platform, "isis_adjacency")
+    node = next(root.iter("{*}last-transition-time"))
+    expected = 3325 if platform == "junos" else 4383
+    assert _seconds_attr(node) == expected
+
+
+def test_seconds_attr_reads_namespaced_attribute():
+    """Ziva PyEZ odpoved muze nest junos: prefix - kryje vetev
+    `key.endswith('}seconds')`, kterou zadna nahravka nedosahne."""
+    xml = (
+        '<last-transition-time xmlns:junos="http://xml.juniper.net/junos/x/junos" '
+        'junos:seconds="42">00:00:42</last-transition-time>'
+    )
+    node = etree.fromstring(xml.encode())
+    assert _seconds_attr(node) == 42
+
+
+def test_seconds_attr_missing_attribute_is_none():
+    node = etree.fromstring(b"<last-transition-time>00:00:42</last-transition-time>")
+    assert _seconds_attr(node) is None
+
+
+def test_seconds_attr_none_node_is_none():
+    assert _seconds_attr(None) is None

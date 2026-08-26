@@ -28,6 +28,12 @@ FACT_AREAS = (
     "routes",
     "bfd",
     "optics",
+    "isis_adjacency",
+    "isis_interface",
+    "isis_overview",
+    "ldp_neighbor",
+    "pim_neighbor",
+    "mpls_interface",
 )
 
 
