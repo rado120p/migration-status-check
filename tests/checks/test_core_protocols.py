@@ -239,6 +239,57 @@ def test_baseline_different_ip_address_is_warn():
     assert v4_row.baseline_value == "10.0.0.1"
 
 
+def test_missing_system_name_does_not_leak_literal_none_into_value():
+    """Pritomny adjacency zaznam bez klice system_name nesmi vyrobit radek
+    s hodnotou "None" - str(None) by to jinak udelal potichu."""
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx(
+            {
+                IFACE: {
+                    "state": "Up",
+                    "ip_address": "10.0.0.1",
+                    "ipv6_address": "2001:db8::1",
+                }
+            }
+        )
+    )
+
+    name_row = findings[0]
+    assert name_row.value != "None"
+    assert name_row.value == MISSING
+
+
+def test_baseline_present_without_state_key_does_not_leak_literal_none():
+    """Baseline zaznam existuje, ale nenese klic 'state' - baseline_value
+    ma zustat None, ne se stringifikovat na doslovny text "None"."""
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx(
+            {
+                IFACE: {
+                    "system_name": "P1",
+                    "state": "Up",
+                    "ip_address": "10.0.0.1",
+                    "ipv6_address": "2001:db8::1",
+                }
+            },
+            baseline_adj={IFACE: {"system_name": "P1"}},
+        )
+    )
+
+    state_row = findings[1]
+    assert state_row.baseline_value != "None"
+    assert state_row.baseline_value is None
+
+
+def test_interface_missing_baseline_without_state_key_does_not_leak_none():
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx({}, baseline_adj={IFACE: {"system_name": "P1"}})
+    )
+
+    assert findings[0].baseline_value != "None"
+    assert findings[0].baseline_value is None
+
+
 def test_loopback_scope_does_not_apply():
     check = IsisAdjacencyStateCheck()
     scope = _scope(service_subtype="loopback")

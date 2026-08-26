@@ -266,11 +266,19 @@ def _facts_for(scopes, pps: int) -> dict:
         if scope.key.service_type == "Core" and scope.service_subtype == "transit":
             v4 = scope.selectors.local_ipv4[0] if scope.selectors.local_ipv4 else None
             v6 = scope.selectors.local_ipv6[0] if scope.selectors.local_ipv6 else None
+            # system_name NESMI vychazet z mistniho jmena rozhrani (ge- vs
+            # et-) - pre/post fixtures prejmenovavaji fyzicke porty pri
+            # vymene zarizeni, ale link (a tedy site sousedni /31 nebo /127)
+            # zustava stejny. Klic ze site je proto jediny stabilni identifikator
+            # sdileny mezi baseline a subjektem - jmenem rozhrani by AR-29
+            # test spadl, jakmile by se scope matching zacal spolehat na
+            # shodu system_name mezi pre a post snapshotem.
+            network_key = str(ipaddress.ip_interface(v4).network) if v4 else "bez-adresy"
             for name in scope.selectors.interfaces:
                 if not is_transit(name):
                     continue
                 isis_adjacency[name] = {
-                    "system_name": f"P-{name}",
+                    "system_name": f"P-{network_key}",
                     "state": "Up",
                     "ip_address": _neighbour_for(v4) if v4 else None,
                     "ipv6_address": _neighbour_for(v6) if v6 else None,

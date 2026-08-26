@@ -57,12 +57,16 @@ class IsisAdjacencyStateCheck(Check):
             adj = subject.get(name)
             was = baseline.get(name)
             if adj is None:
+                # (was or {}).get("state") muze byt None i kdyz `was`
+                # existuje (baseline zaznam bez klice "state") - stringifikace
+                # bez tehle stopky by tam nechala doslovny retezec "None".
+                was_state = (was or {}).get("state")
                 findings.append(Finding(
                     Outcome.BROKEN,
                     f"{name}: rozhrani neni v IS-IS adjacency vypisu",
                     label=qualified(self.label, name),
                     value=MISSING,
-                    baseline_value=str((was or {}).get("state")) if was else None,
+                    baseline_value=str(was_state) if was_state is not None else None,
                 ))
                 continue
             findings.extend(self._rows(name, adj, was, ctx.has_baseline))
@@ -70,23 +74,30 @@ class IsisAdjacencyStateCheck(Check):
 
     def _rows(self, name, adj, was, has_baseline):
         rows = []
+        # system/was_system muzou byt pritomne, ale None (klic "system_name"
+        # bez hodnoty) - str(None) by do sloupce hodnot poslalo doslovny
+        # retezec "None" misto poctiveho MISSING/absence.
         system = adj.get("system_name")
-        if has_baseline and was is not None and system != was.get("system_name"):
+        system_value = str(system) if system is not None else MISSING
+        was_system = was.get("system_name") if was else None
+        was_system_value = str(was_system) if was_system is not None else None
+        if has_baseline and was is not None and system != was_system:
             rows.append(Finding(
                 Outcome.DEGRADED,
-                f"{name}: IS-IS soused {system}, v baseline {was.get('system_name')}",
+                f"{name}: IS-IS soused {system}, v baseline {was_system}",
                 label=qualified("IS-IS neighbor name", name),
-                value=str(system), baseline_value=str(was.get("system_name")),
+                value=system_value, baseline_value=was_system_value,
             ))
         else:
             outcome = Outcome.OK if has_baseline and was is not None else Outcome.INFO
             rows.append(Finding(
                 outcome, f"{name}: IS-IS soused {system}",
-                label=qualified("IS-IS neighbor name", name), value=str(system),
+                label=qualified("IS-IS neighbor name", name), value=system_value,
             ))
 
         state = str(adj.get("state", "unknown"))
-        was_state = str(was.get("state")) if was else None
+        was_raw_state = was.get("state") if was else None
+        was_state = str(was_raw_state) if was_raw_state is not None else None
         if state != "Up":
             outcome = Outcome.BROKEN
         elif has_baseline and was_state is not None and was_state != "Up":
