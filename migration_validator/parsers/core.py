@@ -397,6 +397,7 @@ class JunosServiceParserCore:
         self.default_bgp_neighbors: list[str] = []
         self.default_bgp_neighbors_inactive: list[str] = []
         self.default_bgp_neighbors_internal: list[str] = []
+        self.default_bgp_neighbors_internal_inactive: list[str] = []
         self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
 
@@ -592,7 +593,7 @@ class JunosServiceParserCore:
 
         return unique(neighbors), unique(inactive)
 
-    def _parse_internal_bgp_neighbors(self) -> list[str]:
+    def _parse_internal_bgp_neighbors(self) -> tuple[list[str], list[str]]:
         """Interni peer podle explicitniho type, fallback peer-as == local-as.
 
         Explicitni prikaz ma prednost (rozhodnuti 2026-08-26): AS porovnani
@@ -601,6 +602,13 @@ class JunosServiceParserCore:
 
         Interni se poznavaji jen na globalnim `protocols bgp` - RI peeri
         jsou zakaznicke sluzby a tag nepotrebuji.
+
+        Inaktivni soused se netrati - stejne jako u `_parse_bgp_neighbors`
+        se vraci ve druhem seznamu, aby ho mohla assign-faze polozit do
+        `bgp_neighbor_inactive` (rozhodnuti controllera po review 2026-08-26 -
+        puvodni tvar ho tise zahazoval). Typovaci logika (explicit type,
+        pak AS fallback) se aplikuje stejne, protoze inaktivni neighbor
+        porad nese svuj type/peer-as.
 
         Soused primo pod `bgp` bez group (`protocols bgp neighbor ...`) tu
         neni osetren - v zachycenych lab konfiguracich v repu se tento tvar
@@ -611,22 +619,28 @@ class JunosServiceParserCore:
             self.config_xml, "./routing-options/autonomous-system/as-number/text()"
         )
         internal: list[str] = []
+        internal_inactive: list[str] = []
         for group in self.config_xml.xpath("./protocols/bgp/group"):
             group_type = first_text(group, "./type/text()")
             group_peer_as = first_text(group, "./peer-as/text()")
             for neighbor_node in group.xpath("./neighbor"):
                 name = first_text(neighbor_node, "./name/text()")
-                if not name or self._is_inactive(neighbor_node):
+                if not name:
                     continue
                 peer_type = first_text(neighbor_node, "./type/text()") or group_type
                 peer_as = (
                     first_text(neighbor_node, "./peer-as/text()") or group_peer_as
                 )
-                if peer_type == "internal":
+                is_internal = peer_type == "internal" or (
+                    peer_type is None and local_as and peer_as == local_as
+                )
+                if not is_internal:
+                    continue
+                if self._is_inactive(neighbor_node):
+                    internal_inactive.append(name)
+                else:
                     internal.append(name)
-                elif peer_type is None and local_as and peer_as == local_as:
-                    internal.append(name)
-        return unique(internal)
+        return unique(internal), unique(internal_inactive)
 
     def _parse_static_routes(self) -> list[StaticRoute]:
         """Statiky z globálních routing-options i ze všech routing-instances.
@@ -901,7 +915,10 @@ class JunosServiceParserCore:
         (self.default_bgp_neighbors, self.default_bgp_neighbors_inactive) = (
             self._parse_bgp_neighbors(self.config_xml, "./protocols/bgp")
         )
-        self.default_bgp_neighbors_internal = self._parse_internal_bgp_neighbors()
+        (
+            self.default_bgp_neighbors_internal,
+            self.default_bgp_neighbors_internal_inactive,
+        ) = self._parse_internal_bgp_neighbors()
         self.default_bfd = self._parse_bfd(self.config_xml, "./protocols/bgp")
 
     def _parse_global_eline_interfaces(self, hierarchy: str, target: set[str]) -> None:
@@ -1208,6 +1225,11 @@ class JunosServiceParserCore:
     ) -> None:
         for service in services:
             if service.service_type == "Core" and service.service_subtype == "loopback":
+                if self.default_bgp_neighbors_internal_inactive:
+                    service.bgp_neighbor_inactive = unique(
+                        service.bgp_neighbor_inactive
+                        + self.default_bgp_neighbors_internal_inactive
+                    )
                 if self.default_bgp_neighbors_internal:
                     service.bgp_neighbor = unique(
                         service.bgp_neighbor + self.default_bgp_neighbors_internal

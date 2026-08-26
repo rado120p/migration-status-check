@@ -166,3 +166,31 @@ def test_internal_peers_get_no_bfd_intent(parser_class):
     loopback = by_iface["lo0.0"]
     assert "150.0.0.12" in loopback.bgp_neighbor
     assert loopback.bfd == []
+
+
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_inactive_internal_peer_lands_in_bgp_neighbor_inactive(parser_class):
+    """Deaktivovany interni peer se nesmi tise ztratit - stejne jako
+    u Internet/IPVPN skonci v bgp_neighbor_inactive, ne v bgp_neighbor
+    a nikde jinde (rozhodnuti controllera po review 2026-08-26)."""
+    config = _config(
+        """
+        <group><name>IBGP</name><type>internal</type>
+          <neighbor><name>150.0.0.12</name></neighbor>
+          <neighbor inactive="inactive"><name>150.0.0.14</name></neighbor>
+        </group>
+        """
+    )
+    services = parser_class(etree.fromstring(config)).parse()
+    by_iface = {s.interface: s for s in services}
+
+    loopback = by_iface["lo0.0"]
+    assert "150.0.0.12" in loopback.bgp_neighbor
+    assert "150.0.0.14" in loopback.bgp_neighbor_inactive
+    assert "150.0.0.14" not in loopback.bgp_neighbor
+
+    for service in services:
+        if service.interface == "lo0.0":
+            continue
+        assert "150.0.0.14" not in service.bgp_neighbor
+        assert "150.0.0.14" not in service.bgp_neighbor_inactive
