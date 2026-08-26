@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav ke commitu `59fc550`):
+Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/loopback):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
@@ -25,8 +25,15 @@ Výpis odpovídá `mig-validate checks` (stav ke commitu `59fc550`):
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline: pokles EVPN neighbors = WARN, počty local/IRB interfaců se na rovnost neporovnávají (rozdíl ukazuje sloupec ZMENA — konsolidace do jedné mac-vrf instance je při migraci mění) |
 | `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
-| `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established` |
+| `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established`; na Core transitu neběží vůbec (viz `bfd_transit_state`) |
 | `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
+| `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency je `Up`, soused a adresy sedí proti baseline; chybějící rozhraní v outputu = FAIL |
+| `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 nakonfigurován, level 1 ne; Passive flag role-aware (loopback ho vyžaduje, transit ne) |
+| `isis_overview` | state | advisory | Core (loopback) | overload bit routeru není nastaven |
+| `ldp_neighbor_state` | both | critical | Core (transit) | LDP soused je vždy očekávaný; `uptime_seconds > 0`, adresa proti baseline |
+| `pim_neighbor_state` | both | critical | Core (transit) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález, ne SKIP); jinak stejně jako LDP |
+| `mpls_interface_state` | both | critical | Core (transit) | MPLS na rozhraní je `Up`; chybějící rozhraní v outputu = FAIL |
+| `bfd_transit_state` | both | critical | Core (transit) | BFD session vázaná na rozhraní (ne na peer adresu) je vždy očekávaná a `Up` |
 
 Význam `mode`:
 
@@ -102,6 +109,21 @@ Jiná vrstva než klasifikace výše. Scope vznikne jen pro **migrované typy sl
 ```
 Internet   IPVPN   E-Line   E-LAN   Core
 ```
+
+**`Core` má od vlny 2026-08-26 dva `service_subtype`:**
+
+- `transit` — tranzitní Core rozhraní (`ge`/`xe`/`et`/`ae` s family iso/mpls). Vedle
+  stávajících interface checků dostává i nové protokolové checky
+  (`isis_adjacency_state`, `isis_interface_info`, `ldp_neighbor_state`,
+  `pim_neighbor_state`, `mpls_interface_state`, `bfd_transit_state`).
+- `loopback` — `lo0.*`. Kromě stávajícího interface stavu/admin a
+  `aggregate_route_status` (vlna 2026-08-19) dostává `isis_interface_info` (variantu
+  s povinným Passive) a nový `isis_overview` (overload bit). Interní BGP peeři (viz níž)
+  se od téhle vlny mapují právě sem, ne do NEZAŘAZENO.
+
+Subtype odvozuje parser (`inventory schema 7`) a nese ho `ScopeKey.service_subtype`;
+`Check.service_subtypes` je AND k `service_types` — podrobnosti v
+[files/checks.md](files/checks.md#basepy--kostra).
 
 - Záznamy `Layer1` / `physical-port` **se samostatným scopem nestanou.** Použijí se jen jako
   potvrzení, že fyzický rodič existuje, a doplní se do `physical_interfaces` logické jednotky.
@@ -221,7 +243,7 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 7`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 11`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -235,6 +257,11 @@ Historie verzí:
 | 4 → 5 | snapshot i inventory schema srovnány na 5 — commit `d9e77bc` |
 | 5 → 6 | ARP/ND přes IRB nesou `learned_via`, záznam už neutíká scope filtru — commit `6df6e1a` |
 | 6 → 7 | `evpn_mac` collector čte `count` RPC (per-VLAN a per-interface počty, tvar `{vlans, interfaces}`); přibyla oblast `evpn_instance` — commit `e547a24` |
+| 10 → 11 | šest nových fact areas (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) pro Core transit/loopback checky — vlna 2026-08-26 |
+
+Mezi 7 a 10 proběhly další bumpy beze zápisu do téhle tabulky — mezera je vědomě
+přiznaná, ne dopočítaná (viz [`files/models.md`](files/models.md) pro aktuální hodnotu
+konstanty).
 
 > **Starší snímky nejdou přehrát.** Zvýšení na 3 znamená, že `runs/ipv6/`
 > a `runs/ipv6-live-2026-07-29/` — pořízené se `schema_version: 2` — už `evaluate` odmítne.
@@ -243,13 +270,13 @@ Historie verzí:
 > jako zdravá. Kdo takový snímek potřebuje vyhodnotit, musí **pořídit nový `capture`**;
 > dopočítat chybějící oblasti ze starého souboru nejde.
 >
-> Totéž platí pro bump 6 → 7: `runs/mig01/pre.json` a `runs/mig01/post.json`
-> mají `schema_version: 6` a nástroj verze 7 je odmítne. Je potřeba je
-> znovu nasnímat (`pre` = služby na MX, `post` = po migraci na EVO).
+> **`runs/mig01` je od 2026-08-26 přesnímaný na `schema_version: 11`** (inventory na 7).
+> Předchozí bump 6 → 7 svého času vyžadoval totéž přesnímání (`pre`/`post` na verzi 6
+> nástroj verze 7 odmítal) — historie se opakuje při každém zvýšení, ne jen u tohohle.
 
 ```jsonc
 {
-  "schema_version": 7,
+  "schema_version": 11,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -520,6 +547,14 @@ Vlastnosti:
   selektorů se nedostane, v tabulce ji ale vidět je.
 - **`unassigned.bfd_sessions`** obsahuje session peeru, který není v žádném `bgp_neighbors` —
   typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte.
+- **Interní BGP peeři (vlna 2026-08-26) nespadají do `unassigned.bgp_peers`.** Parser
+  pozná interní peer podle explicitního `type internal` na neighbor/group; bez příkazu
+  fallback na `peer-as == local-as` (s respektem k `local-as` overridům). Takový peer se
+  přiřadí do `bgp_neighbor` záznamu **Core loopback** (lo0.0), ne do žádné zákaznické
+  služby ani do `unassigned` — dřív, když interní peer neměl vlastníka, končil v
+  `NEZARAZENO` (sekce viz níž); od téhle vlny má vlastníka vždy. Druhý důsledek: interní
+  peeři na lo0.0 **nedostávají BFD záměry** (`_assign_bfd` má na rozšíření filtru
+  `_assign_bgp_neighbors` explicitní gate).
 - `unassigned` se **do textového reportu vypisuje** v sekci `NEZARAZENO` (AR-39) — to je něco
   jiného než `NESPAROVANO`, která vypisuje `unmatched`. Sekce `NEZARAZENO` se vypisuje vždy,
   i prázdná (`(nic)`), a filtrování se na ni nevztahuje.

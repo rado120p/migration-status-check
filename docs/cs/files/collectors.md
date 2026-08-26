@@ -1,7 +1,8 @@
 # `collectors/` — sběr operačního stavu
 
 Soubory: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
-`evpn.py`, `routes.py`, `bfd.py` a prázdný `__init__.py`.
+`evpn.py`, `routes.py`, `bfd.py`, `isis.py`, `ldp.py`, `pim.py`, `mpls.py`
+a prázdný `__init__.py`.
 
 Dvě pravidla, na kterých celá vrstva stojí:
 
@@ -344,3 +345,62 @@ detection_time, transmission_interval, multiplier}}`, z nahrávky
 (`tests/fixtures/rpc/junos/bfd.xml`) je `<sessions>0</sessions>` — BFD je tam
 nakonfigurované, ale session nevznikla. Rozhodnout, jestli je to problém, umí až check:
 závisí to na tom, jestli je BFD vůbec v konfiguraci a jestli běží BGP.
+
+## `isis.py`, `ldp.py`, `pim.py`, `mpls.py` — protokoly Core transitu a lo0.0 (vlna 2026-08-26)
+
+Šest nových collectorů pro sedm nových checků z `checks/core_protocols.py` (`isis_overview`
+sdílí collector s `isis_interface_info` co do modulu, ne co do fact area). CLI ekvivalenty:
+
+| fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI ekvivalent |
+|---|---|---|
+| `isis_adjacency` | `get_isis_adjacency_information(detail=True)` | `show isis adjacency detail` |
+| `isis_interface` | `get_isis_interface_information(detail=True)` | `show isis interface detail` |
+| `isis_overview` | `get_isis_overview_information` | `show isis overview` |
+| `ldp_neighbor` | `get_ldp_neighbor_information(detail=True)` | `show ldp neighbor detail` |
+| `pim_neighbor` | `get_pim_neighbors_information` | `show pim neighbors` |
+| `mpls_interface` | `get_mpls_interface_information` | `show mpls interface` |
+
+**Namespace-agnostická iterace.** Živá PyEZ odpověď může nést prvky v namespace
+`junos-routing` (`xmlns` prefix), zatímco normalizované nahrávky z Úkolu 1 žádný prefix
+nemají. Všech šest collectorů proto iteruje přes wildcard `{*}element` (`xml.iter("{*}isis-
+adjacency")`) místo `xml.iter("isis-adjacency")`, který by na jmenném prostoru nic nenašel.
+Texty jednotlivých elementů čte sdílený `_localname_text()` (definovaný v `isis.py`, importují
+ho `ldp.py`, `pim.py`, `mpls.py`) — hledá potomka podle **localname**, ne přesné cesty, takže
+funguje bez ohledu na to, jestli se odpověď zanoří jinak, než čekáme.
+
+`_seconds_attr()` (`isis.py`, sdílené `ldp.py`/`pim.py`) čte atribut `junos:seconds` — ten
+nese verzi OS přímo v URI atributu, takže matchuje na obě varianty (`seconds` u nahrávek bez
+namespace, `{...}seconds` u živé odpovědi s prefixem `junos:`), ne na doslovný klíč.
+
+### `isis.py` — `IsisAdjacencyCollector`, `IsisInterfaceCollector`, `IsisOverviewCollector`
+
+- `isis_adjacency`: `{rozhraní: {system_name, state, ip_address, ipv6_address}}`. `state`
+  defaultuje na `"unknown"`, pokud `adjacency-state` chybí — collector si `Up`/`Down` sám
+  nevymýšlí.
+- `isis_interface`: `{rozhraní: {levels: {level: {passive: bool}}}}`. `passive` je `True`,
+  jen pokud text elementu `<passive>` je přesně `"Passive"` — cokoliv jiného (chybějící
+  element, jiný text) je `False`.
+- `isis_overview`: **device-global**, ne per-rozhraní — jediný dict `{overload_enabled:
+  bool}`. Přítomnost elementu `<isis-overload-enabled/>` (bez ohledu na text) znamená `True`;
+  nepřítomnost `False`. Do scopu tenhle fakt pouští jen Core loopback (viz `models.md`).
+
+### `ldp.py` — `LdpNeighborCollector`
+
+`{rozhraní: {neighbor_address, uptime_seconds}}`. **`lo0.*` záznamy se zahazují už při
+parsování** — LDP soused na loopbacku je *targeted session* mezi loopbacky zařízení napříč
+meshem, ne stav tranzitního linku, a tenhle collector měří jen fyzická/agregovaná rozhraní.
+Rozhraní bez jména (`interface-name` chybí) se přeskočí stejně jako u ostatních.
+
+### `pim.py` — `PimNeighborCollector`
+
+`{rozhraní: {neighbor_address, uptime_seconds}}`. Vnoření odpovědi je `pim-neighbors-
+information > pim-interface > pim-neighbor` — `pim-interface` **bez** vnořeného
+`pim-neighbor` (rozhraní s PIM zapnutým, ale bez souseda) nedostává syntetický záznam, klíč
+prostě chybí (absence je absence, ne vymyšlené Down). Kontrakt klíčuje jedním sousedem na
+rozhraní; při víc než jednom `pim-neighbor` pod jedním `pim-interface` (multi-access segment)
+collector bere první a další tiše zahazuje — v nahrávkách z laborky k tomu nedochází (1:1).
+
+### `mpls.py` — `MplsInterfaceCollector`
+
+`{rozhraní: {state}}`. `state` defaultuje na `"unknown"`, pokud `mpls-interface-state`
+chybí.

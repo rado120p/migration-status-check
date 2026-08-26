@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of commit `59fc550`):
+Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loopback wave):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -25,8 +25,15 @@ Matches the output of `mig-validate checks` (as of commit `59fc550`):
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration) |
 | `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
-| `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established` |
+| `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established`; does not run at all on Core transit (see `bfd_transit_state`) |
 | `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
+| `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency is `Up`, neighbor and addresses match the baseline; interface missing from output = FAIL |
+| `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 configured, level 1 not; passive flag is role-aware (loopback requires it, transit forbids it) |
+| `isis_overview` | state | advisory | Core (loopback) | the router's overload bit is not set |
+| `ldp_neighbor_state` | both | critical | Core (transit) | an LDP neighbor is always expected; `uptime_seconds > 0`, address checked against baseline |
+| `pim_neighbor_state` | both | critical | Core (transit) | only where the interface is under `protocols pim` (otherwise no finding at all, not SKIP); otherwise same as LDP |
+| `mpls_interface_state` | both | critical | Core (transit) | MPLS on the interface is `Up`; interface missing from output = FAIL |
+| `bfd_transit_state` | both | critical | Core (transit) | a BFD session bound to the interface (not a peer address) is always expected and `Up` |
 
 `mode` semantics:
 
@@ -106,6 +113,21 @@ service types**:
 ```
 Internet   IPVPN   E-Line   E-LAN   Core
 ```
+
+**`Core` has had two `service_subtype`s since the 2026-08-26 wave:**
+
+- `transit` — transit Core interfaces (`ge`/`xe`/`et`/`ae` with an iso/mpls family). Besides
+  the existing interface checks it gets the new protocol checks
+  (`isis_adjacency_state`, `isis_interface_info`, `ldp_neighbor_state`,
+  `pim_neighbor_state`, `mpls_interface_state`, `bfd_transit_state`).
+- `loopback` — `lo0.*`. Besides the existing interface state/admin checks and
+  `aggregate_route_status` (2026-08-19 wave) it gets `isis_interface_info` (the variant
+  that requires passive) and the new `isis_overview` (overload bit). Internal BGP peers
+  (see below) are, from this wave on, mapped here instead of into NEZAŘAZENO.
+
+The parser derives the subtype (`inventory schema 7`) and it is carried on
+`ScopeKey.service_subtype`; `Check.service_subtypes` is an AND with `service_types` — see
+[files/checks.md](files/checks.md#basepy--the-skeleton) for details.
 
 - `Layer1` / `physical-port` entries **never become scopes of their own.** They serve only as
   confirmation that the physical parent exists and are added to the logical unit's
@@ -228,7 +250,7 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 7`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+`schema_version: 11`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
 nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
 attempt at data migration.
 
@@ -242,6 +264,11 @@ Version history:
 | 4 → 5 | snapshot and inventory schema aligned at 5 — commit `d9e77bc` |
 | 5 → 6 | ARP/ND over IRB carry `learned_via`, the entry no longer escapes the scope filter — commit `6df6e1a` |
 | 6 → 7 | the `evpn_mac` collector reads the `count` RPC (per-VLAN and per-interface counts, shape `{vlans, interfaces}`); the `evpn_instance` area was added — commit `e547a24` |
+| 10 → 11 | six new fact areas (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) for the Core transit/loopback checks — 2026-08-26 wave |
+
+Further bumps happened between 7 and 10 without an entry in this table — the gap is a
+knowingly disclosed omission, not something backfilled here (see
+[`files/models.md`](files/models.md) for the constant's current value).
 
 > **Older snapshots cannot be replayed.** The bump to 3 means `runs/ipv6/` and
 > `runs/ipv6-live-2026-07-29/` — taken with `schema_version: 2` — are now rejected by
@@ -250,14 +277,13 @@ Version history:
 > uninstalled route would pass as healthy. Anyone needing such a snapshot evaluated must
 > **take a fresh `capture`**; the missing areas cannot be derived from the old file.
 >
-> The same applies to the 6 → 7 bump: `runs/mig01/pre.json` and
-> `runs/mig01/post.json` carry `schema_version: 6` and a version-7 tool
-> rejects them. They need a fresh capture (`pre` = services on the MX,
-> `post` = after migration to the EVO).
+> **`runs/mig01` was recaptured on 2026-08-26 at `schema_version: 11`** (inventory at 7).
+> The earlier 6 → 7 bump required the same recapture at the time (a version-7 tool rejected
+> `pre`/`post` files still at 6) — the history repeats on every bump, not just this one.
 
 ```jsonc
 {
-  "schema_version": 7,
+  "schema_version": 11,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -533,6 +559,15 @@ Properties:
   read: it never reaches the selectors, yet it is plainly visible in the table.
 - **`unassigned.bfd_sessions`** holds sessions of peers absent from every `bgp_neighbors` —
   typically BFD held by a client other than BGP, whose intent the parser does not read at all.
+- **Internal BGP peers (2026-08-26 wave) do not fall into `unassigned.bgp_peers`.** The
+  parser recognizes an internal peer from an explicit `type internal` on the neighbor/group;
+  without that statement it falls back to `peer-as == local-as` (respecting `local-as`
+  overrides). Such a peer is assigned to the **Core loopback** (lo0.0) `bgp_neighbor` record,
+  not to any customer service and not to `unassigned` — before this wave an internal peer
+  with no owner ended up in `NEZARAZENO` (section below); from this wave on it always has an
+  owner. Second consequence: internal peers on lo0.0 **do not get BFD intent**
+  (`_assign_bfd` carries an explicit gate for the extension of `_assign_bgp_neighbors`'s
+  filter).
 - `unassigned` **is rendered in the text report** in the `NEZARAZENO` section (AR-39) — that is
   a different thing than `NESPAROVANO`, which prints `unmatched`. The `NEZARAZENO` section is
   always printed, even when empty (`(nic)`), and filtering does not apply to it.

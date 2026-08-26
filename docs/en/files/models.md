@@ -54,7 +54,7 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
-The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 6`).
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 7`).
 `load_inventory()` **rejects any other value outright** rather than tolerating it.
 
 The reason is the same for every bump: a missing field would not surface as an error but as
@@ -72,6 +72,12 @@ a green service.
   `interface_active` (AR‑20/AR‑21). A tolerant read of a stale file would default both to
   `True`, so a deactivated service would look live and the checks would score FAIL/WARN
   against it instead of SKIPping with the deactivation reason.
+- **6 → 7** (2026-08-26 wave): `Core` gained a `service_subtype` (`"transit"` /
+  `"loopback"`) — a derived datum from `_classify` in the parsers (`lo0.*` → loopback,
+  everything else with an iso/mpls family → transit). The subtype is derived, not optional:
+  an old inventory without it would lose the role distinction, and the new protocol checks
+  (`isis_adjacency_state` and the others, bound via `service_subtypes`) would not run on the
+  old file at all.
 
 After a version bump the inventory therefore has to be **regenerated with the parser**, not
 patched by hand.
@@ -90,11 +96,21 @@ serve as a dict key — which `builder.py` relies on when detecting duplicates.
 
 ### `Selectors`
 
-Ten lists of strings: `interfaces`, `physical_interfaces`, `routing_instances`,
-`bgp_neighbors`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`,
-`bridge_domains`. Addresses and virtual-gateway are split by family here too — same as on
-`ServiceEntry` above — because ping and the report both need to pick a source/target by the
-target's family, not by position in one mixed list.
+Lists of strings: `interfaces`, `physical_interfaces`, `routing_instances`,
+`bgp_neighbors`, `bgp_neighbors_inactive`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`,
+`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `protocols`. Addresses and
+virtual-gateway are split by family here too — same as on `ServiceEntry` above — because
+ping and the report both need to pick a source/target by the target's family, not by
+position in one mixed list.
+
+**`protocols`** (2026-08-26 wave) carries configured intent (`ServiceEntry.protocol`) — which
+IGP/signaling protocols the interface should be running per the configuration (in practice
+so far just `"pim"`, from `protocols pim interface <name>`). Unlike the other selectors it
+**does not filter which facts get selected** — the per-interface areas (`isis_adjacency`,
+`ldp_neighbor`, `pim_neighbor`, …) are still selected in `Scope.select()` by interface, not
+by this field. It is purely a **gate** read directly by `pim_neighbor_state`
+(`"pim" not in ctx.scope.selectors.protocols` → the check stays silent, no rows, not SKIP) —
+see [checks.md](checks.md#core_protocolspy--core-transit-and-lo00-protocols-2026-08-26-wave).
 
 Plus two lists of dictionaries carrying **configured intent**:
 
@@ -117,11 +133,13 @@ as well, provided the inventory contains the corresponding `Layer1` entry.
 ```python
 scope.select(facts, probes) -> dict   # keys: interfaces, arp, nd, bgp,
                                       #       evpn_vpws, evpn_esi, evpn_mac,
-                                      #       routes, bfd, ping
+                                      #       routes, bfd, ping, optics,
+                                      #       isis_adjacency, isis_interface,
+                                      #       isis_overview, ldp_neighbor,
+                                      #       pim_neighbor, mpls_interface
 ```
 
-The module constant **`FACT_AREAS`** enumerates the areas allowed in facts: `interfaces`,
-`arp`, `nd`, `bgp`, `evpn_vpws`, `evpn_esi`, `evpn_mac`, `routes`, `bfd`. The device scope
+The module constant **`FACT_AREAS`** enumerates the areas allowed in facts. The device scope
 returns every area on that list unchanged, so **an area forgotten in it would vanish in
 inventory-less mode**.
 
@@ -137,7 +155,10 @@ Filtering per area:
 | `evpn_esi` | `matches_interface(data["interface"])` |
 | `evpn_mac` | key (instance name) `∈ selectors.routing_instances` |
 | `routes` | the `(RIB, prefix)` pair `∈ selectors.static_routes` |
-| `bfd` | `peer ∈ selectors.bgp_neighbors` |
+| `bfd` | `peer ∈ selectors.bgp_neighbors`, **plus** (2026-08-26 wave) `matches_interface(data["interface"])` on a Core scope with `service_subtype == "transit"` — a second path alongside the existing peer-address one, since transit Core has neither BFD intent nor peers in the service configuration; there a session belongs by interface |
+| `optics` | `matches_interface(name)` or `name ∈ selectors.lag_members` |
+| `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface` | `matches_interface(name)` — same as `interfaces`/`optics` (2026-08-26 wave) |
+| `isis_overview` | a **device-global fact**, not per-interface — only a Core scope with `service_subtype == "loopback"` gets it (empty dict otherwise); the device scope passes everything through unchanged (2026-08-26 wave) |
 | `ping` | `probe["scope_id"] == scope.id` |
 
 Two points worth stressing:
@@ -183,6 +204,12 @@ channel through which a failed collection turns into a `SKIP` in the checks
 `from_dict()` **rejects a different `schema_version` outright** (`SnapshotVersionError`
 printing both versions). No attempt is made to migrate old data: loud failure beats a silent
 misinterpretation.
+
+Current `SCHEMA_VERSION = 11` (`models/snapshot.py`). The bump from 10 to 11 (2026-08-26
+wave) added six new fact areas to `FACT_AREAS` (`isis_adjacency`, `isis_interface`,
+`isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) — see
+[collectors.md](collectors.md) for the shape of each area. Old snapshot data therefore has
+to be recaptured, not patched by hand.
 
 `save_snapshot()` / `load_snapshot()` write and read UTF‑8 JSON with `ensure_ascii=False` and
 create the target directory. The disk round-trip is asserted by

@@ -1,7 +1,8 @@
 # `checks/` — vyhodnocovací logika
 
 Soubory: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py`, `routes.py`, `bfd.py`, `deactivation.py` a prázdný `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py`, `core_protocols.py`, `deactivation.py`
+a prázdný `__init__.py`.
 
 Dvě pravidla:
 
@@ -44,13 +45,18 @@ class Check(ABC):
     requires: tuple[str, ...]     # oblasti z facts/probes, např. ("bgp",)
     requires_inventory: bool
     service_types: frozenset[str] | None    # None = všechny
+    service_subtypes: frozenset[str] | None # AND ke service_types, None = nefiltruje
     default_severity: Severity
 
     def run(self, ctx) -> list[Finding]
 ```
 
 `applies_to(scope)` vrací `True` pro **device scope vždy** (nemá podle čeho filtrovat)
-a jinak porovnává `service_type`.
+a jinak porovnává `service_type` a — je-li nastaven — i `service_subtype` (obojí musí sedět,
+je to AND, ne alternativa). Slouží k rozlišení rolí v rámci jednoho `service_type`, typicky
+Core **transit** vs. Core **loopback** (vlna 2026-08-26): `service_types={"Core"}` samo
+o sobě obě role nerozliší, `service_subtypes={"transit"}` je odstřihne od `isis_overview`,
+který patří jen na lo0.0.
 
 `label` je **povinný** a není to `title`: `title` je věta o checku („Stav BGP session"),
 `label` je popisek sloupce `CHECK` v reportu („BGP status"). Použije se pro řádky, které
@@ -490,6 +496,14 @@ z konfigurace (`Selectors.bfd_peers`), session v subjektu a session v baseline.
 **Peer, který BFD nikdy neměl, řádek nedostane** (rozhodnutí R‑1) — služba bez BFD tedy
 v reportu nemá o BFD ani zmínku.
 
+**Na Core transitu tenhle check vůbec neběží** — `applies_to()` je přetížené a pro
+`service_type == "Core"` + `service_subtype == "transit"` vrací `False` ještě před voláním
+`super().applies_to()`. Tranzitní BFD měří nový `core_protocols.bfd_transit_state` (vlna
+2026-08-26), který session páruje podle **rozhraní**, ne podle peer adresy ze záměrové
+konfigurace — na tranzitu žádný takový záměr není. Bez téhle brány by `bfd_session_state`
+běžel dál a za každou tranzitní session vypsal `WARN | bez konfigurace`, protože žádný
+`Selectors.bfd_peers` záznam by nenašel.
+
 Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 
 | situace | Outcome | status | `value` |
@@ -528,6 +542,141 @@ odlišná hodnota od téhle větve, takže záměna nehrozí. Formulace `v basel
 sluzbe, v subjektu uz ne` je pravdivá v obou případech, které do větve spadají (BFD ze zařízení
 zmizelo i BFD přešlo pod jinou službu) — stejná oprava, jakou dřív dostala analogická větev
 v `checks/bgp.py`.
+
+---
+
+## `core_protocols.py` — protokoly Core transitu a lo0.0 (vlna 2026-08-26)
+
+Sedm nových checků nad šesti novými collectory (`isis_adjacency`, `isis_interface`,
+`isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`). Všechny sdílí dvě
+rozhodnutí:
+
+- **Absence rozhraní ve výpisu je měření, ne díra.** Collector nikdy nesyntetizuje
+  „Down" řádek — pokud rozhraní ve výpisu chybí, je to prostě chybějící klíč ve faktech.
+  Co to znamená, vykládá až check, a skoro vždy je to `FAIL | ... : chybí v outputu`
+  (stejná filosofie jako `mpls_interface_state` u absence z `routes.py`).
+- **Měřené jednotky se berou ze selektoru (záměr), ne z faktů** — `_scope_transit_interfaces`
+  vrací tranzitní rozhraní ze `Scope.selectors.interfaces`, ne klíče ze subjektu. Rozhraní,
+  které z výpisu úplně zmizelo, tak pořád dostane řádek (FAIL „chybí v outputu"), místo aby
+  ztichlo.
+
+### `isis_adjacency_state` (transit, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `isis_adjacency`.
+
+Rozhraní chybí v adjacency výpisu → jediný řádek `FAIL | IS-IS adjacency state : chybí
+v outputu` (`baseline_value` je stav ze stejného řádku baseline, je-li k dispozici — mluví
+v řeči přítomnosti tohoto řádku, ne next-hopu).
+
+Jinak čtyři řádky:
+
+| pole | bez baseline | proti baseline |
+|---|---|---|
+| `system-name` (soused) | INFO | PASS při shodě; WARN při rozdílu |
+| `adjacency-state` | PASS pokud `Up`, jinak FAIL | PASS při shodě s baseline stavem `Up`; **WARN** pokud teď `Up`, ale v baseline nebyl `Up` (zlepšení je pořád změna); jinak FAIL |
+| `ip-address` (IPv4 souseda) | PASS pokud přítomna, jinak FAIL | PASS při shodě; WARN při rozdílu |
+| `global-ipv6-address` (IPv6 souseda) | PASS pokud přítomna, jinak FAIL | PASS při shodě; WARN při rozdílu |
+
+Mutant kill (2026-08-26, ověřeno spuštěním): prohození `Outcome.DEGRADED` → `Outcome.OK`
+ve větvi „Up teď / Down v baseline" nechá padnout
+`test_baseline_state_down_before_up_now_is_warn`.
+
+### `isis_interface_info` (transit + loopback, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **jeden check pro
+obě role**, chování se větví podle `ctx.scope.service_subtype`. Vyžaduje `isis_interface`.
+
+- Rozhraní chybí v ISIS interface výpisu → `FAIL | IS-IS interface : chybí v outputu`.
+- Level 2 přítomen v `levels` → PASS; chybí → FAIL. Level 1 přítomen → **vlastní FAIL řádek**
+  (level 1 nemá na Core rozhraní co dělat).
+- Passive flag na level 2 je **role-aware**: loopback ho vyžaduje (`ok = passive`), transit
+  vyžaduje jeho absenci (`ok = not passive`) — pasivní tranzitní port by nesestavil
+  adjacency, kterou měří `isis_adjacency_state`.
+
+Mutant kill (2026-08-26, ověřeno spuštěním): `ok = passive if loopback else not passive` →
+`ok = passive` nechá padnout `test_transit_non_passive_level2_is_pass` i
+`test_transit_passive_level2_is_fail` (a taky end-to-end regresi).
+
+### `ldp_neighbor_state` (transit, critical) — očekávaný vždy
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `ldp_neighbor`. **Žádný
+gate na záměr** — LDP na tranzitním Core rozhraní je očekávaný vždy (rozhodnutí 2026-08-26),
+takže chybějící soused je rovnou FAIL, ne tiché nic.
+
+| situace | Outcome | value |
+|---|---|---|
+| soused ve výpisu není | FAIL | `Down` |
+| `uptime_seconds > 0` | PASS | `Up for <uptime>` |
+| `uptime_seconds` chybí nebo `0` | FAIL | `Down` |
+| adresa souseda (bez baseline) | INFO | adresa nebo `chybí v outputu` |
+| adresa souseda (proti baseline, rozdíl) | WARN | adresa |
+
+Collector u LDP zahazuje záznamy pro `lo0.*` už při parsování (LDP na loopbacku nemá
+smysl měřit tímhle checkem) — viz `collectors.md`.
+
+### `pim_neighbor_state` (transit, critical) — gate na záměr
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `pim_neighbor`.
+
+**Bez záměru (`"pim"` není v `ctx.scope.selectors.protocols`) check vrátí prázdný seznam
+nálezů — ticho, ne SKIP** (rozhodnutí 2026-08-26): služba bez PIM není méně zdravá, takže
+nemá dostat řádek vůbec, natož SKIP, který by v souhrnu vypadal jako nezměřená věc. Záměr do
+inventory zapisuje parser z `protocols pim interface <name>` (globálně i per routing-instance)
+do existujícího pole `ServiceEntry.protocol`.
+
+Se záměrem se chová stejně jako `ldp_neighbor_state` (sdílená kostra `_neighbor_findings`):
+chybějící soused je FAIL `Down`, jinak PASS/FAIL podle `uptime_seconds`, adresa INFO/WARN.
+
+Mutant kill (2026-08-26, ověřeno spuštěním): smazání gate `if "pim" not in ...` nechá padnout
+`test_pim_neighbor_without_intent_is_silent_not_skip` (a end-to-end regresi).
+
+### `mpls_interface_state` (transit, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `mpls_interface`.
+
+PASS pokud stav `Up`, FAIL pokud `Dn` nebo jiný, FAIL `chybí v outputu` při absenci —
+stejné pravidlo bez baseline i proti ní (`baseline_value` se nese vedle, ale nemění výsledný
+outcome).
+
+### `bfd_transit_state` (transit, critical) — očekávaná vždy
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `bfd`. **Samostatný check
+vedle `bfd.py`**, aby záměrová zákaznická logika `bfd_session_state` zůstala nedotčená — a ta
+se navíc na Core transitu vůbec nespustí (viz gate v sekci `bfd.py` výše).
+
+Session se páruje podle **rozhraní**, ne podle peer adresy — `by_interface` je postavené
+z `data.get("interface")` každé BFD session v subjektu.
+
+| situace | Outcome | value |
+|---|---|---|
+| na rozhraní není žádná session | FAIL | `Down` |
+| session existuje, stav `Up` | PASS | `Up` (case-capitalized ze stavu) |
+| session existuje, jiný stav | FAIL | naměřený stav |
+
+Víc session na stejném rozhraní dostane víc řádků (setříděných podle peera).
+
+Mutant kill (2026-08-26, ověřeno spuštěním): smazání větve `if not entries` nechá padnout
+`test_bfd_transit_missing_session_is_fail_down`.
+
+### `isis_overview` (loopback, advisory)
+
+`service_types={"Core"}`, `service_subtypes={"loopback"}`. Vyžaduje `isis_overview` —
+device-global fakt, do scopu ho `Scope.select()` pustí jen pro Core loopback (viz
+`models.md`), takže na transitu je `ctx.subject["isis_overview"]` vždy prázdný dict.
+Scoping (`Scope.select()`) a vazba checku (`service_subtypes`) jsou dvě **nezávislé**
+pojistky proti stejné chybě: kdyby scoping propustil area i na transit, prázdný dict by
+tam vždy tvrdil falešné `PASS | nenastaven` (overload bit nikdy nenastavený, protože area
+je prázdná) — kdyby selhala jen vazba checku, subtype gate ve `Scope.select()` pořád drží
+area mimo transit.
+
+Jediný řádek: `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (router se vyhýbá
+tranzitnímu provozu), jinak `PASS | IS-IS overload bit : nenastaven`. Baseline nic nepřidává
+(`mode = STATE`).
+
+Mutant kill (2026-08-26, ověřeno spuštěním): smazání podmínky `if self.service_subtype ==
+"loopback"` v `Scope.select()` (u `isis_overview`) nechá padnout
+`test_isis_overview_goes_only_to_loopback_scope` (`tests/models/test_scope_core.py`) — transit
+scope by dostal overview taky.
 
 ---
 

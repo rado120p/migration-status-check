@@ -54,7 +54,7 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 6`).
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 7`).
 `load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
 
 Důvod je u všech zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
@@ -70,6 +70,11 @@ zelená služba.
   `interface_active` (AR‑20/AR‑21). Tolerantní čtení starého souboru by obě pole dopočítalo
   na `True`, takže by se deaktivovaná služba tvářila jako živá a checky by nad ní počítaly
   FAIL/WARN, místo aby ji SKIPly s důvodem deaktivace.
+- **6 → 7** (vlna 2026-08-26): `Core` dostal `service_subtype` (`"transit"` / `"loopback"`) —
+  odvozené datum z `_classify` v parserech (`lo0.*` → loopback, ostatní family iso/mpls →
+  transit). Subtype je odvozený, ne volitelný — stará inventory bez něj by nerozlišila roli
+  a nové protokolové checky (`isis_adjacency_state` a další, vázané přes
+  `service_subtypes`) by na starém souboru neběžely vůbec.
 
 Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 
@@ -87,11 +92,20 @@ použít jako klíč slovníku — čehož využívá `builder.py` při detekci 
 
 ### `Selectors`
 
-Deset seznamů řetězců: `interfaces`, `physical_interfaces`, `routing_instances`,
-`bgp_neighbors`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`, `virtual_gw_v6`, `vlans`,
-`bridge_domains`. Adresy i virtual-gateway jsou rozdělené podle rodiny — stejně jako
-`ServiceEntry` výš — protože ping a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne
-podle pořadí v jednom smíchaném seznamu.
+Seznamy řetězců: `interfaces`, `physical_interfaces`, `routing_instances`,
+`bgp_neighbors`, `bgp_neighbors_inactive`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`,
+`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `protocols`. Adresy i
+virtual-gateway jsou rozdělené podle rodiny — stejně jako `ServiceEntry` výš — protože ping
+a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne podle pořadí v jednom smíchaném
+seznamu.
+
+**`protocols`** (vlna 2026-08-26) nese záměr z konfigurace (`ServiceEntry.protocol`) —
+které IGP/signalizační protokoly má rozhraní mít podle konfigurace (zatím prakticky jen
+`"pim"`, z `protocols pim interface <name>`). Na rozdíl od ostatních selektorů **nefiltruje
+výběr faktů** — per-interface areas (`isis_adjacency`, `ldp_neighbor`, `pim_neighbor`, …) se
+v `Scope.select()` pořád vybírají podle rozhraní, ne podle tohohle pole. Je to čistě **gate**,
+který čte `pim_neighbor_state` přímo (`"pim" not in ctx.scope.selectors.protocols` → check
+mlčí, žádné řádky, ne SKIP) — viz [checks.md](checks.md#core_protocolspy--protokoly-core-transitu-a-lo00-vlna-2026-08-26).
 
 K nim dva seznamy slovníků, které nesou **konfigurační záměr**:
 
@@ -113,11 +127,13 @@ inventory obsahuje odpovídající `Layer1` záznam.
 ```python
 scope.select(facts, probes) -> dict   # klíče: interfaces, arp, nd, bgp,
                                       #        evpn_vpws, evpn_esi, evpn_mac,
-                                      #        routes, bfd, ping
+                                      #        routes, bfd, ping, optics,
+                                      #        isis_adjacency, isis_interface,
+                                      #        isis_overview, ldp_neighbor,
+                                      #        pim_neighbor, mpls_interface
 ```
 
-Modulová konstanta **`FACT_AREAS`** vyjmenovává oblasti, které smí ve faktech být:
-`interfaces`, `arp`, `nd`, `bgp`, `evpn_vpws`, `evpn_esi`, `evpn_mac`, `routes`, `bfd`.
+Modulová konstanta **`FACT_AREAS`** vyjmenovává oblasti, které smí ve faktech být.
 Device scope podle ní vrací všechny oblasti beze změny, takže **oblast zapomenutá v tomhle
 seznamu by v režimu bez inventory zmizela**.
 
@@ -133,7 +149,10 @@ Filtrování per oblast:
 | `evpn_esi` | `matches_interface(data["interface"])` |
 | `evpn_mac` | klíč (název instance) `∈ selectors.routing_instances` |
 | `routes` | dvojice `(RIB, prefix)` `∈ selectors.static_routes` |
-| `bfd` | `peer ∈ selectors.bgp_neighbors` |
+| `bfd` | `peer ∈ selectors.bgp_neighbors`, **plus** (vlna 2026-08-26) `matches_interface(data["interface"])` na Core scope se `service_subtype == "transit"` — druhá cesta vedle stávající peer-adresové, protože tranzitní Core nemá BFD záměry ani peery v konfiguraci služby; session tam patří podle rozhraní |
+| `optics` | `matches_interface(název)` nebo `název ∈ selectors.lag_members` |
+| `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface` | `matches_interface(název)` — stejně jako `interfaces`/`optics` (vlna 2026-08-26) |
+| `isis_overview` | **device-global fakt**, ne per-rozhraní — dostane ho jen Core scope se `service_subtype == "loopback"` (jinak prázdný dict); device scope propouští vše beze změny (vlna 2026-08-26) |
 | `ping` | `probe["scope_id"] == scope.id` |
 
 Dvě věci, které stojí za zdůraznění:
@@ -177,11 +196,14 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 10` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 11` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
-`peers` místo plochého `status`/`local_sid`/`remote_sid`). Stará snapshot data se proto musí
-znovu nasbírat, ne doupravit.
+`peers` místo plochého `status`/`local_sid`/`remote_sid`). Zvýšení z 10 na 11 (vlna
+2026-08-26) přidalo šest nových fact areas do `FACT_AREAS`
+(`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`,
+`mpls_interface`) — viz [collectors.md](collectors.md) pro tvar každé area. Stará snapshot
+data se proto musí znovu nasbírat, ne doupravit.
 
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje

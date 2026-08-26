@@ -78,6 +78,9 @@ def test_transit_scope_selects_only_own_interface_for_per_interface_areas():
 
 
 def test_isis_overview_goes_only_to_loopback_scope():
+    """Mutant kill (2026-08-26, overeno spustenim): smazani podminky
+    `if self.service_subtype == "loopback"` u isis_overview v Scope.select
+    necha tenhle test padnout (transit by dostal overview taky)."""
     transit = _core_transit_scope()
     loopback = _core_loopback_scope()
 

@@ -1,7 +1,8 @@
 # `checks/` — the evaluation logic
 
 Files: `base.py`, `registry.py`, `all.py`, `ifaces.py`, `bgp.py`, `evpn.py`,
-`reachability.py`, `routes.py`, `bfd.py`, `deactivation.py` and an empty `__init__.py`.
+`reachability.py`, `routes.py`, `bfd.py`, `core_protocols.py`, `deactivation.py`
+and an empty `__init__.py`.
 
 Two rules:
 
@@ -46,13 +47,18 @@ class Check(ABC):
     requires: tuple[str, ...]     # areas from facts/probes, e.g. ("bgp",)
     requires_inventory: bool
     service_types: frozenset[str] | None    # None = all
+    service_subtypes: frozenset[str] | None # AND with service_types, None = no filter
     default_severity: Severity
 
     def run(self, ctx) -> list[Finding]
 ```
 
 `applies_to(scope)` returns `True` for the **device scope always** (there is nothing to filter
-by) and otherwise compares `service_type`.
+by) and otherwise compares `service_type` and — when set — `service_subtype` too (both must
+match, it is an AND, not an alternative). It distinguishes roles within one `service_type`,
+typically Core **transit** vs. Core **loopback** (2026-08-26 wave): `service_types={"Core"}`
+alone cannot tell the two roles apart; `service_subtypes={"transit"}` keeps `isis_overview`
+(which only belongs on lo0.0) away from transit scopes.
 
 `label` is **required** and is not `title`: `title` is a sentence about the check ("Stav BGP
 session"), `label` is the report's `CHECK` column label ("BGP status"). It is used for rows
@@ -491,6 +497,14 @@ service without BFD carries no mention of BFD in the report at all.
 
 The check requires **two areas**: `("bfd", "bgp")`.
 
+**This check does not run at all on Core transit** — `applies_to()` is overridden and returns
+`False` for `service_type == "Core"` + `service_subtype == "transit"` before ever calling
+`super().applies_to()`. Transit BFD is measured by the new `core_protocols.bfd_transit_state`
+(2026-08-26 wave), which matches sessions by **interface**, not by peer address from intent
+configuration — transit has no such intent. Without this gate `bfd_session_state` would keep
+running and print `WARN | bez konfigurace` for every transit session, since it would never
+find a matching `Selectors.bfd_peers` entry.
+
 | situation | Outcome | status | `value` |
 |---|---|---|---|
 | session exists, state `Up` | `ok` | PASS | `Up` |
@@ -529,6 +543,143 @@ would surface it in NEZAŘAZENO. The message "is not configured in the subject" 
 two. The wording `v baseline patril k teto sluzbe, v subjektu uz ne` is true in both cases that
 reach this branch (BFD vanished from the device, or BFD moved under a different service) — the
 same fix the analogous branch in `checks/bgp.py` received earlier.
+
+---
+
+## `core_protocols.py` — Core transit and lo0.0 protocols (2026-08-26 wave)
+
+Seven new checks over six new collectors (`isis_adjacency`, `isis_interface`,
+`isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`). All of them share two
+decisions:
+
+- **A missing interface in an output is a measurement, not a hole.** The collector never
+  synthesizes a "Down" row — if the interface is missing from the output, its key is simply
+  absent from the facts. What that means is decided by the check, and it is almost always
+  `FAIL | ... : chybí v outputu` (same philosophy as `mpls_interface_state`'s handling of
+  absence in `routes.py`).
+- **The measured units come from the selector (intent), not from the facts** —
+  `_scope_transit_interfaces` returns transit interfaces from `Scope.selectors.interfaces`,
+  not keys from the subject. An interface that vanished entirely from an output still gets a
+  row (FAIL "missing from output") instead of going silent.
+
+### `isis_adjacency_state` (transit, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `isis_adjacency`.
+
+Interface missing from the adjacency output → a single row `FAIL | IS-IS adjacency state :
+chybí v outputu` (`baseline_value` is the state from that same baseline row, if any — it
+speaks in the language of that row's presence, not the next-hop's).
+
+Otherwise four rows:
+
+| field | without baseline | against baseline |
+|---|---|---|
+| `system-name` (neighbor) | INFO | PASS on match; WARN on mismatch |
+| `adjacency-state` | PASS if `Up`, else FAIL | PASS when it matches a baseline state of `Up`; **WARN** when it is `Up` now but was not `Up` in the baseline (an improvement is still a change); else FAIL |
+| `ip-address` (IPv4 neighbor) | PASS if present, else FAIL | PASS on match; WARN on mismatch |
+| `global-ipv6-address` (IPv6 neighbor) | PASS if present, else FAIL | PASS on match; WARN on mismatch |
+
+Mutant kill (2026-08-26, verified by running it): flipping `Outcome.DEGRADED` →
+`Outcome.OK` in the "Up now / Down in baseline" branch makes
+`test_baseline_state_down_before_up_now_is_warn` fail.
+
+### `isis_interface_info` (transit + loopback, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **one check for both
+roles**, behavior branches on `ctx.scope.service_subtype`. Requires `isis_interface`.
+
+- Interface missing from the ISIS interface output → `FAIL | IS-IS interface : chybí
+  v outputu`.
+- Level 2 present in `levels` → PASS; missing → FAIL. Level 1 present → **its own FAIL row**
+  (level 1 has no business on a Core interface).
+- The passive flag on level 2 is **role-aware**: loopback requires it (`ok = passive`),
+  transit requires its absence (`ok = not passive`) — a passive transit port would never
+  form the adjacency that `isis_adjacency_state` measures.
+
+Mutant kill (2026-08-26, verified by running it): `ok = passive if loopback else not
+passive` → `ok = passive` makes both `test_transit_non_passive_level2_is_pass` and
+`test_transit_passive_level2_is_fail` fail (plus the end-to-end regression).
+
+### `ldp_neighbor_state` (transit, critical) — always expected
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `ldp_neighbor`. **No gate
+on intent** — LDP on a transit Core interface is always expected (2026-08-26 decision), so a
+missing neighbor is a straight FAIL, never quiet nothing.
+
+| situation | Outcome | value |
+|---|---|---|
+| neighbor missing from output | FAIL | `Down` |
+| `uptime_seconds > 0` | PASS | `Up for <uptime>` |
+| `uptime_seconds` missing or `0` | FAIL | `Down` |
+| neighbor address (no baseline) | INFO | address, or `chybí v outputu` |
+| neighbor address (against baseline, mismatch) | WARN | address |
+
+The collector drops `lo0.*` records for LDP already at parse time (LDP on the loopback has
+no meaning for this check) — see `collectors.md`.
+
+### `pim_neighbor_state` (transit, critical) — gated on intent
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `pim_neighbor`.
+
+**Without intent (`"pim"` not in `ctx.scope.selectors.protocols`) the check returns an empty
+finding list — silence, not SKIP** (2026-08-26 decision): a service without PIM is not less
+healthy, so it should get no row at all, let alone a SKIP that would read as "unmeasured" in
+the summary. Intent is written to inventory by the parser from `protocols pim interface
+<name>` (globally and per routing-instance) into the existing `ServiceEntry.protocol` field.
+
+With intent it behaves the same as `ldp_neighbor_state` (shared `_neighbor_findings`
+skeleton): a missing neighbor is FAIL `Down`, otherwise PASS/FAIL by `uptime_seconds`,
+address INFO/WARN.
+
+Mutant kill (2026-08-26, verified by running it): deleting the `if "pim" not in ...` gate
+makes `test_pim_neighbor_without_intent_is_silent_not_skip` fail (plus the end-to-end
+regression).
+
+### `mpls_interface_state` (transit, critical)
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `mpls_interface`.
+
+PASS if state is `Up`, FAIL if `Dn` or anything else, FAIL `chybí v outputu` on absence —
+same rule with or without baseline (`baseline_value` rides alongside but does not change the
+outcome).
+
+### `bfd_transit_state` (transit, critical) — always expected
+
+`service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `bfd`. **A separate check
+next to `bfd.py`**, so the intent-based customer logic of `bfd_session_state` stays untouched
+— and that check does not run at all on Core transit anyway (see the gate in the `bfd.py`
+section above).
+
+Sessions are matched by **interface**, not by peer address — `by_interface` is built from
+`data.get("interface")` on every BFD session in the subject.
+
+| situation | Outcome | value |
+|---|---|---|
+| no session on the interface | FAIL | `Down` |
+| session exists, state `Up` | PASS | `Up` (capitalized state) |
+| session exists, other state | FAIL | the measured state |
+
+Multiple sessions on the same interface get multiple rows (sorted by peer).
+
+Mutant kill (2026-08-26, verified by running it): deleting the `if not entries` branch makes
+`test_bfd_transit_missing_session_is_fail_down` fail.
+
+### `isis_overview` (loopback, advisory)
+
+`service_types={"Core"}`, `service_subtypes={"loopback"}`. Requires `isis_overview` — a
+device-global fact that `Scope.select()` only lets through for Core loopback scopes (see
+`models.md`/`scoping.md`); on transit `ctx.subject["isis_overview"]` is therefore always an
+empty dict, so scoping and the check's subtype binding are two independent safety nets
+against the same mistake.
+
+A single row: `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (the router avoids
+transit traffic), else `PASS | IS-IS overload bit : nenastaven`. The baseline adds nothing
+(`mode = STATE`).
+
+Mutant kill (2026-08-26, verified by running it): deleting the `if self.service_subtype ==
+"loopback"` condition in `Scope.select()` (for `isis_overview`) makes
+`test_isis_overview_goes_only_to_loopback_scope` (`tests/models/test_scope_core.py`) fail —
+the transit scope would receive the overview fact too.
 
 ---
 

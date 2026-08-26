@@ -203,7 +203,11 @@ def test_baseline_state_up_now_and_up_before_is_pass():
 
 
 def test_baseline_state_down_before_up_now_is_warn():
-    """Zlepseni je porad zmena - hlasi se jako DEGRADED, ne jako tiche OK."""
+    """Zlepseni je porad zmena - hlasi se jako DEGRADED, ne jako tiche OK.
+
+    Mutant kill (2026-08-26, overeno spustenim): flip DEGRADED->OK ve vetvi
+    "Up ted / Down v baseline" v IsisAdjacencyStateCheck._rows -> tenhle test
+    padne."""
     findings = IsisAdjacencyStateCheck().run(
         _ctx(
             {
@@ -392,6 +396,10 @@ def test_level1_present_is_fail_row_on_transit():
 
 
 def test_transit_non_passive_level2_is_pass():
+    """Mutant kill (2026-08-26, overeno spustenim), spolu s
+    test_transit_passive_level2_is_fail: `ok = passive if loopback else not
+    passive` -> `ok = passive` v IsisInterfaceInfoCheck.run necha tenhle test
+    padnout."""
     findings = IsisInterfaceInfoCheck().run(
         _ctx_for(
             "isis_interface",
@@ -408,7 +416,11 @@ def test_transit_non_passive_level2_is_pass():
 
 
 def test_transit_passive_level2_is_fail():
-    """Pasivni tranzit nesestavi adjacency, kterou meri isis_adjacency_state."""
+    """Pasivni tranzit nesestavi adjacency, kterou meri isis_adjacency_state.
+
+    Mutant kill (2026-08-26, overeno spustenim): `ok = passive if loopback
+    else not passive` -> `ok = passive` v IsisInterfaceInfoCheck.run necha
+    tenhle test padnout."""
     findings = IsisInterfaceInfoCheck().run(
         _ctx_for(
             "isis_interface",
@@ -581,6 +593,9 @@ def test_pim_neighbor_with_intent_missing_is_fail():
 
 
 def test_pim_neighbor_without_intent_is_silent_not_skip():
+    """Mutant kill (2026-08-26, overeno spustenim): smazani gate `if "pim"
+    not in ctx.scope.selectors.protocols` v PimNeighborStateCheck.run necha
+    tenhle test padnout (findings uz neni prazdny seznam)."""
     scope = _scope(protocols=())
     findings = PimNeighborStateCheck().run(_ctx_area("pim_neighbor", {}, scope=scope))
 
@@ -696,6 +711,9 @@ def test_bfd_transit_down_is_fail():
 
 
 def test_bfd_transit_missing_session_is_fail_down():
+    """Mutant kill (2026-08-26, overeno spustenim): smazani vetve `if not
+    entries` v BfdTransitStateCheck.run necha tenhle test padnout (0 findings
+    misto 1x BROKEN)."""
     findings = BfdTransitStateCheck().run(_ctx_area("bfd", {}))
 
     assert len(findings) == 1

@@ -1,7 +1,8 @@
 # `collectors/` — collecting operational state
 
 Files: `base.py`, `registry.py`, `all.py`, `interfaces.py`, `arp.py`, `nd.py`, `bgp.py`,
-`evpn.py`, `routes.py`, `bfd.py` and an empty `__init__.py`.
+`evpn.py`, `routes.py`, `bfd.py`, `isis.py`, `ldp.py`, `pim.py`, `mpls.py`
+and an empty `__init__.py`.
 
 Two rules the entire layer rests on:
 
@@ -347,3 +348,67 @@ both the intent from the inventory (`Selectors.bfd_peers`) and the BGP state
 (`tests/fixtures/rpc/junos/bfd.xml`) is `<sessions>0</sessions>` — BFD is configured there,
 but no session came up. Only the check can decide whether that is a problem: it depends on
 whether BFD is configured at all and whether BGP is running.
+
+## `isis.py`, `ldp.py`, `pim.py`, `mpls.py` — Core transit and lo0.0 protocols (2026-08-26 wave)
+
+Six new collectors for the seven new checks in `checks/core_protocols.py` (`isis_overview`
+shares its module with `isis_interface_info`, but not its fact area). CLI equivalents:
+
+| fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI equivalent |
+|---|---|---|
+| `isis_adjacency` | `get_isis_adjacency_information(detail=True)` | `show isis adjacency detail` |
+| `isis_interface` | `get_isis_interface_information(detail=True)` | `show isis interface detail` |
+| `isis_overview` | `get_isis_overview_information` | `show isis overview` |
+| `ldp_neighbor` | `get_ldp_neighbor_information(detail=True)` | `show ldp neighbor detail` |
+| `pim_neighbor` | `get_pim_neighbors_information` | `show pim neighbors` |
+| `mpls_interface` | `get_mpls_interface_information` | `show mpls interface` |
+
+**Namespace-agnostic iteration.** A live PyEZ response can carry elements in the
+`junos-routing` namespace (an `xmlns` prefix), while the normalized recordings from Task 1
+carry no prefix at all. All six collectors therefore iterate with the wildcard `{*}element`
+(`xml.iter("{*}isis-adjacency")`) instead of `xml.iter("isis-adjacency")`, which would find
+nothing under a namespace. Element text is read by the shared `_localname_text()` (defined in
+`isis.py`, imported by `ldp.py`, `pim.py`, `mpls.py`) — it looks for a descendant by
+**localname**, not an exact path, so it works regardless of how deeply the response is
+nested.
+
+`_seconds_attr()` (`isis.py`, shared with `ldp.py`/`pim.py`) reads the `junos:seconds`
+attribute — the OS version rides right inside the attribute's URI, so it matches both forms
+(bare `seconds` on namespace-free recordings, `{...}seconds` on a live response carrying the
+`junos:` prefix), not a literal key.
+
+### `isis.py` — `IsisAdjacencyCollector`, `IsisInterfaceCollector`, `IsisOverviewCollector`
+
+- `isis_adjacency`: `{interface: {system_name, state, ip_address, ipv6_address}}`. `state`
+  defaults to `"unknown"` when `adjacency-state` is missing — the collector never invents
+  `Up`/`Down` on its own.
+- `isis_interface`: `{interface: {levels: {level: {passive: bool}}}}`. `passive` is `True`
+  only when the `<passive>` element's text is exactly `"Passive"` — anything else (a missing
+  element, other text) is `False`.
+- `isis_overview`: **device-global**, not per-interface — a single dict `{overload_enabled:
+  bool}`. The presence of the `<isis-overload-enabled/>` element (regardless of its text)
+  means `True`; its absence means `False`. Only the Core loopback scope lets this fact
+  through (see `models.md`).
+
+### `ldp.py` — `LdpNeighborCollector`
+
+`{interface: {neighbor_address, uptime_seconds}}`. **`lo0.*` records are dropped already at
+parse time** — an LDP neighbor on the loopback is a *targeted session* between device
+loopbacks across the mesh, not the state of a transit link, and this collector only measures
+physical/aggregated interfaces. Interfaces with no name (`interface-name` missing) are
+skipped, same as elsewhere.
+
+### `pim.py` — `PimNeighborCollector`
+
+`{interface: {neighbor_address, uptime_seconds}}`. The response nests as
+`pim-neighbors-information > pim-interface > pim-neighbor` — a `pim-interface` **without** a
+nested `pim-neighbor` (PIM enabled on the interface, but no neighbor) gets no synthetic
+record, the key is simply missing (absence is absence, not an invented Down). The contract
+keys on a single neighbor per interface; with more than one `pim-neighbor` under one
+`pim-interface` (a multi-access segment) the collector takes the first and silently drops the
+rest — the lab recordings never hit this case (1:1).
+
+### `mpls.py` — `MplsInterfaceCollector`
+
+`{interface: {state}}`. `state` defaults to `"unknown"` when `mpls-interface-state` is
+missing.
