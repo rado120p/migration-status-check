@@ -668,6 +668,8 @@ def test_ldp_neighbor_missing_row_baseline_derived_from_uptime_not_presence():
         )
     )
 
+    assert findings[0].baseline_value == "Down"
+
 
 # --- BfdTransitStateCheck + gate na stary BfdSessionStateCheck ---
 
