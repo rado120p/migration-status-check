@@ -129,3 +129,83 @@ class IsisAdjacencyStateCheck(Check):
                 baseline_value=str(was_value) if was_value else None,
             ))
         return rows
+
+
+@register
+class IsisInterfaceInfoCheck(Check):
+    id = "isis_interface_info"
+    title = "IS-IS konfigurace rozhrani"
+    label = "IS-IS interface"
+    mode = Mode.STATE
+    requires = ("isis_interface",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"transit", "loopback"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        loopback = ctx.scope.service_subtype == "loopback"
+        names = (
+            sorted(ctx.scope.selectors.interfaces)
+            if loopback
+            else _scope_transit_interfaces(ctx)
+        )
+        data: dict[str, Any] = ctx.subject.get("isis_interface", {})
+        findings: list[Finding] = []
+        for name in names:
+            entry = data.get(name)
+            if entry is None:
+                findings.append(Finding(
+                    Outcome.BROKEN,
+                    f"{name}: rozhrani neni v IS-IS interface vypisu",
+                    label=qualified(self.label, name), value=MISSING,
+                ))
+                continue
+            levels = entry.get("levels", {})
+            findings.append(Finding(
+                Outcome.OK if "2" in levels else Outcome.BROKEN,
+                f"{name}: IS-IS level 2 {'nakonfigurovan' if '2' in levels else 'chybi'}",
+                label=qualified("IS-IS level 2", name),
+                value="nakonfigurován" if "2" in levels else MISSING,
+            ))
+            if "1" in levels:
+                findings.append(Finding(
+                    Outcome.BROKEN,
+                    f"{name}: IS-IS level 1 nema na Core rozhrani co delat",
+                    label=qualified("IS-IS level 1", name), value="nakonfigurován",
+                ))
+            passive = bool(levels.get("2", {}).get("passive"))
+            # Loopback pasivni byt musi (nema souseda), transit nesmi
+            # (pasivni port nesestavi adjacency, kterou meri
+            # isis_adjacency_state).
+            ok = passive if loopback else not passive
+            findings.append(Finding(
+                Outcome.OK if ok else Outcome.BROKEN,
+                f"{name}: level 2 passive={'ano' if passive else 'ne'}",
+                label=qualified("IS-IS level 2 passive", name),
+                value="Passive" if passive else "bez Passive",
+            ))
+        return findings
+
+
+@register
+class IsisOverviewCheck(Check):
+    id = "isis_overview"
+    title = "IS-IS overview routeru"
+    label = "IS-IS overload bit"
+    mode = Mode.STATE
+    requires = ("isis_overview",)
+    requires_inventory = True
+    service_types = CORE
+    service_subtypes = frozenset({"loopback"})
+    default_severity = Severity.ADVISORY
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        overview: dict[str, Any] = ctx.subject.get("isis_overview", {})
+        overload = bool(overview.get("overload_enabled"))
+        return [Finding(
+            Outcome.DEGRADED if overload else Outcome.OK,
+            "overload bit je nastaveny - router se vyhyba tranzitnimu provozu"
+            if overload else "overload bit neni nastaveny",
+            value="nastaven" if overload else "nenastaven",
+        )]

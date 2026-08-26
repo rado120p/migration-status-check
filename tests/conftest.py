@@ -150,6 +150,8 @@ def _facts_for(scopes, pps: int) -> dict:
     bfd = {}
     optics = {}
     isis_adjacency = {}
+    isis_interface = {}
+    isis_overview = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -283,6 +285,19 @@ def _facts_for(scopes, pps: int) -> dict:
                     "ip_address": _neighbour_for(v4) if v4 else None,
                     "ipv6_address": _neighbour_for(v6) if v6 else None,
                 }
+                # Nepasivni level 2 na tranzitu - jinak by isis_interface_info
+                # (Task 9) hlasil FAIL "level 2 passive=ano" na kazdem
+                # zdravem tranzitnim rozhrani a rozbil AR-29.
+                isis_interface[name] = {"levels": {"2": {"passive": False}}}
+
+        # lo0.* nese IS-IS jako pasivni level 2 - loopback nema souseda,
+        # takze nepasivni level 2 by isis_interface_info hlasil FAIL.
+        # overload_enabled: False, jinak by isis_overview hlasil WARN na
+        # kazde zdrave migraci a rozbil AR-29.
+        if scope.key.service_type == "Core" and scope.service_subtype == "loopback":
+            for name in scope.selectors.interfaces:
+                isis_interface[name] = {"levels": {"2": {"passive": True}}}
+            isis_overview = {"overload_enabled": False}
 
         service_type = scope.key.service_type
         instance = (
@@ -351,6 +366,8 @@ def _facts_for(scopes, pps: int) -> dict:
         "bfd": bfd,
         "optics": optics,
         "isis_adjacency": isis_adjacency,
+        "isis_interface": isis_interface,
+        "isis_overview": isis_overview,
     }
 
 

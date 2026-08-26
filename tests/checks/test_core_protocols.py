@@ -10,11 +10,14 @@ from migration_validator.checks.base import CheckContext
 from migration_validator.checks.core_protocols import (
     MISSING,
     IsisAdjacencyStateCheck,
+    IsisInterfaceInfoCheck,
+    IsisOverviewCheck,
 )
 from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 IFACE = "ge-0/0/1.0"
+LOOPBACK = "lo0.0"
 
 
 def _scope(interfaces=(IFACE,), service_subtype="transit") -> Scope:
@@ -31,6 +34,18 @@ def _ctx(subject_adj, baseline_adj=None, scope=None):
         scope=scope or _scope(),
         subject={"isis_adjacency": subject_adj},
         baseline=({"isis_adjacency": baseline_adj} if baseline_adj is not None else None),
+        config=__import__(
+            "migration_validator.config", fromlist=["default_config"]
+        ).default_config(),
+    )
+
+
+def _ctx_for(key: str, subject_value, scope=None):
+    """CheckContext s obecnou fact oblasti - pro isis_interface/isis_overview."""
+    return CheckContext(
+        scope=scope or _scope(),
+        subject={key: subject_value},
+        baseline=None,
         config=__import__(
             "migration_validator.config", fromlist=["default_config"]
         ).default_config(),
@@ -293,5 +308,171 @@ def test_interface_missing_baseline_without_state_key_does_not_leak_none():
 def test_loopback_scope_does_not_apply():
     check = IsisAdjacencyStateCheck()
     scope = _scope(service_subtype="loopback")
+
+    assert check.applies_to(scope) is False
+
+
+# --- IsisInterfaceInfoCheck -------------------------------------------------
+
+
+def _loopback_scope(interfaces=(LOOPBACK,)) -> Scope:
+    return _scope(interfaces=interfaces, service_subtype="loopback")
+
+
+def test_loopback_passive_level2_is_pass():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {"2": {"passive": True}}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    level2_row = next(f for f in findings if f.label == f"IS-IS level 2 ({LOOPBACK})")
+    assert level2_row.outcome is Outcome.OK
+
+    passive_row = next(
+        f for f in findings if f.label == f"IS-IS level 2 passive ({LOOPBACK})"
+    )
+    assert passive_row.outcome is Outcome.OK
+    assert passive_row.value == "Passive"
+
+
+def test_loopback_non_passive_level2_is_fail_passive_row():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {"2": {"passive": False}}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    passive_row = next(
+        f for f in findings if f.label == f"IS-IS level 2 passive ({LOOPBACK})"
+    )
+    assert passive_row.outcome is Outcome.BROKEN
+    assert passive_row.value == "bez Passive"
+
+
+def test_level1_present_is_fail_row_on_loopback():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {
+                LOOPBACK: {
+                    "levels": {"1": {"passive": True}, "2": {"passive": True}}
+                }
+            },
+            scope=_loopback_scope(),
+        )
+    )
+
+    level1_row = next(f for f in findings if f.label == f"IS-IS level 1 ({LOOPBACK})")
+    assert level1_row.outcome is Outcome.BROKEN
+    assert level1_row.value == "nakonfigurován"
+
+
+def test_level1_present_is_fail_row_on_transit():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {IFACE: {"levels": {"1": {"passive": False}, "2": {"passive": False}}}},
+            scope=_scope(),
+        )
+    )
+
+    level1_row = next(f for f in findings if f.label == f"IS-IS level 1 ({IFACE})")
+    assert level1_row.outcome is Outcome.BROKEN
+    assert level1_row.value == "nakonfigurován"
+
+
+def test_transit_non_passive_level2_is_pass():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {IFACE: {"levels": {"2": {"passive": False}}}},
+            scope=_scope(),
+        )
+    )
+
+    passive_row = next(
+        f for f in findings if f.label == f"IS-IS level 2 passive ({IFACE})"
+    )
+    assert passive_row.outcome is Outcome.OK
+    assert passive_row.value == "bez Passive"
+
+
+def test_transit_passive_level2_is_fail():
+    """Pasivni tranzit nesestavi adjacency, kterou meri isis_adjacency_state."""
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {IFACE: {"levels": {"2": {"passive": True}}}},
+            scope=_scope(),
+        )
+    )
+
+    passive_row = next(
+        f for f in findings if f.label == f"IS-IS level 2 passive ({IFACE})"
+    )
+    assert passive_row.outcome is Outcome.BROKEN
+    assert passive_row.value == "Passive"
+
+
+def test_interface_missing_from_isis_interface_output_is_fail():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for("isis_interface", {}, scope=_scope())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == MISSING
+    assert findings[0].label == f"IS-IS interface ({IFACE})"
+
+
+def test_loopback_measures_selector_interfaces_not_transit_filter():
+    """Loopback scope selectors.interfaces = ["lo0.0"] - lo0 neni transit,
+    ale na loopback scopu se meri presto (ne pres _scope_transit_interfaces)."""
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {"2": {"passive": True}}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    assert any(f.label == f"IS-IS level 2 ({LOOPBACK})" for f in findings)
+
+
+# --- IsisOverviewCheck -------------------------------------------------
+
+
+def test_overload_enabled_is_warn():
+    findings = IsisOverviewCheck().run(
+        _ctx_for(
+            "isis_overview", {"overload_enabled": True}, scope=_loopback_scope()
+        )
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].value == "nastaven"
+
+
+def test_overload_disabled_is_pass():
+    findings = IsisOverviewCheck().run(
+        _ctx_for(
+            "isis_overview", {"overload_enabled": False}, scope=_loopback_scope()
+        )
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "nenastaven"
+
+
+def test_isis_overview_does_not_apply_to_transit_scope():
+    check = IsisOverviewCheck()
+    scope = _scope(service_subtype="transit")
 
     assert check.applies_to(scope) is False
