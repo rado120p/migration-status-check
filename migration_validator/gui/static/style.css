@@ -255,29 +255,27 @@ a:hover { color: #0e3fa9; }
 .breadcrumb .crumb-current { color: #374151; }
 .breadcrumb .crumb-current.mono { font-family: 'IBM Plex Mono', monospace; }
 
-/* Summary cards */
-.summary-cards { display: flex; gap: 12px; }
+/* Counts strip (Sluzby/Checky, mirrors CLI _counts_lines) */
+.counts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 
-.summary-card {
-  flex: 1;
+.counts-group {
   background: #fff;
   border: 1px solid #e2e5ea;
-  border-radius: 8px;
-  padding: 14px 16px;
+  border-radius: 6px;
+  padding: 7px 14px;
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
 }
 
-.summary-card.fail-nonzero {
-  border: 1px solid #fecaca;
-  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.08);
-}
-
-.summary-count {
-  font-size: 26px;
-  font-weight: 700;
-  font-family: 'IBM Plex Mono', monospace;
-}
-
-.summary-label { font-size: 12px; color: #6b7280; font-weight: 500; }
+.counts-group .counts-label { color: #6b7280; }
+.counts-group b { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+.count-pass { color: #059669; }
+.count-warn { color: #b45309; }
+.count-fail { color: #b91c1c; }
+.count-skip { color: #6b7280; }
+.count-info { color: #2563eb; }
+.counts-note { font-size: 12px; color: #6b7280; }
 
 /* Notice (422 missing snapshots etc) */
 .notice {

@@ -971,14 +971,33 @@ class App {
     return bad ? bad.message : "";
   }
 
-  computeSummaryTotals() {
-    const totals = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
-    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    for (const ev of evaluations) {
-      const s = ev.result.summary || {};
-      for (const key of Object.keys(totals)) totals[key] += s[key] || 0;
-    }
-    return totals;
+  buildCountsStrip(services, checks, matchedLine) {
+    const order = ["pass", "warn", "fail", "skip", "info"];
+    const group = (label, counts, keys) =>
+      el("div", {
+        className: "counts-group",
+        children: [
+          el("span", { className: "counts-label", text: label }),
+          ...keys.map((key) =>
+            el("span", {
+              className: "count-" + key,
+              children: [
+                el("b", { text: String(counts[key] || 0) }),
+                document.createTextNode(" " + key.toUpperCase()),
+              ],
+            })
+          ),
+        ],
+      });
+    const strip = el("div", {
+      className: "counts",
+      children: [
+        group("Služby:", services, order),
+        group("Checky:", checks, order),
+      ],
+    });
+    if (matchedLine) strip.appendChild(el("span", { className: "counts-note", text: matchedLine }));
+    return strip;
   }
 
   renderRunOverview() {
@@ -1036,27 +1055,24 @@ class App {
       );
     }
 
-    const totals = this.computeSummaryTotals();
-    const cardsDef = [
-      ["pass", "PASS", "#059669"],
-      ["warn", "WARN", "#d97706"],
-      ["fail", "FAIL", "#dc2626"],
-      ["skip", "SKIP", "#6b7280"],
-      ["info", "INFO", "#2563eb"],
-    ];
-    const cardsRow = el("div", { className: "summary-cards" });
-    for (const [key, label, color] of cardsDef) {
-      const count = totals[key];
-      const card = el("div", {
-        className: "summary-card" + (key === "fail" && count > 0 ? " fail-nonzero" : ""),
-        children: [
-          el("div", { className: "summary-count", text: String(count), style: { color } }),
-          el("div", { className: "summary-label", text: label }),
-        ],
-      });
-      cardsRow.appendChild(card);
+    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
+    const results = evaluations.map((ev) => ev.result);
+    const services = MigView.countStatuses(
+      results.flatMap((r) => (r.scopes || []).map((s) => s.status))
+    );
+    const checks = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+    let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0;
+    for (const result of results) {
+      const summary = result.summary || {};
+      for (const key of Object.keys(checks)) checks[key] += summary[key] || 0;
+      matched += summary.scopes_matched || 0;
+      unmatchedBaseline += summary.unmatched_baseline || 0;
+      unmatchedSubject += summary.unmatched_subject || 0;
     }
-    this.mainEl.appendChild(cardsRow);
+    const matchedLine = results.length
+      ? `Spárováno ${matched} služeb, ${unmatchedBaseline} nespárováno v baseline, ${unmatchedSubject} v subject`
+      : null;
+    this.mainEl.appendChild(this.buildCountsStrip(services, checks, matchedLine));
 
     const allRows = detail.rows || [];
     const mappingRows = allRows.filter((r) => r.old && r.new);
