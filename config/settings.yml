@@ -1,0 +1,6 @@
+connection:
+  netconf_port: 830
+  timeout: 30
+  username: rmohyla
+  ssh_key_paths: []
+  password_env: MIG_LAB_PASSWORD

@@ -39,7 +39,9 @@ def _expand(paths) -> tuple[str, ...]:
     return tuple(str(Path(p).expanduser()) for p in paths)
 
 
-def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> ConnectionSettings:
+def load_settings(path: Path | None = None) -> ConnectionSettings:
+    if path is None:
+        path = DEFAULT_SETTINGS_PATH
     if not path.exists():
         return ConnectionSettings(ssh_key_paths=_expand(DEFAULT_SSH_KEY_PATHS))
 

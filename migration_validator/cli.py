@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from migration_validator import api
-from migration_validator.auth import AuthSettings, DEFAULT_AUTH_PATH, load_auth_file
+from migration_validator.auth import ConnectionSettings, load_settings
 from migration_validator.collectors.registry import collectors_for
 from migration_validator.config import Profile, default_profile, load_profile
 from migration_validator.connection.junos import (
@@ -310,17 +310,15 @@ def _cmd_checks(args: argparse.Namespace) -> int:
 def _add_auth_arguments(
     parser: argparse.ArgumentParser, *, port_flag: str = "--port", port_dest: str = "port"
 ) -> None:
-    # default=None vsude: merge flag > soubor > default se deje az
-    # v _connection_options, argparse default by soubor tise prebil.
+    # default=None vsude: merge flag > settings > default se deje az
+    # v _connection_options, argparse default by settings tise prebil.
     parser.add_argument("--username", default=None)
-    parser.add_argument("--auth", choices=("key", "password"), default=None)
-    parser.add_argument("--key-file", default=None)
     parser.add_argument("--password")
     parser.add_argument(port_flag, dest=port_dest, type=int, default=None)
     parser.add_argument("--timeout", type=int, default=None)
     parser.add_argument(
-        "--auth-file",
-        help="cesta k auth YAML (default ~/.config/mig-validate/auth.yml)",
+        "--settings",
+        help="cesta k settings YAML (default config/settings.yml)",
     )
 
 
@@ -332,34 +330,32 @@ def _pick(*values):
     return None
 
 
-def _auth_settings(args: argparse.Namespace) -> AuthSettings:
-    if args.auth_file:
-        return load_auth_file(Path(args.auth_file), required=True)
-    return load_auth_file(DEFAULT_AUTH_PATH, required=False)
+def _connection_settings(args: argparse.Namespace) -> ConnectionSettings:
+    if args.settings:
+        path = Path(args.settings)
+        if not path.exists():
+            raise ToolError(f"settings soubor nenalezen: {path}")
+        return load_settings(path)
+    return load_settings()
 
 
 def _connection_options(
-    args: argparse.Namespace, auth: AuthSettings
+    args: argparse.Namespace, settings: ConnectionSettings
 ) -> ConnectionOptions:
     # capture ma --ssh-port (dest "ssh_port"), protoze --port u nej znamena
     # cislo/jmeno sitoveho portu v run rezimu; record pouziva puvodni --port
-    # jako SSH port. Rozlisuje se pritomnosti atributu, ne hodnotou None -
-    # capture s --ssh-port nezadanym ma ssh_port None, coz by jinak spadlo
-    # na args.port (sitovy port typu "ge-0/0/0") a poslalo ho jako SSH port.
+    # jako SSH port. Rozlisuje se pritomnosti atributu, ne hodnotou None.
     if hasattr(args, "ssh_port"):
         flag_port = args.ssh_port
     else:
         flag_port = getattr(args, "port", None)
     return ConnectionOptions(
         host=args.device,
-        username=_pick(args.username, auth.username, "ansible"),
-        auth_type=_pick(args.auth, auth.auth_type, "key"),
-        key_file=_pick(
-            args.key_file, auth.key_file, str(Path.home() / ".ssh" / "id_rsa")
-        ),
-        password=_pick(args.password, auth.password),
-        port=_pick(flag_port, auth.ssh_port, 22),
-        timeout=_pick(args.timeout, auth.timeout, 30),
+        username=_pick(args.username, settings.username),
+        ssh_key_paths=settings.ssh_key_paths,
+        password=_pick(args.password, settings.password),
+        port=_pick(flag_port, settings.netconf_port),
+        timeout=_pick(args.timeout, settings.timeout),
     )
 
 
@@ -409,7 +405,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
         snapshot = api.capture(
             args.device,
             inventory=args.inventory,
-            options=_connection_options(args, _auth_settings(args)),
+            options=_connection_options(args, _connection_settings(args)),
             collectors=collectors,
             phase=args.phase,
             ping_count=ping_count,
@@ -453,7 +449,7 @@ def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None
     previous = _inventory_interfaces(inventory_path)
 
     try:
-        with connect(_connection_options(args, _auth_settings(args))) as device:
+        with connect(_connection_options(args, _connection_settings(args))) as device:
             platform = detect_platform(device)
             generate_inventory(device, platform, inventory_path, args.port)
     except JunosConnectionError as error:
@@ -541,7 +537,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
         snapshot = api.capture(
             args.device,
             inventory=str(inventory_path),
-            options=_connection_options(args, _auth_settings(args)),
+            options=_connection_options(args, _connection_settings(args)),
             collectors=collectors,
             phase=phase,
             ping_count=ping_count,
@@ -602,7 +598,7 @@ def _cmd_record(args: argparse.Namespace) -> int:
 
     target_root = Path(args.output_dir)
     try:
-        with connect(_connection_options(args, _auth_settings(args))) as device:
+        with connect(_connection_options(args, _connection_settings(args))) as device:
             platform = detect_platform(device)
             target = target_root / platform
             target.mkdir(parents=True, exist_ok=True)

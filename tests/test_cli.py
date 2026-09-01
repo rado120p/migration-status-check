@@ -1287,16 +1287,6 @@ def test_evaluate_prijima_profile_i_config_alias():
     assert args.profile == "p.yml"
 
 
-def test_capture_ma_auth_file_a_service_types():
-    parser = build_parser()
-    args = parser.parse_args(
-        ["capture", "--device", "r1", "--auth-file", "a.yml",
-         "--service-types", "Internet,IPVPN"]
-    )
-    assert args.auth_file == "a.yml"
-    assert args.service_types == "Internet,IPVPN"
-
-
 def test_service_types_carka_bez_typu_je_chyba(tmp_path, capsys):
     """--service-types "," parsuje na [] - ticha shoda by odfiltrovala
     kazdou sluzbu bez jedineho `typy=` kriteria v reportu."""
@@ -1346,70 +1336,68 @@ def test_evaluate_bez_profilu_neprida_zavorku_do_hlavicky(tmp_path, capsys):
     assert "[profil" not in first_line
 
 
-def test_flag_prebiji_auth_soubor(tmp_path, monkeypatch):
-    from migration_validator.auth import AuthSettings
+def test_flag_prebiji_settings():
+    from migration_validator.auth import ConnectionSettings
     from migration_validator.cli import _connection_options, build_parser
 
-    auth = AuthSettings(username="rmohyla", ssh_port=2222)
+    settings = ConnectionSettings(username="rmohyla", netconf_port=2222)
     args = build_parser().parse_args(
-        ["capture", "--device", "r1", "--username", "ansible"]
+        ["capture", "--device", "r1", "--username", "jiny", "--output", "o.json"]
     )
-    options = _connection_options(args, auth)
-    assert options.username == "ansible"   # flag vyhrava
-    assert options.port == 2222            # soubor vyhrava nad defaultem
+    options = _connection_options(args, settings)
+    assert options.username == "jiny"          # flag vyhrava
+    assert options.port == 2222                # settings, flag nezadany
 
 
-def test_soubor_prebiji_default(tmp_path):
-    from migration_validator.auth import AuthSettings
+def test_settings_prebiji_default():
+    from migration_validator.auth import ConnectionSettings
     from migration_validator.cli import _connection_options, build_parser
 
     args = build_parser().parse_args(["capture", "--device", "r1"])
-    options = _connection_options(args, AuthSettings(username="rmohyla"))
+    options = _connection_options(args, ConnectionSettings(username="rmohyla"))
     assert options.username == "rmohyla"
 
 
-def test_default_kdyz_neni_flag_ani_soubor():
-    from migration_validator.auth import AuthSettings
+def test_default_kdyz_neni_flag_ani_settings():
+    from migration_validator.auth import ConnectionSettings
     from migration_validator.cli import _connection_options, build_parser
 
     args = build_parser().parse_args(["capture", "--device", "r1"])
-    options = _connection_options(args, AuthSettings())
+    options = _connection_options(args, ConnectionSettings())
     assert options.username == "ansible"
-    assert options.port == 22
+    assert options.port == 830
     assert options.timeout == 30
 
 
-def test_auth_settings_necte_skutecny_domovsky_auth_soubor(tmp_path, monkeypatch):
-    # Autouse fixture v conftest.py patchuje DEFAULT_AUTH_PATH na neexistujici
-    # cestu - i kdyby na stroji lezel skutecny ~/.config/mig-validate/auth.yml
-    # s hodnotami, testy je nesmi videt. Overuje se tak, ze _auth_settings
-    # skutecne cte patchnutou vazbu (migration_validator.cli.DEFAULT_AUTH_PATH),
-    # ne puvodni z auth.py.
-    from migration_validator.cli import DEFAULT_AUTH_PATH, _auth_settings, build_parser
+def test_settings_flag_urcuje_cestu(tmp_path):
+    from migration_validator.cli import _connection_settings, build_parser
 
-    real_home_auth = tmp_path / "by-any-other-name" / "auth.yml"
-    real_home_auth.parent.mkdir(parents=True)
-    real_home_auth.write_text("username: utocnik\n", encoding="utf-8")
+    path = tmp_path / "s.yml"
+    path.write_text("connection:\n  username: laborant\n", encoding="utf-8")
+    args = build_parser().parse_args(
+        ["capture", "--device", "r1", "--settings", str(path), "--output", "o.json"]
+    )
+    assert _connection_settings(args).username == "laborant"
 
-    # Sanity: DEFAULT_AUTH_PATH v cli modulu je ted patchnuta pryc od
-    # skutecneho domova a rozhodne neukazuje na soubor, ktery jsme prave
-    # vyrobili vedle.
-    assert DEFAULT_AUTH_PATH != real_home_auth
-    assert not DEFAULT_AUTH_PATH.exists()
 
-    args = build_parser().parse_args(["capture", "--device", "r1"])
-    settings = _auth_settings(args)
-    assert settings.username is None
+def test_chybejici_default_settings_neni_chyba(tmp_path, monkeypatch):
+    from migration_validator.cli import _connection_settings, build_parser
+
+    monkeypatch.chdir(tmp_path)  # zadny config/settings.yml v cwd
+    args = build_parser().parse_args(
+        ["capture", "--device", "r1", "--output", "o.json"]
+    )
+    assert _connection_settings(args).username == "ansible"
 
 
 def test_capture_sitovy_port_se_nepropise_do_ssh_portu():
-    # --port u capture --run je sitovy port (napr. "ge-0/0/0"), ne SSH port -
-    # bez --ssh-port se SSH port musi vzit z auth souboru/defaultu.
-    from migration_validator.auth import AuthSettings
+    # capture --port je sitovy port (ge-0/0/0); SSH/NETCONF port jde
+    # ze settings/defaultu, nikdy z args.port.
+    from migration_validator.auth import ConnectionSettings
     from migration_validator.cli import _connection_options, build_parser
 
     args = build_parser().parse_args(
-        ["capture", "--run", "r", "--device", "r1", "--port", "ge-0/0/0"]
+        ["capture", "--device", "r1", "--run", "mig", "--port", "ge-0/0/0"]
     )
-    options = _connection_options(args, AuthSettings())
-    assert options.port == 22
+    options = _connection_options(args, ConnectionSettings(netconf_port=830))
+    assert options.port == 830
