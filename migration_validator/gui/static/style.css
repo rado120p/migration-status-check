@@ -313,7 +313,7 @@ a:hover { color: #0e3fa9; }
 
 .pairing-header-row {
   display: grid;
-  grid-template-columns: 24px 1.3fr 1.3fr 90px 90px 110px 130px;
+  grid-template-columns: 1.3fr 1.3fr 90px 90px 110px;
   gap: 0 8px;
   padding: 10px 18px;
   background: #f9fafb;
@@ -347,7 +347,7 @@ a:hover { color: #0e3fa9; }
 
 .pairing-row {
   display: grid;
-  grid-template-columns: 24px 1.3fr 1.3fr 90px 90px 110px 130px;
+  grid-template-columns: 1.3fr 1.3fr 90px 90px 110px;
   gap: 0 8px;
   padding: 13px 18px;
   border-bottom: 1px solid #f1f3f6;
@@ -392,6 +392,107 @@ a:hover { color: #0e3fa9; }
 .pill-warn { background: #fef3c7; color: #b45309; }
 .pill-fail { background: #fee2e2; color: #b91c1c; }
 .pill-skip, .pill-waiting { background: #f3f4f6; color: #6b7280; }
+
+/* Results table (CLI summary table) */
+.results-table { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }
+
+.results-header-row, .results-row {
+  display: grid;
+  grid-template-columns: 56px 1.7fr 90px 110px 110px 100px 2fr 18px;
+  gap: 0 10px;
+  padding: 9px 16px;
+  align-items: baseline;
+}
+
+.results-header-row.single-port, .results-row.single-port {
+  grid-template-columns: 56px 1.8fr 90px 120px 100px 2fr 18px;
+}
+
+.results-header-row {
+  background: #f9fafb;
+  border-bottom: 1px solid #e2e5ea;
+  font: 600 11px 'IBM Plex Sans', sans-serif;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+.results-row { border-bottom: 1px solid #f1f3f6; font-size: 13px; cursor: pointer; }
+.results-row:hover { filter: brightness(0.985); }
+.results-row.tint-warn { background: #fffbeb; }
+.results-row.tint-fail { background: #fef2f2; }
+.results-row .svc-name { font-weight: 600; color: #111827; }
+.results-row .svc-cell { color: #374151; }
+.results-row .port-cell { font-family: 'IBM Plex Mono', monospace; color: #111827; }
+.results-row .find-cell { color: #4b5563; font-size: 12.5px; }
+.results-row .chevron { color: #9ca3af; font-size: 10px; justify-self: end; transition: transform 0.15s; }
+.results-row .chevron.open { transform: rotate(90deg); }
+.status-token { font: 600 11.5px 'IBM Plex Mono', monospace; }
+.status-token.pass { color: #059669; }
+.status-token.warn { color: #b45309; }
+.status-token.fail { color: #b91c1c; }
+.status-token.skip { color: #9ca3af; }
+.status-token.info { color: #2563eb; }
+
+/* Detail panel (headerless expansion) */
+.detail-cell { border-bottom: 1px solid #f1f3f6; background: #fbfcfd; padding: 8px 16px 14px; }
+
+.detail-block {
+  background: #fff;
+  border: 1px solid #e2e5ea;
+  border-left: 3px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-left: 46px;
+}
+
+.detail-block.status-pass { border-left-color: #059669; }
+.detail-block.status-warn { border-left-color: #d97706; }
+.detail-block.status-fail { border-left-color: #dc2626; }
+.detail-block.status-skip { border-left-color: #d1d5db; }
+
+.detail-cols, .detail-row {
+  display: grid;
+  grid-template-columns: 52px 220px 1fr 1fr;
+  gap: 0 12px;
+  padding: 3px 14px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.detail-cols.no-baseline, .detail-row.no-baseline { grid-template-columns: 52px 220px 1fr; }
+
+.detail-cols {
+  font: 600 10px 'IBM Plex Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+  padding-top: 9px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f1f3f6;
+}
+
+.detail-row .lbl { color: #374151; }
+.detail-row .val { font-family: 'IBM Plex Mono', monospace; color: #111827; }
+.detail-row .chg { font-family: 'IBM Plex Mono', monospace; color: #b45309; }
+.detail-row.grouped { padding-left: 40px; }
+.detail-row:last-child { padding-bottom: 10px; }
+
+.detail-section {
+  font: 600 12px 'IBM Plex Mono', monospace;
+  color: #4338ca;
+  background: #eef2ff;
+  padding: 4px 14px;
+  margin-top: 6px;
+}
+
+.detail-group {
+  font: 600 12px 'IBM Plex Mono', monospace;
+  color: #6b7280;
+  padding: 6px 14px 2px 28px;
+}
+
+.detail-note { font-size: 12px; color: #6b7280; padding: 6px 14px 0; }
 
 /* Expanded row panel (level 1) */
 .scopes-panel {

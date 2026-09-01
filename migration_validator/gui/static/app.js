@@ -76,6 +76,7 @@ class App {
       snapshotBaseline: null,
       openRows: {},
       openScopes: {},
+      openResults: {},
       activeCaptureId: null,
       captureForm: null,
       captureSubmitError: null,
@@ -334,6 +335,128 @@ class App {
     this.render();
   }
 
+  toggleResult(key) {
+    this.state.openResults[key] = !this.state.openResults[key];
+    this.render();
+  }
+
+  collectServiceEntries(evaluations) {
+    const entries = [];
+    for (const evaluation of evaluations) {
+      const result = evaluation.result || {};
+      const hasBaseline = result.baseline != null;
+      for (const scope of result.scopes || []) {
+        entries.push({
+          key: `res|${evaluation.subject}|${scope.scope_id}`,
+          view: MigView.buildView(scope, {}),
+          hasBaseline,
+          scope,
+        });
+      }
+    }
+    return entries;
+  }
+
+  buildResultsTable(entries, opts) {
+    const singlePort = !!(opts && opts.singlePort);
+    const mode = singlePort ? " single-port" : "";
+    const table = el("div", { className: "results-table" });
+    const headers = singlePort
+      ? ["Stav", "Služba", "Typ", "Port", "RI", "Nález", ""]
+      : ["Stav", "Služba", "Typ", "Starý port", "Nový port", "RI", "Nález", ""];
+    table.appendChild(
+      el("div", {
+        className: "results-header-row" + mode,
+        children: headers.map((text) => el("span", { text })),
+      })
+    );
+    for (const entry of entries) {
+      const view = entry.view;
+      const sClass = statusClass(view.status);
+      const open = !!this.state.openResults[entry.key];
+      const tint = view.status === "WARN" ? " tint-warn" : view.status === "FAIL" ? " tint-fail" : "";
+      const oldPort = view.baseline_interfaces[0] || "-";
+      const newPort = view.subject_interfaces[0] || "-";
+      const portCells = singlePort
+        ? [el("span", { className: "port-cell", text: newPort })]
+        : [
+            el("span", { className: "port-cell", text: oldPort }),
+            el("span", { className: "port-cell", text: newPort }),
+          ];
+      table.appendChild(
+        el("div", {
+          className: "results-row" + mode + tint,
+          onClick: () => this.toggleResult(entry.key),
+          children: [
+            el("span", { className: "status-token " + sClass, text: view.status }),
+            el("span", { className: "svc-name", text: view.description }),
+            el("span", { className: "svc-cell", text: view.service_type }),
+            ...portCells,
+            el("span", { className: "port-cell", text: view.routing_instance || "-" }),
+            el("span", { className: "find-cell", text: view.worst_message }),
+            el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+          ],
+        })
+      );
+      if (open) {
+        table.appendChild(
+          el("div", {
+            className: "detail-cell",
+            children: [this.buildDetailPanel(view, entry.hasBaseline)],
+          })
+        );
+      }
+    }
+    return table;
+  }
+
+  buildDetailPanel(view, hasBaseline) {
+    const block = el("div", { className: "detail-block status-" + statusClass(view.status) });
+    if (view.link_note) {
+      block.appendChild(el("div", { className: "detail-note", text: view.link_note }));
+    }
+    const nb = hasBaseline ? "" : " no-baseline";
+    const oldPort = view.baseline_interfaces[0] || "-";
+    const newPort = view.subject_interfaces[0] || "-";
+    const cols = hasBaseline
+      ? ["Stav", "Check", `Post (${newPort})`, `Změna proti ${oldPort}`]
+      : ["Stav", "Check", "Hodnota"];
+    block.appendChild(
+      el("div", { className: "detail-cols" + nb, children: cols.map((text) => el("span", { text })) })
+    );
+    const row = (r, grouped) => {
+      const change = MigView.changeText(r, hasBaseline);
+      const cells = [
+        el("span", { className: "status-token " + statusClass(r.status), text: r.status }),
+        el("span", { className: "lbl", text: r.label }),
+        el("span", { className: "val", text: r.value }),
+      ];
+      if (hasBaseline) cells.push(el("span", { className: "chg", text: change }));
+      return el("div", {
+        className: "detail-row" + nb + (grouped ? " grouped" : ""),
+        children: cells,
+      });
+    };
+    const familyTitle = { 4: "IPv4", 6: "IPv6" };
+    for (const section of view.sections) {
+      if (section.family != null) {
+        const gateway = section.virtual_gw.length ? `   VGW ${section.virtual_gw.join(", ")}` : "";
+        block.appendChild(
+          el("div", {
+            className: "detail-section",
+            text: `${familyTitle[section.family]} — ${section.addresses.join(", ") || "-"}${gateway}`,
+          })
+        );
+      }
+      for (const r of section.rows) block.appendChild(row(r, false));
+      for (const group of section.groups) {
+        block.appendChild(el("div", { className: "detail-group", text: group.title }));
+        for (const r of group.rows) block.appendChild(row(r, true));
+      }
+    }
+    return block;
+  }
+
   async selectRun(name) {
     if (this.state.run === name) return;
     this.state.run = name;
@@ -341,6 +464,7 @@ class App {
     this.state.selectedSnapshot = null;
     this.state.openRows = {};
     this.state.openScopes = {};
+    this.state.openResults = {};
     // Capture tracking is global state (controller ruling: one in-flight
     // capture at a time, tracked across the whole app) - a run switch must
     // not orphan it. activeCaptureId/captureProgress/polling survive; the
@@ -901,28 +1025,6 @@ class App {
     return (detail.snapshots || []).find((s) => s.file === file) || null;
   }
 
-  findEvaluation(row) {
-    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    // Step matches take priority - they are the exact mapped-post pairing.
-    // Only fall back to subject-snapshot matching (whole-device,
-    // mapping-less, rollback evaluations - all step=null) when no step
-    // eval claimed this row, so a rollback eval can never displace the
-    // post eval a mapped row already had.
-    const stepMatch = evaluations.find(
-      (ev) =>
-        ev.step && this.portsEqual(ev.step.old, row.old) && this.portsEqual(ev.step.new, row.new)
-    );
-    if (stepMatch) return stepMatch;
-    return evaluations.find((ev) => {
-      // same-device evaluace maji vlastni sekci - nesmi obsadit radek tabulky
-      if (ev.step || ev.same_device) return false;
-      const record = this.findSnapshotRecord(ev.subject);
-      if (!record) return false;
-      const endpoint = { node: record.device, port: record.port };
-      return this.portsEqual(endpoint, row.old) || this.portsEqual(endpoint, row.new);
-    });
-  }
-
   rowKey(row) {
     const old = row.old ? `${row.old.node}:${row.old.port}` : "x";
     const nw = row.new ? `${row.new.node}:${row.new.port}` : "x";
@@ -1085,14 +1187,25 @@ class App {
         })
       );
       if (wholeRows.length > 0) {
+        this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
         this.mainEl.appendChild(this.buildPairingTable(wholeRows));
       }
     } else {
+      this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
       this.mainEl.appendChild(this.buildPairingTable(allRows));
     }
 
     const sameDevice = this.buildSameDeviceSection();
     if (sameDevice) this.mainEl.appendChild(sameDevice);
+
+    const pairEvaluations = evaluations.filter((ev) => !ev.same_device);
+    const entries = this.collectServiceEntries(pairEvaluations);
+    if (entries.length > 0) {
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
+      );
+      this.mainEl.appendChild(this.buildResultsTable(entries, {}));
+    }
 
     // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
     // first-ever capture on a mapping-less run) has nothing to attach to
@@ -1177,41 +1290,22 @@ class App {
       el("div", {
         className: "pairing-header-row",
         children: [
-          el("span", {}),
           el("span", { text: "Old port" }),
           el("span", { text: "New port" }),
           el("span", { text: "Pre" }),
           el("span", { text: "Post" }),
           el("span", { text: "Rollback" }),
-          el("span", { className: "col-result", text: "Result" }),
         ],
       })
     );
 
     const task = this.cache.captureProgress;
     for (const row of rows) {
-      const evaluation = this.findEvaluation(row);
-      const key = this.rowKey(row);
-      let worst = "waiting";
-      let presentation = null;
-      if (evaluation) {
-        presentation = this.rowPresentation(evaluation);
-        worst = presentation.worst;
-      }
-      const pillClass = evaluation ? "pill-" + statusClass(worst) : "pill-waiting";
-      const pillLabel = evaluation ? this.pillText(worst, presentation.count) : "waiting";
-      const clickable = !!(evaluation && presentation.clickable);
-      const open = clickable && !!this.state.openRows[key];
       const rowMatches = this.rowMatchesCapture(row, task);
 
       const rowEl = el("div", {
-        className:
-          "pairing-row" +
-          (clickable ? " clickable" : "") +
-          (evaluation ? " " + this.rowTintClass(worst) : ""),
-        onClick: clickable ? () => this.toggleRow(key) : null,
+        className: "pairing-row",
         children: [
-          el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
           el("span", {
             className: "port-cell" + (row.old ? "" : " unpaired"),
             text: row.old ? `${row.old.node}:${row.old.port || "all"}` : "not paired",
@@ -1223,10 +1317,6 @@ class App {
           this.buildFlagCell(row, "pre", task),
           this.buildFlagCell(row, "post", task),
           this.buildFlagCell(row, "rollback", task),
-          el("span", {
-            className: "col-result",
-            children: [el("span", { className: "status-pill " + pillClass, text: pillLabel })],
-          }),
         ],
       });
       table.appendChild(rowEl);
@@ -1253,10 +1343,6 @@ class App {
             children: this.buildCaptureIssueLines(task),
           })
         );
-      }
-
-      if (open) {
-        table.appendChild(this.buildScopesPanel(presentation.scopes, key));
       }
     }
     return table;
@@ -2094,6 +2180,7 @@ class App {
         this.state.selectedSnapshot = null;
         this.state.openRows = {};
         this.state.openScopes = {};
+        this.state.openResults = {};
         await this.loadRun();
         this.render();
         return;
