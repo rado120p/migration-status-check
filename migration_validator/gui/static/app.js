@@ -735,13 +735,13 @@ class App {
           el("span", {
             children: [
               document.createTextNode("Device "),
-              el("span", { className: "value", text: snapshot.device }),
+              el("span", { className: "value", text: snapshot.device || "" }),
             ],
           }),
           el("span", {
             children: [
               document.createTextNode("Platform "),
-              el("span", { className: "value", text: snapshot.platform }),
+              el("span", { className: "value", text: snapshot.platform || "" }),
             ],
           }),
           el("span", {
