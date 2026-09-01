@@ -160,3 +160,34 @@ test("countStatuses: five counters, lowercase keys", () => {
   assert.deepStrictEqual(MigView.countStatuses(["PASS", "PASS", "WARN", "INFO"]),
     { pass: 2, warn: 1, fail: 0, skip: 0, info: 1 });
 });
+
+test("unassignedRow: bgp peer -> RI detail", () => {
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bgp_peers", { peer: "192.0.2.99", routing_instance: "GOV-VRF" }),
+    { identity: "192.0.2.99", detail: "RI GOV-VRF" });
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bgp_peers", { peer: "192.0.2.99" }),
+    { identity: "192.0.2.99", detail: "RI -" });
+});
+
+test("unassignedRow: static route -> next_hop arrow, via fallback, aggregate suffix", () => {
+  assert.deepStrictEqual(
+    MigView.unassignedRow("static_routes",
+      { rib: "inet.0", prefix: "198.51.100.0/24", next_hop: ["10.1.2.2"] }),
+    { identity: "inet.0 198.51.100.0/24", detail: "-> 10.1.2.2" });
+  assert.deepStrictEqual(
+    MigView.unassignedRow("static_routes",
+      { rib: "inet.0", prefix: "0.0.0.0/0", via: ["et-0/0/8.13"] }),
+    { identity: "inet.0 0.0.0.0/0", detail: "via et-0/0/8.13" });
+  assert.deepStrictEqual(
+    MigView.unassignedRow("static_routes",
+      { rib: "inet.0", prefix: "10.0.0.0/8", protocol: "aggregate", via: [] }),
+    { identity: "inet.0 10.0.0.0/8 (aggregate)", detail: "via -" });
+});
+
+test("unassignedRow: bfd session -> interface + state detail", () => {
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bfd_sessions",
+      { peer: "10.1.2.2", interface: "et-0/0/8.13", state: "Up" }),
+    { identity: "10.1.2.2", detail: "et-0/0/8.13   Up" });
+});

@@ -410,6 +410,64 @@ class App {
     return table;
   }
 
+  buildUnmatchedSection(items) {
+    const card = el("div", { className: "safety-card" + (items.length ? " nonempty" : "") });
+    if (items.length === 0) {
+      card.appendChild(
+        el("div", { className: "safety-row", children: [el("span", { className: "nothing", text: "(nic)" })] })
+      );
+      return card;
+    }
+    for (const item of items) {
+      card.appendChild(
+        el("div", {
+          className: "safety-row",
+          children: [
+            el("span", { className: "side " + item.side, text: item.side }),
+            el("span", { className: "identity", text: item.label }),
+            el("span", { className: "detail", text: `(${item.serviceType})` }),
+            el("span", {
+              className: "detail",
+              text: item.pairLabel ? `${item.reason} — ${item.pairLabel}` : item.reason,
+            }),
+          ],
+        })
+      );
+    }
+    return card;
+  }
+
+  buildUnassignedSection(unassigned) {
+    const rows = [];
+    for (const [kind, title] of MigView.UNASSIGNED_TITLES) {
+      for (const item of (unassigned && unassigned[kind]) || []) {
+        const { identity, detail } = MigView.unassignedRow(kind, item);
+        rows.push({ title, identity, detail });
+      }
+    }
+    const card = el("div", { className: "safety-card" + (rows.length ? " nonempty" : "") });
+    if (rows.length === 0) {
+      card.appendChild(
+        el("div", { className: "safety-row", children: [el("span", { className: "nothing", text: "(nic)" })] })
+      );
+      return card;
+    }
+    for (const row of rows) {
+      card.appendChild(
+        el("div", {
+          className: "safety-row",
+          children: [
+            el("span", { className: "kind", text: row.title }),
+            el("span", { className: "identity", text: row.identity }),
+            el("span", {}),
+            el("span", { className: "detail", text: row.detail }),
+          ],
+        })
+      );
+    }
+    return card;
+  }
+
   buildDetailPanel(view, hasBaseline) {
     const block = el("div", { className: "detail-block status-" + statusClass(view.status) });
     if (view.link_note) {
@@ -1207,6 +1265,39 @@ class App {
       this.mainEl.appendChild(this.buildResultsTable(entries, {}));
     }
 
+    if (this.cache.evaluation) {
+      const unmatchedItems = [];
+      const unassignedAgg = { bgp_peers: [], static_routes: [], bfd_sessions: [] };
+      const multi = pairEvaluations.length > 1;
+      for (const evaluation of pairEvaluations) {
+        const result = evaluation.result || {};
+        const pairLabel = multi ? evaluation.subject : null;
+        for (const side of ["baseline", "subject"]) {
+          for (const item of (result.unmatched && result.unmatched[side]) || []) {
+            unmatchedItems.push({
+              side,
+              label: item.description || item.scope_id,
+              serviceType: item.service_type || "-",
+              reason: item.reason,
+              pairLabel,
+            });
+          }
+        }
+        for (const kind of Object.keys(unassignedAgg)) {
+          unassignedAgg[kind].push(...((result.unassigned && result.unassigned[kind]) || []));
+        }
+      }
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Nespárováno — ${unmatchedItems.length}` })
+      );
+      this.mainEl.appendChild(this.buildUnmatchedSection(unmatchedItems));
+      const unassignedCount = Object.values(unassignedAgg).reduce((n, list) => n + list.length, 0);
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Nezařazeno (jen subject) — ${unassignedCount}` })
+      );
+      this.mainEl.appendChild(this.buildUnassignedSection(unassignedAgg));
+    }
+
     // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
     // first-ever capture on a mapping-less run) has nothing to attach to
     // above - surface its live progress standalone so it isn't silent.
@@ -1355,8 +1446,8 @@ class App {
     const sameDevice = evaluations.filter((ev) => ev.same_device);
     if (sameDevice.length === 0) return null;
 
-    const table = el("div", { className: "pairing-table" });
-    table.appendChild(
+    const meta = el("div", { className: "pairing-table" });
+    meta.appendChild(
       el("div", {
         className: "pairing-header-row cols-same",
         children: [
@@ -1364,32 +1455,21 @@ class App {
           el("span", { text: "Device" }),
           el("span", { text: "Pre taken" }),
           el("span", { text: "Post taken" }),
-          el("span", { className: "col-result", text: "Result" }),
+          el("span", { className: "col-result" }),
         ],
       })
     );
-
     for (const ev of sameDevice) {
       const subjectRecord = this.findSnapshotRecord(ev.subject);
       const baselineRecord = this.findSnapshotRecord(ev.baseline);
-      const key = `same:${ev.subject}`;
-      const presentation = this.rowPresentation(ev);
-      const worst = presentation.worst;
-      const clickable = presentation.clickable;
-      const open = clickable && !!this.state.openRows[key];
       const deviceLabel = subjectRecord
         ? `${subjectRecord.device}:${subjectRecord.port || "all"}`
         : ev.subject;
-
-      table.appendChild(
+      meta.appendChild(
         el("div", {
-          className:
-            "pairing-row cols-same" +
-            (clickable ? " clickable" : "") +
-            " " + this.rowTintClass(worst),
-          onClick: clickable ? () => this.toggleRow(key) : null,
+          className: "pairing-row cols-same",
           children: [
-            el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+            el("span", {}),
             el("span", { className: "port-cell", text: deviceLabel }),
             el("span", {
               className: "taken-cell",
@@ -1399,22 +1479,14 @@ class App {
               className: "taken-cell",
               text: subjectRecord ? subjectRecord.taken || "" : "",
             }),
-            el("span", {
-              className: "col-result",
-              children: [
-                el("span", {
-                  className: "status-pill pill-" + statusClass(worst),
-                  text: this.pillText(worst, presentation.count),
-                }),
-              ],
-            }),
+            el("span", { className: "col-result" }),
           ],
         })
       );
-      if (open) {
-        table.appendChild(this.buildScopesPanel(presentation.scopes, key));
-      }
     }
+
+    const entries = this.collectServiceEntries(sameDevice);
+    const resultsTable = this.buildResultsTable(entries, { singlePort: true });
 
     return el("div", {
       className: "same-device-section",
@@ -1423,7 +1495,8 @@ class App {
           className: "subsection-title",
           text: "Same device — pre vs post",
         }),
-        table,
+        meta,
+        resultsTable,
       ],
     });
   }

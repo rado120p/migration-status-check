@@ -142,6 +142,30 @@ function countStatuses(statuses) {
   return counts;
 }
 
+const UNASSIGNED_TITLES = [
+  ["bgp_peers", "BGP peer"],
+  ["static_routes", "Staticka routa"],
+  ["bfd_sessions", "BFD session"],
+];
+
+function unassignedRow(kind, item) {
+  if (kind === "bgp_peers") {
+    return { identity: item.peer, detail: `RI ${item.routing_instance || "-"}` };
+  }
+  if (kind === "static_routes") {
+    const hops = item.next_hop || [];
+    const detail = hops.length
+      ? `-> ${hops.join(", ")}`
+      : `via ${(item.via && item.via.length ? item.via : ["-"]).join(", ")}`;
+    const suffix = item.protocol === "aggregate" ? " (aggregate)" : "";
+    return { identity: `${item.rib} ${item.prefix}${suffix}`, detail };
+  }
+  return {
+    identity: item.peer,
+    detail: `${item.interface || "-"}   ${item.state || "-"}`,
+  };
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -150,6 +174,8 @@ const MigView = {
   worstMessage,
   buildView,
   countStatuses,
+  UNASSIGNED_TITLES,
+  unassignedRow,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;

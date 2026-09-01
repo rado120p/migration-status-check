@@ -964,3 +964,26 @@ a:hover { color: #0e3fa9; }
 
 .guide p { margin: 0 0 10px; line-height: 1.5; }
 .guide .k { font: 600 12px 'IBM Plex Mono', monospace; color: #1a56db; }
+
+/* Safety-net sections */
+.safety-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }
+.safety-card.nonempty { border-color: #fde68a; }
+
+.safety-row {
+  display: grid;
+  grid-template-columns: 110px 1.6fr 130px 2fr;
+  gap: 0 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f1f3f6;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.safety-row:last-child { border-bottom: none; }
+.safety-row .side { font: 600 11px 'IBM Plex Mono', monospace; text-transform: uppercase; }
+.safety-row .side.baseline { color: #4338ca; }
+.safety-row .side.subject { color: #047857; }
+.safety-row .kind { font: 600 11px 'IBM Plex Mono', monospace; color: #047857; text-transform: uppercase; }
+.safety-row .identity { font-family: 'IBM Plex Mono', monospace; color: #111827; }
+.safety-row .detail { color: #4b5563; }
+.safety-row .nothing { color: #9ca3af; }
