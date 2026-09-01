@@ -86,7 +86,7 @@ def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> ConnectionSettings:
     return ConnectionSettings(
         username=connection.get("username") or DEFAULT_USERNAME,
         ssh_key_paths=_expand(key_paths),
-        netconf_port=int(connection.get("netconf_port") or DEFAULT_NETCONF_PORT),
-        timeout=int(connection.get("timeout") or DEFAULT_TIMEOUT),
+        netconf_port=int(connection["netconf_port"]) if connection.get("netconf_port") is not None else DEFAULT_NETCONF_PORT,
+        timeout=int(connection["timeout"]) if connection.get("timeout") is not None else DEFAULT_TIMEOUT,
         password=password,
     )

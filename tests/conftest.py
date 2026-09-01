@@ -16,10 +16,14 @@ from migration_validator.scoping.builder import build_scopes
 def _isolate_default_settings_path(tmp_path, monkeypatch):
     """Testy nesmi cist skutecny config/settings.yml.
 
-    Bez tohohle by kazdy test, ktery projde main(["capture"/"record", ...]),
-    zkusil nacist verejny settings soubor. Patchuje se DEFAULT_SETTINGS_PATH
-    v auth.py a jeho odraz v cli.py (kdy je importovany). Bez tohohle by
-    test spadl, kdyby soubor nebyl dostupny.
+    Patchuje se DEFAULT_SETTINGS_PATH v auth.py. Bez tohohle by kazdy test,
+    ktery projde main(["capture"/"record", ...]), zkusil nacist verejny
+    settings soubor a spadl na ValueErroru, kdyby soubor nebyl dostupny.
+
+    POZOR: Pokud cli.py (prevedena v poznejsi uloze) bude pouzivat
+    `from migration_validator.auth import DEFAULT_SETTINGS_PATH`, pouziti
+    pri call-time se nebude patchovat - bude potrebna samostatna patchovani
+    v cli.py. Pro patch v load_settings se tato patchovani staci.
     """
     fake_path = tmp_path / "settings-neexistuje.yml"
     monkeypatch.setattr("migration_validator.auth.DEFAULT_SETTINGS_PATH", fake_path)
