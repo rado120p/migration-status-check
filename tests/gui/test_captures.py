@@ -1,0 +1,113 @@
+import time
+
+import pytest
+
+from migration_validator.gui.captures import CaptureManager, DeviceBusy
+
+
+def _ok_fn(on_progress):
+    on_progress("interfaces", "start", None)
+    on_progress("interfaces", "ok", None)
+    return object()
+
+
+def _fail_fn(on_progress):
+    raise ValueError("autentizace selhala")
+
+
+def _wait_done(manager, task_id, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        task = manager.get(task_id)
+        if task.state != "running":
+            return task
+        time.sleep(0.01)
+    raise AssertionError("capture nedobehl")
+
+
+def _wait_done_route(client, task_id, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        task = client.get(f"/api/captures/{task_id}").json()
+        if task["state"] != "running":
+            return task
+        time.sleep(0.01)
+    raise AssertionError("capture nedobehl")
+
+
+def test_uspesny_capture_ma_kroky_a_stav_done():
+    manager = CaptureManager()
+    task = manager.start(_ok_fn, run="mig01", device="MX1", port="ge-0/0/1", phase="pre")
+    task = _wait_done(manager, task.id)
+    assert task.state == "done"
+    assert task.steps == [
+        {"collector": "interfaces", "status": "ok", "message": None}
+    ]
+
+
+def test_selhani_nastavi_failed_a_error():
+    manager = CaptureManager()
+    task = manager.start(_fail_fn, run="mig01", device="MX1", port=None, phase="pre")
+    task = _wait_done(manager, task.id)
+    assert task.state == "failed"
+    assert "autentizace" in task.error
+
+
+def test_soubezny_capture_na_stejnem_zarizeni_je_busy():
+    manager = CaptureManager()
+
+    def slow_fn(on_progress):
+        time.sleep(0.2)
+        return object()
+
+    manager.start(slow_fn, run="mig01", device="MX1", port=None, phase="pre")
+    with pytest.raises(DeviceBusy):
+        manager.start(slow_fn, run="mig01", device="MX1", port=None, phase="pre")
+
+
+def test_jine_zarizeni_soubezne_muze():
+    manager = CaptureManager()
+
+    def slow_fn(on_progress):
+        time.sleep(0.2)
+        return object()
+
+    manager.start(slow_fn, run="mig01", device="MX1", port=None, phase="pre")
+    manager.start(slow_fn, run="mig01", device="PTX1", port=None, phase="post")
+
+
+def test_route_capture_selhani_docasne_failed(client):
+    response = client.post(
+        "/api/captures",
+        json={
+            "run": "mig01",
+            "device": "MX1",
+            "port": "ge-0/0/1",
+            "phase": "neznama-faze",
+            "parse_services": False,
+        },
+    )
+    assert response.status_code == 202
+    task_id = response.json()["id"]
+
+    task = _wait_done_route(client, task_id)
+    assert task["state"] == "failed"
+
+
+def test_route_409_kdyz_zarizeni_obsazeno(client):
+    def slow_fn(on_progress):
+        time.sleep(0.5)
+
+    client.app.state.captures.start(
+        slow_fn, run="mig01", device="MX1", port=None, phase="pre"
+    )
+    response = client.post(
+        "/api/captures",
+        json={"run": "mig01", "device": "MX1", "port": None, "phase": "pre"},
+    )
+    assert response.status_code == 409
+
+
+def test_route_get_neznamy_capture_je_404(client):
+    response = client.get("/api/captures/neexistuje")
+    assert response.status_code == 404

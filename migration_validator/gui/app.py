@@ -8,10 +8,14 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from migration_validator import api
+from migration_validator.auth import load_settings
 from migration_validator.config import default_profile, load_profile
+from migration_validator.connection.junos import ConnectionOptions
+from migration_validator.gui.captures import CaptureManager, DeviceBusy
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.models.snapshot import load_snapshot
 from migration_validator.runs.manifest import RunManifest
+from migration_validator.runs.orchestrate import capture_into_run
 from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
 
@@ -31,6 +35,14 @@ class CreateRunBody(BaseModel):
 
 class MappingBody(BaseModel):
     mappings: list[tuple[str, str]]
+
+
+class CaptureBody(BaseModel):
+    run: str
+    device: str  # node name z run.yml
+    port: str | None = None
+    phase: str
+    parse_services: bool = False
 
 
 def _devices_dict(manifest: RunManifest) -> dict:
@@ -56,6 +68,8 @@ def create_app(
     app = FastAPI(title="mig-validate")
     app.state.run_root = run_root
     app.state.profile_path = profile_path
+    manager = CaptureManager()
+    app.state.captures = manager
 
     @app.get("/api/checks")
     def list_checks() -> dict:
@@ -184,5 +198,56 @@ def create_app(
             },
             "result": result.to_dict(),
         }
+
+    @app.post("/api/captures", status_code=202)
+    def start_capture(body: CaptureBody) -> dict:
+        store = _require_store(body.run)
+        manifest = store.load()
+        device = manifest.devices.get(body.device)
+        if device is None:
+            raise HTTPException(
+                status_code=404, detail=f"zarizeni '{body.device}' neni v runu"
+            )
+        settings = load_settings()
+        options = ConnectionOptions(
+            host=device.host,
+            username=settings.username,
+            ssh_key_paths=settings.ssh_key_paths,
+            password=settings.password,
+            port=settings.netconf_port,
+            timeout=settings.timeout,
+        )
+        profile = (
+            load_profile(profile_path) if profile_path else default_profile()
+        )
+
+        def fn(on_progress):
+            return capture_into_run(
+                store,
+                host=device.host,
+                phase=body.phase,
+                port=body.port,
+                options=options,
+                profile=profile,
+                parse_services=body.parse_services,
+                overwrite=True,  # GUI resi prepis potvrzenim ve formulari
+                on_progress=on_progress,
+            )
+
+        try:
+            task = manager.start(
+                fn, run=body.run, device=body.device,
+                port=body.port, phase=body.phase,
+            )
+        except DeviceBusy as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return {"id": task.id}
+
+    @app.get("/api/captures/{task_id}")
+    def capture_status(task_id: str) -> dict:
+        task = manager.get(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="capture nenalezen")
+        return task.to_dict()
 
     return app
