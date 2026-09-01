@@ -23,6 +23,9 @@ mig-validate = "migration_validator.cli:main"
 [tool.setuptools.packages.find]
 include = ["migration_validator*"]
 
+[tool.setuptools.package-data]
+"migration_validator.gui" = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

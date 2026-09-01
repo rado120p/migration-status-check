@@ -476,6 +476,20 @@ def _capture_into_run(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_gui(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError as error:
+        raise ToolError(
+            "GUI vyzaduje 'pip install migration-validator[gui]'"
+        ) from error
+    from migration_validator.gui.app import create_app
+
+    app = create_app(run_root=args.run_root, profile_path=args.profile)
+    uvicorn.run(app, host=args.host, port=args.gui_port)
+    return EXIT_OK
+
+
 def _cmd_record(args: argparse.Namespace) -> int:
     from lxml import etree
 
@@ -624,6 +638,17 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--output-dir", required=True)
     _add_auth_arguments(record)
     record.set_defaults(func=_cmd_record)
+
+    gui = sub.add_parser("gui", help="spusti webove GUI")
+    gui.add_argument("--host", default="127.0.0.1")
+    gui.add_argument("--port", dest="gui_port", type=int, default=8321)
+    gui.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    gui.add_argument(
+        "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
+    )
+    gui.set_defaults(func=_cmd_gui)
 
     return parser
 

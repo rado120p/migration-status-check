@@ -1408,3 +1408,10 @@ def test_capture_sitovy_port_se_nepropise_do_ssh_portu():
     )
     options = _connection_options(args, ConnectionSettings(netconf_port=830))
     assert options.port == 830
+
+
+def test_gui_subcommand_parsuje():
+    from migration_validator.cli import build_parser
+    args = build_parser().parse_args(["gui", "--port", "9999"])
+    assert args.gui_port == 9999
+    assert args.host == "127.0.0.1"

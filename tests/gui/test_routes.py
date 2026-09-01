@@ -33,3 +33,9 @@ def test_run_detail(client):
 
 def test_run_detail_404(client):
     assert client.get("/api/runs/neni").status_code == 404
+
+
+def test_root_servuje_index(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "mig-validate" in resp.text
