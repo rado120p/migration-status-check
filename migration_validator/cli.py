@@ -11,8 +11,6 @@ import json
 import sys
 from pathlib import Path
 
-import yaml
-
 from migration_validator import api
 from migration_validator.auth import ConnectionSettings, load_settings
 from migration_validator.collectors.registry import collectors_for
@@ -31,19 +29,12 @@ from migration_validator.models.snapshot import (
 )
 from migration_validator.reporting.json_report import to_json, write_json
 from migration_validator.reporting.text_report import filter_result, render, use_color
-from migration_validator.runs.manifest import (
-    CaptureRecord,
-    MappingEndpoint,
-    RunDevice,
-    RunManifest,
-)
-from migration_validator.runs.pairing import find_pre_baseline, plan_evaluations
-from migration_validator.runs.services import generate_inventory
+from migration_validator.runs.manifest import MappingEndpoint, RunManifest
+from migration_validator.runs.orchestrate import capture_into_run
+from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import empty_mapping, load_mapping
 from migration_validator.scoping.matcher import match_scopes
-
-_PHASE_TO_ROLE = {"pre": "old", "rollback": "old", "post": "new"}
 
 EXIT_OK = 0
 EXIT_FAILED_CHECKS = 1
@@ -425,107 +416,11 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _inventory_interfaces(path: Path) -> set[str] | None:
-    if not path.exists():
-        return None
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        return set()
-    return {
-        entry.get("interface")
-        for entry in raw.get("interfaces") or []
-        if entry.get("interface")
-    }
-
-
-def _parse_services_into(args: argparse.Namespace, inventory_path: Path) -> None:
-    """Vyrobi inventory pro --parse-services v samostatnem kratkem spojeni.
-
-    Existujici soubor se pregeneruje - konfigurace noveho boxu se meni
-    kazdou vlnou a flag je explicitni umysl (revize faze 4, viz spec
-    2026-08-17). api.capture se nemeni - konfigurace pro inventory se
-    stahne pred snapshotem.
-    """
-    previous = _inventory_interfaces(inventory_path)
-
-    try:
-        with connect(_connection_options(args, _connection_settings(args))) as device:
-            platform = detect_platform(device)
-            generate_inventory(device, platform, inventory_path, args.port)
-    except JunosConnectionError as error:
-        raise ToolError(str(error)) from error
-
-    current = _inventory_interfaces(inventory_path) or set()
-    if previous is None:
-        print(f"inventory vyrobena: {inventory_path} ({len(current)} sluzeb)")
-    else:
-        added = len(current - previous)
-        removed = len(previous - current)
-        print(
-            f"inventory pregenerovana: {inventory_path} "
-            f"({len(current)} sluzeb, +{added} nove, -{removed} odebrane)"
-        )
-
-
 def _capture_into_run(args: argparse.Namespace) -> int:
-    from migration_validator.models.snapshot import save_snapshot
-
-    phase = args.phase
-    if phase not in _PHASE_TO_ROLE:
-        raise ToolError(
-            f"neznama faze '{phase}', ocekavano jedno z {sorted(_PHASE_TO_ROLE)}"
-        )
     if args.maps_to and not args.port:
         raise ToolError("--maps-to vyzaduje --port (parovani je vzdy per-port)")
 
     store = RunStore(args.run_root, args.run)
-    manifest = store.load()
-
-    node = manifest.node_for_host(args.device) or args.device
-
-    if phase == "pre" and not args.overwrite:
-        existing = manifest.find_capture("pre", node, args.port)
-        if existing is not None:
-            raise ToolError(
-                f"pre snimek uz existuje: {existing.snapshot}; "
-                "prepis povol s --overwrite"
-            )
-
-    if args.inventory:
-        inventory_path = Path(args.inventory)
-    elif args.parse_services:
-        inventory_path = store.inventory_path(node, args.port)
-        _parse_services_into(args, inventory_path)
-    else:
-        inventory_path = store.inventory_path(node, args.port)
-        if not inventory_path.exists():
-            inventory_path = store.inventory_path(node, None)
-        if not inventory_path.exists():
-            raise ToolError("inventory nenalezena - spust s --parse-services")
-
-    baselines: list[Snapshot] = []
-    if phase == "post":
-        seen_snapshots: set[str] = set()
-        records = []
-        for old in manifest.mapped_olds(node, args.port) if args.port else []:
-            record = manifest.find_capture(
-                "pre", old.node, old.port
-            ) or manifest.find_capture("pre", old.node, None)
-            if record is not None and record.snapshot not in seen_snapshots:
-                seen_snapshots.add(record.snapshot)
-                records.append(record)
-        if not records:
-            fallback = find_pre_baseline(manifest, node, args.port)
-            if fallback is not None:
-                records.append(fallback)
-        for record in records:
-            baselines.append(_load_snapshot(str(store.dir / record.snapshot)))
-        if not baselines:
-            print(
-                "pre snimek nenalezen, ping cile z vlastni ARP",
-                file=sys.stderr,
-            )
-
     profile = load_profile(args.profile) if args.profile else default_profile()
     collectors = (
         args.collectors.split(",") if args.collectors else profile.collectors
@@ -534,40 +429,36 @@ def _capture_into_run(args: argparse.Namespace) -> int:
     service_types = _parse_service_types(args, profile)
 
     try:
-        snapshot = api.capture(
-            args.device,
-            inventory=str(inventory_path),
+        outcome = capture_into_run(
+            store,
+            host=args.device,
+            phase=args.phase,
+            port=args.port,
             options=_connection_options(args, _connection_settings(args)),
+            profile=profile,
+            parse_services=args.parse_services,
+            inventory=args.inventory,
+            overwrite=args.overwrite,
             collectors=collectors,
-            phase=phase,
             ping_count=ping_count,
-            record_raw=args.record_raw,
-            baselines=baselines or None,
             service_types=service_types,
+            record_raw=args.record_raw,
         )
+    except ValueError as error:
+        raise ToolError(str(error)) from error
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error
 
-    if node not in manifest.devices:
-        manifest.devices[node] = RunDevice(
-            host=args.device,
-            platform=snapshot.device.platform,
-            role=_PHASE_TO_ROLE[phase],
-        )
+    for warning in outcome.warnings:
+        print(warning)
 
-    snapshot_path = store.snapshot_path(phase, node, args.port)
-    save_snapshot(snapshot, snapshot_path)
-    manifest.record_capture(
-        CaptureRecord(
-            phase=phase,
-            device=node,
-            port=args.port,
-            snapshot=store.snapshot_name(phase, node, args.port),
-            taken=snapshot.capture.started_at,
-        )
-    )
+    print(f"snapshot ulozen: {outcome.snapshot_path}")
+    for name, message in outcome.failed_collectors.items():
+        print(f"  varovani: collector '{name}' selhal - {message}", file=sys.stderr)
 
     if args.maps_to:
+        manifest = store.load()
+        node = manifest.node_for_host(args.device) or args.device
         try:
             other_node, other_port = args.maps_to.rsplit(":", 1)
         except ValueError as error:
@@ -576,17 +467,11 @@ def _capture_into_run(args: argparse.Namespace) -> int:
             ) from error
         here = MappingEndpoint(node=node, port=args.port)
         there = MappingEndpoint(node=other_node, port=other_port)
-        if phase == "post":
+        if args.phase == "post":
             manifest.add_mapping(old=there, new=here)
         else:
             manifest.add_mapping(old=here, new=there)
-
-    store.save(manifest)
-
-    print(f"snapshot ulozen: {snapshot_path}")
-    failed = snapshot.capture.failed_collectors()
-    for name, message in failed.items():
-        print(f"  varovani: collector '{name}' selhal - {message}", file=sys.stderr)
+        store.save(manifest)
 
     return EXIT_OK
 

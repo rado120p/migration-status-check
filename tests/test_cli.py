@@ -641,9 +641,13 @@ def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("schema_version: 6\ndevice: x\ninterfaces: []\n")
 
-    monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
-    monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
-    monkeypatch.setattr("migration_validator.cli.generate_inventory", fake_generate_inventory)
+    monkeypatch.setattr("migration_validator.runs.orchestrate.connect", fake_connect)
+    monkeypatch.setattr(
+        "migration_validator.runs.orchestrate.detect_platform", fake_detect_platform
+    )
+    monkeypatch.setattr(
+        "migration_validator.runs.orchestrate.generate_inventory", fake_generate_inventory
+    )
 
     code = main(
         [
@@ -765,8 +769,10 @@ def test_parse_services_regenerates_existing_inventory_and_prints_delta(
     def fake_detect_platform(device):
         return "junos"
 
-    monkeypatch.setattr("migration_validator.cli.connect", fake_connect)
-    monkeypatch.setattr("migration_validator.cli.detect_platform", fake_detect_platform)
+    monkeypatch.setattr("migration_validator.runs.orchestrate.connect", fake_connect)
+    monkeypatch.setattr(
+        "migration_validator.runs.orchestrate.detect_platform", fake_detect_platform
+    )
 
     store = RunStore(tmp_path, "mig01")
     inventory_path = store.inventory_path("172.20.20.5", "ae0")
@@ -785,7 +791,8 @@ def test_parse_services_regenerates_existing_inventory_and_prints_delta(
         )
 
     monkeypatch.setattr(
-        "migration_validator.cli.generate_inventory", fake_generate_inventory
+        "migration_validator.runs.orchestrate.generate_inventory",
+        fake_generate_inventory,
     )
 
     code = main(
