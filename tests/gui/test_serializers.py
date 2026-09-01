@@ -1,4 +1,4 @@
-from migration_validator.gui.serializers import status_rows
+from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.runs.manifest import (
     CaptureRecord, InterfaceMapping, MappingEndpoint, RunDevice, RunManifest,
 )
@@ -47,3 +47,18 @@ def test_all_capture_dostane_vlastni_radek():
     assert rows[1]["old"] == {"node": "MX1", "port": None}
     assert rows[1]["new"] is None
     assert rows[1]["pre"] is True
+
+
+def test_snapshot_list_mapuje_capture_record():
+    manifest = _manifest()
+    manifest.record_capture(CaptureRecord(
+        phase="pre", device="MX1", port="ge-0/0/1",
+        snapshot="snapshot_pre_MX1_ge_0_0_1.json", taken="2026-09-01T00:00:00Z",
+    ))
+    assert snapshot_list(manifest) == [{
+        "file": "snapshot_pre_MX1_ge_0_0_1.json",
+        "phase": "pre",
+        "device": "MX1",
+        "port": "ge-0/0/1",
+        "taken": "2026-09-01T00:00:00Z",
+    }]

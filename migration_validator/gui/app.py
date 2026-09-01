@@ -8,17 +8,22 @@ from fastapi import FastAPI, HTTPException
 
 from migration_validator import api
 from migration_validator.gui.serializers import snapshot_list, status_rows
+from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.store import RunStore
+
+
+def _devices_dict(manifest: RunManifest) -> dict:
+    return {
+        node: {"host": d.host, "platform": d.platform, "role": d.role}
+        for node, d in manifest.devices.items()
+    }
 
 
 def _run_summary(store: RunStore) -> dict:
     manifest = store.load()
     return {
         "name": store.name,
-        "devices": {
-            node: {"host": d.host, "platform": d.platform, "role": d.role}
-            for node, d in manifest.devices.items()
-        },
+        "devices": _devices_dict(manifest),
         "snapshots": len(manifest.captures),
         "mapped_ports": len(manifest.interface_mapping),
     }
@@ -57,7 +62,7 @@ def create_app(
         manifest = store.load()
         return {
             "name": run,
-            "devices": _run_summary(store)["devices"],
+            "devices": _devices_dict(manifest),
             "rows": status_rows(manifest),
             "snapshots": snapshot_list(manifest),
         }
