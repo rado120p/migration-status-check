@@ -17,11 +17,12 @@ a:hover { color: #0e3fa9; }
 .page {
   min-height: 100vh;
   overflow-x: auto;
-  padding: 32px 24px;
+  padding: 24px 20px;
 }
 
 .shell {
-  width: 1200px;
+  width: auto;
+  max-width: none;
   margin: 0 auto;
   background: #f7f8fa;
   border: 1px solid #d3d7de;
@@ -110,10 +111,10 @@ a:hover { color: #0e3fa9; }
   color: #1a56db;
 }
 
-/* Body grid: sidebar + main */
+/* Body grid: sidebar + main + guide */
 .body-grid {
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 232px 1fr 280px;
   min-height: 620px;
 }
 
@@ -844,3 +845,23 @@ a:hover { color: #0e3fa9; }
 .mapping-add-btn {
   align-self: flex-start;
 }
+
+/* Guide rail */
+.guide {
+  background: #ffffff;
+  border-left: 1px solid #e2e5ea;
+  padding: 16px 14px;
+  font-size: 12.5px;
+  color: #4b5563;
+}
+
+.guide h4 {
+  margin: 0 0 10px;
+  font: 600 11px 'IBM Plex Sans', sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.guide p { margin: 0 0 10px; line-height: 1.5; }
+.guide .k { font: 600 12px 'IBM Plex Mono', monospace; color: #1a56db; }

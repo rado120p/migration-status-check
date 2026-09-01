@@ -28,6 +28,45 @@ function statusClass(status) {
   return (status || "").toLowerCase();
 }
 
+/* Per-screen copy for the guide rail, keyed by this.state.view values. */
+const GUIDE_TEXT = {
+  run: {
+    title: "Run overview",
+    body: [
+      "Tenhle screen porovnává služby mezi pre a post snímky namapovaných portů.",
+      "Kliknutím na řádek v Results rozbalíš detail checků včetně změn proti baseline.",
+      "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
+      "Nezařazeno = objekt (BGP peer, routa, BFD session), který si nenárokovala žádná služba — typicky mezera v parsování.",
+    ],
+  },
+  snapshot: {
+    title: "Snapshot",
+    body: [
+      "Samostatné vyhodnocení jednoho snímku — běží jen stavové checky (stav rozhraní, ARP/ND, ping). Srovnání s baseline najdeš v run overview.",
+      "Nezařazeno = objekt bez služby — zkontroluj, jestli nechybí v inventáři.",
+    ],
+  },
+  checks: {
+    title: "Checks",
+    body: ["Registr všech checků aktivního profilu: mód, severita a typy služeb, na které se check vztahuje."],
+  },
+  capture: {
+    title: "New capture",
+    body: [
+      "Sebere stav zařízení do snapshotu. Vyber zařízení, port a fázi (pre/post/rollback).",
+      "Průběh sběru uvidíš živě v run overview.",
+    ],
+  },
+  newrun: {
+    title: "New run",
+    body: ["Založí run adresář: pojmenuj run a vyplň obě zařízení. Mapování portů můžeš doplnit i později přes Edit mapping."],
+  },
+  editmapping: {
+    title: "Edit mapping",
+    body: ["Páruje starý port s novým. Řádek s existujícím capture je zamčený — mapování, podle kterého už se sbíralo, se nemění."],
+  },
+};
+
 class App {
   constructor() {
     this.state = {
@@ -67,6 +106,7 @@ class App {
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
+    this.guideEl = document.getElementById("guide");
     this.btnChecksEl = document.getElementById("btn-checks");
 
     this.btnChecksEl.addEventListener("click", () => this.goToChecks());
@@ -711,6 +751,7 @@ class App {
   }
 
   render() {
+    this.renderGuide();
     this.renderSidebar();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
     switch (this.state.view) {
@@ -737,6 +778,15 @@ class App {
         break;
     }
     this.syncCapturePolling();
+  }
+
+  renderGuide() {
+    clear(this.guideEl);
+    const entry = GUIDE_TEXT[this.state.view] || GUIDE_TEXT.run;
+    this.guideEl.appendChild(el("h4", { text: "Guide — " + entry.title }));
+    for (const paragraph of entry.body) {
+      this.guideEl.appendChild(el("p", { text: paragraph }));
+    }
   }
 
   renderEmptyState() {
