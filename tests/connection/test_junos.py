@@ -4,6 +4,7 @@ import pytest
 
 from migration_validator.connection.junos import (
     ConnectionOptions,
+    JunosConnectionError,
     detect_platform,
     device_meta,
 )
@@ -46,36 +47,46 @@ def test_device_meta_reads_facts():
     assert meta.platform == "junos"
 
 
-def test_key_auth_kwargs():
-    options = ConnectionOptions(host="172.20.20.4", key_file="/home/u/.ssh/id_rsa")
-    kwargs = options.device_kwargs()
-
-    assert kwargs["host"] == "172.20.20.4"
-    assert kwargs["user"] == "ansible"
-    assert kwargs["ssh_private_key_file"] == "/home/u/.ssh/id_rsa"
-    assert "passwd" not in kwargs
-
-
-def test_password_auth_kwargs():
+def test_auth_attempts_zkousi_klice_v_poradi(tmp_path):
+    key1 = tmp_path / "id_ed25519"
+    key2 = tmp_path / "id_rsa"
+    key1.write_text("k1")
+    key2.write_text("k2")
     options = ConnectionOptions(
-        host="172.20.20.4", auth_type="password", username="admin", password="secret"
+        host="172.20.20.4", ssh_key_paths=(str(key1), str(key2))
     )
-    kwargs = options.device_kwargs()
-
-    assert kwargs["passwd"] == "secret"
-    assert "ssh_private_key_file" not in kwargs
-
-
-def test_password_auth_requires_password():
-    with pytest.raises(ValueError, match="heslo"):
-        ConnectionOptions(host="1.2.3.4", auth_type="password").device_kwargs()
+    attempts = options.auth_attempts()
+    assert [a["ssh_private_key_file"] for a in attempts] == [str(key1), str(key2)]
+    assert all(a["host"] == "172.20.20.4" for a in attempts)
 
 
-def test_unknown_auth_type_is_rejected():
-    with pytest.raises(ValueError, match="auth"):
-        ConnectionOptions(host="1.2.3.4", auth_type="magic").device_kwargs()
+def test_auth_attempts_preskoci_neexistujici_klic(tmp_path):
+    existing = tmp_path / "id_rsa"
+    existing.write_text("k")
+    options = ConnectionOptions(
+        host="h", ssh_key_paths=(str(tmp_path / "neni"), str(existing))
+    )
+    attempts = options.auth_attempts()
+    assert len(attempts) == 1
+    assert attempts[0]["ssh_private_key_file"] == str(existing)
 
 
-def test_default_key_file_points_to_ssh_dir():
-    options = ConnectionOptions(host="1.2.3.4")
-    assert options.key_file.endswith(str(Path(".ssh") / "id_rsa"))
+def test_auth_attempts_heslo_je_posledni(tmp_path):
+    key = tmp_path / "id_rsa"
+    key.write_text("k")
+    options = ConnectionOptions(
+        host="h", ssh_key_paths=(str(key),), password="tajne"
+    )
+    attempts = options.auth_attempts()
+    assert attempts[-1]["passwd"] == "tajne"
+    assert "ssh_private_key_file" not in attempts[-1]
+
+
+def test_auth_attempts_bez_moznosti_je_chyba(tmp_path):
+    options = ConnectionOptions(host="h", ssh_key_paths=(str(tmp_path / "neni"),))
+    with pytest.raises(JunosConnectionError, match="zadna pouzitelna autentizace"):
+        options.auth_attempts()
+
+
+def test_default_port_je_netconf():
+    assert ConnectionOptions(host="h").port == 830

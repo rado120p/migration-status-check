@@ -21,7 +21,7 @@ from jnpr.junos.exception import (
 from migration_validator.models.snapshot import DeviceMeta
 
 DEFAULT_USER = "ansible"
-DEFAULT_PORT = 22
+DEFAULT_PORT = 830
 DEFAULT_TIMEOUT = 30
 
 EVO_MODEL_PREFIXES = ("PTX10", "ACX7", "QFX5700", "MX304")
@@ -35,49 +35,68 @@ class JunosConnectionError(Exception):
 class ConnectionOptions:
     host: str
     username: str = DEFAULT_USER
-    auth_type: str = "key"  # key | password
-    key_file: str = str(Path.home() / ".ssh" / "id_rsa")
+    ssh_key_paths: tuple[str, ...] = ()
     password: str | None = None
     port: int = DEFAULT_PORT
     timeout: int = DEFAULT_TIMEOUT
 
-    def device_kwargs(self) -> dict[str, Any]:
-        kwargs: dict[str, Any] = {
+    def auth_attempts(self) -> list[dict[str, Any]]:
+        """Kwargs pro Device() v poradi zkouseni: klice, pak heslo."""
+        base: dict[str, Any] = {
             "host": self.host,
             "user": self.username,
             "port": self.port,
         }
-        if self.auth_type == "key":
-            kwargs["ssh_private_key_file"] = self.key_file
-        elif self.auth_type == "password":
-            if not self.password:
-                raise ValueError("auth_type 'password' vyzaduje heslo")
-            kwargs["passwd"] = self.password
-        else:
-            raise ValueError(
-                f"neznamy auth_type '{self.auth_type}', ocekavano 'key' nebo 'password'"
+        attempts: list[dict[str, Any]] = []
+        for key_path in self.ssh_key_paths:
+            if Path(key_path).exists():
+                attempts.append({**base, "ssh_private_key_file": key_path})
+        if self.password:
+            attempts.append({**base, "passwd": self.password})
+        if not attempts:
+            raise JunosConnectionError(
+                f"{self.host}: zadna pouzitelna autentizace - zadny ssh klic "
+                f"neexistuje a heslo neni nastavene"
             )
-        return kwargs
+        return attempts
 
 
 @contextmanager
 def connect(options: ConnectionOptions) -> Iterator[Device]:
-    """Otevre spojeni. Chyby prelozi na JunosConnectionError s jasnym duvodem."""
-    device = Device(**options.device_kwargs())
-    try:
-        device.open()
-    except ConnectAuthError as error:
+    """Otevre spojeni. Zkousi auth moznosti v poradi; jina chyba nez
+    autentizace (timeout, refused) konci hned - dalsi klic by ji nespravil."""
+    device: Device | None = None
+    tried: list[str] = []
+    last_error: Exception | None = None
+
+    for kwargs in options.auth_attempts():
+        label = kwargs.get("ssh_private_key_file", "heslo")
+        candidate = Device(**kwargs)
+        try:
+            candidate.open()
+            device = candidate
+            break
+        except ConnectAuthError as error:
+            tried.append(label)
+            last_error = error
+        except ConnectTimeoutError as error:
+            raise JunosConnectionError(
+                f"{options.host}: timeout po {options.timeout} s - {error}"
+            ) from error
+        except ConnectRefusedError as error:
+            raise JunosConnectionError(
+                f"{options.host}: spojeni odmitnuto - {error}"
+            ) from error
+        except ConnectError as error:
+            raise JunosConnectionError(
+                f"{options.host}: pripojeni selhalo - {error}"
+            ) from error
+
+    if device is None:
         raise JunosConnectionError(
-            f"{options.host}: autentizace selhala (uzivatel {options.username}) - {error}"
-        ) from error
-    except ConnectTimeoutError as error:
-        raise JunosConnectionError(
-            f"{options.host}: timeout po {options.timeout} s - {error}"
-        ) from error
-    except ConnectRefusedError as error:
-        raise JunosConnectionError(f"{options.host}: spojeni odmitnuto - {error}") from error
-    except ConnectError as error:
-        raise JunosConnectionError(f"{options.host}: pripojeni selhalo - {error}") from error
+            f"{options.host}: autentizace selhala (uzivatel {options.username}, "
+            f"zkuseno: {', '.join(tried)}) - {last_error}"
+        ) from last_error
 
     device.timeout = options.timeout
     try:
