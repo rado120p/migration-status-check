@@ -5,6 +5,8 @@ CLI je tenky obal nad timto modulem, ne alternativni implementace.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 from migration_validator.capture import ProgressCallback, capture_device
@@ -16,6 +18,12 @@ from migration_validator.engine import evaluate_snapshots
 from migration_validator.models.inventory import Inventory, load_inventory
 from migration_validator.models.result import RunResult
 from migration_validator.models.snapshot import Snapshot
+from migration_validator.runs.manifest import (
+    MappingEndpoint,
+    RunDevice,
+    RunManifest,
+)
+from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import Mapping
 
 
@@ -85,3 +93,49 @@ def list_checks() -> list[dict[str, Any]]:
     """Popis vsech registrovanych checku - pro CLI i GUI."""
     load_all()
     return [check.describe() for check in all_checks()]
+
+
+_RUN_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
+_DEVICE_KEYS = ("node", "host", "platform")
+
+
+def _run_device(data: dict[str, str], role: str) -> tuple[str, RunDevice]:
+    for key in _DEVICE_KEYS:
+        if not data.get(key):
+            raise ValueError(f"zarizeni role '{role}': chybi '{key}'")
+    return data["node"], RunDevice(
+        host=data["host"], platform=data["platform"], role=role
+    )
+
+
+def create_run(
+    name: str,
+    *,
+    old_device: dict[str, str],
+    new_device: dict[str, str],
+    mappings: list[tuple[str, str]] | None = None,
+    run_root: str | Path = Path("runs"),
+) -> RunManifest:
+    """Zalozi runs/<name>/run.yml - schopnost, kterou CLI nema (run.yml
+    se dosud psal rucne). Mapping je volitelny: bez nej vznika
+    sekvencni run s volnym capture formularem."""
+    if not _RUN_NAME_RE.match(name):
+        raise ValueError(
+            f"nevalidni jmeno runu '{name}' - povolene znaky: a-z 0-9 _ -"
+        )
+    store = RunStore(Path(run_root), name)
+    if store.dir.exists():
+        raise ValueError(f"run '{name}' uz existuje ({store.dir})")
+
+    old_node, old = _run_device(old_device, "old")
+    new_node, new = _run_device(new_device, "new")
+
+    manifest = RunManifest(devices={old_node: old, new_node: new})
+    for old_port, new_port in mappings or []:
+        manifest.add_mapping(
+            old=MappingEndpoint(node=old_node, port=old_port.strip()),
+            new=MappingEndpoint(node=new_node, port=new_port.strip()),
+        )
+
+    store.save(manifest)
+    return manifest
