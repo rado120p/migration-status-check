@@ -644,6 +644,7 @@ a:hover { color: #0e3fa9; }
 }
 
 .form-select:disabled { color: #6b7280; cursor: default; }
+.form-input:disabled { color: #6b7280; cursor: default; }
 
 .phase-toggle {
   display: flex;

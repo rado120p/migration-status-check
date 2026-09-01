@@ -215,9 +215,25 @@ class App {
 
   rowMatchesCapture(row, task) {
     if (!task) return false;
-    const endpoint = task.phase === "post" ? row.new : row.old;
-    if (!endpoint) return false;
-    return endpoint.node === task.device && (endpoint.port ?? null) === (task.port ?? null);
+    for (const endpoint of [row.old, row.new]) {
+      if (!endpoint) continue;
+      if (endpoint.node === task.device && (endpoint.port ?? null) === (task.port ?? null)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Single-capture guard: the GUI tracks exactly one in-flight capture id at
+  // a time (deliberately - no multi-id tracker). While it is still running,
+  // starting a second one would silently orphan the first one's polling, so
+  // the capture form disables submission and explains why.
+  activeCaptureGuardTask() {
+    const task = this.cache.captureProgress;
+    if (this.state.activeCaptureId && task && task.state === "running") {
+      return task;
+    }
+    return null;
   }
 
   buildCaptureStepsLine(task) {
@@ -577,6 +593,7 @@ class App {
   async startCapture() {
     const form = this.state.captureForm;
     if (!form.run || !form.device) return;
+    if (this.activeCaptureGuardTask()) return;
     const isMapped = this.captureMappedRows().length > 0;
     let port;
     if (isMapped) {
@@ -1508,6 +1525,17 @@ class App {
       );
     }
 
+    const guardTask = this.activeCaptureGuardTask();
+    if (guardTask) {
+      sideChildren.push(
+        el("div", {
+          className: "notice notice-indigo",
+          text: `a capture is already running (${guardTask.device}:${guardTask.port || "all"} ${guardTask.phase}) — wait for it to finish`,
+        })
+      );
+    }
+
+    const submitDisabled = this.state.captureSubmitting || !!guardTask;
     const actions = el("div", {
       className: "footer-actions",
       children: [
@@ -1523,7 +1551,8 @@ class App {
             : alreadyCaptured
               ? "Re-capture"
               : "Start capture",
-          onClick: this.state.captureSubmitting ? null : () => this.startCapture(),
+          onClick: submitDisabled ? null : () => this.startCapture(),
+          attrs: submitDisabled ? { disabled: "disabled" } : {},
         }),
       ],
     });
