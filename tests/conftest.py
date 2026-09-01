@@ -13,19 +13,16 @@ from migration_validator.scoping.builder import build_scopes
 
 
 @pytest.fixture(autouse=True)
-def _isolate_default_auth_path(tmp_path, monkeypatch):
-    """Testy nesmi cist skutecny ~/.config/mig-validate/auth.yml.
+def _isolate_default_settings_path(tmp_path, monkeypatch):
+    """Testy nesmi cist skutecny config/settings.yml.
 
-    cli.py dela `from migration_validator.auth import DEFAULT_AUTH_PATH`,
-    takze `_auth_settings` cte vazbu `migration_validator.cli.DEFAULT_AUTH_PATH`,
-    ne puvodni v auth.py - patchuje se proto ta v cli. Bez tohohle by kazdy
-    test, ktery projde main(["capture"/"record", ...]), na stroji se
-    skutecnym auth souborem tise cetl cizi credentials, a kdyby byl soubor
-    poskozeny, spadl by nesouvisejici test na ValueError.
+    Bez tohohle by kazdy test, ktery projde main(["capture"/"record", ...]),
+    zkusil nacist verejny settings soubor. Patchuje se DEFAULT_SETTINGS_PATH
+    v auth.py a jeho odraz v cli.py (kdy je importovany). Bez tohohle by
+    test spadl, kdyby soubor nebyl dostupny.
     """
-    fake_path = tmp_path / "auth-neexistuje.yml"
-    monkeypatch.setattr("migration_validator.cli.DEFAULT_AUTH_PATH", fake_path)
-    monkeypatch.setattr("migration_validator.auth.DEFAULT_AUTH_PATH", fake_path)
+    fake_path = tmp_path / "settings-neexistuje.yml"
+    monkeypatch.setattr("migration_validator.auth.DEFAULT_SETTINGS_PATH", fake_path)
 
 NOW = "2026-07-24T09:12:41Z"
 

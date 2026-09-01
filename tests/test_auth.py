@@ -1,74 +1,106 @@
-"""Auth soubor - per-user credentials, heslo jen pres env nebo 0600."""
+"""Testy pro config/settings.yml - nahrada auth.yml."""
 
 import pytest
 
-from migration_validator.auth import AuthSettings, load_auth_file
+from migration_validator.auth import (
+    DEFAULT_NETCONF_PORT,
+    DEFAULT_SETTINGS_PATH,
+    ConnectionSettings,
+    load_settings,
+)
 
 
-def write(tmp_path, content, mode=0o600):
-    path = tmp_path / "auth.yml"
-    path.write_text(content, encoding="utf-8")
-    path.chmod(mode)
-    return path
+def test_chybejici_soubor_vraci_defaulty(tmp_path):
+    settings = load_settings(tmp_path / "settings.yml")
+    assert settings.username == "ansible"
+    assert settings.netconf_port == 830
+    assert settings.timeout == 30
+    assert settings.password is None
+    assert len(settings.ssh_key_paths) == 2
+    assert settings.ssh_key_paths[0].endswith("/.ssh/id_ed25519")
+    assert settings.ssh_key_paths[1].endswith("/.ssh/id_rsa")
+    # expanduser probehl uz pri load - zadna ~ v cestach
+    assert not any(p.startswith("~") for p in settings.ssh_key_paths)
 
 
-def test_chybejici_default_soubor_je_prazdne_nastaveni(tmp_path):
-    settings = load_auth_file(tmp_path / "neni.yml", required=False)
-    assert settings == AuthSettings()
+def test_default_cesta_je_v_repu():
+    assert str(DEFAULT_SETTINGS_PATH) == "config/settings.yml"
 
 
-def test_chybejici_explicitni_soubor_je_chyba(tmp_path):
-    with pytest.raises(ValueError, match="auth soubor nenalezen"):
-        load_auth_file(tmp_path / "neni.yml", required=True)
-
-
-def test_plna_sada_poli(tmp_path):
-    path = write(
-        tmp_path,
-        "username: rmohyla\nauth: key\nkey_file: ~/.ssh/lab\n"
-        "ssh_port: 2222\ntimeout: 60\n",
+def test_plny_soubor(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text(
+        "connection:\n"
+        "  netconf_port: 22\n"
+        "  timeout: 60\n"
+        "  username: rmohyla\n"
+        "  ssh_key_paths:\n"
+        "    - ~/.ssh/moje_klic\n",
+        encoding="utf-8",
     )
-    settings = load_auth_file(path, required=True)
+    settings = load_settings(path)
     assert settings.username == "rmohyla"
-    assert settings.auth_type == "key"
-    assert settings.key_file.endswith("/.ssh/lab")
-    assert not settings.key_file.startswith("~")
-    assert settings.ssh_port == 2222
+    assert settings.netconf_port == 22
     assert settings.timeout == 60
+    assert len(settings.ssh_key_paths) == 1
+    assert settings.ssh_key_paths[0].endswith("/.ssh/moje_klic")
 
 
-def test_password_env_se_resolvuje(tmp_path, monkeypatch):
-    monkeypatch.setenv("MIG_TEST_HESLO", "tajne")
-    path = write(tmp_path, "auth: password\npassword_env: MIG_TEST_HESLO\n")
-    assert load_auth_file(path, required=True).password == "tajne"
+def test_password_env_se_cte_z_prostredi(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIG_TEST_PW", "tajne")
+    path = tmp_path / "settings.yml"
+    path.write_text(
+        "connection:\n  password_env: MIG_TEST_PW\n", encoding="utf-8"
+    )
+    assert load_settings(path).password == "tajne"
 
 
-def test_nenastavena_promenna_je_chyba_hned(tmp_path, monkeypatch):
-    monkeypatch.delenv("MIG_TEST_HESLO", raising=False)
-    path = write(tmp_path, "password_env: MIG_TEST_HESLO\n")
-    with pytest.raises(ValueError, match="MIG_TEST_HESLO neni nastavena"):
-        load_auth_file(path, required=True)
+def test_password_env_nenastavena_je_chyba(tmp_path, monkeypatch):
+    monkeypatch.delenv("MIG_TEST_PW", raising=False)
+    path = tmp_path / "settings.yml"
+    path.write_text(
+        "connection:\n  password_env: MIG_TEST_PW\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="MIG_TEST_PW"):
+        load_settings(path)
 
 
-def test_plaintext_heslo_pri_0600_projde(tmp_path):
-    path = write(tmp_path, "password: tajne\n", mode=0o600)
-    assert load_auth_file(path, required=True).password == "tajne"
-
-
-def test_plaintext_heslo_pri_sirsich_pravech_je_chyba(tmp_path):
-    path = write(tmp_path, "password: tajne\n", mode=0o640)
+def test_plaintext_password_vyzaduje_0600(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  password: tajne\n", encoding="utf-8")
+    path.chmod(0o644)
     with pytest.raises(ValueError, match="chmod 600"):
-        load_auth_file(path, required=True)
+        load_settings(path)
+    path.chmod(0o600)
+    assert load_settings(path).password == "tajne"
 
 
-def test_heslo_a_env_zaroven_je_chyba(tmp_path, monkeypatch):
-    monkeypatch.setenv("MIG_TEST_HESLO", "x")
-    path = write(tmp_path, "password: a\npassword_env: MIG_TEST_HESLO\n")
-    with pytest.raises(ValueError, match="password i password_env"):
-        load_auth_file(path, required=True)
+def test_password_a_password_env_zaroven_je_chyba(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text(
+        "connection:\n  password: a\n  password_env: B\n", encoding="utf-8"
+    )
+    path.chmod(0o600)
+    with pytest.raises(ValueError, match="vyber jedno"):
+        load_settings(path)
 
 
 def test_neznamy_klic_je_chyba(tmp_path):
-    path = write(tmp_path, "usrename: preklep\n")
-    with pytest.raises(ValueError, match="neznamy klic"):
-        load_auth_file(path, required=True)
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  passwd: preklep\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="passwd"):
+        load_settings(path)
+
+
+def test_soubor_bez_connection_bloku_vraci_defaulty(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("{}\n", encoding="utf-8")
+    settings = load_settings(path)
+    assert settings.username == "ansible"
+
+
+def test_nemapovy_yaml_je_chyba(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("- polozka\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="mapping"):
+        load_settings(path)

@@ -1,8 +1,8 @@
-"""Per-user auth soubor - kdo jsem, ne co testuju.
+"""Nastaveni pripojeni - config/settings.yml v repu.
 
-Heslo se do souboru nepise: bud jmeno env promenne (password_env),
-nebo plaintext jen pri opravneni 0600. Sdileny adresar tak nikdy
-nenese tajemstvi. Chyby jsou ValueError - cli.main je prevadi na
+Nahrazuje auth.yml (per-user soubor v ~/.config). Heslo se do souboru
+nepise: bud jmeno env promenne (password_env), nebo plaintext jen pri
+opravneni 0600. Chyby jsou ValueError - cli.main je prevadi na
 EXIT_TOOL_ERROR stejne jako ostatni vstupni chyby.
 """
 
@@ -14,42 +14,52 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_AUTH_PATH = Path.home() / ".config" / "mig-validate" / "auth.yml"
+DEFAULT_SETTINGS_PATH = Path("config") / "settings.yml"
+
+DEFAULT_USERNAME = "ansible"
+DEFAULT_NETCONF_PORT = 830
+DEFAULT_TIMEOUT = 30
+DEFAULT_SSH_KEY_PATHS = ("~/.ssh/id_ed25519", "~/.ssh/id_rsa")
 
 _KNOWN_KEYS = frozenset(
-    {"username", "auth", "key_file", "password", "password_env", "ssh_port", "timeout"}
+    {"netconf_port", "timeout", "username", "ssh_key_paths", "password", "password_env"}
 )
 
 
 @dataclass(frozen=True)
-class AuthSettings:
-    username: str | None = None
-    auth_type: str | None = None
-    key_file: str | None = None
+class ConnectionSettings:
+    username: str = DEFAULT_USERNAME
+    ssh_key_paths: tuple[str, ...] = ()
+    netconf_port: int = DEFAULT_NETCONF_PORT
+    timeout: int = DEFAULT_TIMEOUT
     password: str | None = None
-    ssh_port: int | None = None
-    timeout: int | None = None
 
 
-def load_auth_file(path: Path, *, required: bool) -> AuthSettings:
+def _expand(paths) -> tuple[str, ...]:
+    return tuple(str(Path(p).expanduser()) for p in paths)
+
+
+def load_settings(path: Path = DEFAULT_SETTINGS_PATH) -> ConnectionSettings:
     if not path.exists():
-        if required:
-            raise ValueError(f"auth soubor nenalezen: {path}")
-        return AuthSettings()
+        return ConnectionSettings(ssh_key_paths=_expand(DEFAULT_SSH_KEY_PATHS))
 
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: ocekavan YAML mapping")
 
-    unknown = sorted(set(raw) - _KNOWN_KEYS)
+    connection = raw.get("connection") or {}
+    if not isinstance(connection, dict):
+        raise ValueError(f"{path}: 'connection' musi byt mapping")
+
+    unknown = sorted(set(connection) - _KNOWN_KEYS)
     if unknown:
         raise ValueError(
             f"{path}: neznamy klic {', '.join(unknown)} "
             f"(zname: {', '.join(sorted(_KNOWN_KEYS))})"
         )
 
-    password = raw.get("password")
-    password_env = raw.get("password_env")
+    password = connection.get("password")
+    password_env = connection.get("password_env")
     if password and password_env:
         raise ValueError(f"{path}: password i password_env zaroven - vyber jedno")
 
@@ -66,20 +76,17 @@ def load_auth_file(path: Path, *, required: bool) -> AuthSettings:
     if password_env:
         value = os.environ.get(password_env)
         if not value:
-            raise ValueError(
-                f"{path}: promenna {password_env} neni nastavena"
-            )
+            raise ValueError(f"{path}: promenna {password_env} neni nastavena")
         password = value
 
-    key_file = raw.get("key_file")
-    if key_file:
-        key_file = str(Path(key_file).expanduser())
+    key_paths = connection.get("ssh_key_paths")
+    if key_paths is None:
+        key_paths = DEFAULT_SSH_KEY_PATHS
 
-    return AuthSettings(
-        username=raw.get("username"),
-        auth_type=raw.get("auth"),
-        key_file=key_file,
+    return ConnectionSettings(
+        username=connection.get("username") or DEFAULT_USERNAME,
+        ssh_key_paths=_expand(key_paths),
+        netconf_port=int(connection.get("netconf_port") or DEFAULT_NETCONF_PORT),
+        timeout=int(connection.get("timeout") or DEFAULT_TIMEOUT),
         password=password,
-        ssh_port=int(raw["ssh_port"]) if raw.get("ssh_port") is not None else None,
-        timeout=int(raw["timeout"]) if raw.get("timeout") is not None else None,
     )
