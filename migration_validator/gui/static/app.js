@@ -2,7 +2,6 @@
 
 /* mig-validate GUI - vanilla JS, fetch only, no framework, no build step. */
 
-const STATUS_RANK = { PASS: 0, SKIP: 1, WARN: 2, FAIL: 3, INFO: -1 };
 const PLATFORM_LABEL = { junos: "MX", "junos-evo": "ACX/EVO" };
 
 function el(tag, opts) {
@@ -73,9 +72,6 @@ class App {
       view: "run",
       run: null,
       selectedSnapshot: null,
-      snapshotBaseline: null,
-      openRows: {},
-      openScopes: {},
       openResults: {},
       activeCaptureId: null,
       captureForm: null,
@@ -325,16 +321,6 @@ class App {
     return parts;
   }
 
-  toggleRow(key) {
-    this.state.openRows[key] = !this.state.openRows[key];
-    this.render();
-  }
-
-  toggleScope(key) {
-    this.state.openScopes[key] = !this.state.openScopes[key];
-    this.render();
-  }
-
   toggleResult(key) {
     this.state.openResults[key] = !this.state.openResults[key];
     this.render();
@@ -520,8 +506,6 @@ class App {
     this.state.run = name;
     this.state.view = "run";
     this.state.selectedSnapshot = null;
-    this.state.openRows = {};
-    this.state.openScopes = {};
     this.state.openResults = {};
     // Capture tracking is global state (controller ruling: one in-flight
     // capture at a time, tracked across the whole app) - a run switch must
@@ -535,28 +519,16 @@ class App {
   async selectSnapshot(file) {
     this.state.view = "snapshot";
     this.state.selectedSnapshot = file;
-    this.state.snapshotBaseline = null;
-    this.state.openScopes = {};
     await this.loadSnapshotEvaluation(file);
-    this.render();
-  }
-
-  async selectSnapshotBaseline(file) {
-    this.state.snapshotBaseline = file || null;
-    await this.loadSnapshotEvaluation(this.state.selectedSnapshot);
     this.render();
   }
 
   async loadSnapshotEvaluation(file) {
     this.cache.snapshotEval = null;
     this.cache.snapshotEvalError = null;
-    const baseline = this.state.snapshotBaseline;
-    const query = baseline
-      ? `?baseline=${encodeURIComponent(baseline)}`
-      : "";
     try {
       const res = await fetch(
-        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation${query}`
+        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation`
       );
       if (res.ok) {
         this.cache.snapshotEval = await res.json();
@@ -1071,64 +1043,10 @@ class App {
 
   // -- run overview (screen 1) ------------------------------------------
 
-  portsEqual(a, b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return a.node === b.node && a.port === b.port;
-  }
-
   findSnapshotRecord(file) {
     const detail = this.cache.detail;
     if (!detail || !file) return null;
     return (detail.snapshots || []).find((s) => s.file === file) || null;
-  }
-
-  rowKey(row) {
-    const old = row.old ? `${row.old.node}:${row.old.port}` : "x";
-    const nw = row.new ? `${row.new.node}:${row.new.port}` : "x";
-    return `${old}->${nw}`;
-  }
-
-  worstFromSummary(summary) {
-    if (summary.fail > 0) return "FAIL";
-    if (summary.warn > 0) return "WARN";
-    if (summary.skip > 0 && summary.pass === 0) return "SKIP";
-    return "PASS";
-  }
-
-  rowPresentation(evaluation) {
-    const result = evaluation.result;
-    const scopes = result.scopes || [];
-    if (scopes.length === 0) {
-      const worst = this.worstFromSummary(result.summary);
-      return { worst, count: null, scopes: [], clickable: false };
-    }
-    let worst = "PASS";
-    for (const scope of scopes) {
-      if (STATUS_RANK[scope.status] > STATUS_RANK[worst]) worst = scope.status;
-    }
-    const count = scopes.filter((s) => s.status === worst).length;
-    return { worst, count, scopes, clickable: true };
-  }
-
-  pillText(worst, count) {
-    if (worst === "PASS" || worst === "SKIP" || count === null) return worst;
-    return `${worst} ${count}`;
-  }
-
-  rowTintClass(worst) {
-    if (worst === "WARN") return "tint-warn";
-    if (worst === "FAIL") return "tint-fail";
-    return "";
-  }
-
-  scopeNote(scope) {
-    const checks = scope.checks || [];
-    if (scope.status === "PASS") {
-      return `${checks.length} checks passed`;
-    }
-    const bad = checks.find((c) => c.status === scope.status) || checks[0];
-    return bad ? bad.message : "";
   }
 
   buildCountsStrip(services, checks, matchedLine) {
@@ -1455,7 +1373,6 @@ class App {
           el("span", { text: "Device" }),
           el("span", { text: "Pre taken" }),
           el("span", { text: "Post taken" }),
-          el("span", { className: "col-result" }),
         ],
       })
     );
@@ -1479,7 +1396,6 @@ class App {
               className: "taken-cell",
               text: subjectRecord ? subjectRecord.taken || "" : "",
             }),
-            el("span", { className: "col-result" }),
           ],
         })
       );
@@ -1501,77 +1417,6 @@ class App {
     });
   }
 
-  buildScopesPanel(scopes, rowKey, opts) {
-    const noBaseline = !!(opts && opts.noBaseline);
-    const flat = !!(opts && opts.flat);
-    const panel = el("div", {
-      className: "scopes-panel" + (flat ? " scopes-panel-flat" : ""),
-    });
-    for (const scope of scopes) {
-      const scopeKey = `${rowKey}|${scope.scope_id}`;
-      const scopeOpen = !!this.state.openScopes[scopeKey];
-      const sClass = statusClass(scope.status);
-      const card = el("div", {
-        className: "scope-card status-" + sClass,
-      });
-      const headerRow = el("div", {
-        className: "scope-card-header",
-        onClick: () => this.toggleScope(scopeKey),
-        children: [
-          el("span", { className: "scope-pill " + sClass, text: scope.status }),
-          el("span", { className: "scope-id", text: scope.scope_id }),
-          el("span", { className: "scope-note", text: this.scopeNote(scope) }),
-          el("span", { className: "scope-header-spacer" }),
-          el("span", {
-            className: "scope-chevron" + (scopeOpen ? " open" : ""),
-            html: "&#9660;",
-          }),
-        ],
-      });
-      card.appendChild(headerRow);
-      if (scopeOpen) {
-        card.appendChild(this.buildChecksTable(scope.checks || [], noBaseline));
-      }
-      panel.appendChild(card);
-    }
-    return panel;
-  }
-
-  buildChecksTable(checks, noBaseline) {
-    const wrap = el("div", { className: "checks-panel" });
-    const grid = el("div", {
-      className: "checks-grid" + (noBaseline ? " no-baseline" : ""),
-    });
-    const labels = noBaseline
-      ? ["Check", "Message", "Value", "Status"]
-      : ["Check", "Message", "Value", "Baseline", "Status"];
-    for (const label of labels) {
-      grid.appendChild(el("span", { className: "col-head", text: label }));
-    }
-    for (const check of checks) {
-      const valueClass =
-        check.status === "FAIL" ? " fail" : check.status === "WARN" ? " warn" : "";
-      grid.appendChild(el("span", { className: "chk-id", text: check.id }));
-      grid.appendChild(el("span", { className: "chk-msg", text: check.message }));
-      grid.appendChild(
-        el("span", { className: "chk-value" + valueClass, text: check.value ?? "—" })
-      );
-      if (!noBaseline) {
-        grid.appendChild(
-          el("span", { className: "chk-baseline", text: check.baseline_value ?? "—" })
-        );
-      }
-      grid.appendChild(
-        el("span", {
-          className: "chk-status " + statusClass(check.status),
-          text: check.status,
-        })
-      );
-    }
-    wrap.appendChild(grid);
-    return wrap;
-  }
-
   // -- snapshot evaluation (screen 2) ------------------------------------
 
   phaseHeaderPillClass(phase) {
@@ -1581,48 +1426,12 @@ class App {
     return "pill-phase-pre";
   }
 
-  snapshotBaselineCandidates() {
-    const record = this.findSnapshotRecord(this.state.selectedSnapshot);
-    if (!record || !this.cache.detail) return [];
-    return (this.cache.detail.snapshots || []).filter(
-      (s) => s.device === record.device && s.file !== record.file
-    );
-  }
-
-  buildSnapshotCompareBar() {
-    const candidates = this.snapshotBaselineCandidates();
-    if (candidates.length === 0) return null;
-    const select = el("select", {
-      className: "form-select",
-      children: [
-        el("option", { text: "— no baseline —", attrs: { value: "" } }),
-        ...candidates.map((s) => {
-          const label = `${s.phase} · ${s.port || "all"} · ${s.taken || ""}`;
-          const attrs =
-            s.file === this.state.snapshotBaseline
-              ? { value: s.file, selected: "selected" }
-              : { value: s.file };
-          return el("option", { text: label, attrs });
-        }),
-      ],
-    });
-    select.addEventListener("change", (e) =>
-      this.selectSnapshotBaseline(e.target.value)
-    );
-    return el("div", {
-      className: "compare-bar",
-      children: [el("span", { className: "compare-bar-label", text: "Compare with" }), select],
-    });
-  }
-
   renderSnapshotView() {
     clear(this.mainEl);
     this.mainEl.appendChild(this.buildBreadcrumb(this.state.selectedSnapshot, true));
 
     if (!this.cache.snapshotEval) {
       if (this.cache.snapshotEvalError) {
-        const bar = this.buildSnapshotCompareBar();
-        if (bar) this.mainEl.appendChild(bar);
         this.mainEl.appendChild(
           el("div", {
             className: "notice notice-warn",
@@ -1633,9 +1442,8 @@ class App {
       return;
     }
 
-    const { snapshot, baseline, result } = this.cache.snapshotEval;
+    const { snapshot, result } = this.cache.snapshotEval;
     const phase = result.subject ? result.subject.phase : null;
-    const baselineRecord = this.findSnapshotRecord(this.state.snapshotBaseline);
 
     const headerChildren = [el("h1", { text: "Snapshot evaluation" })];
     if (phase) {
@@ -1646,22 +1454,7 @@ class App {
         })
       );
     }
-    if (baseline && baselineRecord) {
-      headerChildren.push(
-        el("span", {
-          className: "header-pill " + this.phaseHeaderPillClass(baselineRecord.phase),
-          text: `vs ${baselineRecord.phase}`,
-        })
-      );
-    } else {
-      headerChildren.push(
-        el("span", { className: "header-pill pill-no-baseline", text: "no baseline" })
-      );
-    }
     this.mainEl.appendChild(el("div", { className: "run-header", children: headerChildren }));
-
-    const compareBar = this.buildSnapshotCompareBar();
-    if (compareBar) this.mainEl.appendChild(compareBar);
 
     this.mainEl.appendChild(
       el("div", {
@@ -1694,56 +1487,33 @@ class App {
               }),
             ],
           }),
-          baseline
-            ? el("span", {
-                children: [
-                  document.createTextNode("Baseline taken "),
-                  el("span", { className: "value", text: baseline.taken || "" }),
-                ],
-              })
-            : null,
         ],
       })
     );
 
-    const summary = result.summary || {};
+    const services = MigView.countStatuses((result.scopes || []).map((s) => s.status));
+    this.mainEl.appendChild(this.buildCountsStrip(services, result.summary || {}, null));
+
+    const entries = (result.scopes || []).map((scope) => ({
+      key: `snap|${this.state.selectedSnapshot}|${scope.scope_id}`,
+      view: MigView.buildView(scope, {}),
+      hasBaseline: false,
+      scope,
+    }));
+    this.mainEl.appendChild(
+      el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
+    );
+    this.mainEl.appendChild(this.buildResultsTable(entries, { singlePort: true }));
+
+    const unassigned = result.unassigned || {};
+    const unassignedCount = Object.values(unassigned).reduce((n, list) => n + list.length, 0);
     this.mainEl.appendChild(
       el("div", {
-        className: "chip-row",
-        children: [
-          el("span", {
-            className: "chip chip-pass",
-            text: `${summary.pass || 0} PASS`,
-          }),
-          el("span", {
-            className: "chip chip-warn",
-            text: `${summary.warn || 0} WARN`,
-          }),
-          el("span", {
-            className: "chip chip-fail",
-            text: `${summary.fail || 0} FAIL`,
-          }),
-          el("span", {
-            className: "chip chip-skip",
-            text: `${summary.skip || 0} SKIP`,
-          }),
-          el("span", { className: "chip-row-spacer" }),
-          el("span", {
-            className: "chip-row-note",
-            text: baseline
-              ? `compared against ${this.state.snapshotBaseline}`
-              : "standalone evaluation — comparison checks skipped",
-          }),
-        ],
+        className: "subsection-title",
+        text: `Nezařazeno (jen subject) — ${unassignedCount}`,
       })
     );
-
-    this.mainEl.appendChild(
-      this.buildScopesPanel(result.scopes || [], "snapshot", {
-        noBaseline: !baseline,
-        flat: true,
-      })
-    );
+    this.mainEl.appendChild(this.buildUnassignedSection(unassigned));
 
     this.mainEl.appendChild(
       el("div", {
@@ -2251,8 +2021,6 @@ class App {
         this.state.run = runName;
         this.state.view = "run";
         this.state.selectedSnapshot = null;
-        this.state.openRows = {};
-        this.state.openScopes = {};
         this.state.openResults = {};
         await this.loadRun();
         this.render();
