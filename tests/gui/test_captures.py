@@ -46,6 +46,27 @@ def test_uspesny_capture_ma_kroky_a_stav_done():
     ]
 
 
+def test_castecne_selhane_collectory_se_ulozi_do_task():
+    manager = CaptureManager()
+
+    class FakeOutcome:
+        failed_collectors = {"bgp": "timeout"}
+        warnings = ["inventory pregenerovana"]
+
+    def partial_fail_fn(on_progress):
+        on_progress("interfaces", "start", None)
+        on_progress("interfaces", "ok", None)
+        return FakeOutcome()
+
+    task = manager.start(
+        partial_fail_fn, run="mig01", device="MX1", port=None, phase="pre"
+    )
+    task = _wait_done(manager, task.id)
+    assert task.state == "done"
+    assert task.to_dict()["failed_collectors"] == {"bgp": "timeout"}
+    assert task.to_dict()["warnings"] == ["inventory pregenerovana"]
+
+
 def test_selhani_nastavi_failed_a_error():
     manager = CaptureManager()
     task = manager.start(_fail_fn, run="mig01", device="MX1", port=None, phase="pre")

@@ -199,7 +199,12 @@ class App {
     if (task.state === "done") {
       this.state.activeCaptureId = null;
       this.stopCapturePolling();
-      this.cache.captureProgress = null;
+      // Keep the task around (with its failed_collectors/warnings) so a
+      // WARN note can render on the matching row/notice - cleared on the
+      // next view change (new capture form, new capture started, etc).
+      if (!this.hasCaptureIssues(task)) {
+        this.cache.captureProgress = null;
+      }
       await this.loadRun();
       this.render();
       return;
@@ -215,6 +220,7 @@ class App {
 
   rowMatchesCapture(row, task) {
     if (!task) return false;
+    if (task.run !== this.state.run) return false;
     for (const endpoint of [row.old, row.new]) {
       if (!endpoint) continue;
       if (endpoint.node === task.device && (endpoint.port ?? null) === (task.port ?? null)) {
@@ -255,6 +261,28 @@ class App {
     return parts;
   }
 
+  hasCaptureIssues(task) {
+    if (!task) return false;
+    const failed = task.failed_collectors || {};
+    const warnings = task.warnings || [];
+    return Object.keys(failed).length > 0 || warnings.length > 0;
+  }
+
+  buildCaptureIssueLines(task) {
+    const lines = [];
+    const failed = task.failed_collectors || {};
+    for (const [name, message] of Object.entries(failed)) {
+      lines.push(`collector ${name} failed: ${message}`);
+    }
+    for (const warning of task.warnings || []) lines.push(warning);
+    const parts = [];
+    lines.forEach((line, i) => {
+      if (i > 0) parts.push(el("span", { text: " · " }));
+      parts.push(el("span", { text: line }));
+    });
+    return parts;
+  }
+
   toggleRow(key) {
     this.state.openRows[key] = !this.state.openRows[key];
     this.render();
@@ -272,9 +300,11 @@ class App {
     this.state.selectedSnapshot = null;
     this.state.openRows = {};
     this.state.openScopes = {};
-    this.cache.captureProgress = null;
-    this.state.activeCaptureId = null;
-    this.stopCapturePolling();
+    // Capture tracking is global state (controller ruling: one in-flight
+    // capture at a time, tracked across the whole app) - a run switch must
+    // not orphan it. activeCaptureId/captureProgress/polling survive; the
+    // progress UI itself gates on task.run === this.state.run so it only
+    // renders while viewing the run the capture belongs to.
     await this.loadRun();
     this.render();
   }
@@ -803,13 +833,30 @@ class App {
     return a.node === b.node && a.port === b.port;
   }
 
+  findSnapshotRecord(file) {
+    const detail = this.cache.detail;
+    if (!detail || !file) return null;
+    return (detail.snapshots || []).find((s) => s.file === file) || null;
+  }
+
   findEvaluation(row) {
     const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
+    // Step matches take priority - they are the exact mapped-post pairing.
+    // Only fall back to subject-snapshot matching (whole-device,
+    // mapping-less, rollback evaluations - all step=null) when no step
+    // eval claimed this row, so a rollback eval can never displace the
+    // post eval a mapped row already had.
+    const stepMatch = evaluations.find(
+      (ev) =>
+        ev.step && this.portsEqual(ev.step.old, row.old) && this.portsEqual(ev.step.new, row.new)
+    );
+    if (stepMatch) return stepMatch;
     return evaluations.find((ev) => {
-      if (!ev.step) return false;
-      return (
-        this.portsEqual(ev.step.old, row.old) && this.portsEqual(ev.step.new, row.new)
-      );
+      if (ev.step) return false;
+      const record = this.findSnapshotRecord(ev.subject);
+      if (!record) return false;
+      const endpoint = { node: record.device, port: record.port };
+      return this.portsEqual(endpoint, row.old) || this.portsEqual(endpoint, row.new);
     });
   }
 
@@ -968,8 +1015,10 @@ class App {
     // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
     // first-ever capture on a mapping-less run) has nothing to attach to
     // above - surface its live progress standalone so it isn't silent.
+    // Gated on task.run === this.state.run: a capture tracked while viewing
+    // another run must not bleed its progress into this one.
     const task = this.cache.captureProgress;
-    if (task && !allRows.some((r) => this.rowMatchesCapture(r, task))) {
+    if (task && task.run === this.state.run && !allRows.some((r) => this.rowMatchesCapture(r, task))) {
       if (task.state === "running") {
         const parts = this.buildCaptureStepsLine(task);
         this.mainEl.appendChild(
@@ -987,6 +1036,16 @@ class App {
           el("div", {
             className: "notice notice-fail",
             text: `${task.device}:${task.port || "all"} (${task.phase}) failed — ${task.error || ""}`,
+          })
+        );
+      } else if (task.state === "done" && this.hasCaptureIssues(task)) {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-warn",
+            children: [
+              document.createTextNode(`${task.device}:${task.port || "all"} (${task.phase}) done with issues — `),
+              ...this.buildCaptureIssueLines(task),
+            ],
           })
         );
       }
@@ -1103,6 +1162,13 @@ class App {
           el("div", {
             className: "row-note row-note-fail",
             text: task.error || "capture selhal",
+          })
+        );
+      } else if (rowMatches && task.state === "done" && this.hasCaptureIssues(task)) {
+        table.appendChild(
+          el("div", {
+            className: "row-note row-note-warn",
+            children: this.buildCaptureIssueLines(task),
           })
         );
       }

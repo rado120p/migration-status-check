@@ -26,12 +26,16 @@ class CaptureTask:
     state: str = "running"  # running | done | failed
     steps: list[dict] = field(default_factory=list)
     error: str | None = None
+    failed_collectors: dict = field(default_factory=dict)
+    warnings: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "run": self.run, "device": self.device,
             "port": self.port, "phase": self.phase, "state": self.state,
             "steps": self.steps, "error": self.error,
+            "failed_collectors": self.failed_collectors,
+            "warnings": self.warnings,
         }
 
 
@@ -79,7 +83,13 @@ class CaptureManager:
 
         def worker() -> None:
             try:
-                fn(on_progress)
+                outcome = fn(on_progress)
+                failed = getattr(outcome, "failed_collectors", None)
+                if failed:
+                    task.failed_collectors = failed
+                warns = getattr(outcome, "warnings", None)
+                if warns:
+                    task.warnings = warns
                 task.state = "done"
             except Exception as error:  # noqa: BLE001 - stav musi byt failed vzdy
                 task.state = "failed"

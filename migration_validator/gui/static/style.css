@@ -744,6 +744,7 @@ a:hover { color: #0e3fa9; }
 }
 
 .row-note-fail { color: #b91c1c; }
+.row-note-warn { color: #b45309; }
 
 .step-ok { color: #6b7280; }
 .step-running { color: #374151; font-weight: 600; }
