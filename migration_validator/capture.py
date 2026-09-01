@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from lxml import etree
 
@@ -24,6 +24,8 @@ from migration_validator.models.inventory import Inventory
 from migration_validator.models.snapshot import CaptureMeta, Snapshot
 from migration_validator.probes.ping import DEFAULT_COUNT, resolve_targets, run_ping
 from migration_validator.scoping.builder import build_scopes
+
+ProgressCallback = Callable[[str, str, str | None], None]
 
 LIST_AREAS = frozenset({"arp", "nd"})
 
@@ -101,6 +103,7 @@ def capture_device(
     record_raw: str | Path | None = None,
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> Snapshot:
     started_at = now or _timestamp()
     platform = detect_platform(device)
@@ -111,16 +114,22 @@ def capture_device(
     status: dict[str, dict[str, Any]] = {}
 
     for collector in selected:
+        if on_progress is not None:
+            on_progress(collector.name, "start", None)
         if record_raw is not None:
             _record(Path(record_raw), platform, collector.name, device, collector)
         try:
             facts[collector.name] = collector.collect(device, platform)
             status[collector.name] = {"status": "ok"}
+            if on_progress is not None:
+                on_progress(collector.name, "ok", None)
         except CollectorError as error:
             # Oblast zustane prazdna se spravnym typem - check ji uvidi jako
             # chybejici a diky failed_collectors() vrati SKIP, nikdy PASS.
             facts[collector.name] = _empty_for(collector.name)
             status[collector.name] = {"status": "error", "message": str(error)}
+            if on_progress is not None:
+                on_progress(collector.name, "error", str(error))
 
     scopes = build_scopes(inventory) if inventory is not None else []
 
@@ -145,14 +154,21 @@ def capture_device(
         baseline_nd = (
             _merged_baseline_entries(baselines, "nd") if baselines else None
         )
-        for target in resolve_targets(
-            ping_scopes,
-            facts.get("arp", []),
-            facts.get("nd", []),
-            baseline_arp=baseline_arp,
-            baseline_nd=baseline_nd,
-        ):
+        targets = list(
+            resolve_targets(
+                ping_scopes,
+                facts.get("arp", []),
+                facts.get("nd", []),
+                baseline_arp=baseline_arp,
+                baseline_nd=baseline_nd,
+            )
+        )
+        if on_progress is not None:
+            on_progress("ping", "start", f"{len(targets)} cilu")
+        for target in targets:
             pings.append(run_ping(device, target, count=ping_count))
+        if on_progress is not None:
+            on_progress("ping", "ok", None)
 
     return Snapshot(
         device=device_meta(device, address),

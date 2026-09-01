@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from migration_validator.capture import capture_device
+from migration_validator.capture import ProgressCallback, capture_device
 from migration_validator.checks.all import load_all
 from migration_validator.checks.registry import all_checks
 from migration_validator.config import CheckConfig
@@ -30,6 +30,7 @@ def capture(
     record_raw: str | None = None,
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> Snapshot:
     """Sebere stav zarizeni a vrati self-contained snapshot.
 
@@ -51,6 +52,7 @@ def capture(
             record_raw=record_raw,
             baselines=baselines,
             service_types=service_types,
+            on_progress=on_progress,
         )
 
 

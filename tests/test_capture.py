@@ -192,6 +192,31 @@ def test_failed_nd_collector_leaves_facts_as_empty_list():
     assert isinstance(snapshot.facts["nd"], list)
 
 
+def test_on_progress_hlasi_kolektory_a_ping():
+    inventory = load_inventory(INVENTORY_4)
+    device = FakeDevice()
+    events: list[tuple[str, str]] = []
+
+    def on_progress(step: str, status: str, message: str | None) -> None:
+        events.append((step, status))
+
+    capture_device(
+        device,
+        "172.20.20.4",
+        inventory=inventory,
+        now=NOW,
+        on_progress=on_progress,
+    )
+
+    # kazdy kolektor hlasi start i vysledek
+    starts = [s for s, st in events if st == "start"]
+    finishes = [(s, st) for s, st in events if st in ("ok", "error")]
+    assert len(starts) == len(finishes)
+    # s inventory dojde i na ping - posledni krok je hruby "ping"
+    assert "ping" in starts
+    assert starts[-1] == "ping"
+
+
 def test_every_area_is_registered_for_both_platforms():
     """Collector zapomenuty v all.py by tise vypustil celou oblast.
 
