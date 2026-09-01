@@ -44,16 +44,19 @@ class App {
       detailError: null,
       evaluation: null,
       evaluationError: null,
+      snapshotEval: null,
+      snapshotEvalError: null,
+      checks: null,
+      checksError: null,
     };
 
     this.sidebarRunsEl = document.getElementById("sidebar-runs");
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
+    this.btnChecksEl = document.getElementById("btn-checks");
 
-    document.getElementById("btn-checks").addEventListener("click", () => {
-      // wired in a later task - inert stub for now.
-    });
+    this.btnChecksEl.addEventListener("click", () => this.goToChecks());
     document.getElementById("btn-new-capture").addEventListener("click", () => {
       // wired in a later task - inert stub for now.
     });
@@ -154,17 +157,114 @@ class App {
     this.render();
   }
 
-  selectSnapshot(file) {
-    // Snapshot evaluation view (screen 2) lands in a later task; for now
-    // just track the selection so the sidebar can highlight it.
+  async selectSnapshot(file) {
+    this.state.view = "snapshot";
     this.state.selectedSnapshot = file;
+    this.state.openScopes = {};
+    await this.loadSnapshotEvaluation(file);
     this.render();
+  }
+
+  async loadSnapshotEvaluation(file) {
+    this.cache.snapshotEval = null;
+    this.cache.snapshotEvalError = null;
+    try {
+      const res = await fetch(
+        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation`
+      );
+      if (res.ok) {
+        this.cache.snapshotEval = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.snapshotEvalError = {
+          status: res.status,
+          detail: body.detail || `snapshot evaluation selhala (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.snapshotEvalError = { status: 0, detail: String(err) };
+    }
+  }
+
+  async goToChecks() {
+    this.state.view = "checks";
+    this.state.selectedSnapshot = null;
+    await this.loadChecks();
+    this.render();
+  }
+
+  async loadChecks() {
+    this.cache.checks = null;
+    this.cache.checksError = null;
+    try {
+      const res = await fetch("/api/checks");
+      if (res.ok) {
+        this.cache.checks = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.checksError = {
+          status: res.status,
+          detail: body.detail || `checks se nepodarilo nacist (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.checksError = { status: 0, detail: String(err) };
+    }
+  }
+
+  backToRun() {
+    this.state.view = "run";
+    this.state.selectedSnapshot = null;
+    this.render();
+  }
+
+  exportSnapshotJson() {
+    if (!this.cache.snapshotEval) return;
+    const blob = new Blob([JSON.stringify(this.cache.snapshotEval, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const snapBase = this.state.selectedSnapshot.replace(/\.json$/, "");
+    a.download = `${this.state.run}-${snapBase}-evaluation.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  buildBreadcrumb(currentLabel, currentMono) {
+    return el("div", {
+      className: "breadcrumb",
+      children: [
+        el("span", {
+          className: "crumb-link",
+          text: `run ${this.state.run}`,
+          onClick: () => this.backToRun(),
+        }),
+        el("span", { className: "crumb-sep", text: "/" }),
+        el("span", {
+          className: "crumb-current" + (currentMono ? " mono" : ""),
+          text: currentLabel,
+        }),
+      ],
+    });
   }
 
   render() {
     this.renderSidebar();
+    this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
     if (this.state.view === "empty") {
       this.renderEmptyState();
+      return;
+    }
+    if (this.state.view === "snapshot") {
+      this.renderSnapshotView();
+      return;
+    }
+    if (this.state.view === "checks") {
+      this.renderChecksView();
       return;
     }
     this.renderRunOverview();
@@ -515,8 +615,12 @@ class App {
     return table;
   }
 
-  buildScopesPanel(scopes, rowKey) {
-    const panel = el("div", { className: "scopes-panel" });
+  buildScopesPanel(scopes, rowKey, opts) {
+    const noBaseline = !!(opts && opts.noBaseline);
+    const flat = !!(opts && opts.flat);
+    const panel = el("div", {
+      className: "scopes-panel" + (flat ? " scopes-panel-flat" : ""),
+    });
     for (const scope of scopes) {
       const scopeKey = `${rowKey}|${scope.scope_id}`;
       const scopeOpen = !!this.state.openScopes[scopeKey];
@@ -540,17 +644,22 @@ class App {
       });
       card.appendChild(headerRow);
       if (scopeOpen) {
-        card.appendChild(this.buildChecksTable(scope.checks || []));
+        card.appendChild(this.buildChecksTable(scope.checks || [], noBaseline));
       }
       panel.appendChild(card);
     }
     return panel;
   }
 
-  buildChecksTable(checks) {
+  buildChecksTable(checks, noBaseline) {
     const wrap = el("div", { className: "checks-panel" });
-    const grid = el("div", { className: "checks-grid" });
-    for (const label of ["Check", "Message", "Value", "Baseline", "Status"]) {
+    const grid = el("div", {
+      className: "checks-grid" + (noBaseline ? " no-baseline" : ""),
+    });
+    const labels = noBaseline
+      ? ["Check", "Message", "Value", "Status"]
+      : ["Check", "Message", "Value", "Baseline", "Status"];
+    for (const label of labels) {
       grid.appendChild(el("span", { className: "col-head", text: label }));
     }
     for (const check of checks) {
@@ -561,9 +670,11 @@ class App {
       grid.appendChild(
         el("span", { className: "chk-value" + valueClass, text: check.value ?? "—" })
       );
-      grid.appendChild(
-        el("span", { className: "chk-baseline", text: check.baseline_value ?? "—" })
-      );
+      if (!noBaseline) {
+        grid.appendChild(
+          el("span", { className: "chk-baseline", text: check.baseline_value ?? "—" })
+        );
+      }
       grid.appendChild(
         el("span", {
           className: "chk-status " + statusClass(check.status),
@@ -573,6 +684,205 @@ class App {
     }
     wrap.appendChild(grid);
     return wrap;
+  }
+
+  // -- snapshot evaluation (screen 2) ------------------------------------
+
+  phaseHeaderPillClass(phase) {
+    if (phase === "pre") return "pill-phase-pre";
+    if (phase === "post") return "pill-phase-post";
+    if (phase === "rollback") return "pill-phase-rollback";
+    return "pill-phase-pre";
+  }
+
+  renderSnapshotView() {
+    clear(this.mainEl);
+    this.mainEl.appendChild(this.buildBreadcrumb(this.state.selectedSnapshot, true));
+
+    if (!this.cache.snapshotEval) {
+      if (this.cache.snapshotEvalError) {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-warn",
+            text: this.cache.snapshotEvalError.detail,
+          })
+        );
+      }
+      return;
+    }
+
+    const { snapshot, result } = this.cache.snapshotEval;
+    const phase = result.subject ? result.subject.phase : null;
+
+    const headerChildren = [el("h1", { text: "Snapshot evaluation" })];
+    if (phase) {
+      headerChildren.push(
+        el("span", {
+          className: "header-pill " + this.phaseHeaderPillClass(phase),
+          text: phase,
+        })
+      );
+    }
+    headerChildren.push(
+      el("span", { className: "header-pill pill-no-baseline", text: "no baseline" })
+    );
+    this.mainEl.appendChild(el("div", { className: "run-header", children: headerChildren }));
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "meta-bar",
+        children: [
+          el("span", {
+            children: [
+              document.createTextNode("Device "),
+              el("span", { className: "value", text: snapshot.device }),
+            ],
+          }),
+          el("span", {
+            children: [
+              document.createTextNode("Platform "),
+              el("span", { className: "value", text: snapshot.platform }),
+            ],
+          }),
+          el("span", {
+            children: [
+              document.createTextNode("Taken "),
+              el("span", { className: "value", text: snapshot.taken || "" }),
+            ],
+          }),
+          el("span", {
+            children: [
+              document.createTextNode("Collectors "),
+              el("span", {
+                className: "value",
+                text: Object.keys(snapshot.collectors || {}).join(", "),
+              }),
+            ],
+          }),
+        ],
+      })
+    );
+
+    const summary = result.summary || {};
+    this.mainEl.appendChild(
+      el("div", {
+        className: "chip-row",
+        children: [
+          el("span", {
+            className: "chip chip-pass",
+            text: `${summary.pass || 0} PASS`,
+          }),
+          el("span", {
+            className: "chip chip-warn",
+            text: `${summary.warn || 0} WARN`,
+          }),
+          el("span", {
+            className: "chip chip-fail",
+            text: `${summary.fail || 0} FAIL`,
+          }),
+          el("span", {
+            className: "chip chip-skip",
+            text: `${summary.skip || 0} SKIP`,
+          }),
+          el("span", { className: "chip-row-spacer" }),
+          el("span", {
+            className: "chip-row-note",
+            text: "standalone evaluation — comparison checks skipped",
+          }),
+        ],
+      })
+    );
+
+    this.mainEl.appendChild(
+      this.buildScopesPanel(result.scopes || [], "snapshot", {
+        noBaseline: true,
+        flat: true,
+      })
+    );
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Export JSON",
+            onClick: () => this.exportSnapshotJson(),
+          }),
+        ],
+      })
+    );
+  }
+
+  // -- registered checks (screen 3) --------------------------------------
+
+  renderChecksView() {
+    clear(this.mainEl);
+    this.mainEl.appendChild(this.buildBreadcrumb("registered checks", false));
+
+    if (!this.cache.checks) {
+      if (this.cache.checksError) {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-warn",
+            text: this.cache.checksError.detail,
+          })
+        );
+      }
+      return;
+    }
+
+    const checks = this.cache.checks.checks || [];
+    this.mainEl.appendChild(
+      el("div", {
+        className: "run-header",
+        children: [
+          el("h1", { text: "Registered checks" }),
+          el("span", {
+            className: "subtitle",
+            text: `${checks.length} checks`,
+          }),
+        ],
+      })
+    );
+
+    const table = el("div", { className: "checks-registry-table" });
+    table.appendChild(
+      el("div", {
+        className: "checks-registry-header-row",
+        children: [
+          el("span", { text: "ID" }),
+          el("span", { text: "Mode" }),
+          el("span", { text: "Severity" }),
+          el("span", { text: "Service types" }),
+          el("span", { className: "col-enabled", text: "Enabled" }),
+        ],
+      })
+    );
+    for (const check of checks) {
+      const severity = (check.default_severity || "").toLowerCase();
+      const enabled = check.enabled === undefined ? true : !!check.enabled;
+      const types = check.service_types ? check.service_types.join(", ") : "all";
+      table.appendChild(
+        el("div", {
+          className: "checks-registry-row" + (enabled ? "" : " disabled"),
+          children: [
+            el("span", { className: "reg-id", text: check.id }),
+            el("span", { className: "reg-mode", text: check.mode }),
+            el("span", {
+              className: "reg-severity " + severity,
+              text: (check.default_severity || "").toUpperCase(),
+            }),
+            el("span", { className: "reg-types", text: types }),
+            el("span", {
+              className: "reg-enabled " + (enabled ? "yes" : "off"),
+              text: enabled ? "yes" : "off",
+            }),
+          ],
+        })
+      );
+    }
+    this.mainEl.appendChild(table);
   }
 }
 
