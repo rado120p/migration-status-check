@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #e8eaed; font-family: 'IBM Plex Sans', sans-serif; }
+  a { color: #1a56db; } a:hover { color: #0e3fa9; }
+</style>
+</helmet>
+<div style="min-height: 100vh; overflow-x: auto; padding: 32px 24px; box-sizing: border-box;">
+<div style="width: 1200px; margin: 0 auto; background: #f7f8fa; border: 1px solid #d3d7de; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 30px rgba(15,23,42,0.10); display: grid; grid-template-rows: auto 1fr; align-self: flex-start;">
+  <div style="display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: #ffffff; border-bottom: 1px solid #e2e5ea;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 28px; height: 28px; border-radius: 6px; background: #1a56db; color: #fff; display: grid; place-items: center; font: 700 13px 'IBM Plex Mono', monospace;">mv</div>
+      <span style="font-weight: 600; font-size: 15px; color: #111827;">mig-validate</span>
+    </div>
+    <div style="flex: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280;">
+      <span>Profile:</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">core-only.yml</span>
+    </div>
+    <button onClick="{{ openChecks }}" style="border: 1px solid {{ checksBtnBorder }}; background: {{ checksBtnBg }}; border-radius: 6px; padding: 7px 14px; font: 500 13px 'IBM Plex Sans', sans-serif; color: {{ checksBtnFg }}; cursor: pointer;">Checks</button>
+    <button onClick="{{ openCapture }}" style="border: none; background: #1a56db; color: #fff; border-radius: 6px; padding: 8px 16px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">New capture</button>
+  </div>
+  <div style="display: grid; grid-template-columns: 232px 1fr; min-height: 620px;">
+    <div style="background: #ffffff; border-right: 1px solid #e2e5ea; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px;">
+      <div style="font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.08em; color: #9ca3af; padding: 0 10px 8px; text-transform: uppercase;">Runs</div>
+      <div onClick="{{ backToRun }}" style="background: {{ runCardBg }}; border-radius: 6px; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font: 600 13px 'IBM Plex Mono', monospace; color: #1a56db;">mig01</span>
+          <span style="font-size: 11px; color: #059669; font-weight: 600;">in progress</span>
+        </div>
+        <span style="font-size: 12px; color: #6b7280;">3 of 5 ports migrated</span>
+      </div>
+      <div style="border-radius: 6px; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer;" style-hover="background: #f9fafb;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #374151;">mig00-pilot</span>
+          <span style="font-size: 11px; color: #9ca3af;">done</span>
+        </div>
+        <span style="font-size: 12px; color: #9ca3af;">completed Aug 21</span>
+      </div>
+      <div style="font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.08em; color: #9ca3af; padding: 16px 10px 8px; text-transform: uppercase;">Snapshots</div>
+      <sc-for list="{{ snapshots }}" as="snap" hint-placeholder-count="4">
+        <div onClick="{{ snap.select }}" style="border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; background: {{ snap.bg }};" style-hover="background: #f3f4f6;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+            <span style="font: 500 12px 'IBM Plex Mono', monospace; color: {{ snap.fg }}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ snap.label }}</span>
+            <span style="font: 600 10px 'IBM Plex Mono', monospace; color: {{ snap.phaseFg }}; background: {{ snap.phaseBg }}; padding: 1px 6px; border-radius: 3px;">{{ snap.phase }}</span>
+          </div>
+          <span style="font-size: 11px; color: #9ca3af;">{{ snap.taken }}</span>
+        </div>
+      </sc-for>
+      <div style="flex: 1;"></div>
+      <div style="border-top: 1px solid #eef0f3; padding: 12px 10px 4px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #6b7280;">
+        <div style="display: flex; justify-content: space-between;"><span>Devices</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">2</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>Snapshots</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">7</span></div>
+      </div>
+    </div>
+    <div style="padding: 24px 28px; display: flex; flex-direction: column; gap: 20px;">
+      <sc-if value="{{ isRunView }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: baseline; gap: 14px;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827;">Run <span style="font-family: 'IBM Plex Mono', monospace;">mig01</span></h1>
+        <span style="font-size: 13px; color: #6b7280;">172.20.20.4 (MX) &#8594; 172.20.20.5 (ACX/EVO)</span>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; color: #059669; font-family: 'IBM Plex Mono', monospace;">42</div>
+          <div style="font-size: 12px; color: #6b7280; font-weight: 500;">PASS</div>
+        </div>
+        <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; color: #d97706; font-family: 'IBM Plex Mono', monospace;">3</div>
+          <div style="font-size: 12px; color: #6b7280; font-weight: 500;">WARN</div>
+        </div>
+        <div style="flex: 1; background: #fff; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 16px; box-shadow: 0 0 0 1px rgba(220,38,38,0.08);">
+          <div style="font-size: 26px; font-weight: 700; color: #dc2626; font-family: 'IBM Plex Mono', monospace;">1</div>
+          <div style="font-size: 12px; color: #6b7280; font-weight: 500;">FAIL</div>
+        </div>
+        <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; color: #6b7280; font-family: 'IBM Plex Mono', monospace;">2</div>
+          <div style="font-size: 12px; color: #6b7280; font-weight: 500;">SKIP</div>
+        </div>
+        <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; color: #2563eb; font-family: 'IBM Plex Mono', monospace;">4</div>
+          <div style="font-size: 12px; color: #6b7280; font-weight: 500;">INFO</div>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden;">
+        <div style="display: grid; grid-template-columns: 24px 1.3fr 1.3fr 90px 90px 110px 130px; padding: 10px 18px; background: #f9fafb; border-bottom: 1px solid #e2e5ea; font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.06em; color: #6b7280; text-transform: uppercase; gap: 0 8px;">
+          <span></span><span>Old port</span><span>New port</span><span>Pre</span><span>Post</span><span>Rollback</span><span style="text-align: right;">Result</span>
+        </div>
+        <sc-for list="{{ rows }}" as="row" hint-placeholder-count="5">
+          <div>
+            <div onClick="{{ row.toggle }}" style="display: grid; grid-template-columns: 24px 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 13px; cursor: pointer; gap: 0 8px; background: {{ row.rowBg }};" style-hover="filter: brightness(0.985);">
+              <span style="color: #9ca3af; font-size: 10px; display: inline-block; transition: transform 0.15s; transform: {{ row.chevron }};">&#9654;</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ row.old }}</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: {{ row.newColor }};">{{ row.new }}</span>
+              <span style="color: {{ row.preColor }}; font-weight: 600;">{{ row.pre }}</span>
+              <span style="color: {{ row.postColor }}; font-weight: 600;">{{ row.post }}</span>
+              <span style="color: {{ row.rbColor }}; font-weight: 600;">{{ row.rb }}</span>
+              <span style="text-align: right;"><span style="background: {{ row.pillBg }}; color: {{ row.pillFg }}; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">{{ row.pill }}</span></span>
+            </div>
+            <sc-if value="{{ row.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="background: #fbfcfd; border-bottom: 1px solid #f1f3f6; padding: 14px 18px 16px 50px; display: flex; flex-direction: column; gap: 8px;">
+                <sc-for list="{{ row.scopes }}" as="scope" hint-placeholder-count="2">
+                  <div style="background: #fff; border: 1px solid {{ scope.border }}; border-left: 3px solid {{ scope.accent }}; border-radius: 6px; overflow: hidden;">
+                    <div onClick="{{ scope.toggle }}" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer;" style-hover="background: #f9fafb;">
+                      <span style="background: {{ scope.pillBg }}; color: {{ scope.pillFg }}; font: 600 10.5px 'IBM Plex Mono', monospace; padding: 2px 8px; border-radius: 4px;">{{ scope.status }}</span>
+                      <span style="font: 500 12.5px 'IBM Plex Mono', monospace; color: #111827;">{{ scope.id }}</span>
+                      <span style="font-size: 12px; color: #6b7280;">{{ scope.note }}</span>
+                      <div style="flex: 1;"></div>
+                      <span style="color: #9ca3af; font-size: 10px; display: inline-block; transform: {{ scope.chevron }}; transition: transform 0.15s;">&#9660;</span>
+                    </div>
+                    <sc-if value="{{ scope.expanded }}" hint-placeholder-val="{{ false }}">
+                      <div style="border-top: 1px solid #f1f3f6; padding: 8px 14px 12px;">
+                        <div style="display: grid; grid-template-columns: 190px 1fr 120px 120px 70px; gap: 5px 14px; font-size: 12px; padding-top: 6px;">
+                          <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Check</span>
+                          <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Message</span>
+                          <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Value</span>
+                          <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Baseline</span>
+                          <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Status</span>
+                          <sc-for list="{{ scope.checks }}" as="chk" hint-placeholder-count="3">
+                            <span style="font-family: 'IBM Plex Mono', monospace; color: #111827; grid-column: 1;">{{ chk.id }}</span>
+                            <span style="color: #4b5563;">{{ chk.msg }}</span>
+                            <span style="font-family: 'IBM Plex Mono', monospace; color: {{ chk.valColor }};">{{ chk.value }}</span>
+                            <span style="font-family: 'IBM Plex Mono', monospace; color: #6b7280;">{{ chk.baseline }}</span>
+                            <span style="color: {{ chk.stColor }}; font-weight: 600;">{{ chk.status }}</span>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 8px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Export JSON</button>
+        <button style="border: none; background: #059669; color: #fff; border-radius: 6px; padding: 8px 18px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">Evaluate run</button>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isSnapshotView }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6b7280;">
+        <span onClick="{{ backToRun }}" style="cursor: pointer; color: #1a56db;">run mig01</span>
+        <span style="color: #c3c8cf;">/</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; color: #374151;">{{ snapFile }}</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827;">Snapshot evaluation</h1>
+        <span style="background: {{ snapPhaseBg }}; color: {{ snapPhaseFg }}; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">{{ snapPhase }}</span>
+        <span style="background: #f3f4f6; color: #6b7280; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">no baseline</span>
+      </div>
+      <div style="display: flex; gap: 24px; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 12px 18px; font-size: 12.5px; color: #6b7280; flex-wrap: wrap;">
+        <span>Device <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ snapDevice }}</span></span>
+        <span>Platform <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ snapPlatform }}</span></span>
+        <span>Taken <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ snapTaken }}</span></span>
+        <span>Collectors <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ snapCollectors }}</span></span>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span style="background: #d1fae5; color: #047857; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">{{ snapPass }} PASS</span>
+        <span style="background: #fef3c7; color: #b45309; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">{{ snapWarn }} WARN</span>
+        <span style="background: #fee2e2; color: #b91c1c; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">{{ snapFail }} FAIL</span>
+        <span style="background: #f3f4f6; color: #6b7280; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">{{ snapSkip }} SKIP</span>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 12px; color: #9ca3af;">standalone evaluation &#8212; comparison checks skipped</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{ snapScopes }}" as="scope" hint-placeholder-count="3">
+          <div style="background: #fff; border: 1px solid {{ scope.border }}; border-left: 3px solid {{ scope.accent }}; border-radius: 6px; overflow: hidden;">
+            <div onClick="{{ scope.toggle }}" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer;" style-hover="background: #f9fafb;">
+              <span style="background: {{ scope.pillBg }}; color: {{ scope.pillFg }}; font: 600 10.5px 'IBM Plex Mono', monospace; padding: 2px 8px; border-radius: 4px;">{{ scope.status }}</span>
+              <span style="font: 500 12.5px 'IBM Plex Mono', monospace; color: #111827;">{{ scope.id }}</span>
+              <span style="font-size: 12px; color: #6b7280;">{{ scope.note }}</span>
+              <div style="flex: 1;"></div>
+              <span style="color: #9ca3af; font-size: 10px; display: inline-block; transform: {{ scope.chevron }}; transition: transform 0.15s;">&#9660;</span>
+            </div>
+            <sc-if value="{{ scope.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top: 1px solid #f1f3f6; padding: 8px 14px 12px;">
+                <div style="display: grid; grid-template-columns: 190px 1fr 140px 70px; gap: 5px 14px; font-size: 12px; padding-top: 6px;">
+                  <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Check</span>
+                  <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Message</span>
+                  <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Value</span>
+                  <span style="font: 600 10px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #9ca3af;">Status</span>
+                  <sc-for list="{{ scope.checks }}" as="chk" hint-placeholder-count="3">
+                    <span style="font-family: 'IBM Plex Mono', monospace; color: #111827; grid-column: 1;">{{ chk.id }}</span>
+                    <span style="color: #4b5563;">{{ chk.msg }}</span>
+                    <span style="font-family: 'IBM Plex Mono', monospace; color: {{ chk.valColor }};">{{ chk.value }}</span>
+                    <span style="color: {{ chk.stColor }}; font-weight: 600;">{{ chk.status }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 8px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Export JSON</button>
+        <button style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 8px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Evaluate vs baseline&#8230;</button>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isChecksView }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6b7280;">
+        <span onClick="{{ backToRun }}" style="cursor: pointer; color: #1a56db;">run mig01</span>
+        <span style="color: #c3c8cf;">/</span>
+        <span style="color: #374151;">registered checks</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 14px;">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827;">Registered checks</h1>
+        <span style="font-size: 13px; color: #6b7280;">{{ checksCount }} checks &#183; profile core-only.yml</span>
+      </div>
+      <div style="background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden;">
+        <div style="display: grid; grid-template-columns: 220px 110px 110px 1fr 90px; padding: 10px 18px; background: #f9fafb; border-bottom: 1px solid #e2e5ea; font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.06em; color: #6b7280; text-transform: uppercase; gap: 0 12px;">
+          <span>ID</span><span>Mode</span><span>Severity</span><span>Service types</span><span style="text-align: right;">Enabled</span>
+        </div>
+        <sc-for list="{{ checkDefs }}" as="cd" hint-placeholder-count="8">
+          <div style="display: grid; grid-template-columns: 220px 110px 110px 1fr 90px; padding: 11px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 12.5px; gap: 0 12px; opacity: {{ cd.opacity }};">
+            <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">{{ cd.id }}</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; color: #6b7280;">{{ cd.mode }}</span>
+            <span style="color: {{ cd.sevColor }}; font-weight: 600; font-size: 11.5px;">{{ cd.severity }}</span>
+            <span style="color: #4b5563;">{{ cd.types }}</span>
+            <span style="text-align: right; font-weight: 600; color: {{ cd.enColor }};">{{ cd.enabled }}</span>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isCaptureView }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6b7280;">
+        <span onClick="{{ backToRun }}" style="cursor: pointer; color: #1a56db;">run mig01</span>
+        <span style="color: #c3c8cf;">/</span>
+        <span style="color: #374151;">new capture</span>
+      </div>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827;">New capture</h1>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start;">
+        <div style="background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.08em; color: #9ca3af; text-transform: uppercase;">Target</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12.5px; font-weight: 600; color: #374151;">Device</label>
+            <input value="172.20.20.5" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 12px; font: 400 13px 'IBM Plex Mono', monospace; color: #111827; background: #fff;">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 12.5px; font-weight: 600; color: #374151;">Phase</label>
+            <div style="display: flex; gap: 8px;">
+              <span style="flex: 1; text-align: center; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 0; font-size: 13px; color: #6b7280; cursor: pointer;">pre</span>
+              <span style="flex: 1; text-align: center; border: 2px solid #1a56db; background: #eef2ff; border-radius: 6px; padding: 7px 0; font-size: 13px; font-weight: 600; color: #1a56db; cursor: pointer;">post</span>
+              <span style="flex: 1; text-align: center; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 0; font-size: 13px; color: #6b7280; cursor: pointer;">rollback</span>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 12.5px; font-weight: 600; color: #374151;">Port</label>
+              <input value="et-0/0/12" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 12px; font: 400 13px 'IBM Plex Mono', monospace; color: #111827;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 12.5px; font-weight: 600; color: #374151;">Maps to <span style="font-weight: 400; color: #9ca3af;">(old NODE:PORT)</span></label>
+              <input value="mx1:ge-0/0/7" style="border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 12px; font: 400 13px 'IBM Plex Mono', monospace; color: #111827;">
+            </div>
+          </div>
+          <label style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: #374151; cursor: pointer;">
+            <input type="checkbox" checked style="width: 16px; height: 16px; accent-color: #1a56db;">
+            Regenerate inventory from config <span style="font-family: 'IBM Plex Mono', monospace; color: #9ca3af; font-size: 12px;">(--parse-services)</span>
+          </label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div style="background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.08em; color: #9ca3af; text-transform: uppercase;">Profile &amp; auth</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <label style="font-size: 12.5px; font-weight: 600; color: #374151;">Profile</label>
+              <div style="border: 1px solid #d1d5db; border-radius: 6px; padding: 9px 12px; font: 400 13px 'IBM Plex Mono', monospace; color: #111827; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                <span>core-only.yml</span><span style="color: #9ca3af; font-size: 10px;">&#9660;</span>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #f9fafb; border-radius: 6px; padding: 10px 12px; font-size: 12.5px;">
+              <span style="color: #6b7280;">Auth</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">rmohyla &#183; password via env</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; background: #f9fafb; border-radius: 6px; padding: 10px 12px; font-size: 12.5px;">
+              <span style="color: #6b7280;">Collectors</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">interfaces, bgp, evpn_instance</span>
+            </div>
+          </div>
+          <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; padding: 14px 18px; font-size: 12.5px; color: #4338ca; line-height: 1.5;">
+            Baseline <span style="font-family: 'IBM Plex Mono', monospace;">snapshot_pre_mx1_ge-0-0-7.json</span> found for this pairing &#8212; ping targets will derive from its ARP/ND.
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onClick="{{ backToRun }}" style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 9px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Cancel</button>
+            <button style="border: none; background: #1a56db; color: #fff; border-radius: 6px; padding: 9px 20px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">Start capture</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280, &quot;height&quot;: 900}}">
+class Component extends DCLogic {
+  state = { openRows: { "ge-0/0/5": true }, openScopes: { "ge-0/0/5|Internet vlan113 et-0/0/11.113": true }, view: "run", selectedSnap: null, openSnapScopes: {} };
+
+  toggleRow(key) {
+    this.setState(s => ({ openRows: { ...s.openRows, [key]: !s.openRows[key] } }));
+  }
+  toggleScope(key) {
+    this.setState(s => ({ openScopes: { ...s.openScopes, [key]: !s.openScopes[key] } }));
+  }
+
+  toggleSnapScope(key) {
+    this.setState(s => ({ openSnapScopes: { ...s.openSnapScopes, [key]: !s.openSnapScopes[key] } }));
+  }
+
+  renderVals() {
+    const OK = "\u2713", DASH = "\u2014";
+    const green = "#059669", gray = "#c3c8cf";
+    const pills = {
+      PASS: { bg: "#d1fae5", fg: "#047857", accent: "#059669", border: "#e2e5ea" },
+      WARN: { bg: "#fef3c7", fg: "#b45309", accent: "#d97706", border: "#e2e5ea" },
+      FAIL: { bg: "#fee2e2", fg: "#b91c1c", accent: "#dc2626", border: "#fecaca" },
+      SKIP: { bg: "#f3f4f6", fg: "#6b7280", accent: "#d1d5db", border: "#e2e5ea" },
+      waiting: { bg: "#f3f4f6", fg: "#6b7280", accent: "#d1d5db", border: "#e2e5ea" },
+    };
+    const stColor = { PASS: "#059669", WARN: "#b45309", FAIL: "#b91c1c", SKIP: "#6b7280", INFO: "#2563eb" };
+
+    const data = [
+      { old: "mx1:ge-0/0/2", new: "acx1:et-0/0/8", key: "ge-0/0/2", pre: true, post: true, rb: false, pill: "PASS", scopes: [
+        { status: "PASS", id: "Internet vlan113 et-0/0/8.113", note: "7 checks passed", checks: [
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+          { id: "bgp_session", msg: "BGP session established", value: "Established", baseline: "Established", status: "PASS" },
+          { id: "ping_gateway", msg: "Gateway reachable", value: "5/5", baseline: "5/5", status: "PASS" },
+        ]},
+        { status: "PASS", id: "IPVPN vpn-borealis et-0/0/8.310", note: "9 checks passed", checks: [
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+          { id: "route_count", msg: "Route count matches", value: "823", baseline: "823", status: "PASS" },
+        ]},
+      ]},
+      { old: "mx1:ge-0/0/3", new: "acx1:et-0/0/9", key: "ge-0/0/3", pre: true, post: true, rb: false, pill: "WARN 2", pillKey: "WARN", scopes: [
+        { status: "WARN", id: "IPVPN vpn-acme et-0/0/9.220", note: "optics RX 1.8 dB below baseline", checks: [
+          { id: "optics_levels", msg: "RX level below baseline", value: "-4.9 dBm", baseline: "-3.1 dBm", status: "WARN" },
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+          { id: "ping_gateway", msg: "Gateway reachable", value: "5/5", baseline: "5/5", status: "PASS" },
+        ]},
+        { status: "WARN", id: "Internet vlan117 et-0/0/9.117", note: "ARP entries partially missing", checks: [
+          { id: "arp_entries", msg: "2 of 14 ARP entries missing", value: "12/14", baseline: "14/14", status: "WARN" },
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+        ]},
+        { status: "PASS", id: "Internet vlan114 et-0/0/9.114", note: "12 checks passed", checks: [
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+        ]},
+      ]},
+      { old: "mx1:ge-0/0/5", new: "acx1:et-0/0/11", key: "ge-0/0/5", pre: true, post: true, rb: false, pill: "FAIL 1", pillKey: "FAIL", scopes: [
+        { status: "FAIL", id: "Internet vlan113 et-0/0/11.113", note: "BGP session missing on new box", checks: [
+          { id: "bgp_session", msg: "BGP session to 185.10.4.1 missing", value: "Idle", baseline: "Established, 4d 11h", status: "FAIL" },
+          { id: "ping_gateway", msg: "Gateway reachable", value: "5/5", baseline: "5/5", status: "PASS" },
+          { id: "interface_up", msg: "Interface oper status up", value: "up", baseline: "up", status: "PASS" },
+          { id: "optics_levels", msg: "RX level within range", value: "-3.4 dBm", baseline: "-3.1 dBm", status: "PASS" },
+        ]},
+        { status: "SKIP", id: "Internet vlan119 et-0/0/11.119", note: "service deactivated", checks: [
+          { id: "all", msg: "Skipped: service_deactivated", value: DASH, baseline: DASH, status: "SKIP" },
+        ]},
+      ]},
+      { old: "mx1:ge-0/0/7", new: "acx1:et-0/0/12", key: "ge-0/0/7", pre: true, post: false, rb: false, pill: "waiting", scopes: [] },
+      { old: "mx1:ge-0/0/9", new: "not paired", newUnpaired: true, key: "ge-0/0/9", pre: true, post: false, rb: false, pill: "waiting", scopes: [] },
+    ];
+
+    const rowBgs = { WARN: "#fffbeb", FAIL: "#fef2f2" };
+    const rows = data.map(r => {
+      const pk = r.pillKey || r.pill;
+      const p = pills[pk] || pills.waiting;
+      const expanded = !!this.state.openRows[r.key] && r.scopes.length > 0;
+      return {
+        old: r.old, new: r.new,
+        newColor: r.newUnpaired ? "#9ca3af" : "#111827",
+        pre: r.pre ? OK : DASH, preColor: r.pre ? green : gray,
+        post: r.post ? OK : DASH, postColor: r.post ? green : gray,
+        rb: r.rb ? OK : DASH, rbColor: r.rb ? green : gray,
+        pill: r.pill, pillBg: p.bg, pillFg: p.fg,
+        rowBg: rowBgs[pk] || "#ffffff",
+        chevron: expanded ? "rotate(90deg)" : "rotate(0deg)",
+        expanded,
+        toggle: () => r.scopes.length && this.toggleRow(r.key),
+        scopes: r.scopes.map(sc => {
+          const sp = pills[sc.status] || pills.waiting;
+          const skey = r.key + "|" + sc.id;
+          const sExp = !!this.state.openScopes[skey];
+          return {
+            ...sc, pillBg: sp.bg, pillFg: sp.fg, accent: sp.accent, border: sp.border,
+            expanded: sExp,
+            chevron: sExp ? "rotate(180deg)" : "rotate(0deg)",
+            toggle: () => this.toggleScope(skey),
+            checks: sc.checks.map(c => ({
+              ...c,
+              stColor: stColor[c.status] || "#6b7280",
+              valColor: c.status === "FAIL" ? "#b91c1c" : c.status === "WARN" ? "#b45309" : "#111827",
+            })),
+          };
+        }),
+      };
+    });
+    const phaseStyles = {
+      pre: { bg: "#e0e7ff", fg: "#4338ca" },
+      post: { bg: "#d1fae5", fg: "#047857" },
+      rollback: { bg: "#fef3c7", fg: "#b45309" },
+    };
+    const snapData = [
+      { file: "snapshot_pre_mx1_all.json", label: "pre mx1:all", phase: "pre", taken: "Aug 28, 06:12", device: "172.20.20.4 (mx1)", platform: "MX \u2014 classic Junos", collectors: "interfaces, bgp, evpn_instance, routes",
+        counts: { pass: 18, warn: 0, fail: 0, skip: 2 },
+        scopes: [
+          { status: "PASS", id: "Internet vlan113 ge-0/0/2.113", note: "6 checks passed", checks: [
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+            { id: "bgp_session", msg: "BGP session established", value: "Established, 4d 11h", status: "PASS" },
+            { id: "ping_gateway", msg: "Gateway reachable", value: "5/5", status: "PASS" },
+            { id: "optics_levels", msg: "RX level within range", value: "-3.1 dBm", status: "PASS" },
+          ]},
+          { status: "PASS", id: "IPVPN vpn-acme ge-0/0/2.220", note: "8 checks passed", checks: [
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+            { id: "route_count", msg: "823 routes in table", value: "823", status: "PASS" },
+            { id: "arp_entries", msg: "14 ARP entries present", value: "14", status: "PASS" },
+          ]},
+          { status: "PASS", id: "L2VPN evpn-metro ge-0/0/2.402", note: "7 checks passed", checks: [
+            { id: "evpn_instance", msg: "EVPN instance up, 12 MACs", value: "12 MACs", status: "PASS" },
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+          ]},
+          { status: "SKIP", id: "Internet vlan119 ge-0/0/2.119", note: "service deactivated", checks: [
+            { id: "all", msg: "Skipped: service_deactivated", value: "\u2014", status: "SKIP" },
+          ]},
+        ]},
+      { file: "snapshot_post_acx1_et-0-0-8.json", label: "post acx1:et-0/0/8", phase: "post", taken: "Aug 29, 09:40", device: "172.20.20.5 (acx1)", platform: "ACX \u2014 Junos EVO", collectors: "interfaces, bgp, evpn_instance, routes",
+        counts: { pass: 15, warn: 1, fail: 0, skip: 1 },
+        scopes: [
+          { status: "WARN", id: "IPVPN vpn-acme et-0/0/8.220", note: "optics RX low", checks: [
+            { id: "optics_levels", msg: "RX level low", value: "-4.9 dBm", status: "WARN" },
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+          ]},
+          { status: "PASS", id: "Internet vlan113 et-0/0/8.113", note: "7 checks passed", checks: [
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+            { id: "bgp_session", msg: "BGP session established", value: "Established", status: "PASS" },
+          ]},
+        ]},
+      { file: "snapshot_pre_mx1_ge-0-0-7.json", label: "pre mx1:ge-0/0/7", phase: "pre", taken: "Aug 30, 07:02", device: "172.20.20.4 (mx1)", platform: "MX \u2014 classic Junos", collectors: "interfaces, bgp, routes",
+        counts: { pass: 9, warn: 0, fail: 0, skip: 0 },
+        scopes: [
+          { status: "PASS", id: "Internet vlan131 ge-0/0/7.131", note: "5 checks passed", checks: [
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+            { id: "ping_gateway", msg: "Gateway reachable", value: "5/5", status: "PASS" },
+          ]},
+          { status: "PASS", id: "IPVPN vpn-delta ge-0/0/7.240", note: "4 checks passed", checks: [
+            { id: "route_count", msg: "311 routes in table", value: "311", status: "PASS" },
+          ]},
+        ]},
+      { file: "snapshot_pre_mx1_ge-0-0-9.json", label: "pre mx1:ge-0/0/9", phase: "pre", taken: "Aug 30, 07:15", device: "172.20.20.4 (mx1)", platform: "MX \u2014 classic Junos", collectors: "interfaces, bgp, routes",
+        counts: { pass: 6, warn: 0, fail: 0, skip: 1 },
+        scopes: [
+          { status: "PASS", id: "Internet vlan140 ge-0/0/9.140", note: "6 checks passed", checks: [
+            { id: "interface_up", msg: "Interface oper status up", value: "up", status: "PASS" },
+          ]},
+          { status: "SKIP", id: "Internet vlan141 ge-0/0/9.141", note: "service deactivated", checks: [
+            { id: "all", msg: "Skipped: service_deactivated", value: "\u2014", status: "SKIP" },
+          ]},
+        ]},
+    ];
+
+    const isSnapshotView = this.state.view === "snapshot";
+    const isChecksView = this.state.view === "checks";
+    const isCaptureView = this.state.view === "capture";
+
+    const checkData = [
+      { id: "interface_up", mode: "compare", severity: "critical", types: "all", enabled: true },
+      { id: "interface_errors", mode: "compare", severity: "advisory", types: "all", enabled: true },
+      { id: "interface_optics_levels", mode: "compare", severity: "advisory", types: "all", enabled: false },
+      { id: "bgp_session", mode: "compare", severity: "critical", types: "Internet, IPVPN", enabled: true },
+      { id: "bgp_received_routes", mode: "compare", severity: "critical", types: "Internet, IPVPN", enabled: true },
+      { id: "evpn_instance", mode: "compare", severity: "critical", types: "L2VPN", enabled: true },
+      { id: "evpn_mac_table", mode: "compare", severity: "advisory", types: "L2VPN", enabled: true },
+      { id: "route_count", mode: "compare", severity: "advisory", types: "all", enabled: true },
+      { id: "static_routes", mode: "compare", severity: "critical", types: "all", enabled: true },
+      { id: "arp_entries", mode: "compare", severity: "advisory", types: "Internet, IPVPN", enabled: true },
+      { id: "ping_gateway", mode: "probe", severity: "critical", types: "Internet, IPVPN", enabled: true },
+      { id: "bfd_sessions", mode: "compare", severity: "critical", types: "all", enabled: true },
+      { id: "deactivation", mode: "single", severity: "advisory", types: "all", enabled: true },
+    ];
+    const checkDefs = checkData.map(c => ({
+      id: c.id, mode: c.mode, types: c.types,
+      severity: c.severity.toUpperCase(),
+      sevColor: c.severity === "critical" ? "#b91c1c" : "#b45309",
+      enabled: c.enabled ? "yes" : "off",
+      enColor: c.enabled ? "#059669" : "#9ca3af",
+      opacity: c.enabled ? 1 : 0.55,
+    }));
+    const selected = isSnapshotView ? snapData.find(s => s.file === this.state.selectedSnap) : null;
+
+    const snapshots = snapData.map(s => {
+      const ph = phaseStyles[s.phase];
+      const active = selected && selected.file === s.file;
+      return {
+        label: s.label, phase: s.phase, taken: s.taken,
+        phaseBg: ph.bg, phaseFg: ph.fg,
+        bg: active ? "#eef2ff" : "transparent",
+        fg: active ? "#1a56db" : "#374151",
+        select: () => this.setState({ view: "snapshot", selectedSnap: s.file, openSnapScopes: {} }),
+      };
+    });
+
+    const snapScopes = (selected ? selected.scopes : []).map(sc => {
+      const sp = pills[sc.status] || pills.waiting;
+      const skey = selected.file + "|" + sc.id;
+      const sExp = !!this.state.openSnapScopes[skey];
+      return {
+        ...sc, pillBg: sp.bg, pillFg: sp.fg, accent: sp.accent, border: sp.border,
+        expanded: sExp,
+        chevron: sExp ? "rotate(180deg)" : "rotate(0deg)",
+        toggle: () => this.toggleSnapScope(skey),
+        checks: sc.checks.map(c => ({
+          ...c,
+          stColor: stColor[c.status] || "#6b7280",
+          valColor: c.status === "FAIL" ? "#b91c1c" : c.status === "WARN" ? "#b45309" : "#111827",
+        })),
+      };
+    });
+
+    const selPhase = selected ? phaseStyles[selected.phase] : phaseStyles.pre;
+    return {
+      rows,
+      isRunView: !isSnapshotView && !isChecksView && !isCaptureView,
+      isSnapshotView, isChecksView, isCaptureView,
+      checkDefs, checksCount: checkData.length,
+      openChecks: () => this.setState({ view: "checks", selectedSnap: null }),
+      openCapture: () => this.setState({ view: "capture", selectedSnap: null }),
+      checksBtnBorder: isChecksView ? "#1a56db" : "#d1d5db",
+      checksBtnBg: isChecksView ? "#eef2ff" : "#fff",
+      checksBtnFg: isChecksView ? "#1a56db" : "#374151",
+      runCardBg: this.state.view === "run" ? "#eef2ff" : "transparent",
+      backToRun: () => this.setState({ view: "run", selectedSnap: null }),
+      snapshots,
+      snapScopes,
+      snapFile: selected ? selected.file : "",
+      snapPhase: selected ? selected.phase : "",
+      snapPhaseBg: selPhase.bg, snapPhaseFg: selPhase.fg,
+      snapDevice: selected ? selected.device : "",
+      snapPlatform: selected ? selected.platform : "",
+      snapTaken: selected ? selected.taken : "",
+      snapCollectors: selected ? selected.collectors : "",
+      snapPass: selected ? selected.counts.pass : 0,
+      snapWarn: selected ? selected.counts.warn : 0,
+      snapFail: selected ? selected.counts.fail : 0,
+      snapSkip: selected ? selected.counts.skip : 0,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #e8eaed; font-family: 'IBM Plex Sans', sans-serif; }
+  a { color: #1a56db; } a:hover { color: #0e3fa9; }
+</style>
+</helmet>
+<section style="display: flex; flex-wrap: wrap; gap: 48px; padding: 48px; align-items: flex-start;">
+
+  <!-- ============ 1a: Run Dashboard ============ -->
+  <div id="1a" style="width: 1200px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <span style="background: #1f2937; color: #fff; font: 600 13px 'IBM Plex Mono', monospace; padding: 4px 10px; border-radius: 4px;">1a</span>
+      <span style="font: 600 15px 'IBM Plex Sans', sans-serif; color: #374151;">Run dashboard — sidebar + pairing table</span>
+    </div>
+    <div style="background: #f7f8fa; border: 1px solid #d3d7de; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 30px rgba(15,23,42,0.10); display: grid; grid-template-rows: auto 1fr;">
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: #ffffff; border-bottom: 1px solid #e2e5ea;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 28px; height: 28px; border-radius: 6px; background: #1a56db; color: #fff; display: grid; place-items: center; font: 700 13px 'IBM Plex Mono', monospace;">mv</div>
+          <span style="font-weight: 600; font-size: 15px; color: #111827;">mig-validate</span>
+        </div>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280;">
+          <span>Profile:</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">core-only.yml</span>
+        </div>
+        <button style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 7px 14px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Checks</button>
+        <button style="border: none; background: #1a56db; color: #fff; border-radius: 6px; padding: 8px 16px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">New capture</button>
+      </div>
+      <div style="display: grid; grid-template-columns: 232px 1fr; min-height: 620px;">
+        <div style="background: #ffffff; border-right: 1px solid #e2e5ea; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.08em; color: #9ca3af; padding: 0 10px 8px; text-transform: uppercase;">Runs</div>
+          <div style="background: #eef2ff; border-radius: 6px; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font: 600 13px 'IBM Plex Mono', monospace; color: #1a56db;">mig01</span>
+              <span style="font-size: 11px; color: #059669; font-weight: 600;">in progress</span>
+            </div>
+            <span style="font-size: 12px; color: #6b7280;">3 of 5 ports migrated</span>
+          </div>
+          <div style="border-radius: 6px; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #374151;">mig00-pilot</span>
+              <span style="font-size: 11px; color: #9ca3af;">done</span>
+            </div>
+            <span style="font-size: 12px; color: #9ca3af;">completed Aug 21</span>
+          </div>
+          <div style="flex: 1;"></div>
+          <div style="border-top: 1px solid #eef0f3; padding: 12px 10px 4px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #6b7280;">
+            <div style="display: flex; justify-content: space-between;"><span>Devices</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">2</span></div>
+            <div style="display: flex; justify-content: space-between;"><span>Snapshots</span><span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">7</span></div>
+          </div>
+        </div>
+        <div style="padding: 24px 28px; display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; align-items: baseline; gap: 14px;">
+            <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #111827;">Run <span style="font-family: 'IBM Plex Mono', monospace;">mig01</span></h1>
+            <span style="font-size: 13px; color: #6b7280;">172.20.20.4 (MX) &#8594; 172.20.20.5 (ACX/EVO)</span>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+              <div style="font-size: 26px; font-weight: 700; color: #059669; font-family: 'IBM Plex Mono', monospace;">42</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 500;">PASS</div>
+            </div>
+            <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+              <div style="font-size: 26px; font-weight: 700; color: #d97706; font-family: 'IBM Plex Mono', monospace;">3</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 500;">WARN</div>
+            </div>
+            <div style="flex: 1; background: #fff; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 16px; box-shadow: 0 0 0 1px rgba(220,38,38,0.08);">
+              <div style="font-size: 26px; font-weight: 700; color: #dc2626; font-family: 'IBM Plex Mono', monospace;">1</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 500;">FAIL</div>
+            </div>
+            <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+              <div style="font-size: 26px; font-weight: 700; color: #6b7280; font-family: 'IBM Plex Mono', monospace;">2</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 500;">SKIP</div>
+            </div>
+            <div style="flex: 1; background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; padding: 14px 16px;">
+              <div style="font-size: 26px; font-weight: 700; color: #2563eb; font-family: 'IBM Plex Mono', monospace;">4</div>
+              <div style="font-size: 12px; color: #6b7280; font-weight: 500;">INFO</div>
+            </div>
+          </div>
+          <div style="background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden;">
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 10px 18px; background: #f9fafb; border-bottom: 1px solid #e2e5ea; font: 600 11px 'IBM Plex Sans', sans-serif; letter-spacing: 0.06em; color: #6b7280; text-transform: uppercase;">
+              <span>Old port</span><span>New port</span><span>Pre</span><span>Post</span><span>Rollback</span><span style="text-align: right;">Result</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 13px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">mx1:ge-0/0/2</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">acx1:et-0/0/8</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="text-align: right;"><span style="background: #d1fae5; color: #047857; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">PASS</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 13px; background: #fffbeb;">
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">mx1:ge-0/0/3</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">acx1:et-0/0/9</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="text-align: right;"><span style="background: #fef3c7; color: #b45309; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">WARN 2</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 13px; background: #fef2f2;">
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">mx1:ge-0/0/5</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">acx1:et-0/0/11</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="text-align: right;"><span style="background: #fee2e2; color: #b91c1c; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">FAIL 1</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; border-bottom: 1px solid #f1f3f6; align-items: center; font-size: 13px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">mx1:ge-0/0/7</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">acx1:et-0/0/12</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="text-align: right;"><span style="background: #f3f4f6; color: #6b7280; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">waiting</span></span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1.3fr 1.3fr 90px 90px 110px 130px; padding: 13px 18px; align-items: center; font-size: 13px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #111827;">mx1:ge-0/0/9</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #9ca3af;">not paired</span>
+              <span style="color: #059669; font-weight: 600;">&#10003;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="color: #c3c8cf;">&#8212;</span>
+              <span style="text-align: right;"><span style="background: #f3f4f6; color: #6b7280; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 10px; border-radius: 20px;">waiting</span></span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button style="border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 8px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #374151; cursor: pointer;">Export JSON</button>
+            <button style="border: none; background: #059669; color: #fff; border-radius: 6px; padding: 8px 18px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">Evaluate run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 1b: Guided workflow ============ -->
+  <div id="1b" style="width: 980px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <span style="background: #1f2937; color: #fff; font: 600 13px 'IBM Plex Mono', monospace; padding: 4px 10px; border-radius: 4px;">1b</span>
+      <span style="font: 600 15px 'IBM Plex Sans', sans-serif; color: #374151;">Guided workflow — stepper + expandable results</span>
+    </div>
+    <div style="background: #fcfbf9; border: 1px solid #ddd8cf; border-radius: 10px; box-shadow: 0 8px 30px rgba(15,23,42,0.10); padding: 0 0 32px; min-height: 640px;">
+      <div style="padding: 18px 32px; border-bottom: 1px solid #e9e4da; display: flex; align-items: center; gap: 12px;">
+        <span style="font-weight: 700; font-size: 15px; color: #292524;">Migration Validator</span>
+        <span style="color: #d6d0c4;">/</span>
+        <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #78716c;">mig01 &#183; ge-0/0/3 &#8594; et-0/0/9</span>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 12px; color: #a8a29e;">evaluated 07:41 today</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 0; padding: 28px 40px 24px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 13px;">&#10003;</div>
+          <span style="font-size: 13px; font-weight: 600; color: #292524;">Capture pre</span>
+        </div>
+        <div style="width: 90px; height: 2px; background: #16a34a; margin: 0 14px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 13px;">&#10003;</div>
+          <span style="font-size: 13px; font-weight: 600; color: #292524;">Migrate port</span>
+        </div>
+        <div style="width: 90px; height: 2px; background: #16a34a; margin: 0 14px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #16a34a; color: #fff; display: grid; place-items: center; font-size: 13px;">&#10003;</div>
+          <span style="font-size: 13px; font-weight: 600; color: #292524;">Capture post</span>
+        </div>
+        <div style="width: 90px; height: 2px; background: #d6d0c4; margin: 0 14px;"></div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; background: #292524; color: #fff; display: grid; place-items: center; font: 600 12px 'IBM Plex Mono', monospace;">4</div>
+          <span style="font-size: 13px; font-weight: 700; color: #292524;">Evaluate</span>
+        </div>
+      </div>
+      <div style="margin: 0 32px; display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid #e9e4da; border-radius: 8px; padding: 14px 18px;">
+        <span style="font-size: 13px; color: #57534e; font-weight: 500;">Result vs baseline <span style="font-family: 'IBM Plex Mono', monospace;">pre-mx1-ge-0-0-3.json</span></span>
+        <div style="flex: 1;"></div>
+        <span style="background: #dcfce7; color: #15803d; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">14 PASS</span>
+        <span style="background: #fef3c7; color: #b45309; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">2 WARN</span>
+        <span style="background: #fee2e2; color: #b91c1c; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">1 FAIL</span>
+        <span style="background: #f5f5f4; color: #78716c; font: 600 12px 'IBM Plex Mono', monospace; padding: 4px 12px; border-radius: 20px;">1 SKIP</span>
+      </div>
+      <div style="margin: 16px 32px 0; display: flex; flex-direction: column; gap: 10px;">
+        <div style="background: #fff; border: 1px solid #fca5a5; border-left: 4px solid #dc2626; border-radius: 8px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 13px 18px;">
+            <span style="background: #fee2e2; color: #b91c1c; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 9px; border-radius: 4px;">FAIL</span>
+            <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #292524;">Internet &#183; VLAN 113 &#183; et-0/0/9.113</span>
+            <span style="font-size: 12px; color: #78716c;">matched by address, high confidence</span>
+            <div style="flex: 1;"></div>
+            <span style="color: #a8a29e; font-size: 12px;">&#9650; collapse</span>
+          </div>
+          <div style="border-top: 1px solid #f3ece2; padding: 6px 18px 14px;">
+            <div style="display: grid; grid-template-columns: 210px 1fr 130px 130px 90px; gap: 6px 14px; font-size: 12.5px; padding-top: 8px;">
+              <span style="font: 600 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #a8a29e;">Check</span>
+              <span style="font: 600 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #a8a29e;">Message</span>
+              <span style="font: 600 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #a8a29e;">Value</span>
+              <span style="font: 600 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #a8a29e;">Baseline</span>
+              <span style="font: 600 10.5px 'IBM Plex Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.06em; color: #a8a29e;">Status</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #292524;">bgp_session</span>
+              <span style="color: #57534e;">BGP session missing on new box</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #b91c1c;">Idle</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #78716c;">Established</span>
+              <span style="color: #b91c1c; font-weight: 600;">FAIL</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #292524;">ping_gateway</span>
+              <span style="color: #57534e;">Gateway reachable</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #292524;">5/5</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #78716c;">5/5</span>
+              <span style="color: #15803d; font-weight: 600;">PASS</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #292524;">interface_up</span>
+              <span style="color: #57534e;">Interface oper status up</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #292524;">up</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; color: #78716c;">up</span>
+              <span style="color: #15803d; font-weight: 600;">PASS</span>
+            </div>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e9e4da; border-left: 4px solid #d97706; border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 13px 18px;">
+            <span style="background: #fef3c7; color: #b45309; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 9px; border-radius: 4px;">WARN</span>
+            <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #292524;">IPVPN &#183; vpn-acme &#183; et-0/0/9.220</span>
+            <span style="font-size: 12px; color: #78716c;">optics RX level 1.8 dB below baseline</span>
+            <div style="flex: 1;"></div>
+            <span style="color: #a8a29e; font-size: 12px;">&#9660; expand</span>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e9e4da; border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 13px 18px;">
+            <span style="background: #dcfce7; color: #15803d; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 9px; border-radius: 4px;">PASS</span>
+            <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #292524;">Internet &#183; VLAN 114 &#183; et-0/0/9.114</span>
+            <span style="font-size: 12px; color: #78716c;">12 checks passed</span>
+            <div style="flex: 1;"></div>
+            <span style="color: #a8a29e; font-size: 12px;">&#9660; expand</span>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e9e4da; border-radius: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 13px 18px;">
+            <span style="background: #dcfce7; color: #15803d; font: 600 11px 'IBM Plex Mono', monospace; padding: 3px 9px; border-radius: 4px;">PASS</span>
+            <span style="font: 500 13px 'IBM Plex Mono', monospace; color: #292524;">IPVPN &#183; vpn-borealis &#183; et-0/0/9.310</span>
+            <span style="font-size: 12px; color: #78716c;">9 checks passed</span>
+            <div style="flex: 1;"></div>
+            <span style="color: #a8a29e; font-size: 12px;">&#9660; expand</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin: 20px 32px 0; display: flex; gap: 10px; justify-content: flex-end;">
+        <button style="border: 1px solid #d6d0c4; background: #fff; border-radius: 6px; padding: 8px 16px; font: 500 13px 'IBM Plex Sans', sans-serif; color: #57534e; cursor: pointer;">Re-evaluate</button>
+        <button style="border: 1px solid #fca5a5; background: #fff; border-radius: 6px; padding: 8px 16px; font: 600 13px 'IBM Plex Sans', sans-serif; color: #b91c1c; cursor: pointer;">Rollback port</button>
+        <button style="border: none; background: #292524; color: #fff; border-radius: 6px; padding: 8px 18px; font: 600 13px 'IBM Plex Sans', sans-serif; cursor: pointer;">Next port &#8594;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 1c: NOC console ============ -->
+  <div id="1c" style="width: 1200px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <span style="background: #1f2937; color: #fff; font: 600 13px 'IBM Plex Mono', monospace; padding: 4px 10px; border-radius: 4px;">1c</span>
+      <span style="font: 600 15px 'IBM Plex Sans', sans-serif; color: #374151;">NOC console — dark, dense, filterable</span>
+    </div>
+    <div style="background: #0f172a; border-radius: 10px; box-shadow: 0 8px 30px rgba(15,23,42,0.25); overflow: hidden; font-family: 'IBM Plex Mono', monospace; min-height: 640px; display: grid; grid-template-rows: auto auto 1fr;">
+      <div style="display: flex; align-items: center; gap: 20px; padding: 14px 22px; border-bottom: 1px solid #1e293b;">
+        <span style="color: #38bdf8; font-weight: 600; font-size: 14px;">mig-validate</span>
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px;">
+          <span style="color: #94a3b8;">172.20.20.4</span>
+          <span style="background: #1e293b; color: #64748b; font-size: 10px; padding: 2px 6px; border-radius: 3px;">MX</span>
+          <span style="color: #475569;">&#8594;</span>
+          <span style="color: #e2e8f0;">172.20.20.5</span>
+          <span style="background: #1e293b; color: #38bdf8; font-size: 10px; padding: 2px 6px; border-radius: 3px;">EVO</span>
+        </div>
+        <div style="flex: 1;"></div>
+        <span style="font-size: 12px; color: #64748b;">run mig01 &#183; profile core-only</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #4ade80;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #4ade80;"></span>connected</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 22px; border-bottom: 1px solid #1e293b;">
+        <span style="font-size: 11px; color: #64748b; margin-right: 6px;">FILTER</span>
+        <span style="background: #1e293b; color: #e2e8f0; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #334155;">all 20</span>
+        <span style="color: #4ade80; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #1e293b;">pass 14</span>
+        <span style="color: #fbbf24; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #1e293b;">warn 2</span>
+        <span style="background: rgba(248,113,113,0.12); color: #f87171; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #7f1d1d;">fail 1</span>
+        <span style="color: #64748b; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid #1e293b;">skip 3</span>
+        <div style="flex: 1;"></div>
+        <div style="display: flex; align-items: center; gap: 8px; background: #1e293b; border-radius: 6px; padding: 6px 12px; font-size: 12px; color: #64748b; width: 240px;">
+          <span>&#128269;</span><span>filter scope or check&#8230;</span>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 380px;">
+        <div style="border-right: 1px solid #1e293b; padding: 8px 0;">
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 8px 22px; font-size: 10.5px; color: #475569; letter-spacing: 0.08em;">
+            <span>STATUS</span><span>SCOPE</span><span>CHECKS</span><span>MATCH</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; background: rgba(248,113,113,0.07); border-left: 3px solid #f87171; align-items: center;">
+            <span style="color: #f87171; font-weight: 600;">FAIL</span>
+            <span style="color: #e2e8f0;">Internet vlan113 et-0/0/8.113</span>
+            <span style="color: #94a3b8;">1 fail &#183; 6 pass</span>
+            <span style="color: #4ade80; font-size: 11px;">high</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #fbbf24; font-weight: 600;">WARN</span>
+            <span style="color: #cbd5e1;">IPVPN vpn-acme et-0/0/8.220</span>
+            <span style="color: #94a3b8;">1 warn &#183; 8 pass</span>
+            <span style="color: #4ade80; font-size: 11px;">high</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #fbbf24; font-weight: 600;">WARN</span>
+            <span style="color: #cbd5e1;">Internet vlan117 et-0/0/8.117</span>
+            <span style="color: #94a3b8;">1 warn &#183; 5 pass</span>
+            <span style="color: #fbbf24; font-size: 11px;">medium</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #4ade80; font-weight: 600;">PASS</span>
+            <span style="color: #cbd5e1;">Internet vlan114 et-0/0/8.114</span>
+            <span style="color: #94a3b8;">12 pass</span>
+            <span style="color: #4ade80; font-size: 11px;">high</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #4ade80; font-weight: 600;">PASS</span>
+            <span style="color: #cbd5e1;">IPVPN vpn-borealis et-0/0/8.310</span>
+            <span style="color: #94a3b8;">9 pass</span>
+            <span style="color: #4ade80; font-size: 11px;">high</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #4ade80; font-weight: 600;">PASS</span>
+            <span style="color: #cbd5e1;">L2VPN evpn-metro et-0/0/8.402</span>
+            <span style="color: #94a3b8;">11 pass</span>
+            <span style="color: #4ade80; font-size: 11px;">high</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 70px 1fr 150px 110px; padding: 10px 22px; font-size: 12.5px; border-left: 3px solid transparent; align-items: center;">
+            <span style="color: #64748b; font-weight: 600;">SKIP</span>
+            <span style="color: #64748b;">Internet vlan119 et-0/0/8.119</span>
+            <span style="color: #64748b;">service deactivated</span>
+            <span style="color: #64748b; font-size: 11px;">&#8212;</span>
+          </div>
+        </div>
+        <div style="padding: 18px 22px; display: flex; flex-direction: column; gap: 14px;">
+          <div style="font-size: 11px; color: #475569; letter-spacing: 0.08em;">DETAIL</div>
+          <div>
+            <div style="color: #e2e8f0; font-size: 13px; font-weight: 600;">Internet vlan113 et-0/0/8.113</div>
+            <div style="color: #64748b; font-size: 11.5px; margin-top: 4px;">baseline ge-0/0/2.113 &#183; matched by address</div>
+          </div>
+          <div style="background: rgba(248,113,113,0.08); border: 1px solid #7f1d1d; border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #f87171; font-size: 12px; font-weight: 600;">bgp_session</span>
+              <span style="color: #f87171; font-size: 10.5px; border: 1px solid #7f1d1d; padding: 1px 7px; border-radius: 3px;">CRITICAL</span>
+            </div>
+            <div style="color: #cbd5e1; font-size: 12px; line-height: 1.5;">BGP session to 185.10.4.1 missing on new box</div>
+            <div style="display: grid; grid-template-columns: 80px 1fr; gap: 4px 10px; font-size: 11.5px;">
+              <span style="color: #64748b;">value</span><span style="color: #f87171;">Idle</span>
+              <span style="color: #64748b;">baseline</span><span style="color: #94a3b8;">Established, 4d 11h</span>
+            </div>
+          </div>
+          <div style="background: #1e293b; border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+            <span style="color: #94a3b8; font-size: 12px; font-weight: 600;">Passed checks (6)</span>
+            <div style="display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: #64748b;">
+              <span><span style="color: #4ade80;">&#10003;</span> interface_up &#183; oper status up</span>
+              <span><span style="color: #4ade80;">&#10003;</span> ping_gateway &#183; 5/5 replies</span>
+              <span><span style="color: #4ade80;">&#10003;</span> arp_entries &#183; 14 of 14 present</span>
+              <span><span style="color: #4ade80;">&#10003;</span> route_count &#183; 823 vs 823</span>
+              <span><span style="color: #4ade80;">&#10003;</span> interface_errors &#183; no input errors</span>
+              <span><span style="color: #4ade80;">&#10003;</span> optics_levels &#183; RX -3.1 dBm</span>
+            </div>
+          </div>
+          <div style="flex: 1;"></div>
+          <div style="display: flex; gap: 8px;">
+            <button style="flex: 1; border: 1px solid #334155; background: transparent; color: #94a3b8; border-radius: 6px; padding: 9px 0; font: 500 12px 'IBM Plex Mono', monospace; cursor: pointer;">raw JSON</button>
+            <button style="flex: 1; border: none; background: #38bdf8; color: #0f172a; border-radius: 6px; padding: 9px 0; font: 600 12px 'IBM Plex Mono', monospace; cursor: pointer;">re-run check</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>
