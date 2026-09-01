@@ -7,8 +7,11 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 
 from migration_validator import api
+from migration_validator.config import default_profile, load_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
+from migration_validator.models.snapshot import load_snapshot
 from migration_validator.runs.manifest import RunManifest
+from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
 
 
@@ -65,6 +68,78 @@ def create_app(
             "devices": _devices_dict(manifest),
             "rows": status_rows(manifest),
             "snapshots": snapshot_list(manifest),
+        }
+
+    @app.get("/api/runs/{run}/evaluation")
+    def run_evaluation(run: str, ports: str | None = None) -> dict:
+        store = _require_store(run)
+        manifest = store.load()
+        missing = store.missing_snapshots(manifest)
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail="chybejici soubory snimku: " + ", ".join(sorted(missing)),
+            )
+        port_filter = (
+            [p.strip() for p in ports.split(",") if p.strip()] if ports else None
+        )
+        profile = load_profile(profile_path) if profile_path else default_profile()
+        evaluations = []
+        for evaluation in plan_evaluations(manifest, port_filter):
+            subject = load_snapshot(str(store.dir / evaluation.subject.snapshot))
+            baseline = None
+            if evaluation.baseline is not None:
+                baseline = load_snapshot(
+                    str(store.dir / evaluation.baseline.snapshot)
+                )
+            step_payload = None
+            if evaluation.step is not None:
+                step_payload = {
+                    "old": {"node": evaluation.step.old.node,
+                            "port": evaluation.step.old.port},
+                    "new": {"node": evaluation.step.new.node,
+                            "port": evaluation.step.new.port},
+                }
+            result = api.evaluate(
+                subject,
+                baseline=baseline,
+                config=profile.checks,
+                service_types=profile.service_types,
+                profile_name=profile.name or None,
+                step=step_payload,
+            )
+            evaluations.append({
+                "subject": evaluation.subject.snapshot,
+                "baseline": evaluation.baseline.snapshot
+                if evaluation.baseline else None,
+                "warning": evaluation.reason or None,
+                "step": step_payload,
+                "result": result.to_dict(),
+            })
+        return {"evaluations": evaluations}
+
+    @app.get("/api/runs/{run}/snapshots/{file}/evaluation")
+    def snapshot_evaluation(run: str, file: str) -> dict:
+        store = _require_store(run)
+        path = store.dir / file
+        if not path.exists() or "/" in file or file == "..":
+            raise HTTPException(status_code=404, detail=f"snapshot nenalezen: {file}")
+        snapshot = load_snapshot(str(path))
+        profile = load_profile(profile_path) if profile_path else default_profile()
+        result = api.evaluate(
+            snapshot,
+            config=profile.checks,
+            service_types=profile.service_types,
+            profile_name=profile.name or None,
+        )
+        return {
+            "snapshot": {
+                "device": snapshot.device.hostname or snapshot.device.address,
+                "platform": snapshot.device.platform,
+                "taken": snapshot.capture.started_at,
+                "collectors": snapshot.capture.collectors,
+            },
+            "result": result.to_dict(),
         }
 
     return app

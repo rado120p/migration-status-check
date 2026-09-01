@@ -1,0 +1,135 @@
+"""Evaluation routes - stejna cesta jako cli._evaluate_run, bez renderu."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from migration_validator.gui.app import create_app
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
+from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot, save_snapshot
+from migration_validator.runs.manifest import (
+    CaptureRecord,
+    InterfaceMapping,
+    MappingEndpoint,
+    RunDevice,
+    RunManifest,
+)
+from migration_validator.runs.store import RunStore
+
+NOW = "2026-07-24T11:40:02Z"
+
+
+def _write_run_snapshot(store, phase, node, port, address, interface, *, oper="up"):
+    """Ulozi snapshot na misto, kde ho ceka RunStore, a vrati jeho cestu."""
+    scope = Scope(
+        id="svc:L3VPN:IPVPN",
+        kind="service",
+        key=ScopeKey("L3VPN", "IPVPN", None),
+        selectors=Selectors(interfaces=[interface]),
+    )
+    snapshot = Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(
+            started_at=NOW, finished_at=NOW, phase=phase,
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts={
+            "interfaces": {
+                interface: {
+                    "admin_status": "up", "oper_status": oper,
+                    "input_pps": 400, "output_pps": 400,
+                    "input_errors": 0, "output_errors": 0,
+                }
+            }
+        },
+        probes={"ping": []},
+        scopes=[scope],
+        inventory=[],
+    )
+    path = store.snapshot_path(phase, node, port)
+    save_snapshot(snapshot, path)
+    return path
+
+
+@pytest.fixture
+def run_se_snimky_client(tmp_path):
+    store = RunStore(tmp_path, "mig01")
+    manifest = RunManifest(
+        devices={
+            "MX1": RunDevice(host="10.0.0.1", platform="junos", role="old"),
+            "PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="new"),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1", port="ge-0/0/1"),
+                new=MappingEndpoint(node="PTX1", port="et-0/0/1"),
+            )
+        ],
+    )
+    pre_path = _write_run_snapshot(
+        store, "pre", "MX1", "ge-0/0/1", "10.0.0.1", "ge-0/0/1.113"
+    )
+    post_path = _write_run_snapshot(
+        store, "post", "PTX1", "et-0/0/1", "10.0.0.2", "et-0/0/1.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1", "ge-0/0/1", pre_path.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1", "et-0/0/1", post_path.name, NOW)
+    )
+    store.save(manifest)
+
+    app = create_app(run_root=tmp_path)
+    return TestClient(app)
+
+
+def test_run_evaluation_vraci_result_dict(run_se_snimky_client):
+    data = run_se_snimky_client.get("/api/runs/mig01/evaluation").json()
+    assert len(data["evaluations"]) == 1
+    ev = data["evaluations"][0]
+    assert "summary" in ev["result"]
+    assert set(ev["result"]["summary"]) >= {"pass", "warn", "fail", "skip"}
+    # subject/baseline se skutecne sparovaly pres plan_evaluations
+    assert ev["subject"].startswith("snapshot_post_")
+    assert ev["baseline"] is not None
+    assert ev["baseline"].startswith("snapshot_pre_")
+    assert ev["step"]["old"]["port"] == "ge-0/0/1"
+    assert ev["step"]["new"]["port"] == "et-0/0/1"
+
+
+def test_run_evaluation_404(client):
+    assert client.get("/api/runs/neni/evaluation").status_code == 404
+
+
+def test_run_evaluation_422_chybejici_soubor(run_se_snimky_client, tmp_path):
+    next((tmp_path / "mig01").glob("snapshot_pre_*.json")).unlink()
+    resp = run_se_snimky_client.get("/api/runs/mig01/evaluation")
+    assert resp.status_code == 422
+    assert "chybejici soubory snimku" in resp.json()["detail"]
+
+
+def test_run_evaluation_ports_filter(run_se_snimky_client):
+    matched = run_se_snimky_client.get(
+        "/api/runs/mig01/evaluation", params={"ports": "ge-0/0/1"}
+    ).json()
+    assert len(matched["evaluations"]) == 1
+
+    unmatched = run_se_snimky_client.get(
+        "/api/runs/mig01/evaluation", params={"ports": "neni"}
+    ).json()
+    assert unmatched["evaluations"] == []
+
+
+def test_snapshot_evaluation_bez_baseline(run_se_snimky_client):
+    detail = run_se_snimky_client.get("/api/runs/mig01").json()
+    file = detail["snapshots"][0]["file"]
+    data = run_se_snimky_client.get(
+        f"/api/runs/mig01/snapshots/{file}/evaluation"
+    ).json()
+    assert data["snapshot"]["device"]
+    assert "summary" in data["result"]
+
+
+def test_snapshot_evaluation_neznamy_soubor(run_se_snimky_client):
+    resp = run_se_snimky_client.get("/api/runs/mig01/snapshots/neni.json/evaluation")
+    assert resp.status_code == 404
