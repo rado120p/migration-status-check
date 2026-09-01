@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from migration_validator import api
 from migration_validator.auth import load_settings
+from migration_validator.collectors.registry import collectors_for
 from migration_validator.config import default_profile, load_profile
 from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
@@ -79,6 +80,27 @@ def create_app(
     @app.get("/api/checks")
     def list_checks() -> dict:
         return {"checks": api.list_checks()}
+
+    @app.get("/api/meta")
+    def meta() -> dict:
+        try:
+            settings = load_settings()
+        except ValueError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        profile = load_profile(profile_path) if profile_path else default_profile()
+        parts = [settings.username]
+        if settings.ssh_key_paths:
+            parts.append(f"ssh keys ({len(settings.ssh_key_paths)})")
+        if settings.password is not None:
+            parts.append("password fallback" if settings.ssh_key_paths else "password via env")
+        auth = " · ".join(parts)
+        collectors = {}
+        for platform in ("junos", "junos-evo"):
+            names = [c.name for c in collectors_for(platform)]
+            if profile.collectors is not None:
+                names = [n for n in names if n in profile.collectors]
+            collectors[platform] = names
+        return {"profile": profile.name or None, "auth": auth, "collectors": collectors}
 
     @app.get("/api/runs")
     def list_runs() -> dict:

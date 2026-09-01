@@ -35,6 +35,13 @@ def test_run_detail_404(client):
     assert client.get("/api/runs/neni").status_code == 404
 
 
+def test_meta_vraci_profile_a_auth(client):
+    data = client.get("/api/meta").json()
+    assert "profile" in data
+    assert isinstance(data["auth"], str) and data["auth"]
+    assert isinstance(data["collectors"]["junos"], list) and data["collectors"]["junos"]
+
+
 def test_root_servuje_index(client):
     resp = client.get("/")
     assert resp.status_code == 200

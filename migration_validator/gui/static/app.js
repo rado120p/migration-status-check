@@ -37,6 +37,9 @@ class App {
       openRows: {},
       openScopes: {},
       activeCaptureId: null,
+      captureForm: null,
+      captureSubmitError: null,
+      captureSubmitting: false,
     };
     this.cache = {
       runs: [],
@@ -48,8 +51,13 @@ class App {
       snapshotEvalError: null,
       checks: null,
       checksError: null,
+      captureDetail: null,
+      captureDetailError: null,
+      meta: null,
+      metaError: null,
     };
 
+    this.profileNameEl = document.getElementById("profile-name");
     this.sidebarRunsEl = document.getElementById("sidebar-runs");
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
@@ -58,7 +66,7 @@ class App {
 
     this.btnChecksEl.addEventListener("click", () => this.goToChecks());
     document.getElementById("btn-new-capture").addEventListener("click", () => {
-      // wired in a later task - inert stub for now.
+      this.openCaptureForm();
     });
     const newRunLink = document.getElementById("btn-new-run");
     if (newRunLink) {
@@ -78,7 +86,14 @@ class App {
       this.state.run = runs[0].name;
       await this.loadRun();
     }
+    this.loadMeta().then(() => this.updateProfileBadge());
     this.render();
+  }
+
+  updateProfileBadge() {
+    if (!this.profileNameEl) return;
+    const meta = this.cache.meta;
+    this.profileNameEl.textContent = (meta && meta.profile) || "(default)";
   }
 
   async loadRun() {
@@ -218,6 +233,297 @@ class App {
     this.render();
   }
 
+  // -- new capture form (screen 4) ---------------------------------------
+
+  async openCaptureForm() {
+    const run = this.state.run || (this.cache.runs[0] && this.cache.runs[0].name) || null;
+    this.state.view = "capture";
+    this.state.selectedSnapshot = null;
+    this.state.captureSubmitError = null;
+    this.state.captureForm = {
+      run,
+      device: null,
+      phase: "pre",
+      port: null,
+      portText: "",
+      parseServices: false,
+    };
+    await this.loadCaptureFormData(run);
+    this.presetCaptureFormDevice();
+    if (!this.cache.meta && !this.cache.metaError) await this.loadMeta();
+    this.updateProfileBadge();
+    this.render();
+  }
+
+  async loadCaptureFormData(run) {
+    this.cache.captureDetail = null;
+    this.cache.captureDetailError = null;
+    if (!run) return;
+    try {
+      const res = await fetch(`/api/runs/${run}`);
+      if (res.ok) {
+        this.cache.captureDetail = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.captureDetailError = {
+          status: res.status,
+          detail: body.detail || `run se nepodarilo nacist (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.captureDetailError = { status: 0, detail: String(err) };
+    }
+  }
+
+  async loadMeta() {
+    this.cache.meta = null;
+    this.cache.metaError = null;
+    try {
+      const res = await fetch("/api/meta");
+      if (res.ok) {
+        this.cache.meta = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.metaError = {
+          status: res.status,
+          detail: body.detail || `meta se nepodarilo nacist (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.metaError = { status: 0, detail: String(err) };
+    }
+  }
+
+  presetCaptureFormDevice() {
+    const detail = this.cache.captureDetail;
+    if (!detail) return;
+    const devices = detail.devices || {};
+    const oldEntry = Object.entries(devices).find(([, d]) => d.role === "old");
+    const firstEntry = oldEntry || Object.entries(devices)[0];
+    if (!firstEntry) return;
+    const [node, d] = firstEntry;
+    this.state.captureForm.device = node;
+    this.state.captureForm.phase = d.role === "new" ? "post" : "pre";
+    this.state.captureForm.port = null;
+    this.state.captureForm.portText = "";
+  }
+
+  async selectCaptureFormRun(run) {
+    this.state.captureForm.run = run;
+    this.state.captureForm.device = null;
+    this.state.captureSubmitError = null;
+    await this.loadCaptureFormData(run);
+    this.presetCaptureFormDevice();
+    this.render();
+  }
+
+  selectCaptureFormDevice(node) {
+    const detail = this.cache.captureDetail;
+    const device = detail && detail.devices[node];
+    this.state.captureForm.device = node;
+    this.state.captureForm.phase = device && device.role === "new" ? "post" : "pre";
+    this.state.captureForm.port = null;
+    this.state.captureForm.portText = "";
+    this.state.captureSubmitError = null;
+    this.render();
+  }
+
+  selectCaptureFormPhase(phase) {
+    this.state.captureForm.phase = phase;
+    this.state.captureSubmitError = null;
+    this.render();
+  }
+
+  selectCaptureFormPort(value) {
+    this.state.captureForm.port = value === "" ? null : value;
+    this.state.captureSubmitError = null;
+    this.render();
+  }
+
+  setCaptureFormPortText(value) {
+    this.state.captureForm.portText = value;
+  }
+
+  commitCaptureFormPortText() {
+    this.state.captureSubmitError = null;
+    this.render();
+  }
+
+  toggleCaptureFormParseServices() {
+    this.state.captureForm.parseServices = !this.state.captureForm.parseServices;
+    this.render();
+  }
+
+  captureMappedRows() {
+    const detail = this.cache.captureDetail;
+    if (!detail) return [];
+    return (detail.rows || []).filter((r) => r.old && r.new);
+  }
+
+  captureFindOldDeviceNode() {
+    const detail = this.cache.captureDetail;
+    if (!detail) return null;
+    const entry = Object.entries(detail.devices || {}).find(([, d]) => d.role === "old");
+    return entry ? entry[0] : null;
+  }
+
+  capturePortOptions(device) {
+    const detail = this.cache.captureDetail;
+    if (!detail || !device) return [];
+    const role = detail.devices[device] ? detail.devices[device].role : null;
+    const mapped = this.captureMappedRows();
+    const ports = [];
+    for (const row of mapped) {
+      if (role === "new") {
+        if (row.new.node === device && !ports.includes(row.new.port)) ports.push(row.new.port);
+      } else if (row.old.node === device && !ports.includes(row.old.port)) {
+        ports.push(row.old.port);
+      }
+    }
+    return ports;
+  }
+
+  captureAlreadyCaptured(device, port, phase) {
+    const detail = this.cache.captureDetail;
+    if (!detail) return false;
+    const rows = detail.rows || [];
+    if (phase === "post") {
+      const row = rows.find((r) => r.new && r.new.node === device && r.new.port === port);
+      return row ? !!row.post : false;
+    }
+    const row = rows.find((r) => r.old && r.old.node === device && r.old.port === port);
+    return row ? !!row[phase] : false;
+  }
+
+  captureMapsToText(device, port) {
+    if (port === null) return null;
+    const mapped = this.captureMappedRows();
+    const matches = mapped.filter(
+      (r) =>
+        (r.old.node === device && r.old.port === port) ||
+        (r.new.node === device && r.new.port === port)
+    );
+    if (!matches.length) return null;
+    const newNode = matches[0].new.node;
+    const newPort = matches[0].new.port;
+    const siblings = mapped.filter((r) => r.new.node === newNode && r.new.port === newPort);
+    const oldPorts = siblings.map((r) => r.old.port);
+    return `${oldPorts.join(", ")} → ${newPort}`;
+  }
+
+  captureFindSnapshotFile(node, port) {
+    const detail = this.cache.captureDetail;
+    if (!detail) return null;
+    const rec = (detail.snapshots || []).find(
+      (s) => s.phase === "pre" && s.device === node && s.port === port
+    );
+    return rec ? rec.file : null;
+  }
+
+  captureBaselineNotice() {
+    const form = this.state.captureForm;
+    if (form.phase !== "post") return null;
+    const detail = this.cache.captureDetail;
+    if (!detail) return null;
+    const oldNode = this.captureFindOldDeviceNode();
+    if (!oldNode) return null;
+    const rows = detail.rows || [];
+    const mapped = this.captureMappedRows();
+
+    if (form.port !== null) {
+      const matches = mapped.filter(
+        (r) =>
+          (r.old.node === form.device && r.old.port === form.port) ||
+          (r.new.node === form.device && r.new.port === form.port)
+      );
+      if (matches.length) {
+        const withPre = matches.find((m) => m.pre) || matches[0];
+        const oldPort = withPre.old.port;
+        if (withPre.pre) {
+          const file = this.captureFindSnapshotFile(oldNode, oldPort);
+          return {
+            kind: "indigo",
+            text: file
+              ? `Baseline ${file} found for this pairing.`
+              : `Baseline found for this pairing.`,
+          };
+        }
+        return {
+          kind: "warn",
+          text: `no pre baseline recorded for ${oldPort} — comparison checks will SKIP`,
+        };
+      }
+    }
+
+    // whole-device fallback: no port match (mapping-less run, or "all" selected)
+    const wholeRow = rows.find((r) => r.old && r.old.node === oldNode && r.old.port === null);
+    if (wholeRow && wholeRow.pre) {
+      const file = this.captureFindSnapshotFile(oldNode, null);
+      return {
+        kind: "indigo",
+        text: file
+          ? `Baseline ${file} found for this pairing.`
+          : `Baseline found for this pairing.`,
+      };
+    }
+    return {
+      kind: "warn",
+      text: `no pre baseline recorded for ${oldNode}:all — comparison checks will SKIP`,
+    };
+  }
+
+  async backToRunFromCapture(targetRun) {
+    if (targetRun && targetRun !== this.state.run) {
+      this.state.run = targetRun;
+      await this.loadRun();
+    }
+    this.state.view = "run";
+    this.state.selectedSnapshot = null;
+    this.render();
+  }
+
+  async startCapture() {
+    const form = this.state.captureForm;
+    if (!form.run || !form.device) return;
+    const isMapped = this.captureMappedRows().length > 0;
+    let port;
+    if (isMapped) {
+      port = form.port;
+    } else {
+      const raw = (form.portText || "").trim();
+      port = !raw || raw.toLowerCase() === "all" ? null : raw;
+    }
+    this.state.captureSubmitError = null;
+    this.state.captureSubmitting = true;
+    this.render();
+    try {
+      const res = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          run: form.run,
+          device: form.device,
+          port,
+          phase: form.phase,
+          parse_services: !!form.parseServices,
+        }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        this.state.activeCaptureId = body.id;
+        this.state.captureSubmitting = false;
+        await this.backToRunFromCapture(form.run);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      this.state.captureSubmitError = body.detail || `capture se nepodarilo spustit (${res.status})`;
+    } catch (err) {
+      this.state.captureSubmitError = String(err);
+    }
+    this.state.captureSubmitting = false;
+    this.render();
+  }
+
   exportSnapshotJson() {
     if (!this.cache.snapshotEval) return;
     const blob = new Blob([JSON.stringify(this.cache.snapshotEval, null, 2)], {
@@ -265,6 +571,10 @@ class App {
     }
     if (this.state.view === "checks") {
       this.renderChecksView();
+      return;
+    }
+    if (this.state.view === "capture") {
+      this.renderCaptureForm();
       return;
     }
     this.renderRunOverview();
@@ -812,6 +1122,252 @@ class App {
         ],
       })
     );
+  }
+
+  // -- new capture form (screen 4) ----------------------------------------
+
+  renderCaptureForm() {
+    clear(this.mainEl);
+    const form = this.state.captureForm;
+    if (!form) return;
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "breadcrumb",
+        children: [
+          el("span", {
+            className: "crumb-link",
+            text: `run ${form.run || ""}`,
+            onClick: () => this.backToRunFromCapture(form.run),
+          }),
+          el("span", { className: "crumb-sep", text: "/" }),
+          el("span", { className: "crumb-current", text: "new capture" }),
+        ],
+      })
+    );
+    this.mainEl.appendChild(el("h1", { className: "capture-h1", text: "New capture" }));
+
+    if (this.cache.captureDetailError) {
+      this.mainEl.appendChild(
+        el("div", {
+          className: "notice notice-warn",
+          text: this.cache.captureDetailError.detail,
+        })
+      );
+      return;
+    }
+    const detail = this.cache.captureDetail;
+    if (!detail) return;
+
+    const devices = detail.devices || {};
+    const mapped = this.captureMappedRows();
+    const isMapped = mapped.length > 0;
+    const device = form.device;
+
+    const grid = el("div", { className: "capture-grid" });
+
+    // -- Target card --
+    const runSelect = el("select", {
+      className: "form-select",
+      children: this.cache.runs.map((r) =>
+        el("option", {
+          text: r.name,
+          attrs: r.name === form.run ? { value: r.name, selected: "selected" } : { value: r.name },
+        })
+      ),
+    });
+    runSelect.addEventListener("change", (e) => this.selectCaptureFormRun(e.target.value));
+    const targetChildren = [
+      el("div", { className: "form-section-label", text: "Target" }),
+      this.buildCaptureField("Run", runSelect),
+    ];
+
+    const deviceSelect = el("select", {
+      className: "form-select mono",
+      children: Object.entries(devices).map(([node, d]) => {
+        const label = `${node} — ${d.host} (${d.role})`;
+        const attrs = node === device ? { value: node, selected: "selected" } : { value: node };
+        return el("option", { text: label, attrs });
+      }),
+    });
+    deviceSelect.addEventListener("change", (e) => this.selectCaptureFormDevice(e.target.value));
+    targetChildren.push(this.buildCaptureField("Device", deviceSelect));
+
+    const phaseToggle = el("div", { className: "phase-toggle" });
+    for (const phase of ["pre", "post", "rollback"]) {
+      phaseToggle.appendChild(
+        el("span", {
+          className: "phase-toggle-item" + (form.phase === phase ? " active" : ""),
+          text: phase,
+          onClick: () => this.selectCaptureFormPhase(phase),
+        })
+      );
+    }
+    targetChildren.push(this.buildCaptureField("Phase", phaseToggle));
+
+    let selectedPort = form.port;
+    let alreadyCaptured = false;
+    if (isMapped) {
+      const ports = device ? this.capturePortOptions(device) : [];
+      const allCaptured = device ? this.captureAlreadyCaptured(device, null, form.phase) : false;
+      const portSelect = el("select", {
+        className: "form-select mono",
+        children: [
+          ...ports.map((p) => {
+            const captured = device ? this.captureAlreadyCaptured(device, p, form.phase) : false;
+            const label = p + (captured ? " ✓ captured" : "");
+            const attrs = p === selectedPort ? { value: p, selected: "selected" } : { value: p };
+            return el("option", { text: label, attrs });
+          }),
+          el("option", {
+            text: "all (whole device)" + (allCaptured ? " ✓ captured" : ""),
+            attrs: selectedPort === null ? { value: "", selected: "selected" } : { value: "" },
+          }),
+        ],
+      });
+      portSelect.addEventListener("change", (e) => this.selectCaptureFormPort(e.target.value));
+      targetChildren.push(this.buildCaptureField("Port", portSelect));
+      alreadyCaptured = selectedPort === null ? allCaptured : this.captureAlreadyCaptured(device, selectedPort, form.phase);
+
+      const mapsTo = device ? this.captureMapsToText(device, selectedPort) : null;
+      if (mapsTo) {
+        targetChildren.push(
+          this.buildCaptureField(
+            "Maps to",
+            el("div", { className: "readonly-row mono", text: mapsTo })
+          )
+        );
+      }
+    } else {
+      const portInput = el("input", {
+        className: "form-input mono",
+        attrs: { type: "text", placeholder: "all" },
+      });
+      portInput.value = form.portText || "";
+      portInput.addEventListener("input", (e) => this.setCaptureFormPortText(e.target.value));
+      portInput.addEventListener("change", () => this.commitCaptureFormPortText());
+      targetChildren.push(this.buildCaptureField("Port", portInput));
+      const raw = (form.portText || "").trim();
+      const effectivePort = !raw || raw.toLowerCase() === "all" ? null : raw;
+      alreadyCaptured = device ? this.captureAlreadyCaptured(device, effectivePort, form.phase) : false;
+    }
+
+    const parseServicesLabel = el("label", {
+      className: "checkbox-row",
+      children: [
+        (() => {
+          const cb = el("input", { attrs: { type: "checkbox" } });
+          cb.checked = !!form.parseServices;
+          cb.addEventListener("change", () => this.toggleCaptureFormParseServices());
+          return cb;
+        })(),
+        document.createTextNode("Regenerate inventory from config "),
+        el("span", { className: "mono checkbox-flag", text: "(--parse-services)" }),
+      ],
+    });
+    targetChildren.push(parseServicesLabel);
+
+    const targetCard = el("div", { className: "form-card", children: targetChildren });
+
+    // -- Profile & auth card --
+    const meta = this.cache.meta;
+    const profileChildren = [el("div", { className: "form-section-label", text: "Profile & auth" })];
+    const profileSelect = el("select", {
+      className: "form-select mono",
+      children: [
+        el("option", {
+          text: (meta && meta.profile) || "(default)",
+          attrs: { value: "", selected: "selected" },
+        }),
+      ],
+      attrs: { disabled: "disabled" },
+    });
+    profileChildren.push(this.buildCaptureField("Profile", profileSelect));
+    profileChildren.push(
+      el("div", {
+        className: "readonly-row",
+        children: [
+          el("span", { className: "readonly-label", text: "Auth" }),
+          el("span", {
+            className: "readonly-value mono",
+            text: meta ? meta.auth : this.cache.metaError ? "unavailable" : "…",
+          }),
+        ],
+      })
+    );
+    const deviceForCollectors = device ? devices[device] : null;
+    const platformCollectors =
+      meta && meta.collectors && deviceForCollectors
+        ? meta.collectors[deviceForCollectors.platform]
+        : null;
+    const collectorsValue = el("span", {
+      className: "readonly-value mono",
+      text: platformCollectors ? `${platformCollectors.length} collectors` : "—",
+    });
+    if (platformCollectors) {
+      collectorsValue.setAttribute("title", platformCollectors.join(", "));
+    }
+    profileChildren.push(
+      el("div", {
+        className: "readonly-row",
+        children: [el("span", { className: "readonly-label", text: "Collectors" }), collectorsValue],
+      })
+    );
+    if (this.cache.metaError) {
+      profileChildren.push(
+        el("div", { className: "notice notice-warn", text: this.cache.metaError.detail })
+      );
+    }
+    const profileCard = el("div", { className: "form-card", children: profileChildren });
+
+    const sideChildren = [profileCard];
+    const baseline = this.captureBaselineNotice();
+    if (baseline) {
+      sideChildren.push(
+        el("div", {
+          className: "notice " + (baseline.kind === "indigo" ? "notice-indigo" : "notice-warn"),
+          text: baseline.text,
+        })
+      );
+    }
+    if (this.state.captureSubmitError) {
+      sideChildren.push(
+        el("div", { className: "notice notice-fail", text: this.state.captureSubmitError })
+      );
+    }
+
+    const actions = el("div", {
+      className: "footer-actions",
+      children: [
+        el("button", {
+          className: "btn btn-secondary",
+          text: "Cancel",
+          onClick: () => this.backToRunFromCapture(form.run),
+        }),
+        el("button", {
+          className: "btn btn-primary",
+          text: this.state.captureSubmitting
+            ? "Starting…"
+            : alreadyCaptured
+              ? "Re-capture"
+              : "Start capture",
+          onClick: this.state.captureSubmitting ? null : () => this.startCapture(),
+        }),
+      ],
+    });
+    sideChildren.push(actions);
+    const sideCol = el("div", { className: "capture-side", children: sideChildren });
+
+    grid.appendChild(targetCard);
+    grid.appendChild(sideCol);
+    this.mainEl.appendChild(grid);
+  }
+
+  buildCaptureField(label, control) {
+    return el("div", {
+      className: "form-field",
+      children: [el("label", { className: "field-label", text: label }), control],
+    });
   }
 
   // -- registered checks (screen 3) --------------------------------------
