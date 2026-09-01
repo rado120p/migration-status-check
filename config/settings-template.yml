@@ -1,0 +1,7 @@
+connection:
+  netconf_port: 830
+  timeout: 30
+  username: user-1
+  ssh_key_paths:
+    - /home/user-1/.ssh/id_rsa
+  password_env: # Optional password env
