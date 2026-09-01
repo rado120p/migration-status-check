@@ -40,6 +40,8 @@ class App {
       captureForm: null,
       captureSubmitError: null,
       captureSubmitting: false,
+      newRunForm: null,
+      editMappingForm: null,
     };
     this.cache = {
       runs: [],
@@ -55,7 +57,9 @@ class App {
       captureDetailError: null,
       meta: null,
       metaError: null,
+      captureProgress: null,
     };
+    this.capturePollTimer = null;
 
     this.profileNameEl = document.getElementById("profile-name");
     this.sidebarRunsEl = document.getElementById("sidebar-runs");
@@ -72,9 +76,10 @@ class App {
     if (newRunLink) {
       newRunLink.addEventListener("click", (e) => {
         e.preventDefault();
-        // wired in a later task - inert stub for now.
+        this.openNewRunForm();
       });
     }
+    window.addEventListener("beforeunload", () => this.stopCapturePolling());
   }
 
   async boot() {
@@ -151,6 +156,89 @@ class App {
     URL.revokeObjectURL(url);
   }
 
+  // -- live capture progress polling --------------------------------------
+
+  syncCapturePolling() {
+    const shouldPoll = this.state.view === "run" && !!this.state.activeCaptureId;
+    if (shouldPoll && !this.capturePollTimer) {
+      this.capturePollTimer = setInterval(() => this.pollCapture(), 2000);
+      this.pollCapture();
+    } else if (!shouldPoll && this.capturePollTimer) {
+      this.stopCapturePolling();
+    }
+  }
+
+  stopCapturePolling() {
+    if (this.capturePollTimer) {
+      clearInterval(this.capturePollTimer);
+      this.capturePollTimer = null;
+    }
+  }
+
+  async pollCapture() {
+    const id = this.state.activeCaptureId;
+    if (!id) {
+      this.stopCapturePolling();
+      return;
+    }
+    let task;
+    try {
+      const res = await fetch(`/api/captures/${id}`);
+      if (!res.ok) {
+        this.state.activeCaptureId = null;
+        this.stopCapturePolling();
+        this.render();
+        return;
+      }
+      task = await res.json();
+    } catch (err) {
+      // network hiccup - keep the interval running and retry next tick.
+      return;
+    }
+    this.cache.captureProgress = task;
+    if (task.state === "done") {
+      this.state.activeCaptureId = null;
+      this.stopCapturePolling();
+      this.cache.captureProgress = null;
+      await this.loadRun();
+      this.render();
+      return;
+    }
+    if (task.state === "failed") {
+      this.state.activeCaptureId = null;
+      this.stopCapturePolling();
+      this.render();
+      return;
+    }
+    this.render();
+  }
+
+  rowMatchesCapture(row, task) {
+    if (!task) return false;
+    const endpoint = task.phase === "post" ? row.new : row.old;
+    if (!endpoint) return false;
+    return endpoint.node === task.device && (endpoint.port ?? null) === (task.port ?? null);
+  }
+
+  buildCaptureStepsLine(task) {
+    const parts = [];
+    const steps = task.steps || [];
+    steps.forEach((s, i) => {
+      if (i > 0) parts.push(el("span", { text: " · " }));
+      let cls = "step-ok";
+      let label = `${s.collector} ✓`;
+      if (s.status === "running") {
+        cls = "step-running";
+        label = `${s.collector}…`;
+      } else if (s.status === "error") {
+        cls = "step-error";
+        label = `${s.collector} ✗`;
+      }
+      parts.push(el("span", { className: cls, text: label }));
+    });
+    return parts;
+  }
+
   toggleRow(key) {
     this.state.openRows[key] = !this.state.openRows[key];
     this.render();
@@ -168,6 +256,9 @@ class App {
     this.state.selectedSnapshot = null;
     this.state.openRows = {};
     this.state.openScopes = {};
+    this.cache.captureProgress = null;
+    this.state.activeCaptureId = null;
+    this.stopCapturePolling();
     await this.loadRun();
     this.render();
   }
@@ -240,6 +331,7 @@ class App {
     this.state.view = "capture";
     this.state.selectedSnapshot = null;
     this.state.captureSubmitError = null;
+    this.cache.captureProgress = null;
     this.state.captureForm = {
       run,
       device: null,
@@ -511,6 +603,7 @@ class App {
       if (res.ok) {
         const body = await res.json();
         this.state.activeCaptureId = body.id;
+        this.cache.captureProgress = null;
         this.state.captureSubmitting = false;
         await this.backToRunFromCapture(form.run);
         return;
@@ -561,23 +654,30 @@ class App {
   render() {
     this.renderSidebar();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
-    if (this.state.view === "empty") {
-      this.renderEmptyState();
-      return;
+    switch (this.state.view) {
+      case "empty":
+        this.renderEmptyState();
+        break;
+      case "snapshot":
+        this.renderSnapshotView();
+        break;
+      case "checks":
+        this.renderChecksView();
+        break;
+      case "capture":
+        this.renderCaptureForm();
+        break;
+      case "newrun":
+        this.renderNewRunForm();
+        break;
+      case "editmapping":
+        this.renderEditMapping();
+        break;
+      default:
+        this.renderRunOverview();
+        break;
     }
-    if (this.state.view === "snapshot") {
-      this.renderSnapshotView();
-      return;
-    }
-    if (this.state.view === "checks") {
-      this.renderChecksView();
-      return;
-    }
-    if (this.state.view === "capture") {
-      this.renderCaptureForm();
-      return;
-    }
-    this.renderRunOverview();
+    this.syncCapturePolling();
   }
 
   renderEmptyState() {
@@ -586,8 +686,12 @@ class App {
       el("div", {
         className: "empty-state",
         children: [
-          el("span", { text: "no runs yet" }),
-          el("button", { className: "btn btn-primary", text: "Create your first run" }),
+          el("span", { text: "No runs yet — create one to get started." }),
+          el("button", {
+            className: "btn btn-primary",
+            text: "Create your first run",
+            onClick: () => this.openNewRunForm(),
+          }),
         ],
       })
     );
@@ -595,6 +699,9 @@ class App {
 
   renderSidebar() {
     clear(this.sidebarRunsEl);
+    if (this.cache.runs.length === 0) {
+      this.sidebarRunsEl.appendChild(el("div", { className: "sidebar-empty", text: "no runs yet" }));
+    }
     for (const run of this.cache.runs) {
       const active = run.name === this.state.run;
       this.sidebarRunsEl.appendChild(
@@ -824,7 +931,49 @@ class App {
     }
     this.mainEl.appendChild(cardsRow);
 
-    this.mainEl.appendChild(this.buildPairingTable(detail));
+    const allRows = detail.rows || [];
+    const mappingRows = allRows.filter((r) => r.old && r.new);
+    const wholeRows = allRows.filter((r) => !r.old || !r.new);
+    if (mappingRows.length === 0) {
+      this.mainEl.appendChild(
+        el("div", {
+          className: "notice notice-warn",
+          text: "no port mapping — captures are per-device",
+        })
+      );
+      if (wholeRows.length > 0) {
+        this.mainEl.appendChild(this.buildPairingTable(wholeRows));
+      }
+    } else {
+      this.mainEl.appendChild(this.buildPairingTable(allRows));
+    }
+
+    // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
+    // first-ever capture on a mapping-less run) has nothing to attach to
+    // above - surface its live progress standalone so it isn't silent.
+    const task = this.cache.captureProgress;
+    if (task && !allRows.some((r) => this.rowMatchesCapture(r, task))) {
+      if (task.state === "running") {
+        const parts = this.buildCaptureStepsLine(task);
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-indigo",
+            children: [
+              el("span", { className: "capturing-pill", text: "capturing…" }),
+              document.createTextNode(` ${task.device}:${task.port || "all"} (${task.phase}) `),
+              ...(parts.length ? parts : [el("span", { text: "starting…" })]),
+            ],
+          })
+        );
+      } else if (task.state === "failed") {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-fail",
+            text: `${task.device}:${task.port || "all"} (${task.phase}) failed — ${task.error || ""}`,
+          })
+        );
+      }
+    }
 
     const footer = el("div", {
       className: "footer-actions",
@@ -832,9 +981,7 @@ class App {
         el("button", {
           className: "btn btn-secondary",
           text: "Edit mapping",
-          onClick: () => {
-            // wired in a later task
-          },
+          onClick: () => this.openEditMapping(),
         }),
         el("button", {
           className: "btn btn-secondary",
@@ -851,7 +998,22 @@ class App {
     this.mainEl.appendChild(footer);
   }
 
-  buildPairingTable(detail) {
+  buildFlagCell(row, phaseKey, task) {
+    const matches = task && this.rowMatchesCapture(row, task) && task.phase === phaseKey;
+    if (matches && task.state === "running") {
+      return el("span", {
+        className: "flag-cell",
+        children: [el("span", { className: "capturing-pill", text: "capturing…" })],
+      });
+    }
+    if (matches && task.state === "failed") {
+      return el("span", { className: "flag-cell off", text: "—" });
+    }
+    const on = !!row[phaseKey];
+    return el("span", { className: "flag-cell " + (on ? "on" : "off"), text: on ? "✓" : "—" });
+  }
+
+  buildPairingTable(rows) {
     const table = el("div", { className: "pairing-table" });
     table.appendChild(
       el("div", {
@@ -868,7 +1030,8 @@ class App {
       })
     );
 
-    for (const row of detail.rows) {
+    const task = this.cache.captureProgress;
+    for (const row of rows) {
       const evaluation = this.findEvaluation(row);
       const key = this.rowKey(row);
       let worst = "waiting";
@@ -881,6 +1044,7 @@ class App {
       const pillLabel = evaluation ? this.pillText(worst, presentation.count) : "waiting";
       const clickable = !!(evaluation && presentation.clickable);
       const open = clickable && !!this.state.openRows[key];
+      const rowMatches = this.rowMatchesCapture(row, task);
 
       const rowEl = el("div", {
         className:
@@ -898,18 +1062,9 @@ class App {
             className: "port-cell" + (row.new ? "" : " unpaired"),
             text: row.new ? `${row.new.node}:${row.new.port || "all"}` : "not paired",
           }),
-          el("span", {
-            className: "flag-cell " + (row.pre ? "on" : "off"),
-            text: row.pre ? "✓" : "—",
-          }),
-          el("span", {
-            className: "flag-cell " + (row.post ? "on" : "off"),
-            text: row.post ? "✓" : "—",
-          }),
-          el("span", {
-            className: "flag-cell " + (row.rollback ? "on" : "off"),
-            text: row.rollback ? "✓" : "—",
-          }),
+          this.buildFlagCell(row, "pre", task),
+          this.buildFlagCell(row, "post", task),
+          this.buildFlagCell(row, "rollback", task),
           el("span", {
             className: "col-result",
             children: [el("span", { className: "status-pill " + pillClass, text: pillLabel })],
@@ -917,6 +1072,23 @@ class App {
         ],
       });
       table.appendChild(rowEl);
+
+      if (rowMatches && task.state === "running") {
+        const parts = this.buildCaptureStepsLine(task);
+        table.appendChild(
+          el("div", {
+            className: "row-note",
+            children: parts.length ? parts : [el("span", { text: "starting…" })],
+          })
+        );
+      } else if (rowMatches && task.state === "failed") {
+        table.appendChild(
+          el("div", {
+            className: "row-note row-note-fail",
+            text: task.error || "capture selhal",
+          })
+        );
+      }
 
       if (open) {
         table.appendChild(this.buildScopesPanel(presentation.scopes, key));
@@ -1368,6 +1540,488 @@ class App {
       className: "form-field",
       children: [el("label", { className: "field-label", text: label }), control],
     });
+  }
+
+  // -- shared mapping-card builder (screens 5 & 6) -------------------------
+
+  mappingDupErrors(rows) {
+    const seen = new Set();
+    const dup = new Set();
+    for (const r of rows) {
+      const old = (r.old || "").trim();
+      if (!old) continue;
+      if (seen.has(old)) dup.add(old);
+      seen.add(old);
+    }
+    return dup;
+  }
+
+  buildMappingCard(rows, opts) {
+    const card = el("div", { className: "form-card" });
+    card.appendChild(el("div", { className: "form-section-label", text: "Port mapping" }));
+    const list = el("div", { className: "mapping-rows" });
+    const dupOld = opts.dupOld || new Set();
+    rows.forEach((row, i) => {
+      const locked = !!row.locked;
+      const editableRow = opts.editable && !locked;
+
+      const oldInput = el("input", {
+        className: "form-input mono mapping-port",
+        attrs: { type: "text", placeholder: "old port" },
+      });
+      oldInput.value = row.old || "";
+      oldInput.disabled = !editableRow;
+      oldInput.addEventListener("input", (e) => opts.onChangeOld(i, e.target.value));
+      oldInput.addEventListener("blur", () => opts.onBlur && opts.onBlur());
+
+      const newInput = el("input", {
+        className: "form-input mono mapping-port",
+        attrs: { type: "text", placeholder: "new port" },
+      });
+      newInput.value = row.new || "";
+      newInput.disabled = !editableRow;
+      newInput.addEventListener("input", (e) => opts.onChangeNew(i, e.target.value));
+      newInput.addEventListener("blur", () => opts.onBlur && opts.onBlur());
+
+      const rowChildren = [oldInput, el("span", { className: "mapping-arrow", text: "→" }), newInput];
+      if (locked) {
+        rowChildren.push(
+          el("span", {
+            className: "locked-hint",
+            text: "locked",
+            attrs: { title: "has snapshots" },
+          })
+        );
+      } else if (opts.editable) {
+        rowChildren.push(
+          el("span", {
+            className: "mapping-remove",
+            text: "✕",
+            onClick: () => opts.onRemove(i),
+          })
+        );
+      } else {
+        rowChildren.push(el("span", {}));
+      }
+      list.appendChild(el("div", { className: "mapping-row", children: rowChildren }));
+      if (dupOld.has((row.old || "").trim())) {
+        list.appendChild(
+          el("div", { className: "field-error", text: "duplicate old port" })
+        );
+      } else if (opts.touched && (!row.old.trim() || !row.new.trim())) {
+        list.appendChild(
+          el("div", { className: "field-error", text: "both ports are required" })
+        );
+      }
+    });
+    if (rows.length === 0) {
+      list.appendChild(
+        el("div", { className: "mapping-empty-hint", text: "no pairings yet" })
+      );
+    }
+    card.appendChild(list);
+    if (opts.editable) {
+      card.appendChild(
+        el("button", {
+          className: "btn btn-secondary mapping-add-btn",
+          text: "+ add pairing",
+          onClick: opts.onAdd,
+        })
+      );
+    }
+    return card;
+  }
+
+  buildDeviceSubform(title, device, touched) {
+    const wrap = el("div", { className: "device-subform" });
+    wrap.appendChild(el("div", { className: "device-subform-title", text: title }));
+
+    const nodeInput = el("input", { className: "form-input mono", attrs: { type: "text" } });
+    nodeInput.value = device.node;
+    nodeInput.addEventListener("input", (e) => {
+      device.node = e.target.value;
+    });
+    nodeInput.addEventListener("blur", () => this.render());
+    const nodeField = [el("label", { className: "field-label", text: "Node" }), nodeInput];
+    if (touched && !device.node.trim()) {
+      nodeField.push(el("div", { className: "field-error", text: "node is required" }));
+    }
+    wrap.appendChild(el("div", { className: "form-field", children: nodeField }));
+
+    const hostInput = el("input", { className: "form-input", attrs: { type: "text" } });
+    hostInput.value = device.host;
+    hostInput.addEventListener("input", (e) => {
+      device.host = e.target.value;
+    });
+    hostInput.addEventListener("blur", () => this.render());
+    const hostField = [el("label", { className: "field-label", text: "Host" }), hostInput];
+    if (touched && !device.host.trim()) {
+      hostField.push(el("div", { className: "field-error", text: "host is required" }));
+    }
+    wrap.appendChild(el("div", { className: "form-field", children: hostField }));
+
+    const platformSelect = el("select", {
+      className: "form-select",
+      children: ["junos", "junos-evo"].map((p) =>
+        el("option", {
+          text: p,
+          attrs: p === device.platform ? { value: p, selected: "selected" } : { value: p },
+        })
+      ),
+    });
+    platformSelect.addEventListener("change", (e) => {
+      device.platform = e.target.value;
+      this.render();
+    });
+    wrap.appendChild(this.buildCaptureField("Platform", platformSelect));
+    return wrap;
+  }
+
+  buildReadonlyDeviceSubform(title, device) {
+    const wrap = el("div", { className: "device-subform" });
+    wrap.appendChild(el("div", { className: "device-subform-title", text: title }));
+    if (!device) return wrap;
+    const rows = [
+      ["Node", device.node],
+      ["Host", device.host],
+      ["Platform", device.platform],
+    ];
+    for (const [label, value] of rows) {
+      wrap.appendChild(
+        el("div", {
+          className: "readonly-row mono",
+          children: [
+            el("span", { className: "readonly-label", text: label }),
+            el("span", { className: "readonly-value", text: value || "" }),
+          ],
+        })
+      );
+    }
+    return wrap;
+  }
+
+  // -- new run (screen 5) --------------------------------------------------
+
+  openNewRunForm() {
+    this.state.view = "newrun";
+    this.state.selectedSnapshot = null;
+    this.state.newRunForm = {
+      name: "",
+      touched: false,
+      old: { node: "", host: "", platform: "junos" },
+      new: { node: "", host: "", platform: "junos-evo" },
+      mappings: [],
+      submitting: false,
+      submitError: null,
+    };
+    this.render();
+  }
+
+  cancelNewRunForm() {
+    this.state.newRunForm = null;
+    this.state.view = this.cache.runs.length === 0 ? "empty" : "run";
+    this.render();
+  }
+
+  newRunNameError() {
+    const name = (this.state.newRunForm.name || "").trim();
+    if (!name) return "run name is required";
+    if (!/^[a-z0-9_-]+$/.test(name)) return "only a-z 0-9 _ - allowed";
+    return null;
+  }
+
+  async submitNewRun() {
+    const form = this.state.newRunForm;
+    form.touched = true;
+    const nameErr = this.newRunNameError();
+    const dup = this.mappingDupErrors(form.mappings);
+    const devicesOk =
+      form.old.node.trim() &&
+      form.old.host.trim() &&
+      form.new.node.trim() &&
+      form.new.host.trim();
+    const mappingsOk = form.mappings.every((r) => r.old.trim() && r.new.trim());
+    if (nameErr || !devicesOk || dup.size || !mappingsOk) {
+      this.render();
+      return;
+    }
+    form.submitting = true;
+    form.submitError = null;
+    this.render();
+    try {
+      const res = await fetch("/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          old_device: {
+            node: form.old.node.trim(),
+            host: form.old.host.trim(),
+            platform: form.old.platform,
+          },
+          new_device: {
+            node: form.new.node.trim(),
+            host: form.new.host.trim(),
+            platform: form.new.platform,
+          },
+          mappings: form.mappings.map((r) => [r.old.trim(), r.new.trim()]),
+        }),
+      });
+      if (res.status === 201) {
+        const detail = await res.json();
+        const runName = form.name.trim();
+        this.cache.detail = detail;
+        this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
+        this.state.newRunForm = null;
+        this.state.run = runName;
+        this.state.view = "run";
+        this.state.selectedSnapshot = null;
+        this.state.openRows = {};
+        this.state.openScopes = {};
+        await this.loadRun();
+        this.render();
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      form.submitError = body.detail || `run se nepodarilo vytvorit (${res.status})`;
+    } catch (err) {
+      form.submitError = String(err);
+    }
+    form.submitting = false;
+    this.render();
+  }
+
+  renderNewRunForm() {
+    clear(this.mainEl);
+    const form = this.state.newRunForm;
+    if (!form) return;
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "breadcrumb",
+        children: [el("span", { className: "crumb-current", text: "new run" })],
+      })
+    );
+    this.mainEl.appendChild(el("h1", { className: "capture-h1", text: "New run" }));
+
+    const nameInput = el("input", {
+      className: "form-input mono",
+      attrs: { type: "text", placeholder: "e.g. mig01" },
+    });
+    nameInput.value = form.name;
+    nameInput.addEventListener("input", (e) => {
+      form.name = e.target.value;
+    });
+    nameInput.addEventListener("blur", () => {
+      form.touched = true;
+      this.render();
+    });
+    const nameFieldChildren = [el("label", { className: "field-label", text: "Run name" }), nameInput];
+    const nameErr = form.touched ? this.newRunNameError() : null;
+    if (nameErr) nameFieldChildren.push(el("div", { className: "field-error", text: nameErr }));
+    if (form.submitError) {
+      nameFieldChildren.push(el("div", { className: "field-error", text: form.submitError }));
+    }
+    this.mainEl.appendChild(
+      el("div", {
+        className: "form-card",
+        children: [
+          el("div", { className: "form-section-label", text: "Run name" }),
+          el("div", { className: "form-field", children: nameFieldChildren }),
+        ],
+      })
+    );
+
+    const devicesGrid = el("div", {
+      className: "devices-grid",
+      children: [
+        this.buildDeviceSubform("Old device", form.old, form.touched),
+        this.buildDeviceSubform("New device", form.new, form.touched),
+      ],
+    });
+    this.mainEl.appendChild(
+      el("div", {
+        className: "form-card",
+        children: [el("div", { className: "form-section-label", text: "Devices" }), devicesGrid],
+      })
+    );
+
+    this.mainEl.appendChild(
+      this.buildMappingCard(form.mappings, {
+        editable: true,
+        touched: form.touched,
+        dupOld: this.mappingDupErrors(form.mappings),
+        onAdd: () => {
+          form.mappings.push({ old: "", new: "" });
+          this.render();
+        },
+        onRemove: (i) => {
+          form.mappings.splice(i, 1);
+          this.render();
+        },
+        onChangeOld: (i, v) => {
+          form.mappings[i].old = v;
+        },
+        onChangeNew: (i, v) => {
+          form.mappings[i].new = v;
+        },
+        onBlur: () => {
+          form.touched = true;
+          this.render();
+        },
+      })
+    );
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Cancel",
+            onClick: () => this.cancelNewRunForm(),
+          }),
+          el("button", {
+            className: "btn btn-primary",
+            text: form.submitting ? "Creating…" : "Create run",
+            onClick: form.submitting ? null : () => this.submitNewRun(),
+          }),
+        ],
+      })
+    );
+  }
+
+  // -- edit mapping (screen 6) ---------------------------------------------
+
+  openEditMapping() {
+    const detail = this.cache.detail;
+    if (!detail) return;
+    const rows = (detail.rows || [])
+      .filter((r) => r.old && r.new)
+      .map((r) => ({
+        old: r.old.port,
+        new: r.new.port,
+        locked: !!(r.pre || r.post || r.rollback),
+      }));
+    this.state.editMappingForm = { rows, touched: false, submitting: false, submitError: null };
+    this.state.view = "editmapping";
+    this.render();
+  }
+
+  async saveMapping() {
+    const form = this.state.editMappingForm;
+    form.touched = true;
+    const dup = this.mappingDupErrors(form.rows);
+    const rowsOk = form.rows.every((r) => r.old.trim() && r.new.trim());
+    if (dup.size || !rowsOk) {
+      this.render();
+      return;
+    }
+    form.submitting = true;
+    form.submitError = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/runs/${this.state.run}/mapping`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mappings: form.rows.map((r) => [r.old.trim(), r.new.trim()]),
+        }),
+      });
+      if (res.ok) {
+        this.cache.detail = await res.json();
+        this.state.editMappingForm = null;
+        this.state.view = "run";
+        await this.loadRun();
+        this.render();
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      form.submitError = body.detail || `mapping se nepodarilo ulozit (${res.status})`;
+    } catch (err) {
+      form.submitError = String(err);
+    }
+    form.submitting = false;
+    this.render();
+  }
+
+  renderEditMapping() {
+    clear(this.mainEl);
+    const form = this.state.editMappingForm;
+    const detail = this.cache.detail;
+    if (!form || !detail) return;
+
+    this.mainEl.appendChild(this.buildBreadcrumb("edit mapping", false));
+    this.mainEl.appendChild(el("h1", { className: "capture-h1", text: "Edit mapping" }));
+
+    const devices = detail.devices || {};
+    let oldDevice = null;
+    let newDevice = null;
+    for (const [node, d] of Object.entries(devices)) {
+      if (d.role === "old") oldDevice = { node, ...d };
+      else if (d.role === "new") newDevice = { node, ...d };
+    }
+    const devicesGrid = el("div", {
+      className: "devices-grid",
+      children: [
+        this.buildReadonlyDeviceSubform("Old device", oldDevice),
+        this.buildReadonlyDeviceSubform("New device", newDevice),
+      ],
+    });
+    this.mainEl.appendChild(
+      el("div", {
+        className: "form-card",
+        children: [el("div", { className: "form-section-label", text: "Devices" }), devicesGrid],
+      })
+    );
+
+    this.mainEl.appendChild(
+      this.buildMappingCard(form.rows, {
+        editable: true,
+        touched: form.touched,
+        dupOld: this.mappingDupErrors(form.rows),
+        onAdd: () => {
+          form.rows.push({ old: "", new: "", locked: false });
+          this.render();
+        },
+        onRemove: (i) => {
+          form.rows.splice(i, 1);
+          this.render();
+        },
+        onChangeOld: (i, v) => {
+          form.rows[i].old = v;
+        },
+        onChangeNew: (i, v) => {
+          form.rows[i].new = v;
+        },
+        onBlur: () => {
+          form.touched = true;
+          this.render();
+        },
+      })
+    );
+
+    if (form.submitError) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-fail", text: form.submitError }));
+    }
+
+    this.mainEl.appendChild(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Cancel",
+            onClick: () => this.backToRun(),
+          }),
+          el("button", {
+            className: "btn btn-primary",
+            text: form.submitting ? "Saving…" : "Save",
+            onClick: form.submitting ? null : () => this.saveMapping(),
+          }),
+        ],
+      })
+    );
   }
 
   // -- registered checks (screen 3) --------------------------------------
