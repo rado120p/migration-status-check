@@ -326,14 +326,14 @@ class App {
     this.render();
   }
 
-  collectServiceEntries(evaluations) {
+  collectServiceEntries(evaluations, prefix = "res") {
     const entries = [];
     for (const evaluation of evaluations) {
       const result = evaluation.result || {};
       const hasBaseline = result.baseline != null;
       for (const scope of result.scopes || []) {
         entries.push({
-          key: `res|${evaluation.subject}|${scope.scope_id}`,
+          key: `${prefix}|${evaluation.subject}|${evaluation.baseline || ""}|${scope.scope_id}`,
           view: MigView.buildView(scope, {}),
           hasBaseline,
           scope,
@@ -1134,7 +1134,8 @@ class App {
     }
 
     const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    const results = evaluations.map((ev) => ev.result);
+    const pairEvaluations = evaluations.filter((ev) => !ev.same_device);
+    const results = pairEvaluations.map((ev) => ev.result);
     const services = MigView.countStatuses(
       results.flatMap((r) => (r.scopes || []).map((s) => s.status))
     );
@@ -1174,7 +1175,6 @@ class App {
     const sameDevice = this.buildSameDeviceSection();
     if (sameDevice) this.mainEl.appendChild(sameDevice);
 
-    const pairEvaluations = evaluations.filter((ev) => !ev.same_device);
     const entries = this.collectServiceEntries(pairEvaluations);
     if (entries.length > 0) {
       this.mainEl.appendChild(
@@ -1187,24 +1187,37 @@ class App {
       const unmatchedItems = [];
       const unassignedAgg = { bgp_peers: [], static_routes: [], bfd_sessions: [] };
       const multi = pairEvaluations.length > 1;
-      for (const evaluation of pairEvaluations) {
-        const result = evaluation.result || {};
-        const pairLabel = multi ? evaluation.subject : null;
-        for (const side of ["baseline", "subject"]) {
-          for (const item of (result.unmatched && result.unmatched[side]) || []) {
-            unmatchedItems.push({
-              side,
-              label: item.description || item.scope_id,
-              serviceType: item.service_type || "-",
-              reason: item.reason,
-              pairLabel,
-            });
+      const sameDeviceEvaluations = evaluations.filter((ev) => ev.same_device);
+      const pairEvalLabel = (evaluation) => {
+        if (!multi) return null;
+        if (evaluation.step) {
+          const { old: o, new: n } = evaluation.step;
+          return `${o.node}:${o.port} -> ${n.node}:${n.port}`;
+        }
+        return evaluation.subject;
+      };
+      const aggregate = (evalList, labelFor) => {
+        for (const evaluation of evalList) {
+          const result = evaluation.result || {};
+          const pairLabel = labelFor(evaluation);
+          for (const side of ["baseline", "subject"]) {
+            for (const item of (result.unmatched && result.unmatched[side]) || []) {
+              unmatchedItems.push({
+                side,
+                label: item.description || item.scope_id,
+                serviceType: item.service_type || "-",
+                reason: item.reason,
+                pairLabel,
+              });
+            }
+          }
+          for (const kind of Object.keys(unassignedAgg)) {
+            unassignedAgg[kind].push(...((result.unassigned && result.unassigned[kind]) || []));
           }
         }
-        for (const kind of Object.keys(unassignedAgg)) {
-          unassignedAgg[kind].push(...((result.unassigned && result.unassigned[kind]) || []));
-        }
-      }
+      };
+      aggregate(pairEvaluations, pairEvalLabel);
+      aggregate(sameDeviceEvaluations, (evaluation) => `same-device ${evaluation.subject}`);
       this.mainEl.appendChild(
         el("div", { className: "subsection-title", text: `Nespárováno — ${unmatchedItems.length}` })
       );
@@ -1401,7 +1414,7 @@ class App {
       );
     }
 
-    const entries = this.collectServiceEntries(sameDevice);
+    const entries = this.collectServiceEntries(sameDevice, "same");
     const resultsTable = this.buildResultsTable(entries, { singlePort: true });
 
     return el("div", {

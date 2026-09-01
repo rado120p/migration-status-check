@@ -354,22 +354,6 @@ a:hover { color: #0e3fa9; }
   background: #ffffff;
 }
 
-.pairing-row.clickable { cursor: pointer; }
-.pairing-row.clickable:hover { filter: brightness(0.985); }
-
-.pairing-row.tint-warn { background: #fffbeb; }
-.pairing-row.tint-fail { background: #fef2f2; }
-
-.pairing-row .chevron {
-  color: #9ca3af;
-  font-size: 10px;
-  display: inline-block;
-  transition: transform 0.15s;
-  transform: rotate(0deg);
-}
-
-.pairing-row .chevron.open { transform: rotate(90deg); }
-
 .pairing-row .port-cell { font-family: 'IBM Plex Mono', monospace; color: #111827; }
 .pairing-row .port-cell.unpaired { color: #9ca3af; }
 
@@ -814,7 +798,9 @@ a:hover { color: #0e3fa9; }
 }
 
 .guide p { margin: 0 0 10px; line-height: 1.5; }
-.guide .k { font: 600 12px 'IBM Plex Mono', monospace; color: #1a56db; }
+/* .guide .k intentionally removed: renderGuide never emits it (GUIDE_TEXT
+   stays plain-string body copy - marking up key terms would need innerHTML,
+   which is out of bounds for guide copy). */
 
 /* Safety-net sections */
 .safety-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }

@@ -185,6 +185,12 @@ test("unassignedRow: static route -> next_hop arrow, via fallback, aggregate suf
     { identity: "inet.0 10.0.0.0/8 (aggregate)", detail: "via -" });
 });
 
+test("countStatuses: unknown status ignored, known ones still counted, no stray key", () => {
+  const counts = MigView.countStatuses(["PASS", "BOGUS", "WARN", "PASS"]);
+  assert.deepStrictEqual(counts, { pass: 2, warn: 1, fail: 0, skip: 0, info: 0 });
+  assert.strictEqual(Object.keys(counts).length, 5);
+});
+
 test("unassignedRow: bfd session -> interface + state detail", () => {
   assert.deepStrictEqual(
     MigView.unassignedRow("bfd_sessions",

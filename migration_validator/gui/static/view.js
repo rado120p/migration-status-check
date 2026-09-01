@@ -138,7 +138,10 @@ function buildView(scope, opts) {
 
 function countStatuses(statuses) {
   const counts = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
-  for (const status of statuses) counts[status.toLowerCase()] += 1;
+  for (const status of statuses) {
+    const key = status.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, key)) counts[key] += 1;
+  }
   return counts;
 }
 
