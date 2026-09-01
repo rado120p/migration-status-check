@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 
 from migration_validator import api
+from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.runs.store import RunStore
 
 
@@ -43,5 +44,22 @@ def create_app(
                 if store.manifest_path.exists():
                     runs.append(_run_summary(store))
         return {"runs": runs}
+
+    def _require_store(run: str) -> RunStore:
+        store = RunStore(run_root, run)
+        if not store.manifest_path.exists():
+            raise HTTPException(status_code=404, detail=f"run '{run}' neexistuje")
+        return store
+
+    @app.get("/api/runs/{run}")
+    def run_detail(run: str) -> dict:
+        store = _require_store(run)
+        manifest = store.load()
+        return {
+            "name": run,
+            "devices": _run_summary(store)["devices"],
+            "rows": status_rows(manifest),
+            "snapshots": snapshot_list(manifest),
+        }
 
     return app
