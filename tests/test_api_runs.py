@@ -149,3 +149,24 @@ def test_update_mapping_zachova_captures(tmp_path):
         run_root=tmp_path,
     )
     assert len(result.captures) == 1
+
+
+def test_update_mapping_all_snimek_zamyka_pairingy_zarizeni(tmp_path):
+    """Celozarizeni snimek (port=None) zamyka vsechny pairingy sveho boxu."""
+    api.create_run(
+        "alldev", old_device=OLD, new_device=NEW,
+        mappings=[("ge-0/0/1", "et-0/0/1")],
+        run_root=tmp_path,
+    )
+    manifest_path = tmp_path / "alldev" / "run.yml"
+    manifest = load_manifest(manifest_path)
+    # Zaznamenij celozarizeni snimek
+    manifest.record_capture(CaptureRecord(
+        phase="pre", device="MX1", port=None,
+        snapshot="snapshot_pre_MX1_all.json", taken="2026-09-01T00:00:00Z",
+    ))
+    from migration_validator.runs.manifest import save_manifest
+    save_manifest(manifest, manifest_path)
+    # Pairing zamceny - nelze ho odebrat
+    with pytest.raises(ValueError, match="ma snimky"):
+        api.update_mapping("alldev", [], run_root=tmp_path)

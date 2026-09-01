@@ -142,14 +142,20 @@ def create_run(
 
 
 def _mapping_locked(manifest: RunManifest, mapping) -> bool:
-    """Pairing je zamceny, kdyz na nekterem konci existuje snimek."""
+    """Pairing je zamceny, kdyz na nekterem konci existuje snimek.
+    Celozarizeni snimek (port=None) zamyka vsechny pairingy sveho boxu."""
     endpoints = {
         (mapping.old.node, mapping.old.port),
         (mapping.new.node, mapping.new.port),
     }
-    return any(
-        (record.device, record.port) in endpoints for record in manifest.captures
-    )
+    for record in manifest.captures:
+        # Presne endpoint (port se shoduje)
+        if (record.device, record.port) in endpoints:
+            return True
+        # Celozarizeni snimek (port=None) zamyka vsechny pairingy jeho zarizeni
+        if record.port is None and record.device in {mapping.old.node, mapping.new.node}:
+            return True
+    return False
 
 
 def update_mapping(
