@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 from migration_validator import api
 from migration_validator.config import default_profile, load_profile
@@ -13,6 +14,23 @@ from migration_validator.models.snapshot import load_snapshot
 from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
+
+
+class DeviceBody(BaseModel):
+    node: str
+    host: str
+    platform: str
+
+
+class CreateRunBody(BaseModel):
+    name: str
+    old_device: DeviceBody
+    new_device: DeviceBody
+    mappings: list[tuple[str, str]] = []
+
+
+class MappingBody(BaseModel):
+    mappings: list[tuple[str, str]]
 
 
 def _devices_dict(manifest: RunManifest) -> dict:
@@ -59,8 +77,7 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"run '{run}' neexistuje")
         return store
 
-    @app.get("/api/runs/{run}")
-    def run_detail(run: str) -> dict:
+    def _detail(run: str) -> dict:
         store = _require_store(run)
         manifest = store.load()
         return {
@@ -69,6 +86,32 @@ def create_app(
             "rows": status_rows(manifest),
             "snapshots": snapshot_list(manifest),
         }
+
+    @app.get("/api/runs/{run}")
+    def run_detail(run: str) -> dict:
+        return _detail(run)
+
+    @app.post("/api/runs", status_code=201)
+    def create_run(body: CreateRunBody) -> dict:
+        try:
+            api.create_run(
+                body.name,
+                old_device=body.old_device.model_dump(),
+                new_device=body.new_device.model_dump(),
+                mappings=body.mappings,
+                run_root=run_root,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return _detail(body.name)
+
+    @app.put("/api/runs/{run}/mapping")
+    def update_mapping(run: str, body: MappingBody) -> dict:
+        try:
+            api.update_mapping(run, body.mappings, run_root=run_root)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return _detail(run)
 
     @app.get("/api/runs/{run}/evaluation")
     def run_evaluation(run: str, ports: str | None = None) -> dict:
