@@ -386,7 +386,13 @@ a:hover { color: #0e3fa9; }
   overflow: hidden;
 }
 
-.scope-card.status-fail { border-color: #fecaca; }
+.scope-card.status-pass { border-left-color: #059669; }
+.scope-card.status-warn { border-left-color: #d97706; }
+.scope-card.status-skip { border-left-color: #d1d5db; }
+.scope-card.status-fail {
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
 
 .scope-card-header {
   display: flex;

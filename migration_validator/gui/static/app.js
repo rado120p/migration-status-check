@@ -38,7 +38,13 @@ class App {
       openScopes: {},
       activeCaptureId: null,
     };
-    this.cache = { runs: [], detail: null, evaluation: null, evaluationError: null };
+    this.cache = {
+      runs: [],
+      detail: null,
+      detailError: null,
+      evaluation: null,
+      evaluationError: null,
+    };
 
     this.sidebarRunsEl = document.getElementById("sidebar-runs");
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
@@ -73,7 +79,22 @@ class App {
   }
 
   async loadRun() {
-    this.cache.detail = await (await fetch(`/api/runs/${this.state.run}`)).json();
+    this.cache.detail = null;
+    this.cache.detailError = null;
+    try {
+      const res = await fetch(`/api/runs/${this.state.run}`);
+      if (res.ok) {
+        this.cache.detail = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.detailError = {
+          status: res.status,
+          detail: body.detail || `run se nepodarilo nacist (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.detailError = { status: 0, detail: String(err) };
+    }
     this.cache.evaluation = null;
     this.cache.evaluationError = null;
     try {
@@ -319,7 +340,17 @@ class App {
   renderRunOverview() {
     clear(this.mainEl);
     const detail = this.cache.detail;
-    if (!detail) return;
+    if (!detail) {
+      if (this.cache.detailError) {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-warn",
+            text: this.cache.detailError.detail,
+          })
+        );
+      }
+      return;
+    }
 
     const devices = detail.devices || {};
     let oldDevice = null;
@@ -491,7 +522,7 @@ class App {
       const scopeOpen = !!this.state.openScopes[scopeKey];
       const sClass = statusClass(scope.status);
       const card = el("div", {
-        className: "scope-card" + (sClass === "fail" ? " status-fail" : ""),
+        className: "scope-card status-" + sClass,
       });
       const headerRow = el("div", {
         className: "scope-card-header",
