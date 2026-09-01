@@ -2,7 +2,6 @@
 
 /* mig-validate GUI - vanilla JS, fetch only, no framework, no build step. */
 
-const STATUS_RANK = { PASS: 0, SKIP: 1, WARN: 2, FAIL: 3, INFO: -1 };
 const PLATFORM_LABEL = { junos: "MX", "junos-evo": "ACX/EVO" };
 
 function el(tag, opts) {
@@ -28,15 +27,52 @@ function statusClass(status) {
   return (status || "").toLowerCase();
 }
 
+/* Per-screen copy for the guide rail, keyed by this.state.view values. */
+const GUIDE_TEXT = {
+  run: {
+    title: "Run overview",
+    body: [
+      "Tenhle screen porovnává služby mezi pre a post snímky namapovaných portů.",
+      "Kliknutím na řádek v Results rozbalíš detail checků včetně změn proti baseline.",
+      "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
+      "Nezařazeno = objekt (BGP peer, routa, BFD session), který si nenárokovala žádná služba — typicky mezera v parsování.",
+    ],
+  },
+  snapshot: {
+    title: "Snapshot",
+    body: [
+      "Samostatné vyhodnocení jednoho snímku — běží jen stavové checky (stav rozhraní, ARP/ND, ping). Srovnání s baseline najdeš v run overview.",
+      "Nezařazeno = objekt bez služby — zkontroluj, jestli nechybí v inventáři.",
+    ],
+  },
+  checks: {
+    title: "Checks",
+    body: ["Registr všech checků aktivního profilu: mód, severita a typy služeb, na které se check vztahuje."],
+  },
+  capture: {
+    title: "New capture",
+    body: [
+      "Sebere stav zařízení do snapshotu. Vyber zařízení, port a fázi (pre/post/rollback).",
+      "Průběh sběru uvidíš živě v run overview.",
+    ],
+  },
+  newrun: {
+    title: "New run",
+    body: ["Založí run adresář: pojmenuj run a vyplň obě zařízení. Mapování portů můžeš doplnit i později přes Edit mapping."],
+  },
+  editmapping: {
+    title: "Edit mapping",
+    body: ["Páruje starý port s novým. Řádek s existujícím capture je zamčený — mapování, podle kterého už se sbíralo, se nemění."],
+  },
+};
+
 class App {
   constructor() {
     this.state = {
       view: "run",
       run: null,
       selectedSnapshot: null,
-      snapshotBaseline: null,
-      openRows: {},
-      openScopes: {},
+      openResults: {},
       activeCaptureId: null,
       captureForm: null,
       captureSubmitError: null,
@@ -67,6 +103,7 @@ class App {
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
+    this.guideEl = document.getElementById("guide");
     this.btnChecksEl = document.getElementById("btn-checks");
 
     this.btnChecksEl.addEventListener("click", () => this.goToChecks());
@@ -284,14 +321,184 @@ class App {
     return parts;
   }
 
-  toggleRow(key) {
-    this.state.openRows[key] = !this.state.openRows[key];
+  toggleResult(key) {
+    this.state.openResults[key] = !this.state.openResults[key];
     this.render();
   }
 
-  toggleScope(key) {
-    this.state.openScopes[key] = !this.state.openScopes[key];
-    this.render();
+  collectServiceEntries(evaluations, prefix = "res") {
+    const entries = [];
+    for (const evaluation of evaluations) {
+      const result = evaluation.result || {};
+      const hasBaseline = result.baseline != null;
+      for (const scope of result.scopes || []) {
+        entries.push({
+          key: `${prefix}|${evaluation.subject}|${evaluation.baseline || ""}|${scope.scope_id}`,
+          view: MigView.buildView(scope, {}),
+          hasBaseline,
+          scope,
+        });
+      }
+    }
+    return entries;
+  }
+
+  buildResultsTable(entries, opts) {
+    const singlePort = !!(opts && opts.singlePort);
+    const mode = singlePort ? " single-port" : "";
+    const table = el("div", { className: "results-table" });
+    const headers = singlePort
+      ? ["Stav", "Služba", "Typ", "Port", "RI", "Nález", ""]
+      : ["Stav", "Služba", "Typ", "Starý port", "Nový port", "RI", "Nález", ""];
+    table.appendChild(
+      el("div", {
+        className: "results-header-row" + mode,
+        children: headers.map((text) => el("span", { text })),
+      })
+    );
+    for (const entry of entries) {
+      const view = entry.view;
+      const sClass = statusClass(view.status);
+      const open = !!this.state.openResults[entry.key];
+      const tint = view.status === "WARN" ? " tint-warn" : view.status === "FAIL" ? " tint-fail" : "";
+      const oldPort = view.baseline_interfaces[0] || "-";
+      const newPort = view.subject_interfaces[0] || "-";
+      const portCells = singlePort
+        ? [el("span", { className: "port-cell", text: newPort })]
+        : [
+            el("span", { className: "port-cell", text: oldPort }),
+            el("span", { className: "port-cell", text: newPort }),
+          ];
+      table.appendChild(
+        el("div", {
+          className: "results-row" + mode + tint,
+          onClick: () => this.toggleResult(entry.key),
+          children: [
+            el("span", { className: "status-token " + sClass, text: view.status }),
+            el("span", { className: "svc-name", text: view.description }),
+            el("span", { className: "svc-cell", text: view.service_type }),
+            ...portCells,
+            el("span", { className: "port-cell", text: view.routing_instance || "-" }),
+            el("span", { className: "find-cell", text: view.worst_message }),
+            el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+          ],
+        })
+      );
+      if (open) {
+        table.appendChild(
+          el("div", {
+            className: "detail-cell",
+            children: [this.buildDetailPanel(view, entry.hasBaseline)],
+          })
+        );
+      }
+    }
+    return table;
+  }
+
+  buildUnmatchedSection(items) {
+    const card = el("div", { className: "safety-card" + (items.length ? " nonempty" : "") });
+    if (items.length === 0) {
+      card.appendChild(
+        el("div", { className: "safety-row", children: [el("span", { className: "nothing", text: "(nic)" })] })
+      );
+      return card;
+    }
+    for (const item of items) {
+      card.appendChild(
+        el("div", {
+          className: "safety-row",
+          children: [
+            el("span", { className: "side " + item.side, text: item.side }),
+            el("span", { className: "identity", text: item.label }),
+            el("span", { className: "detail", text: `(${item.serviceType})` }),
+            el("span", {
+              className: "detail",
+              text: item.pairLabel ? `${item.reason} — ${item.pairLabel}` : item.reason,
+            }),
+          ],
+        })
+      );
+    }
+    return card;
+  }
+
+  buildUnassignedSection(unassigned) {
+    const rows = [];
+    for (const [kind, title] of MigView.UNASSIGNED_TITLES) {
+      for (const item of (unassigned && unassigned[kind]) || []) {
+        const { identity, detail } = MigView.unassignedRow(kind, item);
+        rows.push({ title, identity, detail });
+      }
+    }
+    const card = el("div", { className: "safety-card" + (rows.length ? " nonempty" : "") });
+    if (rows.length === 0) {
+      card.appendChild(
+        el("div", { className: "safety-row", children: [el("span", { className: "nothing", text: "(nic)" })] })
+      );
+      return card;
+    }
+    for (const row of rows) {
+      card.appendChild(
+        el("div", {
+          className: "safety-row",
+          children: [
+            el("span", { className: "kind", text: row.title }),
+            el("span", { className: "identity", text: row.identity }),
+            el("span", {}),
+            el("span", { className: "detail", text: row.detail }),
+          ],
+        })
+      );
+    }
+    return card;
+  }
+
+  buildDetailPanel(view, hasBaseline) {
+    const block = el("div", { className: "detail-block status-" + statusClass(view.status) });
+    if (view.link_note) {
+      block.appendChild(el("div", { className: "detail-note", text: view.link_note }));
+    }
+    const nb = hasBaseline ? "" : " no-baseline";
+    const oldPort = view.baseline_interfaces[0] || "-";
+    const newPort = view.subject_interfaces[0] || "-";
+    const cols = hasBaseline
+      ? ["Stav", "Check", `Post (${newPort})`, `Změna proti ${oldPort}`]
+      : ["Stav", "Check", "Hodnota"];
+    block.appendChild(
+      el("div", { className: "detail-cols" + nb, children: cols.map((text) => el("span", { text })) })
+    );
+    const row = (r, grouped) => {
+      const change = MigView.changeText(r, hasBaseline);
+      const cells = [
+        el("span", { className: "status-token " + statusClass(r.status), text: r.status }),
+        el("span", { className: "lbl", text: r.label }),
+        el("span", { className: "val", text: r.value }),
+      ];
+      if (hasBaseline) cells.push(el("span", { className: "chg", text: change }));
+      return el("div", {
+        className: "detail-row" + nb + (grouped ? " grouped" : ""),
+        children: cells,
+      });
+    };
+    const familyTitle = { 4: "IPv4", 6: "IPv6" };
+    for (const section of view.sections) {
+      if (section.family != null) {
+        const gateway = section.virtual_gw.length ? `   VGW ${section.virtual_gw.join(", ")}` : "";
+        block.appendChild(
+          el("div", {
+            className: "detail-section",
+            text: `${familyTitle[section.family]} — ${section.addresses.join(", ") || "-"}${gateway}`,
+          })
+        );
+      }
+      for (const r of section.rows) block.appendChild(row(r, false));
+      for (const group of section.groups) {
+        block.appendChild(el("div", { className: "detail-group", text: group.title }));
+        for (const r of group.rows) block.appendChild(row(r, true));
+      }
+    }
+    return block;
   }
 
   async selectRun(name) {
@@ -299,8 +506,7 @@ class App {
     this.state.run = name;
     this.state.view = "run";
     this.state.selectedSnapshot = null;
-    this.state.openRows = {};
-    this.state.openScopes = {};
+    this.state.openResults = {};
     // Capture tracking is global state (controller ruling: one in-flight
     // capture at a time, tracked across the whole app) - a run switch must
     // not orphan it. activeCaptureId/captureProgress/polling survive; the
@@ -313,28 +519,16 @@ class App {
   async selectSnapshot(file) {
     this.state.view = "snapshot";
     this.state.selectedSnapshot = file;
-    this.state.snapshotBaseline = null;
-    this.state.openScopes = {};
     await this.loadSnapshotEvaluation(file);
-    this.render();
-  }
-
-  async selectSnapshotBaseline(file) {
-    this.state.snapshotBaseline = file || null;
-    await this.loadSnapshotEvaluation(this.state.selectedSnapshot);
     this.render();
   }
 
   async loadSnapshotEvaluation(file) {
     this.cache.snapshotEval = null;
     this.cache.snapshotEvalError = null;
-    const baseline = this.state.snapshotBaseline;
-    const query = baseline
-      ? `?baseline=${encodeURIComponent(baseline)}`
-      : "";
     try {
       const res = await fetch(
-        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation${query}`
+        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation`
       );
       if (res.ok) {
         this.cache.snapshotEval = await res.json();
@@ -711,6 +905,7 @@ class App {
   }
 
   render() {
+    this.renderGuide();
     this.renderSidebar();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
     switch (this.state.view) {
@@ -737,6 +932,15 @@ class App {
         break;
     }
     this.syncCapturePolling();
+  }
+
+  renderGuide() {
+    clear(this.guideEl);
+    const entry = GUIDE_TEXT[this.state.view] || GUIDE_TEXT.run;
+    this.guideEl.appendChild(el("h4", { text: "Guide — " + entry.title }));
+    for (const paragraph of entry.body) {
+      this.guideEl.appendChild(el("p", { text: paragraph }));
+    }
   }
 
   renderEmptyState() {
@@ -839,96 +1043,39 @@ class App {
 
   // -- run overview (screen 1) ------------------------------------------
 
-  portsEqual(a, b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return a.node === b.node && a.port === b.port;
-  }
-
   findSnapshotRecord(file) {
     const detail = this.cache.detail;
     if (!detail || !file) return null;
     return (detail.snapshots || []).find((s) => s.file === file) || null;
   }
 
-  findEvaluation(row) {
-    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    // Step matches take priority - they are the exact mapped-post pairing.
-    // Only fall back to subject-snapshot matching (whole-device,
-    // mapping-less, rollback evaluations - all step=null) when no step
-    // eval claimed this row, so a rollback eval can never displace the
-    // post eval a mapped row already had.
-    const stepMatch = evaluations.find(
-      (ev) =>
-        ev.step && this.portsEqual(ev.step.old, row.old) && this.portsEqual(ev.step.new, row.new)
-    );
-    if (stepMatch) return stepMatch;
-    return evaluations.find((ev) => {
-      // same-device evaluace maji vlastni sekci - nesmi obsadit radek tabulky
-      if (ev.step || ev.same_device) return false;
-      const record = this.findSnapshotRecord(ev.subject);
-      if (!record) return false;
-      const endpoint = { node: record.device, port: record.port };
-      return this.portsEqual(endpoint, row.old) || this.portsEqual(endpoint, row.new);
+  buildCountsStrip(services, checks, matchedLine) {
+    const order = ["pass", "warn", "fail", "skip", "info"];
+    const group = (label, counts, keys) =>
+      el("div", {
+        className: "counts-group",
+        children: [
+          el("span", { className: "counts-label", text: label }),
+          ...keys.map((key) =>
+            el("span", {
+              className: "count-" + key,
+              children: [
+                el("b", { text: String(counts[key] || 0) }),
+                document.createTextNode(" " + key.toUpperCase()),
+              ],
+            })
+          ),
+        ],
+      });
+    const strip = el("div", {
+      className: "counts",
+      children: [
+        group("Služby:", services, order),
+        group("Checky:", checks, order),
+      ],
     });
-  }
-
-  rowKey(row) {
-    const old = row.old ? `${row.old.node}:${row.old.port}` : "x";
-    const nw = row.new ? `${row.new.node}:${row.new.port}` : "x";
-    return `${old}->${nw}`;
-  }
-
-  worstFromSummary(summary) {
-    if (summary.fail > 0) return "FAIL";
-    if (summary.warn > 0) return "WARN";
-    if (summary.skip > 0 && summary.pass === 0) return "SKIP";
-    return "PASS";
-  }
-
-  rowPresentation(evaluation) {
-    const result = evaluation.result;
-    const scopes = result.scopes || [];
-    if (scopes.length === 0) {
-      const worst = this.worstFromSummary(result.summary);
-      return { worst, count: null, scopes: [], clickable: false };
-    }
-    let worst = "PASS";
-    for (const scope of scopes) {
-      if (STATUS_RANK[scope.status] > STATUS_RANK[worst]) worst = scope.status;
-    }
-    const count = scopes.filter((s) => s.status === worst).length;
-    return { worst, count, scopes, clickable: true };
-  }
-
-  pillText(worst, count) {
-    if (worst === "PASS" || worst === "SKIP" || count === null) return worst;
-    return `${worst} ${count}`;
-  }
-
-  rowTintClass(worst) {
-    if (worst === "WARN") return "tint-warn";
-    if (worst === "FAIL") return "tint-fail";
-    return "";
-  }
-
-  scopeNote(scope) {
-    const checks = scope.checks || [];
-    if (scope.status === "PASS") {
-      return `${checks.length} checks passed`;
-    }
-    const bad = checks.find((c) => c.status === scope.status) || checks[0];
-    return bad ? bad.message : "";
-  }
-
-  computeSummaryTotals() {
-    const totals = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
-    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    for (const ev of evaluations) {
-      const s = ev.result.summary || {};
-      for (const key of Object.keys(totals)) totals[key] += s[key] || 0;
-    }
-    return totals;
+    if (matchedLine) strip.appendChild(el("span", { className: "counts-note", text: matchedLine }));
+    return strip;
   }
 
   renderRunOverview() {
@@ -986,27 +1133,25 @@ class App {
       );
     }
 
-    const totals = this.computeSummaryTotals();
-    const cardsDef = [
-      ["pass", "PASS", "#059669"],
-      ["warn", "WARN", "#d97706"],
-      ["fail", "FAIL", "#dc2626"],
-      ["skip", "SKIP", "#6b7280"],
-      ["info", "INFO", "#2563eb"],
-    ];
-    const cardsRow = el("div", { className: "summary-cards" });
-    for (const [key, label, color] of cardsDef) {
-      const count = totals[key];
-      const card = el("div", {
-        className: "summary-card" + (key === "fail" && count > 0 ? " fail-nonzero" : ""),
-        children: [
-          el("div", { className: "summary-count", text: String(count), style: { color } }),
-          el("div", { className: "summary-label", text: label }),
-        ],
-      });
-      cardsRow.appendChild(card);
+    const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
+    const pairEvaluations = evaluations.filter((ev) => !ev.same_device);
+    const results = pairEvaluations.map((ev) => ev.result);
+    const services = MigView.countStatuses(
+      results.flatMap((r) => (r.scopes || []).map((s) => s.status))
+    );
+    const checks = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+    let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0;
+    for (const result of results) {
+      const summary = result.summary || {};
+      for (const key of Object.keys(checks)) checks[key] += summary[key] || 0;
+      matched += summary.scopes_matched || 0;
+      unmatchedBaseline += summary.unmatched_baseline || 0;
+      unmatchedSubject += summary.unmatched_subject || 0;
     }
-    this.mainEl.appendChild(cardsRow);
+    const matchedLine = results.length
+      ? `Spárováno ${matched} služeb, ${unmatchedBaseline} nespárováno v baseline, ${unmatchedSubject} v subject`
+      : null;
+    this.mainEl.appendChild(this.buildCountsStrip(services, checks, matchedLine));
 
     const allRows = detail.rows || [];
     const mappingRows = allRows.filter((r) => r.old && r.new);
@@ -1019,14 +1164,70 @@ class App {
         })
       );
       if (wholeRows.length > 0) {
+        this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
         this.mainEl.appendChild(this.buildPairingTable(wholeRows));
       }
     } else {
+      this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
       this.mainEl.appendChild(this.buildPairingTable(allRows));
     }
 
     const sameDevice = this.buildSameDeviceSection();
     if (sameDevice) this.mainEl.appendChild(sameDevice);
+
+    const entries = this.collectServiceEntries(pairEvaluations);
+    if (entries.length > 0) {
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
+      );
+      this.mainEl.appendChild(this.buildResultsTable(entries, {}));
+    }
+
+    if (this.cache.evaluation) {
+      const unmatchedItems = [];
+      const unassignedAgg = { bgp_peers: [], static_routes: [], bfd_sessions: [] };
+      const multi = pairEvaluations.length > 1;
+      const sameDeviceEvaluations = evaluations.filter((ev) => ev.same_device);
+      const pairEvalLabel = (evaluation) => {
+        if (!multi) return null;
+        if (evaluation.step) {
+          const { old: o, new: n } = evaluation.step;
+          return `${o.node}:${o.port} -> ${n.node}:${n.port}`;
+        }
+        return evaluation.subject;
+      };
+      const aggregate = (evalList, labelFor) => {
+        for (const evaluation of evalList) {
+          const result = evaluation.result || {};
+          const pairLabel = labelFor(evaluation);
+          for (const side of ["baseline", "subject"]) {
+            for (const item of (result.unmatched && result.unmatched[side]) || []) {
+              unmatchedItems.push({
+                side,
+                label: item.description || item.scope_id,
+                serviceType: item.service_type || "-",
+                reason: item.reason,
+                pairLabel,
+              });
+            }
+          }
+          for (const kind of Object.keys(unassignedAgg)) {
+            unassignedAgg[kind].push(...((result.unassigned && result.unassigned[kind]) || []));
+          }
+        }
+      };
+      aggregate(pairEvaluations, pairEvalLabel);
+      aggregate(sameDeviceEvaluations, (evaluation) => `same-device ${evaluation.subject}`);
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Nespárováno — ${unmatchedItems.length}` })
+      );
+      this.mainEl.appendChild(this.buildUnmatchedSection(unmatchedItems));
+      const unassignedCount = Object.values(unassignedAgg).reduce((n, list) => n + list.length, 0);
+      this.mainEl.appendChild(
+        el("div", { className: "subsection-title", text: `Nezařazeno (jen subject) — ${unassignedCount}` })
+      );
+      this.mainEl.appendChild(this.buildUnassignedSection(unassignedAgg));
+    }
 
     // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
     // first-ever capture on a mapping-less run) has nothing to attach to
@@ -1111,41 +1312,22 @@ class App {
       el("div", {
         className: "pairing-header-row",
         children: [
-          el("span", {}),
           el("span", { text: "Old port" }),
           el("span", { text: "New port" }),
           el("span", { text: "Pre" }),
           el("span", { text: "Post" }),
           el("span", { text: "Rollback" }),
-          el("span", { className: "col-result", text: "Result" }),
         ],
       })
     );
 
     const task = this.cache.captureProgress;
     for (const row of rows) {
-      const evaluation = this.findEvaluation(row);
-      const key = this.rowKey(row);
-      let worst = "waiting";
-      let presentation = null;
-      if (evaluation) {
-        presentation = this.rowPresentation(evaluation);
-        worst = presentation.worst;
-      }
-      const pillClass = evaluation ? "pill-" + statusClass(worst) : "pill-waiting";
-      const pillLabel = evaluation ? this.pillText(worst, presentation.count) : "waiting";
-      const clickable = !!(evaluation && presentation.clickable);
-      const open = clickable && !!this.state.openRows[key];
       const rowMatches = this.rowMatchesCapture(row, task);
 
       const rowEl = el("div", {
-        className:
-          "pairing-row" +
-          (clickable ? " clickable" : "") +
-          (evaluation ? " " + this.rowTintClass(worst) : ""),
-        onClick: clickable ? () => this.toggleRow(key) : null,
+        className: "pairing-row",
         children: [
-          el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
           el("span", {
             className: "port-cell" + (row.old ? "" : " unpaired"),
             text: row.old ? `${row.old.node}:${row.old.port || "all"}` : "not paired",
@@ -1157,10 +1339,6 @@ class App {
           this.buildFlagCell(row, "pre", task),
           this.buildFlagCell(row, "post", task),
           this.buildFlagCell(row, "rollback", task),
-          el("span", {
-            className: "col-result",
-            children: [el("span", { className: "status-pill " + pillClass, text: pillLabel })],
-          }),
         ],
       });
       table.appendChild(rowEl);
@@ -1188,10 +1366,6 @@ class App {
           })
         );
       }
-
-      if (open) {
-        table.appendChild(this.buildScopesPanel(presentation.scopes, key));
-      }
     }
     return table;
   }
@@ -1203,8 +1377,8 @@ class App {
     const sameDevice = evaluations.filter((ev) => ev.same_device);
     if (sameDevice.length === 0) return null;
 
-    const table = el("div", { className: "pairing-table" });
-    table.appendChild(
+    const meta = el("div", { className: "pairing-table" });
+    meta.appendChild(
       el("div", {
         className: "pairing-header-row cols-same",
         children: [
@@ -1212,32 +1386,20 @@ class App {
           el("span", { text: "Device" }),
           el("span", { text: "Pre taken" }),
           el("span", { text: "Post taken" }),
-          el("span", { className: "col-result", text: "Result" }),
         ],
       })
     );
-
     for (const ev of sameDevice) {
       const subjectRecord = this.findSnapshotRecord(ev.subject);
       const baselineRecord = this.findSnapshotRecord(ev.baseline);
-      const key = `same:${ev.subject}`;
-      const presentation = this.rowPresentation(ev);
-      const worst = presentation.worst;
-      const clickable = presentation.clickable;
-      const open = clickable && !!this.state.openRows[key];
       const deviceLabel = subjectRecord
         ? `${subjectRecord.device}:${subjectRecord.port || "all"}`
         : ev.subject;
-
-      table.appendChild(
+      meta.appendChild(
         el("div", {
-          className:
-            "pairing-row cols-same" +
-            (clickable ? " clickable" : "") +
-            " " + this.rowTintClass(worst),
-          onClick: clickable ? () => this.toggleRow(key) : null,
+          className: "pairing-row cols-same",
           children: [
-            el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+            el("span", {}),
             el("span", { className: "port-cell", text: deviceLabel }),
             el("span", {
               className: "taken-cell",
@@ -1247,22 +1409,13 @@ class App {
               className: "taken-cell",
               text: subjectRecord ? subjectRecord.taken || "" : "",
             }),
-            el("span", {
-              className: "col-result",
-              children: [
-                el("span", {
-                  className: "status-pill pill-" + statusClass(worst),
-                  text: this.pillText(worst, presentation.count),
-                }),
-              ],
-            }),
           ],
         })
       );
-      if (open) {
-        table.appendChild(this.buildScopesPanel(presentation.scopes, key));
-      }
     }
+
+    const entries = this.collectServiceEntries(sameDevice, "same");
+    const resultsTable = this.buildResultsTable(entries, { singlePort: true });
 
     return el("div", {
       className: "same-device-section",
@@ -1271,80 +1424,10 @@ class App {
           className: "subsection-title",
           text: "Same device — pre vs post",
         }),
-        table,
+        meta,
+        resultsTable,
       ],
     });
-  }
-
-  buildScopesPanel(scopes, rowKey, opts) {
-    const noBaseline = !!(opts && opts.noBaseline);
-    const flat = !!(opts && opts.flat);
-    const panel = el("div", {
-      className: "scopes-panel" + (flat ? " scopes-panel-flat" : ""),
-    });
-    for (const scope of scopes) {
-      const scopeKey = `${rowKey}|${scope.scope_id}`;
-      const scopeOpen = !!this.state.openScopes[scopeKey];
-      const sClass = statusClass(scope.status);
-      const card = el("div", {
-        className: "scope-card status-" + sClass,
-      });
-      const headerRow = el("div", {
-        className: "scope-card-header",
-        onClick: () => this.toggleScope(scopeKey),
-        children: [
-          el("span", { className: "scope-pill " + sClass, text: scope.status }),
-          el("span", { className: "scope-id", text: scope.scope_id }),
-          el("span", { className: "scope-note", text: this.scopeNote(scope) }),
-          el("span", { className: "scope-header-spacer" }),
-          el("span", {
-            className: "scope-chevron" + (scopeOpen ? " open" : ""),
-            html: "&#9660;",
-          }),
-        ],
-      });
-      card.appendChild(headerRow);
-      if (scopeOpen) {
-        card.appendChild(this.buildChecksTable(scope.checks || [], noBaseline));
-      }
-      panel.appendChild(card);
-    }
-    return panel;
-  }
-
-  buildChecksTable(checks, noBaseline) {
-    const wrap = el("div", { className: "checks-panel" });
-    const grid = el("div", {
-      className: "checks-grid" + (noBaseline ? " no-baseline" : ""),
-    });
-    const labels = noBaseline
-      ? ["Check", "Message", "Value", "Status"]
-      : ["Check", "Message", "Value", "Baseline", "Status"];
-    for (const label of labels) {
-      grid.appendChild(el("span", { className: "col-head", text: label }));
-    }
-    for (const check of checks) {
-      const valueClass =
-        check.status === "FAIL" ? " fail" : check.status === "WARN" ? " warn" : "";
-      grid.appendChild(el("span", { className: "chk-id", text: check.id }));
-      grid.appendChild(el("span", { className: "chk-msg", text: check.message }));
-      grid.appendChild(
-        el("span", { className: "chk-value" + valueClass, text: check.value ?? "—" })
-      );
-      if (!noBaseline) {
-        grid.appendChild(
-          el("span", { className: "chk-baseline", text: check.baseline_value ?? "—" })
-        );
-      }
-      grid.appendChild(
-        el("span", {
-          className: "chk-status " + statusClass(check.status),
-          text: check.status,
-        })
-      );
-    }
-    wrap.appendChild(grid);
-    return wrap;
   }
 
   // -- snapshot evaluation (screen 2) ------------------------------------
@@ -1356,48 +1439,12 @@ class App {
     return "pill-phase-pre";
   }
 
-  snapshotBaselineCandidates() {
-    const record = this.findSnapshotRecord(this.state.selectedSnapshot);
-    if (!record || !this.cache.detail) return [];
-    return (this.cache.detail.snapshots || []).filter(
-      (s) => s.device === record.device && s.file !== record.file
-    );
-  }
-
-  buildSnapshotCompareBar() {
-    const candidates = this.snapshotBaselineCandidates();
-    if (candidates.length === 0) return null;
-    const select = el("select", {
-      className: "form-select",
-      children: [
-        el("option", { text: "— no baseline —", attrs: { value: "" } }),
-        ...candidates.map((s) => {
-          const label = `${s.phase} · ${s.port || "all"} · ${s.taken || ""}`;
-          const attrs =
-            s.file === this.state.snapshotBaseline
-              ? { value: s.file, selected: "selected" }
-              : { value: s.file };
-          return el("option", { text: label, attrs });
-        }),
-      ],
-    });
-    select.addEventListener("change", (e) =>
-      this.selectSnapshotBaseline(e.target.value)
-    );
-    return el("div", {
-      className: "compare-bar",
-      children: [el("span", { className: "compare-bar-label", text: "Compare with" }), select],
-    });
-  }
-
   renderSnapshotView() {
     clear(this.mainEl);
     this.mainEl.appendChild(this.buildBreadcrumb(this.state.selectedSnapshot, true));
 
     if (!this.cache.snapshotEval) {
       if (this.cache.snapshotEvalError) {
-        const bar = this.buildSnapshotCompareBar();
-        if (bar) this.mainEl.appendChild(bar);
         this.mainEl.appendChild(
           el("div", {
             className: "notice notice-warn",
@@ -1408,9 +1455,8 @@ class App {
       return;
     }
 
-    const { snapshot, baseline, result } = this.cache.snapshotEval;
+    const { snapshot, result } = this.cache.snapshotEval;
     const phase = result.subject ? result.subject.phase : null;
-    const baselineRecord = this.findSnapshotRecord(this.state.snapshotBaseline);
 
     const headerChildren = [el("h1", { text: "Snapshot evaluation" })];
     if (phase) {
@@ -1421,22 +1467,7 @@ class App {
         })
       );
     }
-    if (baseline && baselineRecord) {
-      headerChildren.push(
-        el("span", {
-          className: "header-pill " + this.phaseHeaderPillClass(baselineRecord.phase),
-          text: `vs ${baselineRecord.phase}`,
-        })
-      );
-    } else {
-      headerChildren.push(
-        el("span", { className: "header-pill pill-no-baseline", text: "no baseline" })
-      );
-    }
     this.mainEl.appendChild(el("div", { className: "run-header", children: headerChildren }));
-
-    const compareBar = this.buildSnapshotCompareBar();
-    if (compareBar) this.mainEl.appendChild(compareBar);
 
     this.mainEl.appendChild(
       el("div", {
@@ -1469,56 +1500,33 @@ class App {
               }),
             ],
           }),
-          baseline
-            ? el("span", {
-                children: [
-                  document.createTextNode("Baseline taken "),
-                  el("span", { className: "value", text: baseline.taken || "" }),
-                ],
-              })
-            : null,
         ],
       })
     );
 
-    const summary = result.summary || {};
+    const services = MigView.countStatuses((result.scopes || []).map((s) => s.status));
+    this.mainEl.appendChild(this.buildCountsStrip(services, result.summary || {}, null));
+
+    const entries = (result.scopes || []).map((scope) => ({
+      key: `snap|${this.state.selectedSnapshot}|${scope.scope_id}`,
+      view: MigView.buildView(scope, {}),
+      hasBaseline: false,
+      scope,
+    }));
+    this.mainEl.appendChild(
+      el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
+    );
+    this.mainEl.appendChild(this.buildResultsTable(entries, { singlePort: true }));
+
+    const unassigned = result.unassigned || {};
+    const unassignedCount = Object.values(unassigned).reduce((n, list) => n + list.length, 0);
     this.mainEl.appendChild(
       el("div", {
-        className: "chip-row",
-        children: [
-          el("span", {
-            className: "chip chip-pass",
-            text: `${summary.pass || 0} PASS`,
-          }),
-          el("span", {
-            className: "chip chip-warn",
-            text: `${summary.warn || 0} WARN`,
-          }),
-          el("span", {
-            className: "chip chip-fail",
-            text: `${summary.fail || 0} FAIL`,
-          }),
-          el("span", {
-            className: "chip chip-skip",
-            text: `${summary.skip || 0} SKIP`,
-          }),
-          el("span", { className: "chip-row-spacer" }),
-          el("span", {
-            className: "chip-row-note",
-            text: baseline
-              ? `compared against ${this.state.snapshotBaseline}`
-              : "standalone evaluation — comparison checks skipped",
-          }),
-        ],
+        className: "subsection-title",
+        text: `Nezařazeno (jen subject) — ${unassignedCount}`,
       })
     );
-
-    this.mainEl.appendChild(
-      this.buildScopesPanel(result.scopes || [], "snapshot", {
-        noBaseline: !baseline,
-        flat: true,
-      })
-    );
+    this.mainEl.appendChild(this.buildUnassignedSection(unassigned));
 
     this.mainEl.appendChild(
       el("div", {
@@ -2026,8 +2034,7 @@ class App {
         this.state.run = runName;
         this.state.view = "run";
         this.state.selectedSnapshot = null;
-        this.state.openRows = {};
-        this.state.openScopes = {};
+        this.state.openResults = {};
         await this.loadRun();
         this.render();
         return;
