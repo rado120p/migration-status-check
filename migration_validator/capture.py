@@ -25,6 +25,8 @@ from migration_validator.models.snapshot import CaptureMeta, Snapshot
 from migration_validator.probes.ping import DEFAULT_COUNT, resolve_targets, run_ping
 from migration_validator.scoping.builder import build_scopes
 
+# volano jako (krok, stav, zprava): stav je "start" | "ok" | "error",
+# krok je jmeno kolektoru nebo "ping"
 ProgressCallback = Callable[[str, str, str | None], None]
 
 LIST_AREAS = frozenset({"arp", "nd"})

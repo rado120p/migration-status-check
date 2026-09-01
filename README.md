@@ -28,7 +28,7 @@ uvedeného ruční cesty i `mig-validate capture --run <nazev> ...` / `evaluate 
 `runs/<nazev>/run.yml`. Ruční workflow beze změny funguje dál; podrobný postup je
 v [docs/cs/README.md, kap. 3a](docs/cs/README.md#3a-run-management---run).
 
-## Profil a auth soubor
+## Profil a settings soubor
 
 Profil (sdileny, klidne v gitu) rika, CO beh testuje:
 
@@ -46,16 +46,21 @@ checks:
 mig-validate evaluate --run mig01 --profile profiles/core-only.yml
 ```
 
-Auth soubor (per-user, default ~/.config/mig-validate/auth.yml) rika,
-KDO se pripojuje - heslo pres env promennou, plaintext jen pri 0600:
+Settings soubor (repo-lokalni, default config/settings.yml) rika,
+KDO se pripojuje - zkousi ssh_key_paths po poradku, pak password_env/password:
 
 ```yaml
-username: rmohyla
-auth: password
-password_env: MIG_PROD_PASSWORD
+connection:
+  netconf_port: 830
+  timeout: 30
+  username: rmohyla
+  ssh_key_paths: []
+  password_env: MIG_PROD_PASSWORD
 ```
 
-Sdileny ansible ucet: `--auth-file /cesta/k/ansible-auth.yml`.
+Kdyz soubor chybi: username ansible, klice ~/.ssh/id_ed25519 a ~/.ssh/id_rsa,
+netconf_port 830, timeout 30. Plaintext `password:` misto `password_env` vyzaduje
+chmod 600 na souboru. Jiny soubor: `--settings /cesta/k/settings.yml`.
 Precedence vsude: CLI flag > soubor > vestavena default.
 Heslo do env bez ~/.bash_history: `read -s MIG_PROD_PASSWORD && export MIG_PROD_PASSWORD`.
 
