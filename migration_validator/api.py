@@ -139,3 +139,55 @@ def create_run(
 
     store.save(manifest)
     return manifest
+
+
+def _mapping_locked(manifest: RunManifest, mapping) -> bool:
+    """Pairing je zamceny, kdyz na nekterem konci existuje snimek."""
+    endpoints = {
+        (mapping.old.node, mapping.old.port),
+        (mapping.new.node, mapping.new.port),
+    }
+    return any(
+        (record.device, record.port) in endpoints for record in manifest.captures
+    )
+
+
+def update_mapping(
+    run: str,
+    mappings: list[tuple[str, str]],
+    *,
+    run_root: str | Path = Path("runs"),
+) -> RunManifest:
+    """Prepise interface_mapping runu na pozadovany seznam.
+
+    Zamek se overuje na serveru, ne v GUI: pairing se snimky na kteremkoliv
+    konci nesmi z pozadovaneho seznamu zmizet."""
+    store = RunStore(Path(run_root), run)
+    if not store.manifest_path.exists():
+        raise ValueError(f"run '{run}' neexistuje ({store.manifest_path})")
+    manifest = store.load()
+
+    old_role = manifest.device_with_role("old")
+    new_role = manifest.device_with_role("new")
+    if old_role is None or new_role is None:
+        raise ValueError(f"run '{run}' nema zarizeni role old a new")
+    old_node, new_node = old_role[0], new_role[0]
+
+    desired = {(o.strip(), n.strip()) for o, n in mappings}
+    for mapping in manifest.interface_mapping:
+        pair = (mapping.old.port, mapping.new.port)
+        if _mapping_locked(manifest, mapping) and pair not in desired:
+            raise ValueError(
+                f"pairing {mapping.old.node}:{mapping.old.port} -> "
+                f"{mapping.new.node}:{mapping.new.port} ma snimky, nelze odebrat"
+            )
+
+    rebuilt = RunManifest(devices=manifest.devices, captures=manifest.captures)
+    for old_port, new_port in mappings:
+        rebuilt.add_mapping(
+            old=MappingEndpoint(node=old_node, port=old_port.strip()),
+            new=MappingEndpoint(node=new_node, port=new_port.strip()),
+        )
+
+    store.save(rebuilt)
+    return rebuilt
