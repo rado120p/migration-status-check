@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+import migration_validator.auth as auth
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
 
 
@@ -111,3 +112,28 @@ def test_route_409_kdyz_zarizeni_obsazeno(client):
 def test_route_get_neznamy_capture_je_404(client):
     response = client.get("/api/captures/neexistuje")
     assert response.status_code == 404
+
+
+def test_route_capture_neznamy_device_je_404(client):
+    response = client.post(
+        "/api/captures",
+        json={"run": "mig01", "device": "NEEXISTUJE", "port": None, "phase": "pre"},
+    )
+    assert response.status_code == 404
+    assert "neni v runu" in response.json()["detail"]
+
+
+def test_route_capture_nevalidni_settings_je_503(client, tmp_path, monkeypatch):
+    settings_path = tmp_path / "settings.yml"
+    settings_path.write_text(
+        "connection:\n  password_env: MIG_TEST_NENASTAVENA\n", encoding="utf-8"
+    )
+    monkeypatch.delenv("MIG_TEST_NENASTAVENA", raising=False)
+    monkeypatch.setattr(auth, "DEFAULT_SETTINGS_PATH", settings_path)
+
+    response = client.post(
+        "/api/captures",
+        json={"run": "mig01", "device": "MX1", "port": None, "phase": "pre"},
+    )
+    assert response.status_code == 503
+    assert "MIG_TEST_NENASTAVENA" in response.json()["detail"]

@@ -208,7 +208,13 @@ def create_app(
             raise HTTPException(
                 status_code=404, detail=f"zarizeni '{body.device}' neni v runu"
             )
-        settings = load_settings()
+        try:
+            settings = load_settings()
+            profile = (
+                load_profile(profile_path) if profile_path else default_profile()
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
         options = ConnectionOptions(
             host=device.host,
             username=settings.username,
@@ -216,9 +222,6 @@ def create_app(
             password=settings.password,
             port=settings.netconf_port,
             timeout=settings.timeout,
-        )
-        profile = (
-            load_profile(profile_path) if profile_path else default_profile()
         )
 
         def fn(on_progress):
