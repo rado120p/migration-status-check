@@ -905,6 +905,42 @@ def test_evaluate_run_pairs_and_exit_code(tmp_path, capsys):
     assert code == EXIT_OK
 
 
+def test_evaluate_run_same_device_block_labeled(tmp_path, capsys):
+    store = RunStore(tmp_path, "mig01")
+    manifest = _base_run_manifest()
+
+    pre_old = _write_run_snapshot(
+        store, "pre", "MX1-POP1", "ge-0/0/0", "172.20.20.4", "ge-0/0/0.113"
+    )
+    pre_new = _write_run_snapshot(
+        store, "pre", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    post_path = _write_run_snapshot(
+        store, "post", "PTX1-POP1", "et-0/0/0", "172.20.20.5", "et-0/0/0.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", pre_old.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "PTX1-POP1", "et-0/0/0", pre_new.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1-POP1", "et-0/0/0", post_path.name, NOW)
+    )
+    store.save(manifest)
+
+    code = main(["evaluate", "--run", "mig01", "--run-root", str(tmp_path)])
+
+    output = capsys.readouterr().out
+    # mapovana evaluace zustava
+    assert f"=== {post_path.name} vs {pre_old.name} [krok" in output
+    # same-device evaluace ma vlastni blok s oznacenim
+    assert (
+        f"=== {post_path.name} vs {pre_new.name} [stejne zarizeni] ===" in output
+    )
+    assert code == EXIT_OK
+
+
 def test_evaluate_run_exit_code_is_worst_across_evaluations(tmp_path, capsys):
     store = RunStore(tmp_path, "mig01")
     manifest = _base_run_manifest()

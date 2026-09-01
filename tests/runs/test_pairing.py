@@ -210,6 +210,86 @@ def test_unmapped_post_keeps_todays_fallback():
     assert evaluations[0].step is None
 
 
+# --- same-device pre vs post (novy box ma vlastni pre) ---------------------
+
+
+def test_same_device_pre_post_adds_extra_evaluation():
+    manifest = _manifest()
+    pre_old = CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "pre_old.json", "T1")
+    pre_new = CaptureRecord("pre", "PTX1-POP1", "et-0/0/0", "pre_new.json", "T1")
+    post = CaptureRecord("post", "PTX1-POP1", "et-0/0/0", "post.json", "T2")
+    manifest.captures = [pre_old, pre_new, post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 2
+    mapped = [e for e in evaluations if not e.same_device]
+    same = [e for e in evaluations if e.same_device]
+    assert len(mapped) == 1 and mapped[0].baseline == pre_old
+    assert len(same) == 1
+    assert same[0].subject == post
+    assert same[0].baseline == pre_new
+    assert same[0].step is None
+    assert same[0].reason is None
+
+
+def test_same_device_whole_box_pre_post_on_new_device():
+    manifest = _manifest()
+    manifest.interface_mapping = []
+    pre_old = CaptureRecord("pre", "MX1-POP1", None, "pre_old.json", "T1")
+    pre_new = CaptureRecord("pre", "PTX1-POP1", None, "pre_new.json", "T1")
+    post = CaptureRecord("post", "PTX1-POP1", None, "post.json", "T2")
+    manifest.captures = [pre_old, pre_new, post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 2
+    same = [e for e in evaluations if e.same_device]
+    assert len(same) == 1
+    assert same[0].baseline == pre_new
+
+
+def test_same_device_dedupes_against_old_role_fallback():
+    # celoboxovy post stareho boxu uz dnes paruje s vlastnim pre -
+    # same-device planovani nesmi vyrobit duplikat
+    manifest = _manifest()
+    manifest.interface_mapping = []
+    pre = CaptureRecord("pre", "MX1-POP1", None, "pre.json", "T1")
+    post = CaptureRecord("post", "MX1-POP1", None, "post.json", "T2")
+    manifest.captures = [pre, post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    assert evaluations[0].baseline == pre
+    assert evaluations[0].same_device is False
+
+
+def test_same_device_respects_ports_filter():
+    manifest = _manifest()
+    manifest.interface_mapping = []
+    pre_new = CaptureRecord("pre", "PTX1-POP1", "et-0/0/0", "pre_new.json", "T1")
+    post = CaptureRecord("post", "PTX1-POP1", "et-0/0/0", "post.json", "T2")
+    manifest.captures = [pre_new, post]
+
+    assert plan_evaluations(manifest, ports=["et-0/0/0"]) != []
+    assert all(
+        not e.same_device for e in plan_evaluations(manifest, ports=["jiny"])
+    )
+
+
+def test_rollback_is_not_flagged_same_device():
+    manifest = _manifest()
+    pre = CaptureRecord("pre", "MX1-POP1", "ge-0/0/0", "pre.json", "T1")
+    rollback = CaptureRecord("rollback", "MX1-POP1", "ge-0/0/0", "rb.json", "T3")
+    manifest.captures = [pre, rollback]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    assert evaluations[0].same_device is False
+
+
 # --- find_pre_baseline (sdilena logika s cli._capture_into_run) -----------
 
 

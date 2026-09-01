@@ -22,6 +22,9 @@ class Evaluation:
     # Migracni krok (zaznam interface_mapping), ktery evaluaci vyrobil.
     # None = celoboxova nebo nemapovana evaluace - chovani beze zmeny.
     step: InterfaceMapping | None = None
+    # True = post vs pre stejneho zarizeni navic k mapovanym evaluacim
+    # (box rekonfigurovany na miste); GUI je vykresluje v samostatne sekci.
+    same_device: bool = False
 
 
 def _passes_port_filter(port: str | None, ports: list[str] | None) -> bool:
@@ -114,6 +117,35 @@ def _plan_rollback(manifest: RunManifest, subject: CaptureRecord) -> Evaluation:
     return Evaluation(subject=subject, baseline=baseline)
 
 
+def _plan_same_device(
+    manifest: RunManifest, planned: list[Evaluation]
+) -> list[Evaluation]:
+    """Post vs pre stejneho zarizeni a portu - navic k mapovanym evaluacim.
+
+    Pokryva box s vlastnim pre i post (rekonfigurace na miste). Dvojice,
+    kterou uz vyrobilo mapovane/fallback planovani (stary box s celoboxovym
+    pre), se neduplikuje.
+    """
+    existing = {
+        (e.subject.snapshot, e.baseline.snapshot)
+        for e in planned
+        if e.baseline is not None
+    }
+    evaluations: list[Evaluation] = []
+    for capture in manifest.captures:
+        if capture.phase != "post":
+            continue
+        baseline = manifest.find_capture("pre", capture.device, capture.port)
+        if baseline is None:
+            continue
+        if (capture.snapshot, baseline.snapshot) in existing:
+            continue
+        evaluations.append(
+            Evaluation(subject=capture, baseline=baseline, same_device=True)
+        )
+    return evaluations
+
+
 def _filter_port(evaluation: Evaluation) -> str | None:
     if evaluation.step is not None:
         return evaluation.step.old.port
@@ -137,6 +169,7 @@ def plan_evaluations(
             evaluations.extend(_plan_post(manifest, capture))
         else:
             evaluations.append(_plan_rollback(manifest, capture))
+    evaluations.extend(_plan_same_device(manifest, evaluations))
     return [
         evaluation
         for evaluation in evaluations

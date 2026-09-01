@@ -198,31 +198,60 @@ def create_app(
                 if evaluation.baseline else None,
                 "warning": evaluation.reason or None,
                 "step": step_payload,
+                "same_device": evaluation.same_device,
                 "result": result.to_dict(),
             })
         return {"evaluations": evaluations}
 
-    @app.get("/api/runs/{run}/snapshots/{file}/evaluation")
-    def snapshot_evaluation(run: str, file: str) -> dict:
-        store = _require_store(run)
+    def _require_snapshot_path(store: RunStore, file: str) -> Path:
         path = store.dir / file
         if not path.exists() or "/" in file or file == "..":
             raise HTTPException(status_code=404, detail=f"snapshot nenalezen: {file}")
+        return path
+
+    def _snapshot_meta(snapshot) -> dict:
+        return {
+            "device": snapshot.device.hostname or snapshot.device.address,
+            "platform": snapshot.device.platform,
+            "taken": snapshot.capture.started_at,
+            "collectors": snapshot.capture.collectors,
+        }
+
+    @app.get("/api/runs/{run}/snapshots/{file}/evaluation")
+    def snapshot_evaluation(run: str, file: str, baseline: str | None = None) -> dict:
+        store = _require_store(run)
+        path = _require_snapshot_path(store, file)
+        baseline_snapshot = None
+        if baseline is not None:
+            manifest = store.load()
+            records = {c.snapshot: c for c in manifest.captures}
+            subject_record = records.get(file)
+            baseline_record = records.get(baseline)
+            if subject_record is None or baseline_record is None:
+                missing = file if subject_record is None else baseline
+                raise HTTPException(
+                    status_code=404, detail=f"snimek neni v run.yml: {missing}"
+                )
+            if subject_record.device != baseline_record.device:
+                raise HTTPException(
+                    status_code=422,
+                    detail="baseline musi byt snimek stejneho zarizeni",
+                )
+            baseline_path = _require_snapshot_path(store, baseline)
+            baseline_snapshot = load_snapshot(str(baseline_path))
         snapshot = load_snapshot(str(path))
         profile = load_profile(profile_path) if profile_path else default_profile()
         result = api.evaluate(
             snapshot,
+            baseline=baseline_snapshot,
             config=profile.checks,
             service_types=profile.service_types,
             profile_name=profile.name or None,
         )
         return {
-            "snapshot": {
-                "device": snapshot.device.hostname or snapshot.device.address,
-                "platform": snapshot.device.platform,
-                "taken": snapshot.capture.started_at,
-                "collectors": snapshot.capture.collectors,
-            },
+            "snapshot": _snapshot_meta(snapshot),
+            "baseline": _snapshot_meta(baseline_snapshot)
+            if baseline_snapshot else None,
             "result": result.to_dict(),
         }
 

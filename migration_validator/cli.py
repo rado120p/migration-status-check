@@ -177,6 +177,8 @@ def _evaluate_run(args: argparse.Namespace) -> int:
                 f" [krok {evaluation.step.old.node}:{evaluation.step.old.port}"
                 f" -> {evaluation.step.new.node}:{evaluation.step.new.port}]"
             )
+        elif evaluation.same_device:
+            step_label = " [stejne zarizeni]"
 
         print(f"=== {evaluation.subject.snapshot} vs {baseline_label}{step_label} ===")
 

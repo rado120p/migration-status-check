@@ -120,6 +120,26 @@ def test_run_evaluation_ports_filter(run_se_snimky_client):
     assert unmatched["evaluations"] == []
 
 
+def test_run_evaluation_same_device_flag(run_se_snimky_client, tmp_path):
+    # novy box dostane vlastni pre -> navic same_device evaluace
+    store = RunStore(tmp_path, "mig01")
+    manifest = store.load()
+    pre_new = _write_run_snapshot(
+        store, "pre", "PTX1", "et-0/0/1", "10.0.0.2", "et-0/0/1.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "PTX1", "et-0/0/1", pre_new.name, NOW)
+    )
+    store.save(manifest)
+
+    data = run_se_snimky_client.get("/api/runs/mig01/evaluation").json()
+    assert len(data["evaluations"]) == 2
+    assert all(ev["subject"].startswith("snapshot_post_") for ev in data["evaluations"])
+    same = [ev for ev in data["evaluations"] if ev["same_device"]]
+    assert len(same) == 1
+    assert same[0]["baseline"] == pre_new.name
+
+
 def test_snapshot_evaluation_bez_baseline(run_se_snimky_client):
     detail = run_se_snimky_client.get("/api/runs/mig01").json()
     file = detail["snapshots"][0]["file"]
@@ -132,4 +152,97 @@ def test_snapshot_evaluation_bez_baseline(run_se_snimky_client):
 
 def test_snapshot_evaluation_neznamy_soubor(run_se_snimky_client):
     resp = run_se_snimky_client.get("/api/runs/mig01/snapshots/neni.json/evaluation")
+    assert resp.status_code == 404
+
+
+@pytest.fixture
+def run_s_rollbackem_client(tmp_path):
+    """Run se dvema snimky stejneho zarizeni (MX1 pre + rollback) a post PTX1."""
+    store = RunStore(tmp_path, "mig01")
+    manifest = RunManifest(
+        devices={
+            "MX1": RunDevice(host="10.0.0.1", platform="junos", role="old"),
+            "PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="new"),
+        },
+        interface_mapping=[],
+    )
+    pre_path = _write_run_snapshot(
+        store, "pre", "MX1", "ge-0/0/1", "10.0.0.1", "ge-0/0/1.113"
+    )
+    rollback_path = _write_run_snapshot(
+        store, "rollback", "MX1", "ge-0/0/1", "10.0.0.1", "ge-0/0/1.113",
+        oper="down",
+    )
+    post_path = _write_run_snapshot(
+        store, "post", "PTX1", "et-0/0/1", "10.0.0.2", "et-0/0/1.113"
+    )
+    manifest.record_capture(
+        CaptureRecord("pre", "MX1", "ge-0/0/1", pre_path.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("rollback", "MX1", "ge-0/0/1", rollback_path.name, NOW)
+    )
+    manifest.record_capture(
+        CaptureRecord("post", "PTX1", "et-0/0/1", post_path.name, NOW)
+    )
+    store.save(manifest)
+
+    app = create_app(run_root=tmp_path)
+    return TestClient(app)
+
+
+def _files_by_phase(client):
+    detail = client.get("/api/runs/mig01").json()
+    return {snap["phase"]: snap["file"] for snap in detail["snapshots"]}
+
+
+def test_snapshot_evaluation_s_baseline(run_s_rollbackem_client):
+    files = _files_by_phase(run_s_rollbackem_client)
+    data = run_s_rollbackem_client.get(
+        f"/api/runs/mig01/snapshots/{files['rollback']}/evaluation",
+        params={"baseline": files["pre"]},
+    ).json()
+    assert data["baseline"]["device"] == "10.0.0.1"
+    assert data["snapshot"]["device"] == "10.0.0.1"
+    assert "summary" in data["result"]
+    # baseline se skutecne pouzil - scope subjektu se sparoval se scope baseline
+    assert data["result"]["summary"]["scopes_matched"] == 1
+
+
+def test_snapshot_evaluation_bez_baseline_nema_baseline_blok(run_s_rollbackem_client):
+    files = _files_by_phase(run_s_rollbackem_client)
+    data = run_s_rollbackem_client.get(
+        f"/api/runs/mig01/snapshots/{files['rollback']}/evaluation"
+    ).json()
+    assert data["baseline"] is None
+
+
+def test_snapshot_evaluation_baseline_jine_zarizeni(run_s_rollbackem_client):
+    files = _files_by_phase(run_s_rollbackem_client)
+    resp = run_s_rollbackem_client.get(
+        f"/api/runs/mig01/snapshots/{files['post']}/evaluation",
+        params={"baseline": files["pre"]},
+    )
+    assert resp.status_code == 422
+    assert "stejneho zarizeni" in resp.json()["detail"]
+
+
+def test_snapshot_evaluation_baseline_neznamy_soubor(run_s_rollbackem_client):
+    files = _files_by_phase(run_s_rollbackem_client)
+    resp = run_s_rollbackem_client.get(
+        f"/api/runs/mig01/snapshots/{files['rollback']}/evaluation",
+        params={"baseline": "neni.json"},
+    )
+    assert resp.status_code == 404
+
+
+def test_snapshot_evaluation_baseline_soubor_chybi_na_disku(
+    run_s_rollbackem_client, tmp_path
+):
+    files = _files_by_phase(run_s_rollbackem_client)
+    (tmp_path / "mig01" / files["pre"]).unlink()
+    resp = run_s_rollbackem_client.get(
+        f"/api/runs/mig01/snapshots/{files['rollback']}/evaluation",
+        params={"baseline": files["pre"]},
+    )
     assert resp.status_code == 404

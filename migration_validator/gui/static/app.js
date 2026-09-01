@@ -34,6 +34,7 @@ class App {
       view: "run",
       run: null,
       selectedSnapshot: null,
+      snapshotBaseline: null,
       openRows: {},
       openScopes: {},
       activeCaptureId: null,
@@ -312,17 +313,28 @@ class App {
   async selectSnapshot(file) {
     this.state.view = "snapshot";
     this.state.selectedSnapshot = file;
+    this.state.snapshotBaseline = null;
     this.state.openScopes = {};
     await this.loadSnapshotEvaluation(file);
+    this.render();
+  }
+
+  async selectSnapshotBaseline(file) {
+    this.state.snapshotBaseline = file || null;
+    await this.loadSnapshotEvaluation(this.state.selectedSnapshot);
     this.render();
   }
 
   async loadSnapshotEvaluation(file) {
     this.cache.snapshotEval = null;
     this.cache.snapshotEvalError = null;
+    const baseline = this.state.snapshotBaseline;
+    const query = baseline
+      ? `?baseline=${encodeURIComponent(baseline)}`
+      : "";
     try {
       const res = await fetch(
-        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation`
+        `/api/runs/${this.state.run}/snapshots/${encodeURIComponent(file)}/evaluation${query}`
       );
       if (res.ok) {
         this.cache.snapshotEval = await res.json();
@@ -852,7 +864,8 @@ class App {
     );
     if (stepMatch) return stepMatch;
     return evaluations.find((ev) => {
-      if (ev.step) return false;
+      // same-device evaluace maji vlastni sekci - nesmi obsadit radek tabulky
+      if (ev.step || ev.same_device) return false;
       const record = this.findSnapshotRecord(ev.subject);
       if (!record) return false;
       const endpoint = { node: record.device, port: record.port };
@@ -1011,6 +1024,9 @@ class App {
     } else {
       this.mainEl.appendChild(this.buildPairingTable(allRows));
     }
+
+    const sameDevice = this.buildSameDeviceSection();
+    if (sameDevice) this.mainEl.appendChild(sameDevice);
 
     // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
     // first-ever capture on a mapping-less run) has nothing to attach to
@@ -1180,6 +1196,86 @@ class App {
     return table;
   }
 
+  buildSameDeviceSection() {
+    const evaluations = this.cache.evaluation
+      ? this.cache.evaluation.evaluations
+      : [];
+    const sameDevice = evaluations.filter((ev) => ev.same_device);
+    if (sameDevice.length === 0) return null;
+
+    const table = el("div", { className: "pairing-table" });
+    table.appendChild(
+      el("div", {
+        className: "pairing-header-row cols-same",
+        children: [
+          el("span", {}),
+          el("span", { text: "Device" }),
+          el("span", { text: "Pre taken" }),
+          el("span", { text: "Post taken" }),
+          el("span", { className: "col-result", text: "Result" }),
+        ],
+      })
+    );
+
+    for (const ev of sameDevice) {
+      const subjectRecord = this.findSnapshotRecord(ev.subject);
+      const baselineRecord = this.findSnapshotRecord(ev.baseline);
+      const key = `same:${ev.subject}`;
+      const presentation = this.rowPresentation(ev);
+      const worst = presentation.worst;
+      const clickable = presentation.clickable;
+      const open = clickable && !!this.state.openRows[key];
+      const deviceLabel = subjectRecord
+        ? `${subjectRecord.device}:${subjectRecord.port || "all"}`
+        : ev.subject;
+
+      table.appendChild(
+        el("div", {
+          className:
+            "pairing-row cols-same" +
+            (clickable ? " clickable" : "") +
+            " " + this.rowTintClass(worst),
+          onClick: clickable ? () => this.toggleRow(key) : null,
+          children: [
+            el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+            el("span", { className: "port-cell", text: deviceLabel }),
+            el("span", {
+              className: "taken-cell",
+              text: baselineRecord ? baselineRecord.taken || "" : "",
+            }),
+            el("span", {
+              className: "taken-cell",
+              text: subjectRecord ? subjectRecord.taken || "" : "",
+            }),
+            el("span", {
+              className: "col-result",
+              children: [
+                el("span", {
+                  className: "status-pill pill-" + statusClass(worst),
+                  text: this.pillText(worst, presentation.count),
+                }),
+              ],
+            }),
+          ],
+        })
+      );
+      if (open) {
+        table.appendChild(this.buildScopesPanel(presentation.scopes, key));
+      }
+    }
+
+    return el("div", {
+      className: "same-device-section",
+      children: [
+        el("div", {
+          className: "subsection-title",
+          text: "Same device — pre vs post",
+        }),
+        table,
+      ],
+    });
+  }
+
   buildScopesPanel(scopes, rowKey, opts) {
     const noBaseline = !!(opts && opts.noBaseline);
     const flat = !!(opts && opts.flat);
@@ -1260,12 +1356,48 @@ class App {
     return "pill-phase-pre";
   }
 
+  snapshotBaselineCandidates() {
+    const record = this.findSnapshotRecord(this.state.selectedSnapshot);
+    if (!record || !this.cache.detail) return [];
+    return (this.cache.detail.snapshots || []).filter(
+      (s) => s.device === record.device && s.file !== record.file
+    );
+  }
+
+  buildSnapshotCompareBar() {
+    const candidates = this.snapshotBaselineCandidates();
+    if (candidates.length === 0) return null;
+    const select = el("select", {
+      className: "form-select",
+      children: [
+        el("option", { text: "— no baseline —", attrs: { value: "" } }),
+        ...candidates.map((s) => {
+          const label = `${s.phase} · ${s.port || "all"} · ${s.taken || ""}`;
+          const attrs =
+            s.file === this.state.snapshotBaseline
+              ? { value: s.file, selected: "selected" }
+              : { value: s.file };
+          return el("option", { text: label, attrs });
+        }),
+      ],
+    });
+    select.addEventListener("change", (e) =>
+      this.selectSnapshotBaseline(e.target.value)
+    );
+    return el("div", {
+      className: "compare-bar",
+      children: [el("span", { className: "compare-bar-label", text: "Compare with" }), select],
+    });
+  }
+
   renderSnapshotView() {
     clear(this.mainEl);
     this.mainEl.appendChild(this.buildBreadcrumb(this.state.selectedSnapshot, true));
 
     if (!this.cache.snapshotEval) {
       if (this.cache.snapshotEvalError) {
+        const bar = this.buildSnapshotCompareBar();
+        if (bar) this.mainEl.appendChild(bar);
         this.mainEl.appendChild(
           el("div", {
             className: "notice notice-warn",
@@ -1276,8 +1408,9 @@ class App {
       return;
     }
 
-    const { snapshot, result } = this.cache.snapshotEval;
+    const { snapshot, baseline, result } = this.cache.snapshotEval;
     const phase = result.subject ? result.subject.phase : null;
+    const baselineRecord = this.findSnapshotRecord(this.state.snapshotBaseline);
 
     const headerChildren = [el("h1", { text: "Snapshot evaluation" })];
     if (phase) {
@@ -1288,10 +1421,22 @@ class App {
         })
       );
     }
-    headerChildren.push(
-      el("span", { className: "header-pill pill-no-baseline", text: "no baseline" })
-    );
+    if (baseline && baselineRecord) {
+      headerChildren.push(
+        el("span", {
+          className: "header-pill " + this.phaseHeaderPillClass(baselineRecord.phase),
+          text: `vs ${baselineRecord.phase}`,
+        })
+      );
+    } else {
+      headerChildren.push(
+        el("span", { className: "header-pill pill-no-baseline", text: "no baseline" })
+      );
+    }
     this.mainEl.appendChild(el("div", { className: "run-header", children: headerChildren }));
+
+    const compareBar = this.buildSnapshotCompareBar();
+    if (compareBar) this.mainEl.appendChild(compareBar);
 
     this.mainEl.appendChild(
       el("div", {
@@ -1324,6 +1469,14 @@ class App {
               }),
             ],
           }),
+          baseline
+            ? el("span", {
+                children: [
+                  document.createTextNode("Baseline taken "),
+                  el("span", { className: "value", text: baseline.taken || "" }),
+                ],
+              })
+            : null,
         ],
       })
     );
@@ -1352,7 +1505,9 @@ class App {
           el("span", { className: "chip-row-spacer" }),
           el("span", {
             className: "chip-row-note",
-            text: "standalone evaluation — comparison checks skipped",
+            text: baseline
+              ? `compared against ${this.state.snapshotBaseline}`
+              : "standalone evaluation — comparison checks skipped",
           }),
         ],
       })
@@ -1360,7 +1515,7 @@ class App {
 
     this.mainEl.appendChild(
       this.buildScopesPanel(result.scopes || [], "snapshot", {
-        noBaseline: true,
+        noBaseline: !baseline,
         flat: true,
       })
     );
