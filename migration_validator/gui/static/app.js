@@ -451,11 +451,11 @@ class App {
           el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
           el("span", {
             className: "port-cell" + (row.old ? "" : " unpaired"),
-            text: row.old ? `${row.old.node}:${row.old.port}` : "not paired",
+            text: row.old ? `${row.old.node}:${row.old.port || "all"}` : "not paired",
           }),
           el("span", {
             className: "port-cell" + (row.new ? "" : " unpaired"),
-            text: row.new ? `${row.new.node}:${row.new.port}` : "not paired",
+            text: row.new ? `${row.new.node}:${row.new.port || "all"}` : "not paired",
           }),
           el("span", {
             className: "flag-cell " + (row.pre ? "on" : "off"),
