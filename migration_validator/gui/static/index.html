@@ -1,3 +1,45 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>mig-validate</title></head>
-<body>mig-validate GUI</body></html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mig-validate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">mv</div>
+        <span class="brand-name">mig-validate</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="profile">
+        <span>Profile:</span><span class="mono profile-value" id="profile-name">core-only.yml</span>
+      </div>
+      <button class="btn btn-secondary" id="btn-checks">Checks</button>
+      <button class="btn btn-primary" id="btn-new-capture">New capture</button>
+    </div>
+    <div class="body-grid">
+      <div class="sidebar">
+        <div class="sidebar-section-header">
+          <span>Runs</span>
+          <a href="#" class="new-run-link" id="btn-new-run">+ New run</a>
+        </div>
+        <div id="sidebar-runs"></div>
+        <div class="sidebar-section-header sidebar-section-header-gap">Snapshots</div>
+        <div id="sidebar-snapshots"></div>
+        <div class="sidebar-spacer"></div>
+        <div class="sidebar-footer" id="sidebar-footer"></div>
+      </div>
+      <div class="main" id="main"></div>
+    </div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
