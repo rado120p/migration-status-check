@@ -394,6 +394,7 @@ class JunosServiceParserCore:
         self.global_ccc_interfaces: set[str] = set()
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
+        self.igmp_interfaces: set[str] = set()
         self.default_bgp_neighbors: list[str] = []
         self.default_bgp_neighbors_inactive: list[str] = []
         self.default_bgp_neighbors_internal: list[str] = []
@@ -408,6 +409,7 @@ class JunosServiceParserCore:
         self._parse_global_eline_interfaces("l2circuit", self.global_l2circuits)
         self._parse_global_eline_interfaces("connections", self.global_ccc_interfaces)
         self._parse_global_protocol_interfaces("pim")
+        self._parse_igmp_interfaces()
 
         interface_configs = self._parse_interfaces()
         interface_configs_by_name = {
@@ -958,6 +960,27 @@ class JunosServiceParserCore:
                 protocol
             )
 
+    def _parse_igmp_interfaces(self) -> None:
+        """Rozhraní pod `protocols igmp interface X` — globálně i uvnitř
+        routing-instance (IGMP v RI je platná syntaxe, byť lab ho má
+        globálně). Záměr říká: tady se čeká IGMP membership report, tohle
+        rozhraní je multicast receiver (spec 2026-09-02).
+
+        Zapisuje se per logické rozhraní do `global_protocols_by_interface`
+        (stejný kanál jako PIM), takže `_collect_protocols` ho připojí bez
+        další větve. RI-scoped varianta se čte přímo tady, ne přes
+        `RoutingInstance.protocols` — ta by dala "igmp" každému rozhraní
+        instance, ne jen tomu pod `igmp interface`.
+        """
+        names = all_texts(
+            self.config_xml,
+            "./protocols/igmp/interface/name/text()"
+            " | ./routing-instances/instance/protocols/igmp/interface/name/text()",
+        )
+        for name in names:
+            self.igmp_interfaces.add(name)
+            self.global_protocols_by_interface.setdefault(name, set()).add("igmp")
+
     # ------------------------------------------------------------------
     # Rozhraní
     # ------------------------------------------------------------------
@@ -1498,6 +1521,25 @@ class JunosServiceParserCore:
 
         return normalize_vlan_values(values)
 
+    def _ipvpn_subtype(
+        self,
+        interface: InterfaceConfig,
+        instance: RoutingInstance | None,
+        reasons: list[str],
+    ) -> str | None:
+        """`mvpn-igmp` = IGMP záměr na rozhraní + `protocols mvpn` v instanci.
+        IGMP bez mvpn zůstává obyčejná IPVPN (rozhodnutí 2026-09-02)."""
+        if (
+            interface.name in self.igmp_interfaces
+            and instance is not None
+            and "mvpn" in instance.protocols
+        ):
+            reasons.append(
+                "Rozhraní je pod protocols igmp a instance má protocols mvpn — MVPN-IGMP receiver site."
+            )
+            return "mvpn-igmp"
+        return None
+
     def _detect_service(
         self,
         interface: InterfaceConfig,
@@ -1520,7 +1562,7 @@ class JunosServiceParserCore:
         if instance_type == "vrf":
             reasons.append("Rozhraní je přiřazeno do routing instance typu vrf.")
 
-            return ("IPVPN", None, "high", reasons)
+            return ("IPVPN", self._ipvpn_subtype(interface, instance, reasons), "high", reasons)
 
         if (
             instance
@@ -1531,7 +1573,7 @@ class JunosServiceParserCore:
                 "L3 rozhraní je v instanci s route distinguisherem nebo VRF targetem."
             )
 
-            return ("IPVPN", None, "high", reasons)
+            return ("IPVPN", self._ipvpn_subtype(interface, instance, reasons), "high", reasons)
 
         # --------------------------------------------------------------
         # E-Line VPWS
@@ -1613,6 +1655,11 @@ class JunosServiceParserCore:
             reasons.append(
                 "Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF."
             )
+
+            if interface.name in self.igmp_interfaces:
+                reasons.append("Rozhraní je pod protocols igmp — multicast receiver.")
+
+                return ("Internet", "multicast", "high", reasons)
 
             return ("Internet", None, "medium", reasons)
 
