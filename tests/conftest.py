@@ -159,9 +159,8 @@ def _facts_for(scopes, pps: int) -> dict:
     ldp_neighbor = {}
     pim_neighbor = {}
     mpls_interface = {}
-    # igmp_group/multicast_route/mvpn_instance se NEsyntetizuji - stejny
-    # duvod jako pim_neighbor vyse (sdilena inventory nema multicast sluzbu).
-    # Zdravou syntezu doplni Task 6, az bude znamy tvar checku.
+    # igmp_group/multicast_route/mvpn_instance se plni jen pro scopy s
+    # multicast rolí (multicast/mvpn-igmp/Core loopback) - viz syntéza nize.
     igmp_group = {}
     multicast_route = {}
     mvpn_instance = {}
@@ -351,6 +350,55 @@ def _facts_for(scopes, pps: int) -> dict:
                         "transmission_interval": "3.000",
                         "multiplier": 3,
                     }
+        # Multicast (spec 2026-09-02): zdravy receiver posila IGMP report,
+        # stream tece na servisni rozhrani, upstream odpovida roli. Bez
+        # toho by nove checky hlasily FAIL na kazde zdrave migraci (AR-29).
+        if scope.service_subtype in ("multicast", "mvpn-igmp") and scope.selectors.interfaces:
+            iface = scope.selectors.interfaces[0]
+            instance = (
+                scope.selectors.routing_instances[0]
+                if scope.selectors.routing_instances
+                else "master"
+            )
+            source, group = "10.200.0.1", "232.200.0.1"
+            igmp_group[iface] = [{"source": source, "group": group}]
+            upstream = "lsi.1048576" if scope.service_subtype == "mvpn-igmp" else "et-0/0/0.0"
+            multicast_route.setdefault(instance, {})[f"{source},{group}"] = {
+                "upstream_interface": upstream,
+                "downstream_interfaces": [iface],
+                "forwarding_rate_pps": 6,
+                "uptime_seconds": 3266,
+                "state": "Active",
+                "forwarding_state": "Forwarding",
+            }
+            if scope.service_subtype == "mvpn-igmp":
+                tunnel = "RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13"
+                mvpn_instance[instance] = {"c_multicast": [{
+                    "source_prefix": f"{source}/32",
+                    "group_prefix": f"{group}/32",
+                    "provider_tunnel_id": tunnel,
+                    "sender_pe": "150.0.0.13",
+                }]}
+
+        # Core lo0.0: ke kazde inet.2 statice existuje stream se zdrojem
+        # uvnitr prefixu a upstream == via z route zrcadla vyse (ten je
+        # scope.selectors.interfaces[0], tedy "lo0.0" - synteticky, ale
+        # konzistentni s tim, co check porovnava).
+        if scope.key.service_type == "Core" and scope.service_subtype == "loopback":
+            for route in scope.selectors.static_routes:
+                if str(route.get("rib")) != "inet.2":
+                    continue
+                network = ipaddress.ip_network(str(route["prefix"]), strict=False)
+                source = str(next(iter(network.hosts()), network.network_address))
+                multicast_route.setdefault("master", {})[f"{source},232.100.0.1"] = {
+                    "upstream_interface": scope.selectors.interfaces[0],
+                    "downstream_interfaces": ["et-0/0/8.11"],
+                    "forwarding_rate_pps": 6,
+                    "uptime_seconds": 3266,
+                    "state": "Active",
+                    "forwarding_state": "Forwarding",
+                }
+
         # lo0.* nese IS-IS jako pasivni level 2 - loopback nema souseda,
         # takze nepasivni level 2 by isis_interface_info hlasil FAIL.
         # overload_enabled: False, jinak by isis_overview hlasil WARN na

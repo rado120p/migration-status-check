@@ -292,6 +292,34 @@ class Scope:
             else {}
         )
 
+        igmp_group = {
+            name: data
+            for name, data in (facts.get("igmp_group") or {}).items()
+            if self.selectors.matches_interface(name)
+        }
+        # Multicast tabulka patri instanci, ne lince: scope bez RI dostane
+        # master, scope s RI svou tabulku. Filtr per (S,G) dela check
+        # (IGMP mnozina / inet.2 prefixy). Jen role, ktere multicast meri -
+        # tranzitni Core ani L2 sluzby tabulku nedostanou (spec 2026-09-02).
+        multicast_route: dict[str, Any] = {}
+        measures_multicast = self.service_type in ("Internet", "IPVPN") or (
+            self.service_type == "Core" and self.service_subtype == "loopback"
+        )
+        if measures_multicast:
+            instance = (
+                self.selectors.routing_instances[0]
+                if self.selectors.routing_instances
+                else "master"
+            )
+            table = (facts.get("multicast_route") or {}).get(instance)
+            if table:
+                multicast_route = {instance: table}
+        mvpn_instance = {
+            name: data
+            for name, data in (facts.get("mvpn_instance") or {}).items()
+            if name in self.selectors.routing_instances
+        }
+
         return {
             "interfaces": interfaces,
             "arp": arp,
@@ -310,6 +338,9 @@ class Scope:
                 for entry in probes.get("ping_skipped", [])
             ),
             "isis_overview": isis_overview,
+            "igmp_group": igmp_group,
+            "multicast_route": multicast_route,
+            "mvpn_instance": mvpn_instance,
             **protocol_areas,
         }
 
