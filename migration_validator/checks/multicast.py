@@ -375,3 +375,101 @@ class CoreMulticastForwardingCheck(Check):
             value=", ".join(downstream) if downstream else "Zadne downstream interfacy",
         )
         return [upstream_row, downstream_row, *stream_rows(sg, route, rate_label="Forwarding rate packets")]
+
+
+# --- mvpn_cmulticast_status --------------------------------------------------
+
+def _cmulticast_entry(
+    entries: list[dict[str, Any]], source: str | None, group: str
+) -> dict[str, Any] | None:
+    """Zaznam, jehoz S/32:G/32 pokryva IGMP (S,G); pro (*, G) staci group."""
+    try:
+        group_ip = ipaddress.ip_address(group)
+        source_ip = ipaddress.ip_address(source) if source else None
+    except ValueError:
+        return None
+    for entry in entries:
+        try:
+            if group_ip not in ipaddress.ip_network(entry["group_prefix"], strict=False):
+                continue
+            if source_ip is not None and source_ip not in ipaddress.ip_network(
+                entry["source_prefix"], strict=False
+            ):
+                continue
+        except (KeyError, ValueError):
+            continue
+        return entry
+    return None
+
+
+@register
+class MvpnCmulticastStatusCheck(Check):
+    id = "mvpn_cmulticast_status"
+    title = "MVPN c-multicast a provider tunnel"
+    label = "C-Multicast status"
+    mode = Mode.BOTH
+    requires = ("igmp_group", "mvpn_instance")
+    requires_inventory = True
+    service_types = frozenset({"IPVPN"})
+    service_subtypes = frozenset({"mvpn-igmp"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        pairs = igmp_pairs(ctx.subject, ctx.scope)
+        if not pairs:
+            # Kaskada (rozhodnuti 2026-09-02): bez IGMP mnoziny neni co hledat v MVPN.
+            return [Finding(
+                Outcome.SKIP, "bez IGMP reportu neni co hledat v MVPN",
+                label=self.label, value=NO_REPORT_SKIP,
+            )]
+        instance = (
+            ctx.scope.selectors.routing_instances[0]
+            if ctx.scope.selectors.routing_instances else None
+        )
+        data = (ctx.subject.get("mvpn_instance") or {}).get(instance)
+        if data is None:
+            return [Finding(
+                Outcome.BROKEN, f"instance {instance} neni v mvpn vypisu",
+                label=self.label, value="instance neni v mvpn vypisu",
+            )]
+        entries = data.get("c_multicast") or []
+        baseline_entries = (
+            ((ctx.baseline or {}).get("mvpn_instance") or {}).get(instance) or {}
+        ).get("c_multicast") or []
+        findings: list[Finding] = []
+        for source, group in pairs:
+            sg = sg_label(source, group)
+            entry = _cmulticast_entry(entries, source, group)
+            if entry is None:
+                findings.append(Finding(
+                    Outcome.BROKEN, f"{sg}: chybi c-multicast zaznam",
+                    label=self.label, group=sg, value="chybi c-multicast zaznam",
+                ))
+                continue
+            findings.append(Finding(
+                Outcome.OK, f"{sg}: c-multicast {entry['source_prefix']}:{entry['group_prefix']}",
+                label=self.label, group=sg,
+                value=f"{entry['source_prefix']}:{entry['group_prefix']}",
+            ))
+            was = _cmulticast_entry(baseline_entries, source, group) if ctx.has_baseline else None
+            findings.append(self._tunnel_row(sg, entry, was))
+        return findings
+
+    @staticmethod
+    def _tunnel_row(sg: str, entry: dict[str, Any], was: dict[str, Any] | None) -> Finding:
+        tunnel = entry.get("provider_tunnel_id") or "-"
+        pe = entry.get("sender_pe")
+        was_tunnel = was.get("provider_tunnel_id") if was else None
+        was_pe = was.get("sender_pe") if was else None
+        if not pe:
+            outcome, note = Outcome.BROKEN, " - bez provider tunelu"
+        elif was_pe and was_pe != pe:
+            # Jen sender PE, ne cely retezec: tunnel id se pri re-signalizaci
+            # LSP zmeni bez zmeny sluzby (rozhodnuti 2026-09-02).
+            outcome, note = Outcome.DEGRADED, f" - sender PE se zmenil z {was_pe}"
+        else:
+            outcome, note = Outcome.OK, ""
+        return Finding(
+            outcome, f"{sg}: provider tunnel {tunnel}{note}",
+            label="Provider tunnel", group=sg, value=tunnel, baseline_value=was_tunnel,
+        )

@@ -12,6 +12,7 @@ from migration_validator.checks.multicast import (
     CoreMulticastForwardingCheck,
     IgmpMembershipReportCheck,
     MulticastForwardingStatusCheck,
+    MvpnCmulticastStatusCheck,
     assign_sources,
     format_uptime_hms,
     igmp_pairs,
@@ -384,3 +385,90 @@ def test_core_missing_rate_is_skip():
     rate_row = _by_label(findings, sg_label(*SG))["Forwarding rate packets"]
     assert rate_row.outcome is Outcome.SKIP
     assert rate_row.value == RATE_UNAVAILABLE
+
+
+# --- mvpn_cmulticast_status -------------------------------------------------
+
+RI = "MULTICAST-STREAM-B-MUX1-RECEIVER"
+MSG = ("10.12.12.1", "239.1.1.1")
+TUNNEL = "RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13"
+
+
+def _mvpn_scope(iface="irb.2"):
+    return _scope(iface, "IPVPN", "mvpn-igmp", [RI])
+
+
+def _entry(tunnel=TUNNEL, pe="150.0.0.13", source=f"{MSG[0]}/32", group=f"{MSG[1]}/32"):
+    return {"source_prefix": source, "group_prefix": group, "provider_tunnel_id": tunnel, "sender_pe": pe}
+
+
+def _mvpn_facts(entries=None, iface="irb.2", pairs=(MSG,), instance_present=True):
+    facts = _igmp(iface, *pairs)
+    facts["mvpn_instance"] = {RI: {"c_multicast": entries if entries is not None else [_entry()]}} if instance_present else {}
+    return facts
+
+
+def test_mvpn_pass_rows():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(_mvpn_facts(), scope=_mvpn_scope()))
+    rows = _by_label(findings, sg_label(*MSG))
+    assert [f.label for f in findings] == ["C-Multicast status", "Provider tunnel"]
+    assert rows["C-Multicast status"].outcome is Outcome.OK
+    assert rows["C-Multicast status"].value == "10.12.12.1/32:239.1.1.1/32"
+    assert rows["Provider tunnel"].outcome is Outcome.OK
+    assert rows["Provider tunnel"].value == TUNNEL
+
+
+def test_mvpn_without_igmp_is_skip():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(_mvpn_facts(pairs=()), scope=_mvpn_scope()))
+    assert [(f.outcome, f.label, f.value) for f in findings] == [
+        (Outcome.SKIP, "C-Multicast status", NO_REPORT_SKIP)]
+
+
+def test_mvpn_instance_missing_is_fail():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(_mvpn_facts(instance_present=False), scope=_mvpn_scope()))
+    assert [(f.outcome, f.value) for f in findings] == [(Outcome.BROKEN, "instance neni v mvpn vypisu")]
+
+
+def test_mvpn_missing_cmulticast_entry_is_fail():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(_mvpn_facts(entries=[]), scope=_mvpn_scope()))
+    assert [(f.outcome, f.label, f.value, f.group) for f in findings] == [
+        (Outcome.BROKEN, "C-Multicast status", "chybi c-multicast zaznam", sg_label(*MSG))]
+
+
+def test_mvpn_invalid_tunnel_is_fail():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(entries=[_entry(tunnel="I-P-tnl:invalid", pe=None)]), scope=_mvpn_scope()))
+    row = _by_label(findings, sg_label(*MSG))["Provider tunnel"]
+    assert row.outcome is Outcome.BROKEN
+    assert row.value == "I-P-tnl:invalid"
+    assert "bez provider tunelu" in row.message
+
+
+def test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not():
+    """Mutant: porovnani celeho retezce misto sender_pe polozi druhou
+    polovinu testu (overit spustenim v Tasku 11)."""
+    resignaled = "RSVP-TE P2MP:150.0.0.13, 99999,150.0.0.13"
+    same_pe = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=resignaled)]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    assert _by_label(same_pe, sg_label(*MSG))["Provider tunnel"].outcome is Outcome.OK
+    assert _by_label(same_pe, sg_label(*MSG))["Provider tunnel"].baseline_value == resignaled
+
+    other_pe = "RSVP-TE P2MP:150.0.0.11, 24209,150.0.0.11"
+    moved = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=other_pe, pe="150.0.0.11")]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    assert _by_label(moved, sg_label(*MSG))["Provider tunnel"].outcome is Outcome.DEGRADED
+
+
+def test_mvpn_asm_report_matches_by_group_only():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(pairs=((None, MSG[1]),)), scope=_mvpn_scope()))
+    assert _by_label(findings, sg_label(None, MSG[1]))["C-Multicast status"].outcome is Outcome.OK
+
+
+def test_mvpn_check_applies_only_to_mvpn_igmp():
+    check = MvpnCmulticastStatusCheck()
+    assert check.applies_to(_mvpn_scope())
+    assert not check.applies_to(_scope())
+    assert not check.applies_to(_scope("irb.3", "IPVPN", None, [RI]))
