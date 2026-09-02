@@ -45,8 +45,8 @@ class Collector(ABC):
         return {}
 
     def record_calls(self, device: Any, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
-        """Volani pro `record` a pro collect, kdyz zavisi na zarizeni (napr.
-        seznam instanci). Default = staticke rpc_calls."""
+        """Volani pro `record`, `--record-raw` i pro collect, kdyz zavisi na
+        zarizeni (napr. seznam instanci). Default = staticke rpc_calls."""
         return self.rpc_calls(platform)
 
     def rpc_calls(self, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:

@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from lxml import etree
 
-from migration_validator.capture import capture_device
+from migration_validator.capture import _record, capture_device
+from migration_validator.collectors.base import Collector
 from migration_validator.models.inventory import load_inventory
 from migration_validator.scoping.builder import build_scopes
 
@@ -243,6 +244,108 @@ def test_record_raw_writes_every_rpc_of_multi_rpc_collector(tmp_path):
     target = tmp_path / "junos"
     assert (target / "evpn_mac.xml").exists()
     assert (target / "evpn_mac.2.xml").exists()
+
+
+class _TwoCallCollector(Collector):
+    """Collector, jehoz pocet volani zavisi na zarizeni (jako
+    multicast_route na MX) - record_calls() vraci dve RPC, rpc_calls() jen
+    jedno. Test overuje, ze --record-raw pouziva record_calls(), ne
+    rpc_calls() (viz base.py:rpc_calls docstring vs record_calls docstring)."""
+
+    name = "two_call"
+
+    def rpc_name(self, platform):
+        return "get_a_information"
+
+    def parse(self, xml, platform):
+        return {}
+
+    def record_calls(self, device, platform):
+        return (("get_a_information", {}), ("get_b_information", {}))
+
+
+class _TwoCallRpc:
+    def get_a_information(self, **kwargs):
+        return etree.fromstring("<a/>")
+
+    def get_b_information(self, **kwargs):
+        return etree.fromstring("<b/>")
+
+
+class _TwoCallDevice:
+    rpc = _TwoCallRpc()
+
+
+def test_record_uses_record_calls_not_rpc_calls(tmp_path):
+    """--record-raw musi jit pres record_calls() - collector zavisly na
+    zarizeni (multicast_route: per-VRF na MX) by jinak tise ztratil
+    nahravky, ktere rpc_calls() nezna (viz base.py record_calls docstring)."""
+    _record(tmp_path, "junos", "two_call", _TwoCallDevice(), _TwoCallCollector())
+
+    target = tmp_path / "junos"
+    assert (target / "two_call.xml").exists()
+    assert (target / "two_call.2.xml").exists()
+
+
+class _BoomRecordCallsCollector(Collector):
+    """record_calls() sama muze zavolat RPC zavisle na zarizeni
+    (get-instance-information pro multicast_route na MX) a to volani muze
+    selhat - nahravani je best effort, takze to nesmi zastavit zbytek
+    capture (ostatni collectory pod stejnym --record-raw behem)."""
+
+    name = "boom_record_calls"
+
+    def rpc_name(self, platform):
+        return "get_boom_information"
+
+    def parse(self, xml, platform):
+        return {}
+
+    def record_calls(self, device, platform):
+        raise RuntimeError("get-instance-information selhalo")
+
+
+class _BoomDevice:
+    rpc = None
+
+
+def test_record_does_not_raise_when_record_calls_fails(tmp_path):
+    # Nesmi vyhodit vyjimku - jinak by pod capture_device spadl cely beh
+    # a ostatni collectory by se pod --record-raw vubec nenahraly.
+    _record(tmp_path, "junos", "boom_record_calls", _BoomDevice(), _BoomRecordCallsCollector())
+
+    assert not (tmp_path / "junos" / "boom_record_calls.xml").exists()
+
+
+def test_record_raw_continues_after_one_collector_boom(tmp_path, monkeypatch):
+    """Cely capture_device pod --record-raw: jeden collector s padajicim
+    record_calls() nesmi zabranit nahravce ostatnich collectoru.
+
+    Collector se nezaregistruje do globalniho registru (ten je sdileny
+    napric testovacimi moduly ve stejnem behu - test_cli.py by pak
+    _cmd_record zavolal i na nej a spadl na stejne vyjimce, kterou tenhle
+    test overuje, ze nezpusobi). Misto toho se nahradi
+    `capture.collectors_for`, ktere `_select_collectors` pouziva - platforma
+    a jmena zustavaji skutecna, jen seznam collectoru je uzavreny.
+    """
+    from migration_validator import capture as capture_module
+    from migration_validator.collectors.interfaces import InterfacesCollector
+
+    boom = _BoomRecordCallsCollector()
+    monkeypatch.setattr(
+        capture_module,
+        "collectors_for",
+        lambda platform: [InterfacesCollector(), boom],
+    )
+
+    # collector_names=None (default) - se seznamem by _select_collectors
+    # overoval jmena proti all_collectors() (skutecny globalni registr, kde
+    # boom_record_calls neni), a spadl by na "neznamy collector".
+    capture_device(FakeDevice(), "172.20.20.4", now=NOW, record_raw=tmp_path)
+
+    target = tmp_path / "junos"
+    assert (target / "interfaces.xml").exists()
+    assert not (target / "boom_record_calls.xml").exists()
 
 
 def test_collector_subset_can_be_selected():

@@ -59,11 +59,23 @@ def _record(xml_root: Path, platform: str, name: str, device: Any, collector) ->
 
     Collector s vice RPC uklada kazde zvlast - prvni pod jmenem oblasti,
     dalsi s poradovym cislem. Jinak by fixture nesla jen cast dat.
+
+    record_calls() je autorita (ne rpc_calls()) - collector zavisly na
+    zarizeni (multicast_route: seznam VRF na MX pres get-instance-information)
+    by jinak pod --record-raw tise ztratil per-VRF nahravky. Volani
+    record_calls() samo o sobe muze selhat (RPC pro zjisteni seznamu
+    instanci spadne) - zabaleno stejne jako jednotlive RPC nize, aby
+    nahravani zustalo best effort a nezastavilo zbytek collectoru.
     """
     target = Path(xml_root) / platform
     target.mkdir(parents=True, exist_ok=True)
 
-    for index, (rpc_name, rpc_kwargs) in enumerate(collector.rpc_calls(platform)):
+    try:
+        calls = collector.record_calls(device, platform)
+    except Exception:  # noqa: BLE001 - nahravani je best effort
+        return
+
+    for index, (rpc_name, rpc_kwargs) in enumerate(calls):
         try:
             xml = getattr(device.rpc, rpc_name)(**rpc_kwargs)
         except Exception:  # noqa: BLE001 - nahravani je best effort
