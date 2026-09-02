@@ -9,8 +9,10 @@ from migration_validator.checks.multicast import (
     NO_REPORT,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
+    CoreMulticastForwardingCheck,
     IgmpMembershipReportCheck,
     MulticastForwardingStatusCheck,
+    assign_sources,
     format_uptime_hms,
     igmp_pairs,
     routes_for,
@@ -266,5 +268,119 @@ def test_forwarding_missing_rate_is_skip_not_failure():
     assert findings[0].outcome is Outcome.OK
     assert findings[0].value == "1 S,G"
     rate_row = _by_label(findings, sg_label(*SG))["Forwarding-rate"]
+    assert rate_row.outcome is Outcome.SKIP
+    assert rate_row.value == RATE_UNAVAILABLE
+
+
+# --- core_multicast_forwarding ----------------------------------------------
+
+PREFIX = "10.11.11.1/32"
+INET2 = ({"rib": "inet.2", "prefix": PREFIX, "route_type": "static",
+          "next_hops": [{"to": "10.1.1.2", "interface": None, "qualified": False, "active": True}],
+          "active": True},)
+
+
+def _core_scope(static_routes=INET2):
+    return _scope("lo0.0", "Core", "loopback", static_routes=static_routes)
+
+
+def _core_facts(routes=None, via=("et-0/0/0.0",), inet2_present=True):
+    facts = {"multicast_route": {"master": routes if routes is not None else {
+        f"{SG[0]},{SG[1]}": _route(downstream=["et-0/0/8.11", "irb.2"])}}}
+    facts["routes"] = {"inet.2": {PREFIX: {"next_hop": ["10.1.1.2"], "via": list(via),
+                                           "active": True, "protocol": "static"}}} if inet2_present else {}
+    return facts
+
+
+def test_assign_sources_longest_prefix_wins_and_each_route_once():
+    table = {"10.11.11.1,232.1.1.1": {}, "10.11.12.1,232.1.1.2": {}, "192.0.2.1,232.9.9.9": {}}
+    assigned = assign_sources(table, ["10.11.0.0/16", "10.11.11.0/24"])
+    assert [k for k, _ in assigned["10.11.11.0/24"]] == ["10.11.11.1,232.1.1.1"]
+    assert [k for k, _ in assigned["10.11.0.0/16"]] == ["10.11.12.1,232.1.1.2"]
+
+
+def test_core_no_inet2_statics_is_silent():
+    assert CoreMulticastForwardingCheck().run(_ctx(_core_facts(), scope=_core_scope(()))) == []
+
+
+def test_core_pass_block_shape():
+    findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(), scope=_core_scope()))
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].label == "Multicast forwarding status"
+    assert findings[0].value == f"Existuje S,G pro {PREFIX}"
+    rows = _by_label(findings, sg_label(*SG))
+    assert [f.label for f in findings[1:]] == [
+        "Upstream interface", "Downstream interfaces", "Forwarding rate packets", "Route uptime"]
+    assert rows["Upstream interface"].outcome is Outcome.OK
+    assert rows["Upstream interface"].value == "et-0/0/0.0"
+    assert rows["Downstream interfaces"].value == "et-0/0/8.11, irb.2"
+    assert rows["Forwarding rate packets"].value == "6 pps"
+
+
+def test_core_no_stream_for_prefix_fails_with_four_skips():
+    findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(routes={}), scope=_core_scope()))
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == f"Neexistuje S,G pro {PREFIX}"
+    assert [(f.outcome, f.label, f.value) for f in findings[1:]] == [
+        (Outcome.SKIP, "S,G", ""),
+        (Outcome.SKIP, "Forwarding rate packets", ""),
+        (Outcome.SKIP, "Upstream interface", ""),
+        (Outcome.SKIP, "Downstream interfaces", ""),
+    ]
+
+
+def test_core_upstream_must_be_one_of_via():
+    """ECMP / qualified-next-hop: inet.2 routa ma vic via, upstream staci
+    jeden z nich."""
+    findings = CoreMulticastForwardingCheck().run(_ctx(
+        _core_facts(via=("et-0/0/1.0", "et-0/0/0.0")), scope=_core_scope()))
+    assert _by_label(findings, sg_label(*SG))["Upstream interface"].outcome is Outcome.OK
+    wrong = CoreMulticastForwardingCheck().run(_ctx(_core_facts(via=("et-0/0/1.0",)), scope=_core_scope()))
+    row = _by_label(wrong, sg_label(*SG))["Upstream interface"]
+    assert row.outcome is Outcome.BROKEN and row.value == "et-0/0/0.0"
+
+
+def test_core_inet2_route_missing_from_table_skips_upstream_row():
+    findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(inet2_present=False), scope=_core_scope()))
+    row = _by_label(findings, sg_label(*SG))["Upstream interface"]
+    assert row.outcome is Outcome.SKIP and row.value == "routa neni v tabulce"
+
+
+def test_core_no_downstream_fails():
+    routes = {f"{SG[0]},{SG[1]}": _route(downstream=[])}
+    findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(routes=routes), scope=_core_scope()))
+    row = _by_label(findings, sg_label(*SG))["Downstream interfaces"]
+    assert row.outcome is Outcome.BROKEN and row.value == "Zadne downstream interfacy"
+
+
+def test_core_sg_set_compared_against_baseline():
+    """Mutant: smazani vetve DEGRADED pri rozdilu mnozin polozi tento test."""
+    baseline = _core_facts(routes={
+        f"{SG[0]},{SG[1]}": _route(), "10.11.11.1,232.1.1.9": _route()})
+    findings = CoreMulticastForwardingCheck().run(_ctx(
+        _core_facts(), baseline=baseline, scope=_core_scope(), baseline_scope=_core_scope()))
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].baseline_value == "(10.11.11.1, 232.1.1.1), (10.11.11.1, 232.1.1.9)"
+    same = CoreMulticastForwardingCheck().run(_ctx(
+        _core_facts(), baseline=_core_facts(), scope=_core_scope(), baseline_scope=_core_scope()))
+    assert same[0].outcome is Outcome.OK
+    assert same[0].baseline_value == "(10.11.11.1, 232.1.1.1)"
+
+
+def test_core_check_applies_only_to_loopback():
+    check = CoreMulticastForwardingCheck()
+    assert check.applies_to(_core_scope())
+    assert not check.applies_to(_scope("et-0/0/0.0", "Core", "transit"))
+    assert not check.applies_to(_scope())
+
+
+def test_core_missing_rate_is_skip():
+    """Radici rozhodnuti Tasku 1 prenesene do core checku: chybejici rate
+    (EVO bez statistik) je SKIP, ne selhani - a souhrn zustava OK, protoze
+    ho rozhoduje jen existence streamu a mnozina proti baseline."""
+    routes = {f"{SG[0]},{SG[1]}": _route(pps=None)}
+    findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(routes=routes), scope=_core_scope()))
+    assert findings[0].outcome is Outcome.OK
+    rate_row = _by_label(findings, sg_label(*SG))["Forwarding rate packets"]
     assert rate_row.outcome is Outcome.SKIP
     assert rate_row.value == RATE_UNAVAILABLE

@@ -10,6 +10,7 @@ z definice; porovnava se jen mnozina (S,G) a sender PE tunelu.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
@@ -250,3 +251,127 @@ class MulticastForwardingStatusCheck(Check):
             ),
             *stream_rows(sg, route, rate_label="Forwarding-rate"),
         ]
+
+
+# --- core_multicast_forwarding -----------------------------------------------
+
+CORE_SKIP_LABELS = ("S,G", "Forwarding rate packets", "Upstream interface", "Downstream interfaces")
+
+
+def assign_sources(
+    table: dict[str, dict[str, Any]], prefixes: list[str]
+) -> dict[str, list[tuple[str, dict[str, Any]]]]:
+    """Routy k inet.2 prefixum podle zdroje - nejdelsi pokryvajici prefix
+    vyhrava, kazda routa se pocita jen jednou. Ne-IPv4 prefixy a zdroje
+    se preskoci (inet.2 je IPv4 tabulka)."""
+    networks = []
+    for prefix in prefixes:
+        try:
+            networks.append((ipaddress.ip_network(prefix, strict=False), prefix))
+        except ValueError:
+            continue
+    networks.sort(key=lambda item: item[0].prefixlen, reverse=True)
+    assigned: dict[str, list[tuple[str, dict[str, Any]]]] = {prefix: [] for prefix in prefixes}
+    for key, route in sorted(table.items()):
+        try:
+            source = ipaddress.ip_address(key.split(",", 1)[0])
+        except ValueError:
+            continue
+        for network, prefix in networks:
+            if source.version == network.version and source in network:
+                assigned[prefix].append((key, route))
+                break
+    return assigned
+
+
+def _inet2_prefixes(scope: Scope) -> list[str]:
+    return sorted(
+        str(route["prefix"])
+        for route in scope.selectors.static_routes
+        if str(route.get("rib")) == "inet.2"
+        and str(route.get("route_type", "static")) == "static"
+    )
+
+
+def _labels_of(streams: list[tuple[str, dict[str, Any]]]) -> str:
+    return ", ".join(sg_label(*key.split(",", 1)) for key, _ in streams)
+
+
+@register
+class CoreMulticastForwardingCheck(Check):
+    id = "core_multicast_forwarding"
+    title = "Multicast forwarding pro inet.2 statiky"
+    label = "Multicast forwarding status"
+    mode = Mode.BOTH
+    requires = ("multicast_route", "routes")
+    requires_inventory = True
+    service_types = frozenset({"Core"})
+    service_subtypes = frozenset({"loopback"})
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        prefixes = _inet2_prefixes(ctx.scope)
+        if not prefixes:
+            # Bez inet.2 zameru ticho, ne SKIP (rozhodnuti 2026-09-02).
+            return []
+        assigned = assign_sources(multicast_table(ctx.subject), prefixes)
+        baseline_assigned = (
+            assign_sources(multicast_table(ctx.baseline), prefixes)
+            if ctx.has_baseline else None
+        )
+        inet2 = (ctx.subject.get("routes") or {}).get("inet.2") or {}
+        findings: list[Finding] = []
+        for prefix in prefixes:
+            streams = assigned.get(prefix, [])
+            was = baseline_assigned.get(prefix, []) if baseline_assigned else []
+            was_value = _labels_of(was) if was else None
+            if not streams:
+                findings.append(Finding(
+                    Outcome.BROKEN, f"neexistuje S,G se zdrojem v {prefix}",
+                    label=self.label, value=f"Neexistuje S,G pro {prefix}", baseline_value=was_value,
+                ))
+                findings.extend(
+                    Finding(Outcome.SKIP, f"{prefix}: bez streamu", label=label, value="")
+                    for label in CORE_SKIP_LABELS
+                )
+                continue
+            changed = bool(was) and {k for k, _ in was} != {k for k, _ in streams}
+            findings.append(Finding(
+                Outcome.DEGRADED if changed else Outcome.OK,
+                f"existuje S,G se zdrojem v {prefix}: {_labels_of(streams)}"
+                + (" (mnozina se lisi od baseline)" if changed else ""),
+                label=self.label, value=f"Existuje S,G pro {prefix}", baseline_value=was_value,
+            ))
+            measured = inet2.get(prefix)
+            vias = list(measured.get("via") or []) if measured else None
+            for key, route in streams:
+                sg = sg_label(*key.split(",", 1))
+                findings.extend(self._stream(sg, route, vias))
+        return findings
+
+    @staticmethod
+    def _stream(sg: str, route: dict[str, Any], vias: list[str] | None) -> list[Finding]:
+        upstream = route.get("upstream_interface")
+        if vias is None:
+            # FAIL za chybejici inet.2 routu nese static_route_status -
+            # tady by byl druhy FAIL za tutez pricinu.
+            upstream_row = Finding(
+                Outcome.SKIP, f"{sg}: inet.2 routa neni v tabulce, upstream nelze overit",
+                label="Upstream interface", group=sg, value="routa neni v tabulce",
+            )
+        else:
+            ok = bool(upstream) and upstream in vias
+            upstream_row = Finding(
+                Outcome.OK if ok else Outcome.BROKEN,
+                f"{sg}: upstream {upstream or '-'}"
+                + ("" if ok else f" neni mezi via inet.2 routy ({', '.join(vias) or '-'})"),
+                label="Upstream interface", group=sg, value=upstream or "-",
+            )
+        downstream = route.get("downstream_interfaces") or []
+        downstream_row = Finding(
+            Outcome.OK if downstream else Outcome.BROKEN,
+            f"{sg}: downstream {', '.join(downstream) or 'zadne'}",
+            label="Downstream interfaces", group=sg,
+            value=", ".join(downstream) if downstream else "Zadne downstream interfacy",
+        )
+        return [upstream_row, downstream_row, *stream_rows(sg, route, rate_label="Forwarding rate packets")]
