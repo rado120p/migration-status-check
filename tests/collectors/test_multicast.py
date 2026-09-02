@@ -72,8 +72,13 @@ def test_multicast_route_parses_master_and_ri_on_evo(rpc_fixture):
     master = data["master"][route_key("10.11.11.1", "232.1.1.1")]
     assert master["upstream_interface"]
     assert IGMP_IFACE["junos-evo"] in master["downstream_interfaces"]
-    # R2: EVO nese <multicast-statistics-timed-out/> misto forwarding-rate-packets.
-    assert master["forwarding_rate_pps"] is None
+    # R2: nahravka 2026-09-03 (task 5c, post-migration z .5) uz nese
+    # <forwarding-rate-packets> misto <multicast-statistics-timed-out/> -
+    # stream bezi dost dlouho, ze box stihl statistiky spocitat. Vetev
+    # "chybejici element je None" ma vlastni pokryti na syntetickem XML
+    # (test_route_without_rate_element_is_none_not_zero nize), takze tady
+    # se overuje jen aktualni realny obsah.
+    assert master["forwarding_rate_pps"] == 6
     assert isinstance(master["uptime_seconds"], int)
     ri = data[MVPN_RI][route_key("10.12.12.1", "239.1.1.1")]
     assert ri["upstream_interface"].startswith(("lsi.", "vt-"))

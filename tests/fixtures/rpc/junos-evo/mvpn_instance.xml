@@ -18,7 +18,7 @@
           <neighbor-entry>
             <neighbor-identifier>150.0.0.13</neighbor-identifier>
             <provider-tunnel-id>RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13</provider-tunnel-id>
-            <label-in>55</label-in>
+            <label-in>295</label-in>
           </neighbor-entry>
         </neighbor>
         <c-multicast-ipv4>
@@ -27,7 +27,7 @@
             <provider-tunnel-id>RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13</provider-tunnel-id>
             <c-multicast-property/>
             <c-multicast-fwd-nh>M-(nil)</c-multicast-fwd-nh>
-            <label-in>55</label-in>
+            <label-in>295</label-in>
           </c-multicast-ipv4-entry>
         </c-multicast-ipv4>
       </instance-entry>

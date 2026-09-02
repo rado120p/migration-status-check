@@ -1,6 +1,6 @@
 <arp-table-information style="no-resolve">
   <arp-table-entry>
-    <mac-address>12:d3:eb:3b:00:00</mac-address>
+    <mac-address>88:25:a7:18:00:00</mac-address>
     <ip-address>10.1.1.2</ip-address>
     <interface-name>et-0/0/0.0</interface-name>
     <arp-table-entry-flags>
@@ -10,7 +10,7 @@
     <reference-count>9</reference-count>
   </arp-table-entry>
   <arp-table-entry>
-    <mac-address>0c:00:64:21:1e:02</mac-address>
+    <mac-address>0c:00:62:1f:00:02</mac-address>
     <ip-address>10.1.0.4</ip-address>
     <interface-name>et-0/0/1.0</interface-name>
     <arp-table-entry-flags>
@@ -20,7 +20,7 @@
     <reference-count>7</reference-count>
   </arp-table-entry>
   <arp-table-entry>
-    <mac-address>0c:00:4b:4c:4e:01</mac-address>
+    <mac-address>0c:00:68:31:c7:01</mac-address>
     <ip-address>152.11.13.2</ip-address>
     <interface-name>et-0/0/8.13</interface-name>
     <arp-table-entry-flags>
@@ -30,7 +30,7 @@
     <reference-count>2</reference-count>
   </arp-table-entry>
   <arp-table-entry>
-    <mac-address>0c:00:b7:c7:6b:03</mac-address>
+    <mac-address>0c:00:c3:34:f8:03</mac-address>
     <ip-address>152.11.14.4</ip-address>
     <interface-name>irb.14[ ae0.14 ]</interface-name>
     <arp-table-entry-flags>
@@ -41,7 +41,7 @@
     <reference-count>1</reference-count>
   </arp-table-entry>
   <arp-table-entry>
-    <mac-address>0c:00:4b:4c:4e:01</mac-address>
+    <mac-address>0c:00:68:31:c7:01</mac-address>
     <ip-address>198.11.13.2</ip-address>
     <interface-name>et-0/0/8.113</interface-name>
     <arp-table-entry-flags>
@@ -51,8 +51,8 @@
     <reference-count>2</reference-count>
   </arp-table-entry>
   <arp-table-entry>
-    <mac-address>0c:00:f9:bb:ac:02</mac-address>
-    <ip-address>198.11.14.2</ip-address>
+    <mac-address>0c:00:17:75:54:02</mac-address>
+    <ip-address>198.11.14.4</ip-address>
     <interface-name>irb.15[ ae0.15 ]</interface-name>
     <arp-table-entry-flags>
       <permanent/>
@@ -61,5 +61,71 @@
     <state>perm</state>
     <reference-count>1</reference-count>
   </arp-table-entry>
-  <arp-entry-count>6</arp-entry-count>
+  <arp-table-entry>
+    <mac-address>0c:00:19:f1:80:02</mac-address>
+    <ip-address>10.40.94.2</ip-address>
+    <interface-name>irb.4094[ ae0.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>1</reference-count>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>0c:00:da:84:d5:03</mac-address>
+    <ip-address>10.40.94.3</ip-address>
+    <interface-name>irb.4094[ ae0.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>1</reference-count>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>0c:00:68:31:c7:01</mac-address>
+    <ip-address>10.40.94.4</ip-address>
+    <interface-name>irb.4094[ et-0/0/8.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>1</reference-count>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>2c:6b:f5:bd:36:f0</mac-address>
+    <ip-address>10.40.94.10</ip-address>
+    <interface-name>irb.4094[ ae0.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>2</reference-count>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>2c:6b:f5:5e:30:f0</mac-address>
+    <ip-address>10.40.94.252</ip-address>
+    <interface-name>irb.4094[ ae0.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>1</reference-count>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>0c:00:26:bc:a8:04</mac-address>
+    <ip-address>10.40.95.3</ip-address>
+    <interface-name>irb.4094[ ae0.4094 ]</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+    <state>perm</state>
+    <reference-count>1</reference-count>
+  </arp-table-entry>
+  <arp-entry-count>12</arp-entry-count>
 </arp-table-information>

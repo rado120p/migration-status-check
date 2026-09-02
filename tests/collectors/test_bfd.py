@@ -1,14 +1,20 @@
 """Testy collectoru BFD proti nahranemu XML z laborky.
 
-Obe nahravky maji spolecny peer 152.11.13.2. Na 172.20.20.5 (junos-evo) je
-Up se dvema sessions na et-0/0/8. Na 172.20.20.4 (junos) byla pred vlnou
-multicast-checks (nahravka 2026-07-31) taky Up na ge-0/0/2, ale nahravka
-2026-09-02 (ideal pre-migration state z Ansible commitu, viz task 5b) ukazala,
-ze `bfd-liveness-detection` byl z BGP skupin/sousedu na .4 odebran cele -
-sessions zustavaji v tabulce jako AdminDown/bez klientu (Junos je nemaze
-hned), 198.11.13.2 a 2001:db8:11:13::b (L3VPN-CPE13-NNI) uz z tabulky
-vypadly uplne. Tvar odpovedi se mezi rodinami nelisi - same elementy, jen
-jina jmena rozhrani a (aktualne) jiny operacni stav na .4.
+Puvodne (pred 2026-09) obe nahravky nesly spolecny peer 152.11.13.2, Up na
+obou stranach. Nahravka 2026-09-02 (task 5b, ideal pre-migration state z
+Ansible commitu) ukazala, ze `bfd-liveness-detection` byl z BGP skupin/
+sousedu na .4 odebran cele - sessions zustavaji v tabulce jako AdminDown/
+bez klientu (Junos je nemaze hned), 198.11.13.2 a 2001:db8:11:13::b
+(L3VPN-CPE13-NNI) uz z tabulky vypadly uplne.
+
+Nahravka 2026-09-03 (task 5c, post-migration z .5 po presunu sluzeb) ukazala
+totez o krok dal: uzivatel BFD odebral DEVICE-WIDE na OBOU routerech
+zaroven. .5 (junos-evo) uz nema zadny konfigurovany bfd_peer a session
+tabulka (tests/fixtures/rpc/junos-evo/bfd.xml) je uplne prazdna (0 session,
+0 clients) - na rozdil od .4, kde jeste stale AdminDown zaznamy zustavaji.
+Testy, ktere drive overovaly konkretni peer/stav proti nahravce z .5, uz
+takovy scenar na zive laborce nemaji - prevedeny na synteticke XML (stejny
+zpusob jako EMPTY_OUTPUT nize), aby o pokryti nerozhodoval stav laborky.
 
 Prazdny vypis je platny stav a testuje se na syntetickem XML (EMPTY_OUTPUT),
 ne na nahravce, aby o pokryti nerozhodoval stav laborky.
@@ -26,11 +32,29 @@ PLATFORMS = ("junos", "junos-evo")
 
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
+    """Collector vraci dict bez ohledu na to, kolik (pripadne zadnych) session laborka ma.
+
+    Do 2026-09-03 (task 5c) obe nahravky nesly spolecny peer 152.11.13.2 a
+    testovalo se tu i na to. Po tomto datu .5 (junos-evo) nema BFD zadne -
+    tvrdit "152.11.13.2 in result" by uz neplatilo pro zadnou platformu
+    stejne (na .4 je to jen stale AdminDown zaznam, na .5 nic). Obsah
+    session konkretniho peera overuji dedikovane testy nize (synteticke pro
+    .5, na realne nahravce pro .4).
+    """
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
     assert isinstance(result, dict)
-    # Obe nahravky nesou session se stejnym peerem, takze vyjimka na
-    # platformu uz neni potreba (AR-30).
-    assert "152.11.13.2" in result
+
+
+def test_evo_session_table_is_empty_after_bfd_removal(rpc_fixture):
+    """Realny fakt z 2026-09-03: .5 uz nema jedinou BFD session vubec.
+
+    Na rozdil od .4 (task 5b), kde stale AdminDown zaznamy v tabulce jeste
+    zustavaji, .5 uz session table vyprazdnila uplne - collector musi umet
+    vratit prazdny dict i z RPC odpovedi, ktera ma sessions=0/clients=0.
+    """
+    result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
+
+    assert result == {}
 
 
 EMPTY_OUTPUT = """
@@ -56,8 +80,36 @@ def test_empty_output_is_a_valid_state(platform):
     assert result == {}
 
 
-def test_up_and_down_sessions_are_recorded_verbatim(rpc_fixture):
-    result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
+def test_up_and_down_sessions_are_recorded_verbatim():
+    """Odpoved nese session verbatim vcetne stavu a rozhrani.
+
+    Do 2026-09-03 (task 5c) toto overovala nahravka z .5 (peer 152.11.13.2
+    Up, 198.11.13.2 Down). BFD odebrane device-wide z laborky vyprazdnilo
+    .5 session tabulku uplne (viz modulovy docstring), takze zadna zive
+    nahrana data uz tenhle mix Up/Down nenesou - synteticke XML, tvar
+    prevzaty ze skutecne zaznamenane odpovedi.
+    """
+    xml = etree.fromstring(
+        b"""
+        <bfd-session-information style="detail">
+          <bfd-session>
+            <session-neighbor>152.11.13.2</session-neighbor>
+            <session-state>Up</session-state>
+            <session-interface>et-0/0/8.13</session-interface>
+            <local-diagnostic>None</local-diagnostic>
+            <remote-state>Up</remote-state>
+          </bfd-session>
+          <bfd-session>
+            <session-neighbor>198.11.13.2</session-neighbor>
+            <session-state>Down</session-state>
+            <local-diagnostic>None</local-diagnostic>
+            <remote-state>AdminDown</remote-state>
+          </bfd-session>
+        </bfd-session-information>
+        """
+    )
+
+    result = BfdCollector().parse(xml, "junos-evo")
 
     assert result["152.11.13.2"]["state"] == "Up"
     assert result["152.11.13.2"]["interface"] == "et-0/0/8.13"
@@ -65,9 +117,31 @@ def test_up_and_down_sessions_are_recorded_verbatim(rpc_fixture):
     assert result["198.11.13.2"]["remote_state"] == "AdminDown"
 
 
-def test_client_names_are_collected(rpc_fixture):
-    """Klient rozlisi BGP session od te, kterou drzi jiny protokol."""
-    result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
+def test_client_names_are_collected():
+    """Klient rozlisi BGP session od te, kterou drzi jiny protokol.
+
+    Synteticke XML od 2026-09-03 (task 5c) ze stejneho duvodu jako
+    test_up_and_down_sessions_are_recorded_verbatim vyse - .5 uz zadnou
+    session s klientem v realne nahravce nema.
+    """
+    xml = etree.fromstring(
+        b"""
+        <bfd-session-information style="detail">
+          <bfd-session>
+            <session-neighbor>152.11.13.2</session-neighbor>
+            <session-state>Up</session-state>
+            <session-interface>et-0/0/8.13</session-interface>
+            <bfd-client>
+              <client-name>BGP</client-name>
+            </bfd-client>
+            <local-diagnostic>None</local-diagnostic>
+            <remote-state>Up</remote-state>
+          </bfd-session>
+        </bfd-session-information>
+        """
+    )
+
+    result = BfdCollector().parse(xml, "junos-evo")
 
     assert result["152.11.13.2"]["clients"] == ["BGP"]
 
@@ -128,9 +202,35 @@ def test_mx_client_names_are_collected(rpc_fixture):
     assert result["152.11.13.2"]["clients"] == ["BGP"]
 
 
-def test_entries_have_expected_keys(rpc_fixture):
-    result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
+def test_entries_have_expected_keys():
+    """Kazda session ma presne tuto sadu klicu - zadny navic, zadny chybi.
 
+    Do 2026-09-03 (task 5c) toto overovala nahravka z .5, ktera aspon jednu
+    session mela. Po vyprazdneni .5 tabulky (viz modulovy docstring) by
+    smycka pres `result.values()` nad realnou nahravkou proslo VAKUOVE -
+    prazdny dict nema co iterovat. Synteticke XML drzi test na skutecnem
+    obsahu, ne na tom, jestli laborka zrovna nejakou session ma.
+    """
+    xml = etree.fromstring(
+        b"""
+        <bfd-session-information style="detail">
+          <bfd-session>
+            <session-neighbor>152.11.13.2</session-neighbor>
+            <session-state>Up</session-state>
+            <session-interface>et-0/0/8.13</session-interface>
+            <bfd-client>
+              <client-name>BGP</client-name>
+            </bfd-client>
+            <local-diagnostic>None</local-diagnostic>
+            <remote-state>Up</remote-state>
+          </bfd-session>
+        </bfd-session-information>
+        """
+    )
+
+    result = BfdCollector().parse(xml, "junos-evo")
+
+    assert result
     for data in result.values():
         assert set(data) == {
             "state",

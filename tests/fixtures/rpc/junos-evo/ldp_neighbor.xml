@@ -3,40 +3,48 @@
     <ldp-neighbor-address>150.0.0.2</ldp-neighbor-address>
     <interface-name>lo0.0</interface-name>
     <ldp-label-space-id>150.0.0.2:0</ldp-label-space-id>
-    <ldp-remaining-time>41</ldp-remaining-time>
+    <ldp-remaining-time>34</ldp-remaining-time>
     <ldp-local-transport-address>150.0.0.12</ldp-local-transport-address>
     <ldp-transport-address>150.0.0.2</ldp-transport-address>
-    <ldp-config-sequence>1</ldp-config-sequence>
-    <ldp-up-time seconds="4381">01:13:01</ldp-up-time>
+    <ldp-config-sequence>3</ldp-config-sequence>
+    <ldp-up-time seconds="7860">
+02:11:00
+</ldp-up-time>
   </ldp-neighbor>
   <ldp-neighbor>
     <ldp-neighbor-address>150.0.0.11</ldp-neighbor-address>
     <interface-name>lo0.0</interface-name>
     <ldp-label-space-id>150.0.0.11:0</ldp-label-space-id>
-    <ldp-remaining-time>38</ldp-remaining-time>
+    <ldp-remaining-time>36</ldp-remaining-time>
     <ldp-local-transport-address>150.0.0.12</ldp-local-transport-address>
     <ldp-transport-address>150.0.0.11</ldp-transport-address>
-    <ldp-config-sequence>5</ldp-config-sequence>
-    <ldp-up-time seconds="4352">01:12:32</ldp-up-time>
+    <ldp-config-sequence>15</ldp-config-sequence>
+    <ldp-up-time seconds="7859">
+02:10:59
+</ldp-up-time>
   </ldp-neighbor>
   <ldp-neighbor>
     <ldp-neighbor-address>10.1.1.2</ldp-neighbor-address>
     <interface-name>et-0/0/0.0</interface-name>
     <ldp-label-space-id>150.0.0.2:0</ldp-label-space-id>
-    <ldp-remaining-time>14</ldp-remaining-time>
+    <ldp-remaining-time>12</ldp-remaining-time>
     <ldp-local-transport-address>150.0.0.12</ldp-local-transport-address>
     <ldp-transport-address>150.0.0.2</ldp-transport-address>
-    <ldp-config-sequence>1</ldp-config-sequence>
-    <ldp-up-time seconds="4389">01:13:09</ldp-up-time>
+    <ldp-config-sequence>3</ldp-config-sequence>
+    <ldp-up-time seconds="8660">
+02:24:20
+</ldp-up-time>
   </ldp-neighbor>
   <ldp-neighbor>
     <ldp-neighbor-address>10.1.0.4</ldp-neighbor-address>
     <interface-name>et-0/0/1.0</interface-name>
     <ldp-label-space-id>150.0.0.11:0</ldp-label-space-id>
-    <ldp-remaining-time>14</ldp-remaining-time>
+    <ldp-remaining-time>11</ldp-remaining-time>
     <ldp-local-transport-address>150.0.0.12</ldp-local-transport-address>
     <ldp-transport-address>150.0.0.11</ldp-transport-address>
-    <ldp-config-sequence>5</ldp-config-sequence>
-    <ldp-up-time seconds="4392">01:13:12</ldp-up-time>
+    <ldp-config-sequence>15</ldp-config-sequence>
+    <ldp-up-time seconds="8014">
+02:13:34
+</ldp-up-time>
   </ldp-neighbor>
 </ldp-neighbor-information>

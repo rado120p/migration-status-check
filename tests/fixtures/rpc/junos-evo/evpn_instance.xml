@@ -2,14 +2,14 @@
   <evpn-instance style="extensive">
     <evpn-instance-name>EVPN-VLAN-AWARE-CPE13-NNI</evpn-instance-name>
     <route-distinguisher>65000:313</route-distinguisher>
-    <evpn-instance-mac-label>292</evpn-instance-mac-label>
+    <evpn-instance-mac-label>284</evpn-instance-mac-label>
     <evpn-instance-control-word>enabled</evpn-instance-control-word>
     <duplicate-mac-detection-threshold>5</duplicate-mac-detection-threshold>
     <duplicate-mac-detection-window>180</duplicate-mac-detection-window>
     <mac-database-status-table style="extensive">
       <local-macs>1</local-macs>
       <remote-macs>1</remote-macs>
-      <local-mac-ips>1</local-mac-ips>
+      <local-mac-ips>0</local-mac-ips>
       <remote-mac-ips>1</remote-mac-ips>
       <local-default-gateway-macs>0</local-default-gateway-macs>
       <remote-default-gateway-macs>0</remote-default-gateway-macs>
@@ -18,7 +18,7 @@
     <local-interfaces-up>2</local-interfaces-up>
     <evpn-interface-status-table style="extensive">
       <evpn-interface style="extensive">
-        <evpn-interface-name>.local..55</evpn-interface-name>
+        <evpn-interface-name>.local..57</evpn-interface-name>
         <evpn-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-interface-esi>
         <evpn-interface-mode>single-homed</evpn-interface-mode>
         <evpn-interface-status>Up</evpn-interface-status>
@@ -66,13 +66,13 @@
     </evpn-neighbor>
     <evpn-num-esi>0</evpn-num-esi>
     <evpn-smet-forwarding>Disabled</evpn-smet-forwarding>
-    <evpn-rib-table-id>184549388</evpn-rib-table-id>
-    <evpn-kernel-table-id>55</evpn-kernel-table-id>
+    <evpn-rib-table-id>184549389</evpn-rib-table-id>
+    <evpn-kernel-table-id>57</evpn-kernel-table-id>
     <evpn-kernel-table-id-generation>0</evpn-kernel-table-id-generation>
     <evpn-instance-flags>0x800010000</evpn-instance-flags>
-    <evpn-rtt-update-ts>Aug  4 21:02:02.301 2026</evpn-rtt-update-ts>
-    <evpn-l2ald-state-chg-ts>Aug  4 21:02:02.624 2026</evpn-l2ald-state-chg-ts>
-    <core-isolation-chg-ts>Aug  4 21:02:08.900 2026</core-isolation-chg-ts>
+    <evpn-rtt-update-ts>Sep  2 22:34:12.011 2026</evpn-rtt-update-ts>
+    <evpn-l2ald-state-chg-ts>Sep  2 22:34:12.518 2026</evpn-l2ald-state-chg-ts>
+    <core-isolation-chg-ts>Sep  2 22:34:21.544 2026</core-isolation-chg-ts>
     <core-isolated-state>N</core-isolated-state>
     <core-isolation-chg-reason>evpn-peer-transition</core-isolation-chg-reason>
     <enhanced-convergence>Disabled</enhanced-convergence>
@@ -80,23 +80,23 @@
   <evpn-instance style="extensive">
     <evpn-instance-name>EVPN-VLAN-AWARE-POP1</evpn-instance-name>
     <route-distinguisher>150.0.0.12:1000</route-distinguisher>
-    <evpn-instance-mac-label>294</evpn-instance-mac-label>
+    <evpn-instance-mac-label>286</evpn-instance-mac-label>
     <evpn-instance-control-word>enabled</evpn-instance-control-word>
     <duplicate-mac-detection-threshold>5</duplicate-mac-detection-threshold>
     <duplicate-mac-detection-window>180</duplicate-mac-detection-window>
     <mac-database-status-table style="extensive">
-      <local-macs>4</local-macs>
+      <local-macs>12</local-macs>
       <remote-macs>0</remote-macs>
-      <local-mac-ips>9</local-mac-ips>
+      <local-mac-ips>23</local-mac-ips>
       <remote-mac-ips>0</remote-mac-ips>
-      <local-default-gateway-macs>3</local-default-gateway-macs>
+      <local-default-gateway-macs>6</local-default-gateway-macs>
       <remote-default-gateway-macs>0</remote-default-gateway-macs>
     </mac-database-status-table>
-    <local-interfaces>3</local-interfaces>
-    <local-interfaces-up>3</local-interfaces-up>
+    <local-interfaces>5</local-interfaces>
+    <local-interfaces-up>5</local-interfaces-up>
     <evpn-interface-status-table style="extensive">
       <evpn-interface style="extensive">
-        <evpn-interface-name>.local..56</evpn-interface-name>
+        <evpn-interface-name>.local..58</evpn-interface-name>
         <evpn-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-interface-esi>
         <evpn-interface-mode>single-homed</evpn-interface-mode>
         <evpn-interface-status>Up</evpn-interface-status>
@@ -104,21 +104,35 @@
       </evpn-interface>
       <evpn-interface style="extensive">
         <evpn-interface-name>ae0.14</evpn-interface-name>
-        <evpn-interface-esi>00:11:12:13:14:00:00:00:00:00</evpn-interface-esi>
-        <evpn-interface-mode>all-active</evpn-interface-mode>
+        <evpn-interface-esi>00:11:12:13:14:00:14:00:00:00</evpn-interface-esi>
+        <evpn-interface-mode>single-active</evpn-interface-mode>
         <evpn-interface-status>Up</evpn-interface-status>
         <evpn-interface-etree-role>Root</evpn-interface-etree-role>
       </evpn-interface>
       <evpn-interface style="extensive">
         <evpn-interface-name>ae0.15</evpn-interface-name>
-        <evpn-interface-esi>00:11:12:13:14:00:00:00:00:00</evpn-interface-esi>
-        <evpn-interface-mode>all-active</evpn-interface-mode>
+        <evpn-interface-esi>00:11:12:13:14:00:15:00:00:00</evpn-interface-esi>
+        <evpn-interface-mode>single-active</evpn-interface-mode>
+        <evpn-interface-status>Up</evpn-interface-status>
+        <evpn-interface-etree-role>Root</evpn-interface-etree-role>
+      </evpn-interface>
+      <evpn-interface style="extensive">
+        <evpn-interface-name>ae0.4094</evpn-interface-name>
+        <evpn-interface-esi>00:11:12:13:14:40:94:00:00:00</evpn-interface-esi>
+        <evpn-interface-mode>single-active</evpn-interface-mode>
+        <evpn-interface-status>Up</evpn-interface-status>
+        <evpn-interface-etree-role>Root</evpn-interface-etree-role>
+      </evpn-interface>
+      <evpn-interface style="extensive">
+        <evpn-interface-name>et-0/0/8.4094</evpn-interface-name>
+        <evpn-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-interface-esi>
+        <evpn-interface-mode>single-homed</evpn-interface-mode>
         <evpn-interface-status>Up</evpn-interface-status>
         <evpn-interface-etree-role>Root</evpn-interface-etree-role>
       </evpn-interface>
     </evpn-interface-status-table>
-    <irb-interfaces>2</irb-interfaces>
-    <irb-interfaces-up>2</irb-interfaces-up>
+    <irb-interfaces>3</irb-interfaces>
+    <irb-interfaces-up>3</irb-interfaces-up>
     <irb-interface-status-table style="extensive">
       <irb-interface style="extensive">
         <irb-interface-name>irb.14</irb-interface-name>
@@ -132,11 +146,17 @@
         <irb-interface-status>Up</irb-interface-status>
         <irb-interface-l3-context>L3VPN-CPE14-UNI</irb-interface-l3-context>
       </irb-interface>
+      <irb-interface style="extensive">
+        <irb-interface-name>irb.4094</irb-interface-name>
+        <irb-interface-vlan-id>4094</irb-interface-vlan-id>
+        <irb-interface-status>Up</irb-interface-status>
+        <irb-interface-l3-context>MGMT</irb-interface-l3-context>
+      </irb-interface>
     </irb-interface-status-table>
     <num-protect-interfaces>0</num-protect-interfaces>
     <evpn-protect-interface-status-table style="extensive">
 </evpn-protect-interface-status-table>
-    <num-bridge-domains>2</num-bridge-domains>
+    <num-bridge-domains>3</num-bridge-domains>
     <bridge-domain-status-table style="extensive">
       <bridge-domain style="extensive">
         <vlan-id>14</vlan-id>
@@ -160,29 +180,85 @@
         <sg-sync-status>Disabled</sg-sync-status>
         <v6-sg-sync-status>Disabled</v6-sg-sync-status>
       </bridge-domain>
+      <bridge-domain style="extensive">
+        <vlan-id>4094</vlan-id>
+        <domain-id/>
+        <interfaces>2</interfaces>
+        <interfaces-up>2</interfaces-up>
+        <irb-interface>irb.4094</irb-interface>
+        <mode>Extended</mode>
+        <mac-sync-status>Enabled</mac-sync-status>
+        <sg-sync-status>Disabled</sg-sync-status>
+        <v6-sg-sync-status>Disabled</v6-sg-sync-status>
+      </bridge-domain>
     </bridge-domain-status-table>
     <evpn-num-neighbors>0</evpn-num-neighbors>
-    <evpn-num-esi>3</evpn-num-esi>
+    <evpn-num-esi>6</evpn-num-esi>
     <evpn-esi style="extensive">
-      <evpn-esi-value>00:11:12:13:14:00:00:00:00:00</evpn-esi-value>
-      <evpn-esi-status>Resolved by IFL ae0.15</evpn-esi-status>
+      <evpn-esi-value>00:11:12:13:14:00:14:00:00:00</evpn-esi-value>
+      <evpn-esi-status>Resolved by IFL ae0.14</evpn-esi-status>
       <evpn-esi-state-bits>0x42</evpn-esi-state-bits>
-      <evpn-esi-refcount>2</evpn-esi-refcount>
-      <evpn-esi-num-mac>2</evpn-esi-num-mac>
+      <evpn-esi-refcount>1</evpn-esi-refcount>
+      <evpn-esi-num-mac>1</evpn-esi-num-mac>
       <evpn-esi-num-sgdb>0</evpn-esi-num-sgdb>
       <evpn-esi-local-intf-information style="extensive">
-        <evpn-esi-num-local-intf>2</evpn-esi-num-local-intf>
+        <evpn-esi-num-local-intf>1</evpn-esi-num-local-intf>
         <evpn-esi-local-intf-name>ae0.14</evpn-esi-local-intf-name>
         <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
       </evpn-esi-local-intf-information>
       <evpn-esi-remote-pe-information style="extensive">
 </evpn-esi-remote-pe-information>
       <evpn-esi-df-information style="extensive">
-        <esi-df-election-algorithm>MOD based</esi-df-election-algorithm>
+        <esi-df-election-algorithm>Preference based</esi-df-election-algorithm>
         <esi-designated-forwarder>150.0.0.12</esi-designated-forwarder>
-        <esi-last-df-update-timestamp>Aug 04 21:02:20</esi-last-df-update-timestamp>
+        <esi-df-preference>100</esi-df-preference>
+        <esi-last-df-update-timestamp>Sep 02 22:34:55</esi-last-df-update-timestamp>
       </evpn-esi-df-information>
-      <evpn-esi-split-horizon-label>310</evpn-esi-split-horizon-label>
+      <evpn-esi-split-horizon-label>316</evpn-esi-split-horizon-label>
+    </evpn-esi>
+    <evpn-esi style="extensive">
+      <evpn-esi-value>00:11:12:13:14:00:15:00:00:00</evpn-esi-value>
+      <evpn-esi-status>Resolved by IFL ae0.15</evpn-esi-status>
+      <evpn-esi-state-bits>0x42</evpn-esi-state-bits>
+      <evpn-esi-refcount>1</evpn-esi-refcount>
+      <evpn-esi-num-mac>1</evpn-esi-num-mac>
+      <evpn-esi-num-sgdb>0</evpn-esi-num-sgdb>
+      <evpn-esi-local-intf-information style="extensive">
+        <evpn-esi-num-local-intf>1</evpn-esi-num-local-intf>
+        <evpn-esi-local-intf-name>ae0.15</evpn-esi-local-intf-name>
+        <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+      </evpn-esi-local-intf-information>
+      <evpn-esi-remote-pe-information style="extensive">
+</evpn-esi-remote-pe-information>
+      <evpn-esi-df-information style="extensive">
+        <esi-df-election-algorithm>Preference based</esi-df-election-algorithm>
+        <esi-designated-forwarder>150.0.0.12</esi-designated-forwarder>
+        <esi-df-preference>100</esi-df-preference>
+        <esi-last-df-update-timestamp>Sep 02 22:34:55</esi-last-df-update-timestamp>
+      </evpn-esi-df-information>
+      <evpn-esi-split-horizon-label>317</evpn-esi-split-horizon-label>
+    </evpn-esi>
+    <evpn-esi style="extensive">
+      <evpn-esi-value>00:11:12:13:14:40:94:00:00:00</evpn-esi-value>
+      <evpn-esi-status>Resolved by IFL ae0.4094</evpn-esi-status>
+      <evpn-esi-state-bits>0x42</evpn-esi-state-bits>
+      <evpn-esi-refcount>6</evpn-esi-refcount>
+      <evpn-esi-num-mac>6</evpn-esi-num-mac>
+      <evpn-esi-num-sgdb>0</evpn-esi-num-sgdb>
+      <evpn-esi-local-intf-information style="extensive">
+        <evpn-esi-num-local-intf>1</evpn-esi-num-local-intf>
+        <evpn-esi-local-intf-name>ae0.4094</evpn-esi-local-intf-name>
+        <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+      </evpn-esi-local-intf-information>
+      <evpn-esi-remote-pe-information style="extensive">
+</evpn-esi-remote-pe-information>
+      <evpn-esi-df-information style="extensive">
+        <esi-df-election-algorithm>Preference based</esi-df-election-algorithm>
+        <esi-designated-forwarder>150.0.0.12</esi-designated-forwarder>
+        <esi-df-preference>100</esi-df-preference>
+        <esi-last-df-update-timestamp>Sep 02 22:34:54</esi-last-df-update-timestamp>
+      </evpn-esi-df-information>
+      <evpn-esi-split-horizon-label>318</evpn-esi-split-horizon-label>
     </evpn-esi>
     <evpn-esi style="extensive">
       <evpn-esi-value>05:00:00:fd:e8:00:00:00:0e:00</evpn-esi-value>
@@ -203,14 +279,14 @@
         <esi-designated-forwarder>DF not elected yet</esi-designated-forwarder>
         <esi-last-df-update-timestamp>Never</esi-last-df-update-timestamp>
       </evpn-esi-df-information>
-      <evpn-esi-split-horizon-label>313</evpn-esi-split-horizon-label>
+      <evpn-esi-split-horizon-label>324</evpn-esi-split-horizon-label>
     </evpn-esi>
     <evpn-esi style="extensive">
       <evpn-esi-value>05:00:00:fd:e8:00:00:00:0f:00</evpn-esi-value>
       <evpn-esi-status/>
       <evpn-esi-state-bits>0x42</evpn-esi-state-bits>
-      <evpn-esi-refcount>0</evpn-esi-refcount>
-      <evpn-esi-num-mac>0</evpn-esi-num-mac>
+      <evpn-esi-refcount>1</evpn-esi-refcount>
+      <evpn-esi-num-mac>1</evpn-esi-num-mac>
       <evpn-esi-num-sgdb>0</evpn-esi-num-sgdb>
       <evpn-esi-local-intf-information style="extensive">
         <evpn-esi-num-local-intf>1</evpn-esi-num-local-intf>
@@ -219,24 +295,51 @@
       </evpn-esi-local-intf-information>
       <evpn-esi-remote-pe-information style="extensive">
 </evpn-esi-remote-pe-information>
+      <evpn-esi-df-information style="extensive">
+        <esi-df-election-algorithm>MOD based</esi-df-election-algorithm>
+        <esi-designated-forwarder>DF not elected yet</esi-designated-forwarder>
+        <esi-last-df-update-timestamp>Never</esi-last-df-update-timestamp>
+      </evpn-esi-df-information>
+      <evpn-esi-split-horizon-label>323</evpn-esi-split-horizon-label>
+    </evpn-esi>
+    <evpn-esi style="extensive">
+      <evpn-esi-value>05:00:00:fd:e8:00:00:0f:fe:00</evpn-esi-value>
+      <evpn-esi-status/>
+      <evpn-esi-state-bits>0x42</evpn-esi-state-bits>
+      <evpn-esi-refcount>1</evpn-esi-refcount>
+      <evpn-esi-num-mac>1</evpn-esi-num-mac>
+      <evpn-esi-num-sgdb>0</evpn-esi-num-sgdb>
+      <evpn-esi-local-intf-information style="extensive">
+        <evpn-esi-num-local-intf>1</evpn-esi-num-local-intf>
+        <evpn-esi-local-intf-name>irb.4094</evpn-esi-local-intf-name>
+        <evpn-esi-local-intf-status>Up/Forwarding</evpn-esi-local-intf-status>
+      </evpn-esi-local-intf-information>
+      <evpn-esi-remote-pe-information style="extensive">
+</evpn-esi-remote-pe-information>
+      <evpn-esi-df-information style="extensive">
+        <esi-df-election-algorithm>MOD based</esi-df-election-algorithm>
+        <esi-designated-forwarder>DF not elected yet</esi-designated-forwarder>
+        <esi-last-df-update-timestamp>Never</esi-last-df-update-timestamp>
+      </evpn-esi-df-information>
+      <evpn-esi-split-horizon-label>320</evpn-esi-split-horizon-label>
     </evpn-esi>
     <evpn-smet-forwarding>Disabled</evpn-smet-forwarding>
-    <evpn-rib-table-id>184549389</evpn-rib-table-id>
-    <evpn-kernel-table-id>56</evpn-kernel-table-id>
+    <evpn-rib-table-id>184549390</evpn-rib-table-id>
+    <evpn-kernel-table-id>58</evpn-kernel-table-id>
     <evpn-kernel-table-id-generation>0</evpn-kernel-table-id-generation>
     <evpn-instance-flags>0x800010000</evpn-instance-flags>
-    <evpn-rtt-update-ts>Aug  4 21:02:02.309 2026</evpn-rtt-update-ts>
-    <evpn-l2ald-state-chg-ts>Aug  4 21:02:02.624 2026</evpn-l2ald-state-chg-ts>
-    <core-isolation-chg-ts>NA</core-isolation-chg-ts>
+    <evpn-rtt-update-ts>Sep  2 22:34:12.026 2026</evpn-rtt-update-ts>
+    <evpn-l2ald-state-chg-ts>Sep  2 22:34:12.518 2026</evpn-l2ald-state-chg-ts>
+    <core-isolation-chg-ts>Sep  2 22:34:21.295 2026</core-isolation-chg-ts>
     <core-isolated-state>N</core-isolated-state>
-    <core-isolation-chg-reason>NA</core-isolation-chg-reason>
+    <core-isolation-chg-reason>evpn-peer-transition</core-isolation-chg-reason>
     <enhanced-convergence>Disabled</enhanced-convergence>
   </evpn-instance>
   <evpn-instance style="extensive">
     <evpn-instance-name>EVPN-VLAN-BASED-CPE13-NNI</evpn-instance-name>
     <route-distinguisher>65000:413</route-distinguisher>
     <evpn-instance-vlan-id>413</evpn-instance-vlan-id>
-    <evpn-instance-mac-label>297</evpn-instance-mac-label>
+    <evpn-instance-mac-label>290</evpn-instance-mac-label>
     <evpn-instance-control-word>enabled</evpn-instance-control-word>
     <duplicate-mac-detection-threshold>5</duplicate-mac-detection-threshold>
     <duplicate-mac-detection-window>180</duplicate-mac-detection-window>
@@ -252,7 +355,7 @@
     <local-interfaces-up>2</local-interfaces-up>
     <evpn-interface-status-table style="extensive">
       <evpn-interface style="extensive">
-        <evpn-interface-name>.local..57</evpn-interface-name>
+        <evpn-interface-name>.local..59</evpn-interface-name>
         <evpn-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-interface-esi>
         <evpn-interface-mode>single-homed</evpn-interface-mode>
         <evpn-interface-status>Up</evpn-interface-status>
@@ -300,13 +403,13 @@
     </evpn-neighbor>
     <evpn-num-esi>0</evpn-num-esi>
     <evpn-smet-forwarding>Disabled</evpn-smet-forwarding>
-    <evpn-rib-table-id>184549390</evpn-rib-table-id>
-    <evpn-kernel-table-id>57</evpn-kernel-table-id>
+    <evpn-rib-table-id>184549391</evpn-rib-table-id>
+    <evpn-kernel-table-id>59</evpn-kernel-table-id>
     <evpn-kernel-table-id-generation>0</evpn-kernel-table-id-generation>
     <evpn-instance-flags>0x800010000</evpn-instance-flags>
-    <evpn-rtt-update-ts>Aug  4 21:02:02.318 2026</evpn-rtt-update-ts>
-    <evpn-l2ald-state-chg-ts>Aug  4 21:02:02.624 2026</evpn-l2ald-state-chg-ts>
-    <core-isolation-chg-ts>Aug  4 21:02:08.900 2026</core-isolation-chg-ts>
+    <evpn-rtt-update-ts>Sep  2 22:34:12.042 2026</evpn-rtt-update-ts>
+    <evpn-l2ald-state-chg-ts>Sep  2 22:34:12.518 2026</evpn-l2ald-state-chg-ts>
+    <core-isolation-chg-ts>Sep  2 22:34:21.548 2026</core-isolation-chg-ts>
     <core-isolated-state>N</core-isolated-state>
     <core-isolation-chg-reason>evpn-peer-transition</core-isolation-chg-reason>
     <enhanced-convergence>Disabled</enhanced-convergence>

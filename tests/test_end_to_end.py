@@ -625,6 +625,25 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
         "multiplier": 3,
     }
 
+    # Nahravka 2026-09-03 (task 5c, post-migration z .5) ukazala totez o
+    # krok dal: bfd-liveness-detection byl device-wide odebran i na .5
+    # (uzivatelske rozhodnuti odebrat BFD z OBOU routeru zaroven, viz task
+    # 5c report) - 172.20.20.5.yml uz pro tohoto peera taky nema zadny
+    # bfd_peers zamer, takze _facts_for() uz pro nej v new.facts["bfd"] nic
+    # nesyntetizuje. Test presouva peera pryc ze sluzby AZ NAD HOTOVYM
+    # SNIMKEM (viz docstring), takze potrebuje odkud ho odebrat - dopsana
+    # rucne, protoze uz ji nejde odvodit ze skutecne .5 inventory.
+    new.facts["bfd"]["152.11.13.2"] = {
+        "state": "Up",
+        "interface": "et-0/0/8.13",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": ["BGP"],
+        "detection_time": "9.000",
+        "transmission_interval": "3.000",
+        "multiplier": 3,
+    }
+
     # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
     target = next(
         scope for scope in new.scopes

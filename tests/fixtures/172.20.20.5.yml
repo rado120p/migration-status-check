@@ -395,11 +395,7 @@ interfaces:
       qualified: true
       active: true
     active: true
-  bfd:
-  - peer: 152.11.13.2
-    minimum_interval: 3000
-    multiplier: 3
-    source: neighbor
+  bfd: []
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
@@ -451,11 +447,7 @@ interfaces:
       qualified: false
       active: true
     active: true
-  bfd:
-  - peer: 198.11.13.2
-    minimum_interval: 3000
-    multiplier: 3
-    source: neighbor
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
@@ -729,15 +721,7 @@ interfaces:
   - ae0.15
   lag_members: []
   static_route: []
-  bfd:
-  - peer: 198.11.14.4
-    minimum_interval: 3000
-    multiplier: 3
-    source: group
-  - peer: 2001:db8:11:14::4
-    minimum_interval: 3000
-    multiplier: 3
-    source: group
+  bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.

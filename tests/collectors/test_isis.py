@@ -184,9 +184,10 @@ def test_seconds_attr_reads_unprefixed_attribute_from_fixture(rpc_fixture, platf
     """Nahravky nemaji zadny prefix - kryje vetev `key == 'seconds'`."""
     root = rpc_fixture(platform, "isis_adjacency")
     node = next(root.iter("{*}last-transition-time"))
-    # junos hodnota aktualizovana na nahravku 2026-09-02 (task 5b) - adjacency
-    # bezi dal, seconds jen rostou s casem od posledniho capture.
-    expected = 27915 if platform == "junos" else 4383
+    # junos hodnota aktualizovana na nahravku 2026-09-02 (task 5b), junos-evo
+    # na nahravku 2026-09-03 (task 5c) - adjacency bezi dal, seconds jen
+    # rostou s casem od posledniho capture.
+    expected = 27915 if platform == "junos" else 8594
     assert _seconds_attr(node) == expected
 
 

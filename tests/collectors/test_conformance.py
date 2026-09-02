@@ -46,8 +46,12 @@ from migration_validator.collectors.nd import NdCollector
 from migration_validator.collectors.optics import OpticsCollector
 from migration_validator.collectors.pim import PimNeighborCollector
 from migration_validator.collectors.routes import RoutesCollector
+from migration_validator.checks.base import CheckContext, run_check
+from migration_validator.checks.bfd import BfdSessionStateCheck
+from migration_validator.config import default_config
 from migration_validator.models.inventory import load_inventory
 from migration_validator.models.result import Status
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 from migration_validator.scoping.builder import build_scopes
 
@@ -298,14 +302,21 @@ def test_checks_produce_real_verdicts_not_all_skip(platform):
         # Skutecny seam drzi test_static_route_check_really_reads_the_routing_table
         # na junos-evo, ktery vyzaduje PASS.
         ("junos-evo", "static_route_status"),
-        # Obe platformy: po regeneraci .4 (AR-30) ma junos dve realne session
-        # na ge-0/0/2 a sluzby, ktere je nesou, uz nejsou deaktivovane. Mutant
-        # ctx.subject.get("bfd_x") ale na junos prezije: BGP je tam
-        # Established, takze check ze sameho zameru vyrobi FAIL "bez
-        # session" - manufakturovany ne-SKIP stejneho druhu, jaky uz drzi
-        # komentar u statik vyse. Skutecny sev drzi
-        # test_bfd_check_really_reads_the_session_table, ktery vyzaduje PASS.
-        ("junos-evo", "bfd_session_state"),
+        # ("junos-evo", "bfd_session_state") schvalne chybi (task 5c,
+        # 2026-09-03). Nahravka z .5 po presunu sluzeb ukazala, ze BFD bylo
+        # z laborky odebrano DEVICE-WIDE na obou routerech (uzivatelske
+        # rozhodnuti) - .5 inventory uz nema jediny zaznam s neprazdnym
+        # `bfd:` a bfd.xml je uplne prazdny (0 session, zadne stale zaznamy
+        # jako na .4). Union intent|sessions|baseline_sessions v
+        # bfd_session_state.run() je proto na .5 prazdny a check nevyrobi
+        # ani jeden Finding - "se vubec nespustil" je tedy spravny, ne
+        # regrese. Skutecny sev ted drzi test_bfd_check_really_reads_the_
+        # session_table na syntetickych faktech (nezavisle na stavu laborky).
+        #
+        # ("junos", "bfd_session_state") zustava: .4 (task 5b) ma v bfd.xml
+        # porad stale AdminDown zaznamy (152.11.13.2, 198.11.14.4), takze
+        # `sessions` neni prazdna a union pres ni porad vyrobi ne-SKIP nalez
+        # (DEGRADED "v konfiguraci sluzby neni"), i kdyz zamer uz chybi.
         ("junos", "bfd_session_state"),
     ],
 )
@@ -387,35 +398,67 @@ def test_bfd_check_really_reads_the_session_table():
     bfd_session_state iteruje pres sjednoceni tri zdroju (AR-14), takze
     verdikt vyda i tehdy, kdyz oblast `bfd` z faktu vubec neprecte: ze
     sameho zameru s BGP Established vyrobi FAIL 'bez session', a to je
-    ne-SKIP. Overeno mutaci: po zmene ctenoho klice na
-    ctx.subject.get("bfd_x") zustava test_specific_check_sees_data[*-
-    bfd_session_state] zeleny, protoze BGP je Established a check
-    manufakturuje FAIL bez toho, aby session tabulku videl.
+    ne-SKIP.
 
-    Puvodne testovano na junos (.4): svc:INTERNET-CPE13-NNI:Internet mel
-    peera 152.11.13.2 s session Up (PASS) a svc:L3VPN-CPE13-NNI:IPVPN peera
-    198.11.13.2 s session Down (FAIL). Nahravka 2026-09-02 (task 5b) ukazala,
-    ze `.4` uz v idealnim pre-migracnim stavu nema zadny bfd-liveness-detection
-    zamer vubec (BGP skupiny/sousede ho ztratili globalne) - kazdy peer je
-    proto "configured=False" a check nikdy nedosahne PASS, jen DEGRADED
-    ("v konfiguraci sluzby neni"). Presunuto na junos-evo (.5, touto vlnou
-    nedotcene), kde stejna dvojice sluzeb existuje se stejnym tvarem
-    (et-0/0/8.13 / et-0/0/8.113 misto ge-0/0/2.13 / ge-0/0/2.113) a
-    bfd-liveness-detection je porad nakonfigurovane - FAIL je tedy dosazitelny
-    naslepo, ale PASS muze vzniknout JEDINE tak, ze check tabulku session
-    opravdu videl. Check kod je platform-agnostic (cte ctx.subject["bfd"]
-    bez ohledu na platformu), takze presun neoslabuje pokryti mutanta.
+    Puvodne testovano na junos (.4), pak (task 5b) presunuto na junos-evo
+    (.5). Task 5c (2026-09-03) ukazala, ze uzivatel BFD odebral z LABORKY
+    DEVICE-WIDE na obou routerech - .5 uz nema jediny konfigurovany bfd_peer
+    (172.20.20.5.yml: kazdy zaznam ma `bfd: []`) a session tabulka
+    (tests/fixtures/rpc/junos-evo/bfd.xml) je uplne prazdna (0 session, na
+    rozdil od .4 kde jeste stale AdminDown zaznamy zustavaji). Zadna zivá
+    laborka uz tedy PASS na tomto checku vyrobit nemuze - viz
+    test_specific_check_sees_data, kde ("junos-evo", "bfd_session_state")
+    je nove schvalne vyrazeno ze seznamu se stejnym zduvodnenim.
+
+    Test proto stavi Scope a fakta rucne (stejny tvar, jaky by syntetizoval
+    tests/conftest.py::_facts_for pro scope s konfigurovanym bfd_peer), misto
+    aby cetl nahranou fixture - PASS uz jinak nejde dokazat. Check bezi
+    normalni cestou pres run_check(), ne primym `.run()`, aby test proslo i
+    obalkou (mode/severity/applies_to), ne jen samotnou logikou.
+
+    Overeno mutaci 2026-09-03: docasna zmena ctx.subject.get("bfd") na
+    ctx.subject.get("bfd_x") v migration_validator/checks/bfd.py shodila
+    tento test (session zmizi, check spadne do vetve BGP-Established/no-
+    session a vyrobi FAIL misto PASS) - obnoveno po overeni.
     """
-    result = api.evaluate(_snapshot("junos-evo"), now=NOW)
-    matching = [
-        check
-        for scope in result.scopes
-        for check in scope.checks
-        if check.id == "bfd_session_state"
-    ]
+    peer = "152.11.13.2"
+    scope = Scope(
+        id="svc:TEST-BFD:IPVPN",
+        kind="service",
+        key=ScopeKey(description="TEST-BFD", service_type="IPVPN"),
+        selectors=Selectors(
+            interfaces=["et-0/0/8.13"],
+            bgp_neighbors=[peer],
+            bfd_peers=[
+                {"peer": peer, "minimum_interval": 3000, "multiplier": 3, "source": "neighbor"}
+            ],
+        ),
+    )
+    # Presny tvar, jaky _facts_for() (tests/conftest.py) syntetizuje pro
+    # kazdy configured bfd_peer.
+    bfd_fact = {
+        peer: {
+            "state": "Up",
+            "interface": "et-0/0/8.13",
+            "remote_state": "Up",
+            "local_diagnostic": "None",
+            "clients": ["BGP"],
+            "detection_time": "9.000",
+            "transmission_interval": "3.000",
+            "multiplier": 3,
+        }
+    }
+    ctx = CheckContext(
+        scope=scope,
+        subject={"bfd": bfd_fact, "bgp": {peer: {"state": "Established"}}},
+        baseline=None,
+        config=default_config(),
+    )
 
-    assert matching
-    assert any(check.status is Status.PASS for check in matching), (
-        "junos: zadna BFD session nedostala PASS - check nevidi oblast "
+    results = run_check(BfdSessionStateCheck(), ctx)
+
+    assert results
+    assert any(result.status is Status.PASS for result in results), (
+        "synteticky bfd fakt s state=Up nedal PASS - check nevidi oblast "
         "'bfd' z faktu, jen svuj vlastni zamer"
     )

@@ -1,17 +1,5 @@
 <igmp-group-information style="igmp">
   <mgm-interface-groups>
-    <interface-name>irb.2</interface-name>
-    <mgm-group-count>1</mgm-group-count>
-    <mgm-group style="igmp">
-      <multicast-group-address>239.1.1.1</multicast-group-address>
-      <mgm-group-mode-type>Include</mgm-group-mode-type>
-      <multicast-source-address>10.12.12.1</multicast-source-address>
-      <last-address>10.12.11.1</last-address>
-      <mgm-timeout>215</mgm-timeout>
-      <mgm-type>Dynamic</mgm-type>
-    </mgm-group>
-  </mgm-interface-groups>
-  <mgm-interface-groups>
     <interface-name>et-0/0/8.11</interface-name>
     <mgm-group-count>1</mgm-group-count>
     <mgm-group style="igmp">
@@ -19,13 +7,25 @@
       <mgm-group-mode-type>Include</mgm-group-mode-type>
       <multicast-source-address>10.11.11.1</multicast-source-address>
       <last-address>10.111.11.2</last-address>
-      <mgm-timeout>197</mgm-timeout>
+      <mgm-timeout>237</mgm-timeout>
+      <mgm-type>Dynamic</mgm-type>
+    </mgm-group>
+  </mgm-interface-groups>
+  <mgm-interface-groups>
+    <interface-name>irb.2</interface-name>
+    <mgm-group-count>1</mgm-group-count>
+    <mgm-group style="igmp">
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <mgm-group-mode-type>Include</mgm-group-mode-type>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
+      <last-address>10.12.11.1</last-address>
+      <mgm-timeout>258</mgm-timeout>
       <mgm-type>Dynamic</mgm-type>
     </mgm-group>
   </mgm-interface-groups>
   <mgm-interface-groups>
     <interface-name>local</interface-name>
-    <mgm-group-count>2</mgm-group-count>
+    <mgm-group-count>4</mgm-group-count>
     <mgm-group style="igmp">
       <multicast-group-address>224.0.0.0</multicast-group-address>
       <multicast-source-address>0.0.0.0</multicast-source-address>
@@ -34,7 +34,21 @@
       <mgm-type>Dynamic</mgm-type>
     </mgm-group>
     <mgm-group style="igmp">
+      <multicast-group-address>224.0.0.2</multicast-group-address>
+      <multicast-source-address>0.0.0.0</multicast-source-address>
+      <last-address>Local</last-address>
+      <mgm-timeout>0</mgm-timeout>
+      <mgm-type>Dynamic</mgm-type>
+    </mgm-group>
+    <mgm-group style="igmp">
       <multicast-group-address>224.0.0.13</multicast-group-address>
+      <multicast-source-address>0.0.0.0</multicast-source-address>
+      <last-address>Local</last-address>
+      <mgm-timeout>0</mgm-timeout>
+      <mgm-type>Dynamic</mgm-type>
+    </mgm-group>
+    <mgm-group style="igmp">
+      <multicast-group-address>224.0.0.22</multicast-group-address>
       <multicast-source-address>0.0.0.0</multicast-source-address>
       <last-address>Local</last-address>
       <mgm-timeout>0</mgm-timeout>

@@ -79,17 +79,43 @@ def test_framing_errors_are_collected(rpc_fixture, platform):
 
 
 # Stavy unitu: extensive vypis zadny per-unit admin/oper nenese, skutecne
-# hodnoty ma jen terse vypis (fixture interfaces.2.xml, nahrana z labu se
-# zamerne disablovanymi unity irb.4094 a ae0.4094). Zadne dedeni z rodice
-# ani odvozovani z iff- flagu - stav se cte jen tam, kde ho box vydava.
+# hodnoty ma jen terse vypis. Zadne dedeni z rodice ani odvozovani z
+# iff- flagu - stav se cte jen tam, kde ho box vydava.
 
 
-def test_terse_parse_cte_realne_stavy_unitu(rpc_fixture):
-    """Lab dukaz: irb.4094 je admin down / link UP, ae0.4094 down / down.
-    Dedeni z rodice ani 'disabled => down' by tenhle rozdil nikdy nedalo."""
-    result = InterfacesCollector().parse(
-        rpc_fixture("junos-evo", "interfaces.2"), "junos-evo"
+def test_terse_parse_cte_realne_stavy_unitu():
+    """Admin down / link UP nesmi dedit stav z rodice ani z 'disabled => down'.
+
+    Do 2026-09-03 (task 5c) toto overovala nahravka interfaces.2.xml, ktera
+    mela zamerne disablovane unity irb.4094 (admin down/oper up) a ae0.4094
+    (admin down/oper down). Po presunu sluzeb na .5 jsou oba uniti nyni
+    admin up/oper up (MGMT/irb.4094 context aktivni - viz i
+    test_evpn.py::test_instance_irb_carries_l3_context) a v cele nahravce uz
+    zadny admin-down unit neni. Synteticke terse XML drzi puvodni scenar bez
+    ohledu na stav laborky.
+    """
+    xml = etree.fromstring(
+        b"""
+        <interface-information style="terse">
+          <physical-interface>
+            <name>ae0</name>
+            <admin-status>up</admin-status>
+            <oper-status>up</oper-status>
+            <logical-interface>
+              <name>irb.4094</name>
+              <admin-status>down</admin-status>
+              <oper-status>up</oper-status>
+            </logical-interface>
+            <logical-interface>
+              <name>ae0.4094</name>
+              <admin-status>down</admin-status>
+              <oper-status>down</oper-status>
+            </logical-interface>
+          </physical-interface>
+        </interface-information>
+        """
     )
+    result = InterfacesCollector().parse(xml, "junos-evo")
     assert result["irb.4094"]["admin_status"] == "down"
     assert result["irb.4094"]["oper_status"] == "up"
     assert result["ae0.4094"]["admin_status"] == "down"
