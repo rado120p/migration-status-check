@@ -87,8 +87,10 @@ def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
 
     KNOWN_LAB_ASYMMETRIES je uzka vyjimka (check id + podretezec zpravy),
     ne plosne "bfd_session_state se ignoruje" - to by schovalo check, ktery
-    by byl trvale FAIL/WARN na zdrave sluzbe. Zatim jediny zaznamenany
-    rozdil viz komentar u konstanty vyse.
+    by byl trvale FAIL/WARN na zdrave sluzbe. Aktualne je tuple prazdny -
+    jediny drive zaznamenany rozdil (BFD na L3VPN-CPE13-NNI peerovi
+    2001:db8:11:13::b) zmizel s tim, jak .4 prisel o BFD zamer cely (task
+    5b, 2026-09-02) - viz komentar u konstanty vyse.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
