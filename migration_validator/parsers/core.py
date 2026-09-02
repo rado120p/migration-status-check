@@ -1396,9 +1396,20 @@ class JunosServiceParserCore:
         Agregát hopy nemá a mapuje se podle RIB: VRF na služby instance,
         globální jen na Core lo0.0 (rozhodnutí uživatele 2026-08-19 — ne na
         tranzitní rozhraní).
+
+        Globální `inet.2` statiky se mapují jen na Core lo0.0 bez ohledu na
+        next-hop (spec 2026-09-02).
         """
         if rib_instance(route.rib) != service.routing_instance:
             return False
+
+        if route.rib == "inet.2":
+            # Globalni inet.2 (multicast RPF) statiky patri routeru, ne lince,
+            # kterou zrovna ukazuje next-hop: core_multicast_forwarding je
+            # cte z lo0.0 scopu a upstream porovnava s jejich `via`
+            # (rozhodnuti 2026-09-02). <RI>.inet.2 sem nespada -
+            # rib_instance("X.inet.2") je "X", ne None.
+            return service.service_type == "Core" and service.interface == "lo0.0"
 
         if route.route_type == "aggregate":
             if rib_instance(route.rib) is not None:

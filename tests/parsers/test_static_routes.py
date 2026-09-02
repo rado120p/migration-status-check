@@ -754,3 +754,89 @@ def test_globalni_aggregate_se_mapuje_jen_na_core_lo0(parser_cls):
         r["route_type"] != "aggregate"
         for r in by_iface["et-0/0/1.0"].static_route
     )
+
+
+INET2_WITH_CORE = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>et-0/0/0</name>
+      <unit>
+        <name>0</name>
+        <family>
+          <inet><address><name>10.1.1.1/30</name></address></inet>
+          <iso/>
+          <mpls/>
+        </family>
+      </unit>
+    </interface>
+    <interface>
+      <name>lo0</name>
+      <unit>
+        <name>0</name>
+        <family>
+          <inet><address><name>150.0.0.12/32</name></address></inet>
+          <iso><address><name>49.0001.1500.0000.0012.00</name></address></iso>
+        </family>
+      </unit>
+    </interface>
+    <interface>
+      <name>irb</name>
+      <unit>
+        <name>9</name>
+        <family><inet><address><name>10.9.9.1/24</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-options>
+    <rib>
+      <name>inet.2</name>
+      <static>
+        <route>
+          <name>10.11.11.1/32</name>
+          <next-hop>10.1.1.2</next-hop>
+        </route>
+      </static>
+    </rib>
+  </routing-options>
+  <routing-instances>
+    <instance>
+      <name>VRF-A</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>irb.9</name></interface>
+      <routing-options>
+        <rib>
+          <name>VRF-A.inet.2</name>
+          <static>
+            <route>
+              <name>10.99.0.0/16</name>
+              <next-hop>10.9.9.2</next-hop>
+            </route>
+          </static>
+        </rib>
+      </routing-options>
+    </instance>
+  </routing-instances>
+</configuration>
+"""
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_globalni_inet2_statika_patri_lo0_ne_tranzitu(parser_cls):
+    """Next-hop 10.1.1.2 lezi v subnetu et-0/0/0.0 - dnesni subnet pravidlo
+    by routu dalo tranzitu. Spec 2026-09-02: vsechny globalni inet.2
+    statiky patri Core lo0.0 (stejne jako globalni agregaty)."""
+    by_iface = {s.interface: s for s in parser_cls(etree.fromstring(INET2_WITH_CORE)).parse()}
+
+    lo0 = [(r["rib"], r["prefix"]) for r in by_iface["lo0.0"].static_route]
+    assert ("inet.2", "10.11.11.1/32") in lo0
+    assert all(r["rib"] != "inet.2" for r in by_iface["et-0/0/0.0"].static_route)
+
+
+@pytest.mark.parametrize("parser_cls", PARSERS)
+def test_inet2_v_ramci_vrf_zustava_na_subnet_pravidle(parser_cls):
+    by_iface = {s.interface: s for s in parser_cls(etree.fromstring(INET2_WITH_CORE)).parse()}
+
+    vrf = [(r["rib"], r["prefix"]) for r in by_iface["irb.9"].static_route]
+    assert vrf == [("VRF-A.inet.2", "10.99.0.0/16")]
+    assert all(r["rib"] != "VRF-A.inet.2" for r in by_iface["lo0.0"].static_route)
