@@ -144,6 +144,7 @@ def _identity(scope: Scope) -> dict[str, Any]:
         "ipv6": list(selectors.local_ipv6),
         "virtual_gw_v4": list(selectors.virtual_gw_v4),
         "virtual_gw_v6": list(selectors.virtual_gw_v6),
+        "l2_interfaces": list(selectors.l2_interfaces),
     }
 
 

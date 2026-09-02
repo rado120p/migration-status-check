@@ -264,3 +264,13 @@ def test_tranzitni_porty_si_scope_zachovaji():
     ])
     l1_ids = {s.id for s in build_scopes(inventory) if s.kind == "layer1"}
     assert l1_ids == {"l1:ae0", "l1:ge-0/0/2"}
+
+
+def test_l2_interface_protece_do_selektoru():
+    entry = ServiceEntry(
+        interface="irb.2", service_type="IPVPN", service_subtype="mvpn-igmp",
+        routing_instance="MULTICAST-STREAM-B-MUX1-RECEIVER", l2_interface=["ge-0/0/2.12"],
+    )
+    (scope,) = build_scopes(Inventory(device="x", entries=[entry]))
+    assert scope.selectors.l2_interfaces == ["ge-0/0/2.12"]
+    assert scope.id == "svc:irb.2:IPVPN"

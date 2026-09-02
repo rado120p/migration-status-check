@@ -1,4 +1,4 @@
-schema_version: 7
+schema_version: 8
 device: 172.20.20.5
 interfaces:
 - interface: ae0
@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members:
   - et-0/0/5
   static_route: []
@@ -45,6 +46,7 @@ interfaces:
   - VL-14
   customer_vlan:
   - '14'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -72,6 +74,7 @@ interfaces:
   - VL-15
   customer_vlan:
   - '15'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -98,6 +101,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '224'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -126,6 +130,7 @@ interfaces:
   customer_vlan:
   - 0x8100.4094
   - '4094'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -148,6 +153,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -177,6 +183,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -199,6 +206,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -228,6 +236,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -250,6 +259,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -272,12 +282,66 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: et-0/0/8.11
+  description: MULTICAST-STREAM-A-MUX1-RECEIVER-1
+  service_type: Internet
+  service_subtype: multicast
+  ipv4_address:
+  - 10.111.11.1/30
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - igmp
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '11'
+  l2_interface: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - Rozhraní je pod protocols igmp — multicast receiver.
+- interface: et-0/0/8.12
+  description: MULTICAST-STREAM-B-MUX1-RECEIVER
+  service_type: Unknown
+  service_subtype: layer2
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '12'
+  l2_interface: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: low
+  detection_reason:
+  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
 - interface: et-0/0/8.13
   description: INTERNET-CPE13-NNI
   service_type: Internet
@@ -301,6 +365,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '13'
+  l2_interface: []
   lag_members: []
   static_route:
   - rib: inet.0
@@ -365,6 +430,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  l2_interface: []
   lag_members: []
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
@@ -415,6 +481,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '213'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -442,6 +509,7 @@ interfaces:
   - VL-313
   customer_vlan:
   - '313'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -469,6 +537,7 @@ interfaces:
   - VL-NONE
   customer_vlan:
   - '413'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -497,6 +566,7 @@ interfaces:
   customer_vlan:
   - '4093'
   - '4094'
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -519,6 +589,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -541,12 +612,46 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
   detection_confidence: high
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: irb.2
+  description: MUX1 receivers POP1
+  service_type: IPVPN
+  service_subtype: mvpn-igmp
+  ipv4_address:
+  - 10.12.11.2/30
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: MULTICAST-STREAM-B-MUX1-RECEIVER
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - igmp
+  - mvpn
+  - pim
+  - vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-MUX1-B
+  customer_vlan:
+  - '2'
+  l2_interface:
+  - et-0/0/8.12
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - Rozhraní je pod protocols igmp a instance má protocols mvpn — MVPN-IGMP receiver site.
 - interface: irb.14
   description: EVPN-VLAN-AWARE-INTERNET
   service_type: Internet
@@ -569,8 +674,12 @@ interfaces:
   - 152.11.14.4
   - 2001:abcd:11:14::4
   bgp_neighbor_inactive: []
-  bridge_domain: []
-  customer_vlan: []
+  bridge_domain:
+  - VL-14
+  customer_vlan:
+  - '14'
+  l2_interface:
+  - ae0.14
   lag_members: []
   static_route:
   - rib: inet6.0
@@ -581,10 +690,6 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    - to: 2001:db8::ffff
-      interface: null
-      qualified: true
-      active: false
     active: true
   bfd: []
   detection_confidence: medium
@@ -616,8 +721,12 @@ interfaces:
   - 198.11.14.4
   - 2001:db8:11:14::4
   bgp_neighbor_inactive: []
-  bridge_domain: []
-  customer_vlan: []
+  bridge_domain:
+  - VL-15
+  customer_vlan:
+  - '15'
+  l2_interface:
+  - ae0.15
   lag_members: []
   static_route: []
   bfd:
@@ -653,8 +762,13 @@ interfaces:
   - vrf
   bgp_neighbor: []
   bgp_neighbor_inactive: []
-  bridge_domain: []
-  customer_vlan: []
+  bridge_domain:
+  - VL-4094
+  customer_vlan:
+  - '4094'
+  l2_interface:
+  - ae0.4094
+  - et-0/0/8.4094
   lag_members: []
   static_route:
   - rib: MGMT.inet.0
@@ -693,6 +807,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -724,6 +839,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route:
   - rib: inet.0
@@ -736,6 +852,15 @@ interfaces:
     route_type: aggregate
     next_hops: []
     active: true
+  - rib: inet.2
+    prefix: 10.11.11.1/32
+    route_type: static
+    next_hops:
+    - to: 10.1.2.0
+      interface: null
+      qualified: false
+      active: true
+    active: true
   - rib: inet6.0
     prefix: 2001:abcd::/32
     route_type: aggregate
@@ -746,6 +871,7 @@ interfaces:
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
   - 'Interni BGP peeri (type internal / shoda AS): 150.0.0.1, 150.0.0.2, 2001:db8::1'
+  - 'Statická routa odpovídá subnetu rozhraní: 10.11.11.1/32'
   - 'Agregátní routa patří této službě: 10.1.0.0/23, 150.0.0.0/24, 2001:abcd::/32'
 - interface: re0:mgmt-0
   description: null
@@ -763,6 +889,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []
@@ -787,6 +914,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l2_interface: []
   lag_members: []
   static_route: []
   bfd: []

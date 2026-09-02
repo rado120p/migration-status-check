@@ -76,6 +76,9 @@ class Selectors:
     vlans: list[str] = field(default_factory=list)
     bridge_domains: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
+    # Access porty IRB (spec 2026-09-02) - jen pro poznamku v hlavicce bloku,
+    # do vyberu faktu se nepromitaji (L2 port do IRB scopu nepatri).
+    l2_interfaces: list[str] = field(default_factory=list)
     # Zamer z konfigurace. Slouzi zaroven jako filtr (vyber podle
     # (rib, prefix)) i jako mnozina, proti ktere check pozna, ze
     # nakonfigurovana routa v tabulce chybi.
@@ -107,6 +110,7 @@ class Selectors:
             "vlans": list(self.vlans),
             "bridge_domains": list(self.bridge_domains),
             "lag_members": list(self.lag_members),
+            "l2_interfaces": list(self.l2_interfaces),
             "static_routes": [dict(route) for route in self.static_routes],
             "bfd_peers": [dict(intent) for intent in self.bfd_peers],
             "protocols": list(self.protocols),

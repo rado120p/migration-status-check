@@ -16,20 +16,80 @@ DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 DEVICE_5 = str(FIXTURES / "172.20.20.5.yml")
 
 
+# Bod v laborce, ktery pri regeneraci 2026-09-02 vysel jako realny rozdil
+# mezi MX (.4, baseline) a EVO (.5, subject) konfiguraci, ne jako regrese
+# parseru/kodu: L3VPN-CPE13-NNI ma na MX pod BGP peerem
+# 2001:db8:11:13::b nakonfigurovany bfd-liveness-detection, na EVO tenhle
+# neighbor stanzu nema (bgp/group CPE13/neighbor 2001:db8:11:13::b je bez
+# <bfd-liveness-detection>, zatimco 198.11.13.2 ji ma na obou). Overeno
+# primo v `show configuration routing-instances L3VPN-CPE13-NNI` na obou
+# zarizenich - neni to artefakt syntetickych faktu ani chyba checku
+# (bfd_session_state spravne hlasi chybejici session). Bod k proverovani
+# operatorem laborky: je to zamerny rozdil, nebo mezera v post-migracnim
+# setupu z Ukolu 1/2?
+KNOWN_LAB_ASYMMETRIES = (
+    ("bfd_session_state", "2001:db8:11:13::b"),
+)
+
+
+def _deactivate_only_in_subject(old, new) -> None:
+    """Vyrobi jednu FAIL deaktivaci (baseline aktivni, subjekt vypnuty) na
+    sluzbe sdilene obema snimky.
+
+    Nazev se lisi od `_deactivate_shared_service` nize (ta vypina TUTEZ
+    sluzbu na OBOU stranach - WARN "stejne jako v baseline"): stejne jmeno
+    by v modulu prepsalo drivejsi definici a `test_full_migration_run_...`
+    by tise volal jiny scenar, nez zamyslel.
+
+    Puvodne test cilil na realnou asymetrii z laborky (CPE24/MGMT-VLAN mely
+    kazde jinou stranu deaktivovanou). Regenerace 2026-09-02 to uz nenese -
+    laborka byla mezitim pro multicast scenar sjednocena a obe sluzby jsou
+    ted aktivni na obou zarizenich. AR-22/AR-23 smer testu je porad potreba
+    overit na skutecne postavenem RunResultu (ne jen jednotkovym testem
+    checku), takze scenar se vyrabi rucne stejnym zpusobem jako
+    `_deactivate_shared_route` u statickych rout.
+    """
+    old_by_key = {
+        (scope.key.description, scope.key.service_type): scope
+        for scope in old.scopes
+        if scope.key is not None and scope.key.description is not None
+    }
+    new_by_key = {
+        (scope.key.description, scope.key.service_type): scope
+        for scope in new.scopes
+        if scope.key is not None and scope.key.description is not None
+    }
+    shared = sorted(set(old_by_key) & set(new_by_key))
+    assert shared, "fixture nema zadnou sluzbu sdilenou obema snimky"
+
+    key = shared[0]
+    old_by_key[key].interface_active = True
+    old_by_key[key].routing_instance_active = True
+    new_by_key[key].interface_active = False
+
+
 def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
     """172.20.20.4/.5 uz nemodeluji cistou migraci beze zmen (AR-29).
 
-    Laborka po regeneraci nese realne, ruzne stavy deaktivace mezi MX (.4,
-    baseline) a PTX (.5, subject) - napr. CPE24 je na .4 deaktivovana a na
-    .5 aktivni, MGMT-VLAN naopak. deactivation_state to spravne hlasi jako
-    FAIL/WARN (AR-22/AR-23) a to je zdravy vysledek, ne regrese.
+    Puvodne 172.20.20.4/.5 nesly realnou asymetrii deaktivace (CPE24 na .4
+    vypnuta a na .5 aktivni, MGMT-VLAN naopak). Regenerace 2026-09-02 uz
+    tenhle stav v laborce nenajde - obe sluzby jsou na obou zarizenich
+    aktivni (multicast lab setup je mezitim sjednotil) - takze AR-22/AR-23
+    smer se overuje na scenari vyrobenem `_deactivate_shared_service`, ne
+    na realnych datech.
 
     Co porad musi platit: zadny JINY check nesmi na teto dvojici vratit
     FAIL nebo WARN. Kdyby to udelal, byl by to check, ktery je vzdy
     FAIL/WARN na zdrave sluzbe a prosel by tichem.
+
+    KNOWN_LAB_ASYMMETRIES je uzka vyjimka (check id + podretezec zpravy),
+    ne plosne "bfd_session_state se ignoruje" - to by schovalo check, ktery
+    by byl trvale FAIL/WARN na zdrave sluzbe. Zatim jediny zaznamenany
+    rozdil viz komentar u konstanty vyse.
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+    _deactivate_only_in_subject(old, new)
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
@@ -38,10 +98,14 @@ def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
         for scope in result.scopes
         for check in scope.checks
         if check.id != "deactivation_state" and check.status in (Status.FAIL, Status.WARN)
+        and not any(
+            check.id == known_id and known_substring in (check.message or "")
+            for known_id, known_substring in KNOWN_LAB_ASYMMETRIES
+        )
     ]
     assert not unexpected, (
-        "check jiny nez deactivation_state vratil FAIL/WARN na zdrave migraci: "
-        f"{[(c.id, c.status, c.message) for c in unexpected]}"
+        "check jiny nez deactivation_state (a mimo KNOWN_LAB_ASYMMETRIES) vratil "
+        f"FAIL/WARN na zdrave migraci: {[(c.id, c.status, c.message) for c in unexpected]}"
     )
 
     # Smer musi odpovidat AR-22/AR-23: baseline aktivni -> subject
@@ -138,18 +202,22 @@ def _block_of(rendered: str, description: str, service_type: str) -> str:
     """
     lines = rendered.splitlines()
     starts = [i for i, line in enumerate(lines) if line and set(line) == {"="}]
+    # Bloky chodi v parech ('=' nad hlavickou, '=' pod ni) - hlavicka ale
+    # nema pevny pocet radku: IRB bez EVPN linku dostava navic radek
+    # "L2: ..." (spec 2026-09-02, l2_interfaces v identite). Puvodni kod
+    # pocital s presne jednim radkem hlavicky (index+2 jako dolni okraj) -
+    # s poznamkovym radkem navic se dolni okraj posunul na index+3, ktery
+    # "rest = [i for i in starts if i > index + 2]" omylem vzal za zacatek
+    # DALSIHO bloku, takze se telo bloku usteklo hned za poznamkou.
+    pairs = list(zip(starts[0::2], starts[1::2]))
 
     blocks = []
-    for index in starts:
-        header = lines[index + 1] if index + 1 < len(lines) else ""
+    for position, (top, bottom) in enumerate(pairs):
+        header = "\n".join(lines[top + 1 : bottom])
         if description not in header or service_type not in header:
             continue
-        # Blok ma dve cary '=': nad hlavickou a pod ni. Dalsi blok proto
-        # zacina az tou treti - hledat od index+1 by useklo vyrez hned za
-        # hlavickou a telo bloku by se vubec nemerilo.
-        rest = [i for i in starts if i > index + 2]
-        end = rest[0] if rest else lines.index("NESPAROVANO")
-        blocks.append("\n".join(lines[index:end]))
+        end = pairs[position + 1][0] if position + 1 < len(pairs) else lines.index("NESPAROVANO")
+        blocks.append("\n".join(lines[top:end]))
 
     assert len(blocks) == 1, (
         f"ocekavan 1 blok pro {description!r}/{service_type!r}, je jich {len(blocks)}"
@@ -342,8 +410,8 @@ def test_dual_rib_peer_yields_two_distinguishable_blocks(synthetic_snapshot):
     )
 
 
-def _deactivate_shared_route(old, new) -> str:
-    """Vypne TUTEZ routu TEZE sluzby v obou snimcich a vrati jeji popis.
+def _deactivate_shared_route(old, new) -> tuple[str, str]:
+    """Vypne TUTEZ routu TEZE sluzby v obou snimcich a vrati jeji popis + typ.
 
     Naivni "prvni scope se statickou routou v kazdem snimku" je vada: vnitrni
     break opousti jen vnitrni smycku a poradi scopu se mezi .4 a .5 lisit
@@ -353,6 +421,12 @@ def _deactivate_shared_route(old, new) -> str:
 
     Parovat se musi i konkretni routa, ne jen sluzba: dve ruzne routy tehoz
     prefixu neexistuji, ale poradi v seznamu garantovane neni.
+
+    Vraci i service_type: laborka (po regeneraci 2026-09-02) ma pripady, kdy
+    dve ruzne sluzby (napr. E-LAN a Internet strana teze EVPN-VLAN-AWARE
+    komponenty) sdileji stejny popis. Popis samotny proto scope neurcuje
+    jednoznacne - volajici musi filtrovat i podle typu, jinak muze vybrat
+    scope, ktery deaktivovanou routu vubec nenese.
 
     Odchylka od bodu z brief: samotne nastaveni "active": False v selektoru
     nestaci. `routes.py:155` vyzaduje `deactivated and subject is None` -
@@ -368,25 +442,30 @@ def _deactivate_shared_route(old, new) -> str:
     None` a `baseline_deactivated` (zamer ze selektoru, uz nastaveny vyse),
     ne podle faktu baselinu. Ty ovlivnuji jen zobrazenou `baseline_value`.
     """
-    by_description = {}
+    by_key = {}
     for snapshot, side in ((old, "old"), (new, "new")):
         for scope in snapshot.scopes:
             if scope.key is None or scope.key.description is None:
                 continue
             for route in scope.selectors.static_routes:
-                key = (scope.key.description, str(route.get("rib")), str(route.get("prefix")))
-                by_description.setdefault(key, {})[side] = route
+                key = (
+                    scope.key.description,
+                    scope.key.service_type,
+                    str(route.get("rib")),
+                    str(route.get("prefix")),
+                )
+                by_key.setdefault(key, {})[side] = route
 
-    shared = sorted(key for key, sides in by_description.items() if len(sides) == 2)
+    shared = sorted(key for key, sides in by_key.items() if len(sides) == 2)
     assert shared, "fixture nema zadnou statickou routu pritomnou v obou snimcich"
 
     target = shared[0]
-    for route in by_description[target].values():
+    for route in by_key[target].values():
         route["active"] = False
 
-    _, rib, prefix = target
+    description, service_type, rib, prefix = target
     new.facts.get("routes", {}).get(rib, {}).pop(prefix, None)
-    return target[0]
+    return description, service_type
 
 
 def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
@@ -408,16 +487,21 @@ def test_deactivated_route_is_visible_without_detail(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
-    target = _deactivate_shared_route(old, new)
+    target, service_type = _deactivate_shared_route(old, new)
 
     result = api.evaluate(new, baseline=old, now=NOW)
     rendered = render(result)
 
-    affected = [scope for scope in result.scopes if scope.identity.get("description") == target]
+    affected = [
+        scope
+        for scope in result.scopes
+        if scope.identity.get("description") == target
+        and scope.identity.get("service_type") == service_type
+    ]
     assert affected, f"sluzba {target} ve vysledku neni"
     assert affected[0].status is Status.WARN
 
-    block = _block_of(rendered, target, affected[0].identity["service_type"])
+    block = _block_of(rendered, target, service_type)
     assert "deaktivovana" in block
 
 
@@ -455,13 +539,14 @@ def test_deactivated_element_moves_a_service_from_pass_to_warn(synthetic_snapsho
     # Cerstve snimky, ne ty uz vyhodnocene - deaktivace se zapisuje do
     # zameru a sdileny objekt mezi dvema behy by meril poradi volani.
     old, new = snapshots()
-    target = _deactivate_shared_route(old, new)
+    target, service_type = _deactivate_shared_route(old, new)
 
     # Cil MUSI byt PASS pred zmenou, jinak aserce nize nemeri nic: sluzba,
     # ktera uz WARN byla, se do counteru nepresune a rozdil vyjde nula.
     target_before = [
         scope for scope in baseline_run.scopes
         if scope.identity.get("description") == target
+        and scope.identity.get("service_type") == service_type
     ]
     assert target_before, f"sluzba {target} ve vysledku neni"
     assert target_before[0].status is Status.PASS, (

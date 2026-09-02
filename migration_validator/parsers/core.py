@@ -190,6 +190,10 @@ class InterfaceService:
     # l3-interface) - port filtr inventory podle nich přitahuje L3 polovinu
     # služby, která bydlí mimo filtrovaný port.
     l3_interface: list[str] = field(default_factory=list)
+    # Opacny smer nez l3_interface: IRB nese access porty svych
+    # bridge-domain/vlan (globalnich i v instanci). Report z toho dela
+    # poznamku "L2: ..." v hlavicce IRB bloku (spec 2026-09-02).
+    l2_interface: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
     detection_confidence: str = "medium"
     detection_reason: list[str] = field(default_factory=list)
@@ -401,9 +405,20 @@ class JunosServiceParserCore:
         self.default_bgp_neighbors_internal_inactive: list[str] = []
         self.default_bfd: dict[str, dict[str, Any]] = {}
         self.static_routes: list[StaticRoute] = []
+        self.global_l2_domains: list[BridgeDomain] = []
 
     def parse(self) -> list[InterfaceService]:
         self._parse_routing_instances()
+        # Globalni bridge-domains (MX) / vlans (EVO) - dosud se stahovaly
+        # (CONFIG_HIERARCHIES), ale necetly. Potrebuje je vazba IRB -> access
+        # port; access port v globalni domene zadnou sluzbu nedostava (mimo
+        # rozsah 2026-09-02).
+        self.global_l2_domains = [
+            domain
+            for container_name in ("bridge-domains", "vlans")
+            for container in self.config_xml.xpath(f"./{container_name}")
+            for domain in self._parse_l2_domain_container(container)
+        ]
         self.static_routes = self._parse_static_routes()
         self._parse_default_bgp_neighbors()
         self._parse_global_eline_interfaces("l2circuit", self.global_l2circuits)
@@ -1144,6 +1159,10 @@ class JunosServiceParserCore:
         if self._should_ignore_interface(interface, instance, service_type):
             return None
 
+        irb_domains = (
+            self._domains_routed_by(interface) if interface.name.startswith("irb.") else []
+        )
+
         return InterfaceService(
             interface=interface.name,
             description=interface.description,
@@ -1157,8 +1176,14 @@ class JunosServiceParserCore:
             protocol=protocols,
             routing_instance_active=instance.active if instance else True,
             interface_active=interface.active,
-            bridge_domain=[domain.name for domain in bridge_domains],
-            customer_vlan=customer_vlans,
+            bridge_domain=unique(
+                [domain.name for domain in bridge_domains]
+                + [domain.name for domain in irb_domains]
+            ),
+            customer_vlan=unique(
+                customer_vlans
+                + [vlan for domain in irb_domains for vlan in domain.all_vlan_ids]
+            ),
             l3_interface=unique(
                 [
                     domain.routing_interface
@@ -1166,9 +1191,20 @@ class JunosServiceParserCore:
                     if domain.routing_interface
                 ]
             ),
+            l2_interface=unique(
+                [iface for domain in irb_domains for iface in domain.interfaces]
+            ),
             detection_confidence=confidence,
             detection_reason=reasons,
         )
+
+    def _domains_routed_by(self, interface: InterfaceConfig) -> list[BridgeDomain]:
+        """Bridge-domains / vlans, jejichz routing-interface (MX) nebo
+        l3-interface (EVO) je tenhle IRB - globalni i v instancich."""
+        candidates = list(self.global_l2_domains)
+        for instance in self.routing_instances.values():
+            candidates.extend(instance.bridge_domains + instance.vlans)
+        return [d for d in candidates if d.routing_interface == interface.name]
 
     def _find_best_instance(self, interface: InterfaceConfig) -> RoutingInstance | None:
         names = unique(
@@ -1974,6 +2010,7 @@ def clean_service_dict(data: dict[str, Any]) -> dict[str, Any]:
         "bgp_neighbor_inactive",
         "bridge_domain",
         "customer_vlan",
+        "l2_interface",
         "lag_members",
         "static_route",
         "bfd",

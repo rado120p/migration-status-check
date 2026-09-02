@@ -63,7 +63,7 @@ def test_generate_inventory_port_filter(tmp_path, monkeypatch):
         "ge-0/0/0",
         "ge-0/0/0.100",
     ]
-    assert data["schema_version"] == 7
+    assert data["schema_version"] == 8
 
 
 def test_generate_inventory_all_mode(tmp_path, monkeypatch):

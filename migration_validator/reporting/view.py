@@ -256,6 +256,11 @@ def build_view(scope: ScopeResult, *, detail: bool = False) -> ServiceView:
                 f"L3 cast: {link['peer_interface']} v {link['peer_instance']} (blok vyse)"
             )
 
+    if link_note is None and identity.get("l2_interfaces"):
+        # IRB bez EVPN linku (access port v globalni bridge-domain/vlan) -
+        # port nema vlastni blok, tak ho aspon pojmenuje hlavicka L3 bloku.
+        link_note = "L2: " + ", ".join(identity["l2_interfaces"])
+
     service_type = identity.get("service_type") or "-"
     if link_role == "l2":
         # L2 blok je technicky doplnek sluzby z bloku nad nim - typ to ma

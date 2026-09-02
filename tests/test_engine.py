@@ -881,6 +881,7 @@ def test_identity_on_device_scope_is_empty_not_crashing():
         "ipv6": [],
         "virtual_gw_v4": [],
         "virtual_gw_v6": [],
+        "l2_interfaces": [],
     }
 
 

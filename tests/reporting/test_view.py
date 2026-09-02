@@ -451,6 +451,14 @@ def test_l3_link_note_points_below():
     assert "(L2 cast)" not in view.service_type
 
 
+def test_irb_without_link_gets_l2_note_from_identity():
+    scope = _scope([_check("interface_state")])
+    scope.identity["l2_interfaces"] = ["ge-0/0/2.12"]
+    view = build_view(scope)
+    assert view.link_role is None
+    assert view.link_note == "L2: ge-0/0/2.12"
+
+
 def test_l3_link_note_lists_every_l2_peer():
     # N L2 : 1 L3 (lab BD-4094) - poznamka vyjmenuje vsechny L2 casti.
     scope = _scope(

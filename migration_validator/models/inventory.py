@@ -68,6 +68,7 @@ class ServiceEntry:
     bgp_neighbor_inactive: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    l2_interface: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
@@ -102,6 +103,7 @@ class ServiceEntry:
             bgp_neighbor_inactive=_as_list(data.get("bgp_neighbor_inactive")),
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
+            l2_interface=_as_list(data.get("l2_interface")),
             lag_members=_as_list(data.get("lag_members")),
             static_route=_as_mapping_list(data.get("static_route")),
             bfd=_as_mapping_list(data.get("bfd")),
@@ -125,6 +127,7 @@ class ServiceEntry:
             "bgp_neighbor_inactive": list(self.bgp_neighbor_inactive),
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
+            "l2_interface": list(self.l2_interface),
             "lag_members": list(self.lag_members),
             "static_route": [dict(route) for route in self.static_route],
             "bfd": [dict(intent) for intent in self.bfd],
@@ -139,7 +142,11 @@ class Inventory:
 
 # 7: Core entry nese service_subtype "transit" | "loopback" - lo0.* uz se
 #    v checku nevaze na stejnem profilu jako tranzitni port.
-INVENTORY_SCHEMA_VERSION = 7
+# 8: subtypy Internet "multicast" / IPVPN "mvpn-igmp" a pole l2_interface
+#    (IRB -> access porty). Subtype je odvozene datum: stara inventory by
+#    na pre strane nesla None a parovaci pravidlo description+type+subtype
+#    by baseline scope vyradilo z novych checku.
+INVENTORY_SCHEMA_VERSION = 8
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -161,6 +168,12 @@ def load_inventory(path: str | Path) -> Inventory:
     Tolerantni cteni stare (v6) inventory by vratilo Core zaznamy se
     service_subtype None - checky vazane na subtype by nemely na co
     naskocit a sluzba (loopback i transit) by tise prosla jako zelena.
+
+    Verze 8 pridala multicast subtypy (Internet "multicast", IPVPN
+    "mvpn-igmp") a l2_interface. Tolerantni cteni stare (v7) inventory by
+    tise vratilo None subtype i prazdny l2_interface - subtype-vazane
+    checky (Task 6) by nemely na co naskocit a IRB blok by ztratil L2
+    poznamku v hlavicce, aniz by to bylo videt.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

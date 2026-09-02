@@ -157,6 +157,7 @@ def _facts_for(scopes, pps: int) -> dict:
     isis_interface = {}
     isis_overview = {}
     ldp_neighbor = {}
+    pim_neighbor = {}
     mpls_interface = {}
     # igmp_group/multicast_route/mvpn_instance se NEsyntetizuji - stejny
     # duvod jako pim_neighbor vyse (sdilena inventory nema multicast sluzbu).
@@ -313,6 +314,17 @@ def _facts_for(scopes, pps: int) -> dict:
                 # MPLS na tranzitu musi byt Up ze stejneho duvodu jako LDP -
                 # jinak by mpls_interface_state hlasil FAIL a rozbil AR-29.
                 mpls_interface[name] = {"state": "Up"}
+                # PIM na tranzitu (spec 2026-09-02, multicast lab): global
+                # "protocols pim interface all" ted zapina pim i na tranzitnich
+                # portech, ktere pak nesou "pim" v zameru. pim_neighbor_state
+                # ma gate na zamer (na rozdil od LDP/MPLS), ale kdyz uz bezi,
+                # bez zdrave synteze by hlasil FAIL "soused ve vypisu neni"
+                # na kazde zdrave migraci a rozbil AR-29.
+                if "pim" in scope.selectors.protocols:
+                    pim_neighbor[name] = {
+                        "neighbor_address": _neighbour_for(v4) if v4 else None,
+                        "uptime_seconds": 25210,
+                    }
                 # BFD na tranzitu je ocekavany vzdy (Task 11, zadny gate na
                 # zamer) - bez zaznamu by bfd_transit_state hlasil FAIL
                 # "zadna BFD session" na kazdem zdravem tranzitnim rozhrani
@@ -339,12 +351,6 @@ def _facts_for(scopes, pps: int) -> dict:
                         "transmission_interval": "3.000",
                         "multiplier": 3,
                     }
-                # pim_neighbor se NEsyntetizuje: sdilene inventory ymly
-                # (172.20.20.4/.5) nenesou "pim" v protocol u zadneho Core
-                # tranzitniho rozhrani (overeno), takze pim_neighbor_state
-                # na e2e fixturach vzdy vraci [] (gate na zamer) a syntetizovana
-                # fakta by byla mrtvy kod.
-
         # lo0.* nese IS-IS jako pasivni level 2 - loopback nema souseda,
         # takze nepasivni level 2 by isis_interface_info hlasil FAIL.
         # overload_enabled: False, jinak by isis_overview hlasil WARN na
@@ -397,17 +403,28 @@ def _facts_for(scopes, pps: int) -> dict:
             }
             # Nove schema (Task 2): klic je VLAN id, domena je jen popisek k
             # rendrovani (None u vlan-based - collector taky nevraci domenu).
+            #
+            # Instance sdili vic E-LAN scopu (napr. MGMT-DEVICE4 a MGMT-VLAN
+            # obe v EVPN-VLAN-AWARE-POP1) - drivejsi kod tady zapisoval cely
+            # slovnik najednou a druhy scope ten prvni tise prepsal. Fungovalo
+            # to, dokud baseline (MX) a subjekt (EVO) nahodou sdileli stejny
+            # vlan-key format; realna laborka po regeneraci (2026-09-02) uz
+            # pro tutez domenu pouziva jiny format na kazde platforme
+            # (MX vlan-tags jako "0x8100.4094", EVO plain "4093"/"4094"), a
+            # scope taky muze mit vic nez jeden customer_vlan (multi-tag
+            # unit) - jen prvni by tise vypadl. Merge pres vsechny scopy a
+            # vsechny jejich vlany drzi synteticka fakta konzistentni s tim,
+            # co inventory skutecne desklaruje.
             iface = scope.selectors.interfaces[0] if scope.selectors.interfaces else None
-            vlan = scope.selectors.vlans[0] if scope.selectors.vlans else "1"
+            vlans = scope.selectors.vlans or ["1"]
             domain = scope.selectors.bridge_domains[0] if scope.selectors.bridge_domains else None
-            evpn_mac[instance] = {
-                "vlans": {vlan: {"count": 42, "domain": domain}},
-                "interfaces": (
-                    {iface: {"count": 42, "name": f"{iface}:{vlan}", "domain": domain}}
-                    if iface
-                    else {}
-                ),
-            }
+            mac_entry = evpn_mac.setdefault(instance, {"vlans": {}, "interfaces": {}})
+            for vlan in vlans:
+                mac_entry["vlans"][vlan] = {"count": 42, "domain": domain}
+            if iface:
+                mac_entry["interfaces"][iface] = {
+                    "count": 42, "name": f"{iface}:{vlans[0]}", "domain": domain
+                }
 
     return {
         "interfaces": interfaces,
@@ -424,6 +441,7 @@ def _facts_for(scopes, pps: int) -> dict:
         "isis_interface": isis_interface,
         "isis_overview": isis_overview,
         "ldp_neighbor": ldp_neighbor,
+        "pim_neighbor": pim_neighbor,
         "mpls_interface": mpls_interface,
         "igmp_group": igmp_group,
         "multicast_route": multicast_route,
