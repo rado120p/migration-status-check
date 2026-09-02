@@ -21,6 +21,11 @@ from migration_validator.models.scope import Scope
 MULTICAST_TYPES = frozenset({"Internet", "IPVPN"})
 MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn-igmp"})
 
+# Internet/multicast prijima stream primo z fyzickeho/agregovaneho transit
+# rozhrani; IPVPN/mvpn-igmp jde pres MVPN core tunel (lsi.* nebo vt-*).
+INTERNET_UPSTREAM_PREFIXES = ("ge-", "xe-", "et-", "ae")
+MVPN_UPSTREAM_PREFIXES = ("lsi.", "vt-")
+
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
 NO_REPORT_SKIP = "bez IGMP reportu"
 # junos-evo casto vraci <multicast-statistics-timed-out/> misto
@@ -156,3 +161,92 @@ class IgmpMembershipReportCheck(Check):
             Outcome.OK, f"IGMP membership report: {pairs_text(now)}",
             label=self.label, value=pairs_text(now), baseline_value=was_value,
         )]
+
+
+# --- multicast_forwarding_status --------------------------------------------
+
+def _upstream_ok(subtype: str | None, upstream: str | None) -> bool:
+    if not upstream:
+        return False
+    prefixes = MVPN_UPSTREAM_PREFIXES if subtype == "mvpn-igmp" else INTERNET_UPSTREAM_PREFIXES
+    return upstream.startswith(prefixes)
+
+
+def _summary(label: str, total: int, failed: int) -> Finding:
+    if failed:
+        return Finding(
+            Outcome.BROKEN, f"{failed} z {total} S,G nefunguje",
+            label=label, value=f"{failed}/{total} S,G nefunguje",
+        )
+    return Finding(Outcome.OK, f"{total} S,G funguje", label=label, value=f"{total} S,G")
+
+
+@register
+class MulticastForwardingStatusCheck(Check):
+    id = "multicast_forwarding_status"
+    title = "Multicast forwarding na servisnim rozhrani"
+    label = "Multicast forwarding status"
+    mode = Mode.STATE
+    requires = ("igmp_group", "multicast_route")
+    requires_inventory = True
+    service_types = MULTICAST_TYPES
+    service_subtypes = MULTICAST_SUBTYPES
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        pairs = igmp_pairs(ctx.subject, ctx.scope)
+        if not pairs:
+            # Kaskada (rozhodnuti 2026-09-02): bez IGMP mnoziny neni co hledat.
+            return [Finding(
+                Outcome.SKIP, "bez IGMP reportu neni co hledat v multicast tabulce",
+                value=NO_REPORT_SKIP,
+            )]
+        table = multicast_table(ctx.subject)
+        iface = ctx.scope.selectors.interfaces[0]
+        rows: list[Finding] = []
+        failed = 0
+        for source, group in pairs:
+            matches = routes_for(table, source, group)
+            if not matches:
+                sg = sg_label(source, group)
+                rows.append(Finding(
+                    Outcome.BROKEN, f"{sg}: S,G neni v multicast tabulce",
+                    label="Stream", group=sg, value="S,G neni v multicast tabulce",
+                ))
+                failed += 1
+                continue
+            for key, route in matches:
+                # Skupina nese realny zdroj z tabulky - u ASM zaznamu (*, G)
+                # je to jediny zpusob, jak streamy rozlisit.
+                sg = sg_label(key.split(",", 1)[0], group)
+                stream = self._stream(sg, iface, ctx.scope.service_subtype, route)
+                if any(f.outcome is Outcome.BROKEN for f in stream):
+                    failed += 1
+                rows.extend(stream)
+        return [_summary(self.label, len(pairs), failed), *rows]
+
+    @staticmethod
+    def _stream(sg: str, iface: str, subtype: str | None, route: dict[str, Any]) -> list[Finding]:
+        downstream = route.get("downstream_interfaces") or []
+        on_iface = iface in downstream
+        upstream = route.get("upstream_interface")
+        return [
+            Finding(
+                Outcome.OK if on_iface else Outcome.BROKEN,
+                f"{sg}: stream se na {iface} " + ("posila" if on_iface else "neposila"),
+                label="Stream", group=sg,
+                value=(
+                    f"Stream se na {iface} posila" if on_iface
+                    else f"S,G je v tabulce ale stream se na {iface} neposila"
+                ),
+            ),
+            Finding(
+                Outcome.OK if _upstream_ok(subtype, upstream) else Outcome.BROKEN,
+                f"{sg}: upstream {upstream or '-'}" + (
+                    "" if _upstream_ok(subtype, upstream)
+                    else " - S,G je v tabulce ale nema upstream interface"
+                ),
+                label="Upstream interface", group=sg, value=upstream or "-",
+            ),
+            *stream_rows(sg, route, rate_label="Forwarding-rate"),
+        ]
