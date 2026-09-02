@@ -37,6 +37,11 @@ from migration_validator.collectors.isis import (
 )
 from migration_validator.collectors.ldp import LdpNeighborCollector
 from migration_validator.collectors.mpls import MplsInterfaceCollector
+from migration_validator.collectors.multicast import (
+    IgmpGroupCollector,
+    MulticastRouteCollector,
+    MvpnInstanceCollector,
+)
 from migration_validator.collectors.nd import NdCollector
 from migration_validator.collectors.optics import OpticsCollector
 from migration_validator.collectors.pim import PimNeighborCollector
@@ -75,6 +80,9 @@ COLLECTORS = (
     LdpNeighborCollector(),
     PimNeighborCollector(),
     MplsInterfaceCollector(),
+    IgmpGroupCollector(),
+    MulticastRouteCollector(),
+    MvpnInstanceCollector(),
 )
 
 # optics na junos (vMX) nema fixture zamerne: RPC existuje, ale vMX na nej
@@ -86,20 +94,24 @@ NO_FIXTURE_ON: set[tuple[str, str]] = {("junos", "optics")}
 
 
 def _fixture_paths(platform: str, collector) -> list[Path]:
-    """Vsechny nahravky oblasti - collector muze mit vic RPC (evpn_mac na MX).
+    """Vsechny nahravky oblasti - collector muze mit vic RPC (evpn_mac na MX)
+    nebo device-aware pocet volani (multicast_route: per-VRF na MX).
 
-    `record` uklada prvni RPC pod jmenem oblasti a dalsi s poradovym cislem.
-    Kdyby se tady cetla jen prvni, MX vlan-based instance by v faktech
-    chybela a test by tvrdil mensi pokryti, nez capture ve skutecnosti ma.
+    Puvodne se pocet nahravek odvozoval z `rpc_names(platform)` (staticky).
+    To selze u collectoru, jehoz pocet volani zavisi na zarizeni (record_calls)
+    - `junos/multicast_route.2.xml` (RI nahrana per-VRF, Task 1) by zustala
+    osirela, protoze rpc_names() vraci jen jedno jmeno. Test proto glob-uje
+    to, co by `record` opravdu zapsal: `<name>.xml` plus kazdy existujici
+    `<name>.<N>.xml` - shoda s diskem misto predpovedi z metody.
     """
     if (platform, collector.name) in NO_FIXTURE_ON:
         return []
     root = RPC_ROOT / platform
     paths = [root / f"{collector.name}.xml"]
-    paths += [
-        root / f"{collector.name}.{index + 1}.xml"
-        for index in range(1, len(collector.rpc_names(platform)))
-    ]
+    index = 2
+    while (extra := root / f"{collector.name}.{index}.xml").exists():
+        paths.append(extra)
+        index += 1
     return paths
 
 

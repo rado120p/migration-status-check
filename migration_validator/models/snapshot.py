@@ -23,7 +23,9 @@ from migration_validator.models.scope import Scope
 #     next_hop.
 # 11: fact areas isis_adjacency/isis_interface/isis_overview/ldp_neighbor/
 #     pim_neighbor/mpls_interface (Core transit/loopback checky).
-SCHEMA_VERSION = 11
+# 12: fact areas igmp_group/multicast_route/mvpn_instance (multicast checky,
+#     spec 2026-09-02) a selektor l2_interfaces (IRB -> access porty).
+SCHEMA_VERSION = 12
 
 
 class SnapshotVersionError(Exception):

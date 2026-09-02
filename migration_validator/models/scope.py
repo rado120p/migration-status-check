@@ -34,6 +34,9 @@ FACT_AREAS = (
     "ldp_neighbor",
     "pim_neighbor",
     "mpls_interface",
+    "igmp_group",
+    "multicast_route",
+    "mvpn_instance",
 )
 
 

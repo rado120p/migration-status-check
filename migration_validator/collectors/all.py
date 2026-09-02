@@ -11,6 +11,7 @@ from migration_validator.collectors import (  # noqa: F401
     isis,
     ldp,
     mpls,
+    multicast,
     nd,
     optics,
     pim,

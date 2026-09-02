@@ -52,6 +52,9 @@ COLLECTOR_NAMES = (
     "ldp_neighbor",
     "pim_neighbor",
     "mpls_interface",
+    "igmp_group",
+    "multicast_route",
+    "mvpn_instance",
 )
 
 
@@ -155,6 +158,12 @@ def _facts_for(scopes, pps: int) -> dict:
     isis_overview = {}
     ldp_neighbor = {}
     mpls_interface = {}
+    # igmp_group/multicast_route/mvpn_instance se NEsyntetizuji - stejny
+    # duvod jako pim_neighbor vyse (sdilena inventory nema multicast sluzbu).
+    # Zdravou syntezu doplni Task 6, az bude znamy tvar checku.
+    igmp_group = {}
+    multicast_route = {}
+    mvpn_instance = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -416,6 +425,9 @@ def _facts_for(scopes, pps: int) -> dict:
         "isis_overview": isis_overview,
         "ldp_neighbor": ldp_neighbor,
         "mpls_interface": mpls_interface,
+        "igmp_group": igmp_group,
+        "multicast_route": multicast_route,
+        "mvpn_instance": mvpn_instance,
     }
 
 
