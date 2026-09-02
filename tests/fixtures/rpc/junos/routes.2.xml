@@ -2,9 +2,9 @@
   <!-- keepalive -->
   <route-table>
     <table-name>inet.0</table-name>
-    <destination-count>26</destination-count>
-    <total-route-count>27</total-route-count>
-    <active-route-count>26</active-route-count>
+    <destination-count>32</destination-count>
+    <total-route-count>33</total-route-count>
+    <active-route-count>32</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
     <rt style="brief">
@@ -15,7 +15,7 @@
         <last-active/>
         <protocol-name>Aggregate</protocol-name>
         <preference>130</preference>
-        <age seconds="4705">01:18:25</age>
+        <age seconds="22947">06:22:27</age>
         <nh-type>Discard</nh-type>
       </rt-entry>
     </rt>
@@ -27,24 +27,24 @@
         <last-active/>
         <protocol-name>Aggregate</protocol-name>
         <preference>130</preference>
-        <age seconds="4726">01:18:46</age>
+        <age seconds="22966">06:22:46</age>
         <nh-type>Reject</nh-type>
       </rt-entry>
     </rt>
   </route-table>
   <route-table>
     <table-name>inet.1</table-name>
-    <destination-count>3</destination-count>
-    <total-route-count>3</total-route-count>
-    <active-route-count>3</active-route-count>
+    <destination-count>5</destination-count>
+    <total-route-count>5</total-route-count>
+    <active-route-count>5</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>inet.2</table-name>
-    <destination-count>9</destination-count>
-    <total-route-count>9</total-route-count>
-    <active-route-count>9</active-route-count>
+    <destination-count>12</destination-count>
+    <total-route-count>12</total-route-count>
+    <active-route-count>12</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
@@ -65,6 +65,58 @@
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
+    <table-name>L3VPN-CPE13-NNI.inet.0</table-name>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>L3VPN-CPE14-UNI.inet.0</table-name>
+    <destination-count>3</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>3</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>MGMT.inet.0</table-name>
+    <destination-count>14</destination-count>
+    <total-route-count>18</total-route-count>
+    <active-route-count>14</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+    <rt style="brief">
+      <rt-destination>10.40.94.0/23</rt-destination>
+      <rt-entry>
+        <active-tag>*</active-tag>
+        <current-active/>
+        <last-active/>
+        <protocol-name>Aggregate</protocol-name>
+        <preference>130</preference>
+        <age seconds="2917">00:48:37</age>
+        <nh-type>Discard</nh-type>
+      </rt-entry>
+    </rt>
+  </route-table>
+  <route-table>
+    <table-name>MULTICAST-STREAM-B-MUX1-RECEIVER.inet.0</table-name>
+    <destination-count>7</destination-count>
+    <total-route-count>8</total-route-count>
+    <active-route-count>7</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>MULTICAST-STREAM-B-MUX1-RECEIVER.inet.1</table-name>
+    <destination-count>5</destination-count>
+    <total-route-count>5</total-route-count>
+    <active-route-count>5</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
     <table-name>iso.0</table-name>
     <destination-count>1</destination-count>
     <total-route-count>1</total-route-count>
@@ -74,17 +126,25 @@
   </route-table>
   <route-table>
     <table-name>mpls.0</table-name>
-    <destination-count>14</destination-count>
-    <total-route-count>14</total-route-count>
-    <active-route-count>14</active-route-count>
+    <destination-count>49</destination-count>
+    <total-route-count>49</total-route-count>
+    <active-route-count>49</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>bgp.l3vpn.0</table-name>
+    <destination-count>12</destination-count>
+    <total-route-count>12</total-route-count>
+    <active-route-count>12</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
     <table-name>inet6.0</table-name>
-    <destination-count>31</destination-count>
-    <total-route-count>31</total-route-count>
-    <active-route-count>31</active-route-count>
+    <destination-count>33</destination-count>
+    <total-route-count>33</total-route-count>
+    <active-route-count>33</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
     <rt style="brief">
@@ -95,7 +155,7 @@
         <last-active/>
         <protocol-name>Aggregate</protocol-name>
         <preference>130</preference>
-        <age seconds="4138">01:08:58</age>
+        <age seconds="2912">00:48:32</age>
         <nh-type>Discard</nh-type>
       </rt-entry>
     </rt>
@@ -125,7 +185,7 @@
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
-    <table-name>bgp.rtarget.0</table-name>
+    <table-name>L3VPN-CPE13-NNI.inet6.0</table-name>
     <destination-count>2</destination-count>
     <total-route-count>2</total-route-count>
     <active-route-count>2</active-route-count>
@@ -133,10 +193,50 @@
     <hidden-route-count>0</hidden-route-count>
   </route-table>
   <route-table>
+    <table-name>L3VPN-CPE14-UNI.inet6.0</table-name>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>MULTICAST-STREAM-B-MUX1-RECEIVER.inet6.1</table-name>
+    <destination-count>1</destination-count>
+    <total-route-count>1</total-route-count>
+    <active-route-count>1</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>bgp.rtarget.0</table-name>
+    <destination-count>13</destination-count>
+    <total-route-count>13</total-route-count>
+    <active-route-count>13</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>bgp.mvpn.0</table-name>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>MULTICAST-STREAM-B-MUX1-RECEIVER.mvpn.0</table-name>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
     <table-name>bgp.evpn.0</table-name>
-    <destination-count>2</destination-count>
-    <total-route-count>2</total-route-count>
-    <active-route-count>2</active-route-count>
+    <destination-count>79</destination-count>
+    <total-route-count>79</total-route-count>
+    <active-route-count>79</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>
@@ -145,6 +245,46 @@
     <destination-count>2</destination-count>
     <total-route-count>2</total-route-count>
     <active-route-count>2</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>EVPN-VPWS-CPE24-UNI.evpn.0</table-name>
+    <destination-count>4</destination-count>
+    <total-route-count>4</total-route-count>
+    <active-route-count>4</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>EVPN-VLAN-AWARE-CPE13-NNI.evpn.0</table-name>
+    <destination-count>7</destination-count>
+    <total-route-count>8</total-route-count>
+    <active-route-count>7</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>EVPN-VLAN-AWARE-POP1.evpn.0</table-name>
+    <destination-count>54</destination-count>
+    <total-route-count>54</total-route-count>
+    <active-route-count>54</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>EVPN-VLAN-BASED-CPE13-NNI.evpn.0</table-name>
+    <destination-count>11</destination-count>
+    <total-route-count>12</total-route-count>
+    <active-route-count>11</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+  </route-table>
+  <route-table>
+    <table-name>__default_evpn__.evpn.0</table-name>
+    <destination-count>1</destination-count>
+    <total-route-count>1</total-route-count>
+    <active-route-count>1</active-route-count>
     <holddown-route-count>0</holddown-route-count>
     <hidden-route-count>0</hidden-route-count>
   </route-table>

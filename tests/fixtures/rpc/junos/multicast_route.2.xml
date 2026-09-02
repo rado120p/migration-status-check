@@ -1,0 +1,32 @@
+<multicast-route-information>
+  <route-family>
+    <multicast-instance>MULTICAST-STREAM-B-MUX1-RECEIVER</multicast-instance>
+    <address-family>INET</address-family>
+    <multicast-route style="extensive">
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
+      <multicast-source-prefix-length>32</multicast-source-prefix-length>
+      <upstream-interface-name>lsi.3</upstream-interface-name>
+      <downstream-interface-names>
+        <interface-name>irb.2</interface-name>
+      </downstream-interface-names>
+      <outgoing-interface-count>1</outgoing-interface-count>
+      <for-blank-line-line/>
+      <session-name>Organisational Local Scope</session-name>
+      <forwarding-rate-kilobytes>0</forwarding-rate-kilobytes>
+      <forwarding-rate-packets>6</forwarding-rate-packets>
+      <forwarded-packet-count>6656</forwarded-packet-count>
+      <next-hop-id>1048646</next-hop-id>
+      <upstream-protocol>Upstream protocol: MVPN</upstream-protocol>
+      <multicast-route-state>Active</multicast-route-state>
+      <multicast-route-forwarding-state>Forwarding</multicast-route-forwarding-state>
+      <multicast-route-timeout>forever</multicast-route-timeout>
+      <interface-mismatch-count>0</interface-mismatch-count>
+      <multicast-route-uptime seconds="1143">00:19:03</multicast-route-uptime>
+    </multicast-route>
+  </route-family>
+  <route-family>
+    <multicast-instance>MULTICAST-STREAM-B-MUX1-RECEIVER</multicast-instance>
+    <address-family>INET6</address-family>
+  </route-family>
+</multicast-route-information>

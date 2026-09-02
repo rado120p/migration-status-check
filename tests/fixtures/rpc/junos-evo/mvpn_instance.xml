@@ -1,0 +1,36 @@
+<mvpn-instance-information>
+  <mvpn-instance style="normal">
+    <instance-family>
+      <address-family>INET</address-family>
+      <instance-entry>
+        <instance-name>MULTICAST-STREAM-B-MUX1-RECEIVER</instance-name>
+        <ngen-mvpn-mode>SPT-ONLY</ngen-mvpn-mode>
+        <sender-based-rpf-status>Disabled. Reason: Not enabled by configuration.</sender-based-rpf-status>
+        <hot-root-standby-status>Disabled. Reason: Not enabled by configuration.</hot-root-standby-status>
+        <provider-tunnel>
+          <provider-tunnel-id>I-P-tnl:invalid</provider-tunnel-id>
+        </provider-tunnel>
+        <neighbor>
+          <neighbor-entry>
+            <neighbor-identifier>150.0.0.11</neighbor-identifier>
+            <provider-tunnel-id/>
+          </neighbor-entry>
+          <neighbor-entry>
+            <neighbor-identifier>150.0.0.13</neighbor-identifier>
+            <provider-tunnel-id>RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13</provider-tunnel-id>
+            <label-in>55</label-in>
+          </neighbor-entry>
+        </neighbor>
+        <c-multicast-ipv4>
+          <c-multicast-ipv4-entry>
+            <c-multicast-address>10.12.12.1/32:239.1.1.1/32</c-multicast-address>
+            <provider-tunnel-id>RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13</provider-tunnel-id>
+            <c-multicast-property/>
+            <c-multicast-fwd-nh>M-(nil)</c-multicast-fwd-nh>
+            <label-in>55</label-in>
+          </c-multicast-ipv4-entry>
+        </c-multicast-ipv4>
+      </instance-entry>
+    </instance-family>
+  </mvpn-instance>
+</mvpn-instance-information>

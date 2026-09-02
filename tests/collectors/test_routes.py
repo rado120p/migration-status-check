@@ -1,6 +1,7 @@
 """Testy collectoru statickych rout proti nahranemu XML z laborky.
 
-Fixtures jsou skutecne odpovedi z 2026-07-29. Na junos (vMX) jsou v tabulce
+Fixtures jsou skutecne odpovedi z laborky (routes.xml/routes.2.xml naposledy
+prenahrany 2026-09-02). Na junos (vMX) jsou v tabulce
 jen mgmt routy - servisni statiky tam sice nakonfigurovane jsou, ale
 nenainstalovaly se, protoze jejich next-hop neexistuje (rozhrani je po
 migraci deaktivovane). Prave tenhle rozpor ma check chytat.
@@ -37,7 +38,7 @@ def test_table_name_carries_rib_and_family(rpc_fixture):
     result = RoutesCollector().parse(rpc_fixture("junos-evo", "routes"), "junos-evo")
 
     assert result["inet.0"]["198.62.1.0/29"]["next_hop"] == ["152.11.13.2"]
-    assert result["inet6.0"]["2001:aaaa::/64"]["next_hop"] == ["2001:abcd:11:13::b"]
+    assert result["inet6.0"]["2001:aaaa::/64"]["next_hop"] == ["2001:abcd:11:14::4"]
     assert result["L3VPN-CPE13-NNI.inet.0"]["172.26.1.0/29"]["via"] == ["et-0/0/8.113"]
     assert "L3VPN-CPE13-NNI.inet6.0" in result
 
