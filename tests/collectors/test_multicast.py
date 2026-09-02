@@ -55,8 +55,13 @@ def test_multicast_route_parses_master_on_junos(rpc_fixture):
 
 def test_multicast_route_parses_ri_on_junos(rpc_fixture):
     # MX: RI se nahravala zvlast (Task 1, record_calls per-VRF), takze RI je
-    # ve druhem souboru fixture (multicast_route.2.xml).
-    data = MulticastRouteCollector().parse(rpc_fixture("junos", "multicast_route.2"), "junos")
+    # v jednom z pripojenych multicast_route.<N>.xml souboru - poradi dane
+    # poradim VRF ze zarizeni (get-instance-information), ne obsahem. Task 1
+    # mel na .4 jen jednu VRF (multicast_route.2.xml). Nahravka 2026-09-02
+    # (task 5b, idealni pre-migracni stav) uz ma na .4 ctyri VRF - tri bez
+    # bezicich multicast routes ("instance is not running", .2-.4) a
+    # MULTICAST-STREAM-B-MUX1-RECEIVER jako ctvrtou (multicast_route.5.xml).
+    data = MulticastRouteCollector().parse(rpc_fixture("junos", "multicast_route.5"), "junos")
     ri = data[MVPN_RI][route_key("10.12.12.1", "239.1.1.1")]
     assert ri["upstream_interface"].startswith(("lsi.", "vt-"))
 

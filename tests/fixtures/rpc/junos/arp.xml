@@ -15,7 +15,7 @@ fxp0.0
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-d6:e1:d0:21:00:09
+90:6a:ee:36:00:09
 </mac-address>
     <ip-address>
 10.1.0.5
@@ -29,7 +29,7 @@ ge-0/0/1.0
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-3c:b3:fb:3a:00:00
+7a:b6:75:2f:ff:ff
 </mac-address>
     <ip-address>
 10.1.2.0
@@ -43,7 +43,7 @@ ge-0/0/0.0
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-2c:6b:f5:3a:38:f0
+0c:00:19:f1:80:02
 </mac-address>
     <ip-address>
 10.40.94.2
@@ -58,7 +58,7 @@ irb.4094 [ge-0/0/6.4094]
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-2c:6b:f5:3a:38:f0
+0c:00:da:84:d5:03
 </mac-address>
     <ip-address>
 10.40.94.3
@@ -73,7 +73,7 @@ irb.4094 [ge-0/0/6.4094]
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-2c:6b:f5:3a:38:f0
+2c:6b:f5:bd:36:f0
 </mac-address>
     <ip-address>
 10.40.94.10
@@ -88,13 +88,58 @@ irb.4094 [ge-0/0/6.4094]
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-2c:6b:f5:4c:79:f0
+2c:6b:f5:5e:30:f0
 </mac-address>
     <ip-address>
 10.40.94.252
 </ip-address>
     <interface-name>
 irb.4094 [ge-0/0/6.4094]
+</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>
+90:6a:ee:36:08:06
+</mac-address>
+    <ip-address>
+10.40.94.254
+</ip-address>
+    <interface-name>
+irb.4094 [ge-0/0/2.4094]
+</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>
+0c:00:26:bc:a8:04
+</mac-address>
+    <ip-address>
+10.40.95.3
+</ip-address>
+    <interface-name>
+irb.4094 [ge-0/0/6.4094]
+</interface-name>
+    <arp-table-entry-flags>
+      <permanent/>
+      <remotely-learnt-address/>
+    </arp-table-entry-flags>
+  </arp-table-entry>
+  <arp-table-entry>
+    <mac-address>
+90:6a:ee:36:08:06
+</mac-address>
+    <ip-address>
+10.40.95.254
+</ip-address>
+    <interface-name>
+irb.4094 [ge-0/0/2.4094]
 </interface-name>
     <arp-table-entry-flags>
       <permanent/>
@@ -117,7 +162,7 @@ em1.0
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-0c:00:4b:4c:4e:01
+0c:00:68:31:c7:01
 </mac-address>
     <ip-address>
 152.11.13.2
@@ -131,7 +176,7 @@ ge-0/0/2.13
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-0c:00:b7:c7:6b:03
+0c:00:c3:34:f8:03
 </mac-address>
     <ip-address>
 152.11.14.4
@@ -145,7 +190,7 @@ ge-0/0/5.0
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-0c:00:4b:4c:4e:01
+0c:00:68:31:c7:01
 </mac-address>
     <ip-address>
 198.11.13.2
@@ -159,10 +204,10 @@ ge-0/0/2.113
   </arp-table-entry>
   <arp-table-entry>
     <mac-address>
-0c:00:f9:bb:ac:02
+0c:00:17:75:54:02
 </mac-address>
     <ip-address>
-198.11.14.2
+198.11.14.4
 </ip-address>
     <interface-name>
 ge-0/0/4.0
@@ -172,6 +217,6 @@ ge-0/0/4.0
     </arp-table-entry-flags>
   </arp-table-entry>
   <arp-entry-count>
-12
+15
 </arp-entry-count>
 </arp-table-information>

@@ -16,7 +16,7 @@
       <level>2</level>
       <adjacency-count>1</adjacency-count>
       <interface-priority>64</interface-priority>
-      <metric>16777214</metric>
+      <metric>1000</metric>
       <te-metric>1000</te-metric>
       <hello-time>9.000</hello-time>
       <holdtime>27</holdtime>
@@ -47,7 +47,7 @@
       <level>2</level>
       <adjacency-count>1</adjacency-count>
       <interface-priority>64</interface-priority>
-      <metric>16777214</metric>
+      <metric>1000</metric>
       <te-metric>1000</te-metric>
       <hello-time>9.000</hello-time>
       <holdtime>27</holdtime>
@@ -76,7 +76,7 @@
       <level>2</level>
       <adjacency-count>0</adjacency-count>
       <interface-priority>64</interface-priority>
-      <metric>16777214</metric>
+      <metric>0</metric>
       <passive>Passive</passive>
       <isis-interface-level-topology>
         <isis-topology-id>IPV4 Multicast</isis-topology-id>

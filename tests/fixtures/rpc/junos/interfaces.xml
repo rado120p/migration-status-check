@@ -13,7 +13,7 @@ up
 149
 </local-index>
     <snmp-index>
-531
+527
 </snmp-index>
     <generation>
 152
@@ -114,63 +114,63 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:71:f7:f4:01
+0c:00:4b:1d:c2:01
 </current-physical-address>
     <hardware-physical-address>
-0c:00:71:f7:f4:01
+0c:00:4b:1d:c2:01
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-281531188
+287730477
 </input-bytes>
       <input-bps>
-1800
+7344
 </input-bps>
       <output-bytes>
-2223642147
+1062831061
 </output-bytes>
       <output-bps>
-1656
+1552
 </output-bps>
       <input-packets>
-3002892
+2933652
 </input-packets>
       <input-pps>
-2
+13
 </input-pps>
       <output-packets>
-23716740
+10692361
 </output-packets>
       <output-pps>
 1
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-216
+21987
 </input-bytes>
         <input-bps>
 0
 </input-bps>
         <output-bytes>
-0
+21673
 </output-bytes>
         <output-bps>
 0
 </output-bps>
         <input-packets>
-3
+230
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-0
+221
 </output-packets>
         <output-pps>
 0
@@ -286,22 +286,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-323449651
+328704256
 </input-bytes>
       <output-bytes>
-2991412736
+1422848662
 </output-bytes>
       <input-packets>
-3002932
+2933691
 </input-packets>
       <output-packets>
-23716738
+10692360
 </output-packets>
       <input-unicasts>
-3002925
+2933646
 </input-unicasts>
       <output-unicasts>
-23716729
+10692354
 </output-unicasts>
       <input-broadcasts>
 0
@@ -363,19 +363,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-3002925
+2933646
 </input-packets>
       <input-reject-count>
-33
+27
 </input-reject-count>
       <input-reject-destination-address-count>
-33
+27
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-23716729
+10692354
 </output-packets>
       <output-packet-pad-count>
 0
@@ -471,13 +471,13 @@ Disabled
 ge-0/0/0.0
 </name>
       <local-index>
-343
+333
 </local-index>
       <snmp-index>
-543
+539
 </snmp-index>
       <generation>
-152
+142
 </generation>
       <description>
 clab-pop-migration-P1;et-0/0/0
@@ -496,92 +496,92 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-281531188
+287730477
 </input-bytes>
         <output-bytes>
-2223700429
+1062877475
 </output-bytes>
         <input-packets>
-3002892
+2933652
 </input-packets>
         <output-packets>
-23716740
+10692361
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
-5184
+302353
 </input-bytes>
           <output-bytes>
-8156
+349775
 </output-bytes>
           <input-packets>
-78
+3580
 </input-packets>
           <output-packets>
-98
+3591
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-3987354
+3499590
 </input-bytes>
         <output-bytes>
-4717379
+4244694
 </output-bytes>
         <input-packets>
-41620
+35721
 </input-packets>
         <output-packets>
-44997
+38832
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-277543834
+284230887
 </input-bytes>
         <input-bps>
-1800
+7344
 </input-bps>
         <output-bytes>
-2218983050
+1058632781
 </output-bytes>
         <output-bps>
-600
+424
 </output-bps>
         <input-packets>
-2961272
+2897931
 </input-packets>
         <input-pps>
-2
+13
 </input-pps>
         <output-packets>
-23671743
+10653529
 </output-packets>
         <output-pps>
 0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-72942
+3966759
 </input-bytes>
           <input-bps>
-1112
+2736
 </input-bps>
           <output-bytes>
-127572
+251760
 </output-bytes>
           <output-bps>
 0
 </output-bps>
           <input-packets>
-797
+62621
 </input-packets>
           <input-pps>
-1
+5
 </input-pps>
           <output-packets>
-1616
+3664
 </output-packets>
           <output-pps>
 0
@@ -589,25 +589,25 @@ ENET2
         </ipv4-transit-statistics>
         <ipv6-transit-statistics>
           <input-bytes>
-216
+21987
 </input-bytes>
           <input-bps>
 0
 </input-bps>
           <output-bytes>
-0
+21673
 </output-bytes>
           <output-bps>
 0
 </output-bps>
           <input-packets>
-3
+230
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-0
+221
 </output-packets>
           <output-pps>
 0
@@ -639,7 +639,7 @@ inet
 0
 </intf-dropcnt>
         <generation>
-188
+165
 </generation>
         <route-table>
 0
@@ -670,7 +670,7 @@ inet
 Unspecified
 </ifa-broadcast>
           <generation>
-151
+147
 </generation>
         </interface-address>
       </address-family>
@@ -682,7 +682,7 @@ iso
 9199
 </mtu>
         <generation>
-189
+166
 </generation>
         <route-table>
 0
@@ -717,7 +717,7 @@ inet6
 0
 </intf-dropcnt>
         <generation>
-190
+167
 </generation>
         <route-table>
 0
@@ -748,7 +748,7 @@ inet6
 Unspecified
 </ifa-broadcast>
           <generation>
-153
+149
 </generation>
         </interface-address>
         <interface-address>
@@ -762,7 +762,7 @@ Unspecified
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:71ff:fef7:f401
+fe80::e00:4bff:fe1d:c201
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -773,7 +773,7 @@ fe80::e00:71ff:fef7:f401
 Unspecified
 </ifa-broadcast>
           <generation>
-155
+151
 </generation>
         </interface-address>
       </address-family>
@@ -788,7 +788,7 @@ mpls
 3
 </maximum-labels>
         <generation>
-191
+168
 </generation>
         <route-table>
 0
@@ -808,7 +808,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-192
+169
 </generation>
         <route-table>
 0
@@ -843,7 +843,7 @@ up
 146
 </local-index>
     <snmp-index>
-524
+520
 </snmp-index>
     <generation>
 149
@@ -992,13 +992,13 @@ Never
 lc-0/0/0.32769
 </name>
       <local-index>
-339
+329
 </local-index>
       <snmp-index>
-525
+521
 </snmp-index>
       <generation>
-148
+138
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -1101,7 +1101,7 @@ vpls
 Unlimited
 </mtu>
         <generation>
-183
+160
 </generation>
         <route-table>
 1
@@ -1129,7 +1129,7 @@ up
 148
 </local-index>
     <snmp-index>
-527
+523
 </snmp-index>
     <generation>
 151
@@ -1278,13 +1278,13 @@ Never
 pfe-0/0/0.16383
 </name>
       <local-index>
-342
+332
 </local-index>
       <snmp-index>
-530
+526
 </snmp-index>
       <generation>
-151
+141
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -1443,7 +1443,7 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-186
+163
 </generation>
         <route-table>
 1
@@ -1475,7 +1475,7 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-187
+164
 </generation>
         <route-table>
 1
@@ -1500,7 +1500,7 @@ up
 147
 </local-index>
     <snmp-index>
-526
+522
 </snmp-index>
     <generation>
 150
@@ -1649,13 +1649,13 @@ Never
 pfh-0/0/0.16383
 </name>
       <local-index>
-340
+330
 </local-index>
       <snmp-index>
-528
+524
 </snmp-index>
       <generation>
-149
+139
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -1774,7 +1774,7 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-184
+161
 </generation>
         <route-table>
 1
@@ -1789,13 +1789,13 @@ Unlimited
 pfh-0/0/0.16384
 </name>
       <local-index>
-341
+331
 </local-index>
       <snmp-index>
-529
+525
 </snmp-index>
       <generation>
-150
+140
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -1914,7 +1914,7 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-185
+162
 </generation>
         <route-table>
 2
@@ -1940,7 +1940,7 @@ up
 150
 </local-index>
     <snmp-index>
-532
+528
 </snmp-index>
     <generation>
 153
@@ -2041,63 +2041,63 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:64:21:1e:02
+0c:00:62:1f:00:02
 </current-physical-address>
     <hardware-physical-address>
-0c:00:64:21:1e:02
+0c:00:62:1f:00:02
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-1956896278
+318740136
 </input-bytes>
       <input-bps>
-480
+1810584
 </input-bps>
       <output-bytes>
-1279577851
+948545612
 </output-bytes>
       <output-bps>
-920
+1136
 </output-bps>
       <input-packets>
-20197234
+3416782
 </input-packets>
       <input-pps>
-0
+2159
 </input-pps>
       <output-packets>
-13728493
+9464123
 </output-packets>
       <output-pps>
 1
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-216
+41658
 </input-bytes>
         <input-bps>
 0
 </input-bps>
         <output-bytes>
-0
+20868
 </output-bytes>
         <output-bps>
 0
 </output-bps>
         <input-packets>
-3
+476
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-0
+220
 </output-packets>
         <output-pps>
 0
@@ -2213,22 +2213,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-2239523600
+365717705
 </input-bytes>
       <output-bytes>
-1690728981
+1231952469
 </output-bytes>
       <input-packets>
-20197276
+3417010
 </input-packets>
       <output-packets>
-13728492
+9464122
 </output-packets>
       <input-unicasts>
-20197273
+3410522
 </input-unicasts>
       <output-unicasts>
-13728489
+9464119
 </output-unicasts>
       <input-broadcasts>
 0
@@ -2290,19 +2290,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-20197273
+3410522
 </input-packets>
       <input-reject-count>
-33
+27
 </input-reject-count>
       <input-reject-destination-address-count>
-33
+27
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-13728489
+9464119
 </output-packets>
       <output-packet-pad-count>
 0
@@ -2398,13 +2398,13 @@ Disabled
 ge-0/0/1.0
 </name>
       <local-index>
-344
+334
 </local-index>
       <snmp-index>
-544
+540
 </snmp-index>
       <generation>
-153
+143
 </generation>
       <description>
 clab-pop-migration-PTX1-POP1;et-0/0/1
@@ -2423,92 +2423,92 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-1956896278
+318740136
 </input-bytes>
         <output-bytes>
-1279636225
+948592026
 </output-bytes>
         <input-packets>
-20197234
+3416782
 </input-packets>
         <output-packets>
-13728493
+9464123
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
-12416
+57306
 </input-bytes>
           <output-bytes>
-16766
+41136
 </output-bytes>
           <input-packets>
-182
+699
 </input-packets>
           <output-packets>
-201
+462
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-3770077
+3263486
 </input-bytes>
         <output-bytes>
-4361483
+3737832
 </output-bytes>
         <input-packets>
-36473
+30404
 </input-packets>
         <output-packets>
-35351
+29975
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-1953126201
+315476650
 </input-bytes>
         <input-bps>
-480
+1810584
 </input-bps>
         <output-bytes>
-1275274742
+944854194
 </output-bytes>
         <output-bps>
-0
+200
 </output-bps>
         <input-packets>
-20160761
+3386378
 </input-packets>
         <input-pps>
-0
+2159
 </input-pps>
         <output-packets>
-13693142
+9434148
 </output-packets>
         <output-pps>
 0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-127572
+377258
 </input-bytes>
           <input-bps>
-480
+272
 </input-bps>
           <output-bytes>
-72942
+212120
 </output-bytes>
           <output-bps>
-0
+200
 </output-bps>
           <input-packets>
-1616
+6496
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-797
+3674
 </output-packets>
           <output-pps>
 0
@@ -2516,25 +2516,25 @@ ENET2
         </ipv4-transit-statistics>
         <ipv6-transit-statistics>
           <input-bytes>
-216
+41658
 </input-bytes>
           <input-bps>
 0
 </input-bps>
           <output-bytes>
-0
+20868
 </output-bytes>
           <output-bps>
 0
 </output-bps>
           <input-packets>
-3
+476
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-0
+220
 </output-packets>
           <output-pps>
 0
@@ -2566,7 +2566,7 @@ inet
 0
 </intf-dropcnt>
         <generation>
-193
+170
 </generation>
         <route-table>
 0
@@ -2596,7 +2596,7 @@ inet
 Unspecified
 </ifa-broadcast>
           <generation>
-157
+153
 </generation>
         </interface-address>
       </address-family>
@@ -2608,7 +2608,7 @@ iso
 9199
 </mtu>
         <generation>
-194
+171
 </generation>
         <route-table>
 0
@@ -2633,7 +2633,7 @@ inet6
 75000
 </new-hold-limit>
         <intf-curr-cnt>
-2
+1
 </intf-curr-cnt>
         <intf-unresolved-cnt>
 0
@@ -2642,7 +2642,7 @@ inet6
 0
 </intf-dropcnt>
         <generation>
-195
+172
 </generation>
         <route-table>
 0
@@ -2672,7 +2672,7 @@ inet6
 Unspecified
 </ifa-broadcast>
           <generation>
-159
+155
 </generation>
         </interface-address>
         <interface-address>
@@ -2686,7 +2686,7 @@ Unspecified
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:64ff:fe21:1e02
+fe80::e00:62ff:fe1f:2
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -2697,7 +2697,7 @@ fe80::e00:64ff:fe21:1e02
 Unspecified
 </ifa-broadcast>
           <generation>
-161
+157
 </generation>
         </interface-address>
       </address-family>
@@ -2712,7 +2712,7 @@ mpls
 3
 </maximum-labels>
         <generation>
-196
+173
 </generation>
         <route-table>
 0
@@ -2731,7 +2731,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-197
+174
 </generation>
         <route-table>
 0
@@ -2765,7 +2765,7 @@ up
 151
 </local-index>
     <snmp-index>
-533
+529
 </snmp-index>
     <generation>
 154
@@ -2868,63 +2868,63 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:5d:97:dd:03
+0c:00:e2:de:5d:03
 </current-physical-address>
     <hardware-physical-address>
-0c:00:5d:97:dd:03
+0c:00:e2:de:5d:03
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-1436245610
+1013564026
 </input-bytes>
       <input-bps>
-1936
+768
 </input-bps>
       <output-bytes>
-1529710300
+442736736
 </output-bytes>
       <output-bps>
-1856
+824120
 </output-bps>
       <input-packets>
-16188889
+10856722
 </input-packets>
       <input-pps>
-2
+0
 </input-pps>
       <output-packets>
-17287579
+4987194
 </output-packets>
       <output-pps>
-1
+1087
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-649288
+32852
 </input-bytes>
         <input-bps>
 0
 </input-bps>
         <output-bytes>
-637040
+20592
 </output-bytes>
         <output-bps>
 0
 </output-bps>
         <input-packets>
-8128
+443
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-7963
+286
 </output-packets>
         <output-pps>
 0
@@ -3026,22 +3026,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-1437914531
+1015516770
 </input-bytes>
       <output-bytes>
-1739049288
+505315906
 </output-bytes>
       <input-packets>
-16200105
+10863756
 </input-packets>
       <output-packets>
-17288448
+4988137
 </output-packets>
       <input-unicasts>
-16200095
+10863751
 </input-unicasts>
       <output-unicasts>
-17288438
+4984874
 </output-unicasts>
       <input-broadcasts>
 0
@@ -3103,19 +3103,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-16200095
+10863751
 </input-packets>
       <input-reject-count>
-13766
+24552
 </input-reject-count>
       <input-reject-destination-address-count>
-10524
+6851
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-17288438
+4984874
 </output-packets>
       <output-packet-pad-count>
 0
@@ -3208,16 +3208,356 @@ Disabled
 </interface-transmit-statistics>
     <logical-interface>
       <name>
+ge-0/0/2.11
+</name>
+      <local-index>
+353
+</local-index>
+      <snmp-index>
+555
+</snmp-index>
+      <generation>
+225
+</generation>
+      <description>
+MULTICAST-STREAM-A-MUX1-RECEIVER-1
+</description>
+      <if-config-flags>
+        <iff-up/>
+        <iff-snmp-traps/>
+        <internal-flags>
+0x4000
+</internal-flags>
+      </if-config-flags>
+      <link-address format="VLAN-Tag [ 0x8100.11 ] ">
+[ 0x8100.11 ] 
+</link-address>
+      <encapsulation>
+ENET2
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+15464
+</input-bytes>
+        <output-bytes>
+2401936
+</output-bytes>
+        <input-packets>
+352
+</input-packets>
+        <output-packets>
+38161
+</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+13396
+</input-bytes>
+        <output-bytes>
+9826
+</output-bytes>
+        <input-packets>
+319
+</input-packets>
+        <output-packets>
+191
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+2068
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+2392110
+</output-bytes>
+        <output-bps>
+2736
+</output-bps>
+        <input-packets>
+33
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+37970
+</output-packets>
+        <output-pps>
+5
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+1764
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+2392110
+</output-bytes>
+          <output-bps>
+2736
+</output-bps>
+          <input-packets>
+28
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+37970
+</output-packets>
+          <output-pps>
+5
+</output-pps>
+        </ipv4-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+1500
+</mtu>
+        <max-local-cache>
+75000
+</max-local-cache>
+        <new-hold-limit>
+75000
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+305
+</generation>
+        <route-table>
+0
+</route-table>
+        <address-family-flags>
+          <ifff-sendbcast-pkt-to-re/>
+          <internal-flags>
+0x0
+</internal-flags>
+        </address-family-flags>
+        <filter-information>
+</filter-information>
+        <policer-information>
+</policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>
+10.111.11.0/30
+</ifa-destination>
+          <ifa-local>
+10.111.11.1
+</ifa-local>
+          <ifa-broadcast>
+10.111.11.3
+</ifa-broadcast>
+          <generation>
+229
+</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+306
+</generation>
+        <route-table>
+0
+</route-table>
+        <address-family-flags>
+          <internal-flags>
+0x0
+</internal-flags>
+        </address-family-flags>
+        <filter-information>
+</filter-information>
+        <policer-information>
+          <policer-input>
+__default_arp_policer__
+</policer-input>
+        </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.12
+</name>
+      <local-index>
+368
+</local-index>
+      <snmp-index>
+568
+</snmp-index>
+      <generation>
+240
+</generation>
+      <description>
+MULTICAST-STREAM-B-MUX1-RECEIVER
+</description>
+      <if-config-flags>
+        <iff-up/>
+        <iff-snmp-traps/>
+        <internal-flags>
+0x20004000
+</internal-flags>
+      </if-config-flags>
+      <link-address format="VLAN-Tag [ 0x8100.12 ] ">
+[ 0x8100.12 ] 
+</link-address>
+      <encapsulation>
+VLAN-Bridge
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+1994214
+</input-bytes>
+        <output-bytes>
+2942811
+</output-bytes>
+        <input-packets>
+24683
+</input-packets>
+        <output-packets>
+46689
+</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+24066
+</input-bytes>
+        <output-bytes>
+34416
+</output-bytes>
+        <input-packets>
+380
+</input-packets>
+        <output-packets>
+535
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+1970148
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+2908395
+</output-bytes>
+        <output-bps>
+2984
+</output-bps>
+        <input-packets>
+24303
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+46154
+</output-packets>
+        <output-pps>
+5
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv4-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+        <mtu>
+1522
+</mtu>
+        <generation>
+331
+</generation>
+        <route-table>
+5
+</route-table>
+        <iff-vpls-status>
+up
+</iff-vpls-status>
+        <iff-next-hop>
+787
+</iff-next-hop>
+        <vpls-mesh-group>
+__all_ces__
+</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-is-primary/>
+          <internal-flags>
+0x4000000
+</internal-flags>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
 ge-0/0/2.13
 </name>
       <local-index>
-333
+354
 </local-index>
       <snmp-index>
-545
+556
 </snmp-index>
       <generation>
-185
+226
 </generation>
       <description>
 INTERNET-CPE13-NNI
@@ -3239,92 +3579,92 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-11624
+179491
 </input-bytes>
         <output-bytes>
-12643
+387587
 </output-bytes>
         <input-packets>
-195
+4245
 </input-packets>
         <output-packets>
-197
+6664
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
-6116
+432
 </input-bytes>
           <output-bytes>
-6815
+82
 </output-bytes>
           <input-packets>
-74
+6
 </input-packets>
           <output-packets>
-77
+1
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-4464
+80603
 </input-bytes>
         <output-bytes>
-5379
+184047
 </output-bytes>
         <input-packets>
-59
+1249
 </input-packets>
         <output-packets>
-59
+1655
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-7160
+98888
 </input-bytes>
         <input-bps>
-632
+200
 </input-bps>
         <output-bytes>
-7264
+203540
 </output-bytes>
         <output-bps>
-632
+200
 </output-bps>
         <input-packets>
-136
+2996
 </input-packets>
         <input-pps>
-1
+0
 </input-pps>
         <output-packets>
-138
+5009
 </output-packets>
         <output-pps>
-1
+0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-3960
+100840
 </input-bytes>
           <input-bps>
-312
+200
 </input-bps>
           <output-bytes>
-4064
+203540
 </output-bytes>
           <output-bps>
-312
+200
 </output-bps>
           <input-packets>
-96
+3034
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-98
+5009
 </output-packets>
           <output-pps>
 0
@@ -3332,25 +3672,25 @@ ENET2
         </ipv4-transit-statistics>
         <ipv6-transit-statistics>
           <input-bytes>
-3200
+0
 </input-bytes>
           <input-bps>
-312
+0
 </input-bps>
           <output-bytes>
-3200
+0
 </output-bytes>
           <output-bps>
-312
+0
 </output-bps>
           <input-packets>
-40
+0
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-40
+0
 </output-packets>
           <output-pps>
 0
@@ -3382,7 +3722,7 @@ inet
 0
 </intf-dropcnt>
         <generation>
-232
+307
 </generation>
         <route-table>
 0
@@ -3412,7 +3752,7 @@ inet
 152.11.13.3
 </ifa-broadcast>
           <generation>
-183
+231
 </generation>
         </interface-address>
       </address-family>
@@ -3430,7 +3770,7 @@ inet6
 75000
 </new-hold-limit>
         <intf-curr-cnt>
-1
+0
 </intf-curr-cnt>
         <intf-unresolved-cnt>
 0
@@ -3439,7 +3779,7 @@ inet6
 0
 </intf-dropcnt>
         <generation>
-233
+308
 </generation>
         <route-table>
 0
@@ -3452,49 +3792,24 @@ inet6
         <interface-address>
           <ifa-flags>
             <ifaf-current-preferred/>
-            <ifaf-current-primary/>
-          </ifa-flags>
-          <ifa-destination>
-2001:abcd:11:13::a/127
-</ifa-destination>
-          <ifa-local>
-2001:abcd:11:13::a
-</ifa-local>
-          <interface-address>
-            <in6-addr-flags>
-              <ifaf-none/>
-            </in6-addr-flags>
-          </interface-address>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
-185
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <ifaf-current-preferred/>
-            <internal-flags>
-0x800
-</internal-flags>
+            <ifaf-duplicate/>
           </ifa-flags>
           <ifa-destination>
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:5d00:d97:dd03
+fe80::1
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
-              <ifaf-none/>
+              <in6-duplicate/>
             </in6-addr-flags>
           </interface-address>
           <ifa-broadcast>
 Unspecified
 </ifa-broadcast>
           <generation>
-187
+233
 </generation>
         </interface-address>
       </address-family>
@@ -3506,7 +3821,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-234
+309
 </generation>
         <route-table>
 0
@@ -3530,13 +3845,13 @@ __default_arp_policer__
 ge-0/0/2.113
 </name>
       <local-index>
-335
+355
 </local-index>
       <snmp-index>
-546
+557
 </snmp-index>
       <generation>
-186
+227
 </generation>
       <description>
 L3VPN-CPE13-NNI
@@ -3558,92 +3873,92 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-5555
+443615
 </input-bytes>
         <output-bytes>
-9904
+685359
 </output-bytes>
         <input-packets>
-100
+9637
 </input-packets>
         <output-packets>
-163
+16254
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
-1860
+132289
 </input-bytes>
           <output-bytes>
-2679
+27911
 </output-bytes>
           <input-packets>
-22
+1806
 </input-packets>
           <output-packets>
-28
+309
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-4379
+244671
 </input-bytes>
         <output-bytes>
-5920
+224931
 </output-bytes>
         <input-packets>
-58
+3610
 </input-packets>
         <output-packets>
-67
+2212
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-1176
+198944
 </input-bytes>
         <input-bps>
-744
+568
 </input-bps>
         <output-bytes>
-3984
+460428
 </output-bytes>
         <output-bps>
-104
+0
 </output-bps>
         <input-packets>
-42
+6027
 </input-packets>
         <input-pps>
-1
+0
 </input-pps>
         <output-packets>
-96
+14042
 </output-packets>
         <output-pps>
 0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-1176
+204796
 </input-bytes>
           <input-bps>
-384
+200
 </input-bps>
           <output-bytes>
-3984
+451428
 </output-bytes>
           <output-bps>
-104
+0
 </output-bps>
           <input-packets>
-42
+6193
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-96
+13917
 </output-packets>
           <output-pps>
 0
@@ -3651,25 +3966,25 @@ ENET2
         </ipv4-transit-statistics>
         <ipv6-transit-statistics>
           <input-bytes>
-0
+14544
 </input-bytes>
           <input-bps>
-0
+360
 </input-bps>
           <output-bytes>
-0
+9000
 </output-bytes>
           <output-bps>
 0
 </output-bps>
           <input-packets>
-0
+202
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-0
+125
 </output-packets>
           <output-pps>
 0
@@ -3701,10 +4016,10 @@ inet
 0
 </intf-dropcnt>
         <generation>
-235
+310
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -3733,7 +4048,7 @@ inet
 198.11.13.3
 </ifa-broadcast>
           <generation>
-189
+235
 </generation>
         </interface-address>
       </address-family>
@@ -3760,10 +4075,10 @@ inet6
 0
 </intf-dropcnt>
         <generation>
-236
+311
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -3792,7 +4107,7 @@ inet6
 Unspecified
 </ifa-broadcast>
           <generation>
-191
+237
 </generation>
         </interface-address>
         <interface-address>
@@ -3806,7 +4121,7 @@ Unspecified
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:5d00:7197:dd03
+fe80::e00:e200:71de:5d03
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -3817,7 +4132,7 @@ fe80::e00:5d00:7197:dd03
 Unspecified
 </ifa-broadcast>
           <generation>
-193
+239
 </generation>
         </interface-address>
       </address-family>
@@ -3829,10 +4144,10 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-237
+312
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <internal-flags>
@@ -3853,13 +4168,13 @@ __default_arp_policer__
 ge-0/0/2.213
 </name>
       <local-index>
-336
+356
 </local-index>
       <snmp-index>
-547
+558
 </snmp-index>
       <generation>
-187
+228
 </generation>
       <description>
 EVPN-VPWS-CPE13-NNI
@@ -3881,16 +4196,16 @@ VLAN-CCC
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-4626
+639766
 </input-bytes>
         <output-bytes>
-5094
+903262
 </output-bytes>
         <input-packets>
-69
+9167
 </input-packets>
         <output-packets>
-68
+12598
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -3909,25 +4224,25 @@ VLAN-CCC
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-4626
+639766
 </input-bytes>
         <input-bps>
 0
 </input-bps>
         <output-bytes>
-5094
+903262
 </output-bytes>
         <output-bps>
 0
 </output-bps>
         <input-packets>
-69
+9167
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-68
+12598
 </output-packets>
         <output-pps>
 0
@@ -3969,7 +4284,7 @@ ccc
 1522
 </mtu>
         <generation>
-238
+313
 </generation>
         <route-table>
 0
@@ -3986,13 +4301,13 @@ ccc
 ge-0/0/2.313
 </name>
       <local-index>
-354
+369
 </local-index>
       <snmp-index>
-548
+569
 </snmp-index>
       <generation>
-198
+241
 </generation>
       <description>
 EVPN-VLAN-AWARE-CPE13-NNI
@@ -4014,16 +4329,16 @@ VLAN-Bridge
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-4742
+452044202
 </input-bytes>
         <output-bytes>
-5154
+106512556
 </output-bytes>
         <input-packets>
-71
+4681044
 </input-packets>
         <output-packets>
-69
+1113508
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -4042,28 +4357,28 @@ VLAN-Bridge
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-4742
+452044202
 </input-bytes>
         <input-bps>
-176
+0
 </input-bps>
         <output-bytes>
-5154
+106512556
 </output-bytes>
         <output-bps>
-624
+218352
 </output-bps>
         <input-packets>
-71
+4681044
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-69
+1113508
 </output-packets>
         <output-pps>
-0
+278
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
@@ -4102,16 +4417,16 @@ bridge
 1522
 </mtu>
         <generation>
-253
+332
 </generation>
         <route-table>
-16
+15
 </route-table>
         <iff-vpls-status>
 up
 </iff-vpls-status>
         <iff-next-hop>
-713
+825
 </iff-next-hop>
         <vpls-mesh-group>
 __all_ces__
@@ -4129,13 +4444,13 @@ __all_ces__
 ge-0/0/2.413
 </name>
       <local-index>
-353
+367
 </local-index>
       <snmp-index>
-549
+567
 </snmp-index>
       <generation>
-197
+239
 </generation>
       <description>
 EVPN-VLAN-BASED-CPE13-NNI
@@ -4157,16 +4472,16 @@ VLAN-Bridge
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-2810
+456722648
 </input-bytes>
         <output-bytes>
-2728
+206660672
 </output-bytes>
         <input-packets>
-29
+4734815
 </input-packets>
         <output-packets>
-28
+2160522
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -4185,25 +4500,168 @@ VLAN-Bridge
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-2810
+456722648
 </input-bytes>
         <input-bps>
-384
+0
 </input-bps>
         <output-bytes>
-2728
+206660672
 </output-bytes>
         <output-bps>
-0
+599032
 </output-bps>
         <input-packets>
-29
+4734815
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-28
+2160522
+</output-packets>
+        <output-pps>
+799
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv4-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+        <mtu>
+1522
+</mtu>
+        <generation>
+330
+</generation>
+        <route-table>
+17
+</route-table>
+        <iff-vpls-status>
+up
+</iff-vpls-status>
+        <iff-next-hop>
+786
+</iff-next-hop>
+        <vpls-mesh-group>
+__all_ces__
+</vpls-mesh-group>
+        <address-family-flags>
+          <ifff-is-primary/>
+          <internal-flags>
+0x4000000
+</internal-flags>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.4094
+</name>
+      <local-index>
+370
+</local-index>
+      <snmp-index>
+570
+</snmp-index>
+      <generation>
+242
+</generation>
+      <description>
+MGMT-DEVICE4
+</description>
+      <if-config-flags>
+        <iff-up/>
+        <iff-snmp-traps/>
+        <internal-flags>
+0x20004000
+</internal-flags>
+      </if-config-flags>
+      <link-address format="VLAN-Tag [ 0x8100.4093 0x8100.4094 ] In(pop) Out(push 0x8100.4093) ">
+[ 0x8100.4093 0x8100.4094 ] In(pop) Out(push 0x8100.4093) 
+</link-address>
+      <encapsulation>
+VLAN-Bridge
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+73662274
+</input-bytes>
+        <output-bytes>
+52766386
+</output-bytes>
+        <input-packets>
+1047422
+</input-packets>
+        <output-packets>
+748586
+</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+7932322
+</input-bytes>
+        <output-bytes>
+0
+</output-bytes>
+        <input-packets>
+128492
+</input-packets>
+        <output-packets>
+0
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+65729952
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+52766386
+</output-bytes>
+        <output-bps>
+0
+</output-bps>
+        <input-packets>
+918930
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+748586
 </output-packets>
         <output-pps>
 0
@@ -4245,16 +4703,16 @@ bridge
 1522
 </mtu>
         <generation>
-252
+333
 </generation>
         <route-table>
-18
+16
 </route-table>
         <iff-vpls-status>
 up
 </iff-vpls-status>
         <iff-next-hop>
-704
+826
 </iff-next-hop>
         <vpls-mesh-group>
 __all_ces__
@@ -4272,13 +4730,13 @@ __all_ces__
 ge-0/0/2.32767
 </name>
       <local-index>
-337
+357
 </local-index>
       <snmp-index>
-550
+560
 </snmp-index>
       <generation>
-188
+229
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -4385,7 +4843,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-239
+314
 </generation>
         <route-table>
 0
@@ -4417,7 +4875,7 @@ up
 152
 </local-index>
     <snmp-index>
-534
+530
 </snmp-index>
     <generation>
 155
@@ -4518,45 +4976,45 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:c4:3b:27:04
+0c:00:e6:71:31:04
 </current-physical-address>
     <hardware-physical-address>
-0c:00:c4:3b:27:04
+0c:00:e6:71:31:04
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-1716566
+2668438
 </input-bytes>
       <input-bps>
-352
+360
 </input-bps>
       <output-bytes>
-101178
+1515058
 </output-bytes>
       <output-bps>
-0
+472
 </output-bps>
       <input-packets>
-28524
+44538
 </input-packets>
       <input-pps>
 0
 </input-pps>
       <output-packets>
-1485
+26196
 </output-packets>
       <output-pps>
 0
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-3950
+4972
 </input-bytes>
         <input-bps>
 0
@@ -4676,22 +5134,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-1813188
+2741906
 </input-bytes>
       <output-bytes>
-128100
+1979648
 </output-bytes>
       <input-packets>
-29014
+44862
 </input-packets>
       <output-packets>
-1485
+26200
 </output-packets>
       <input-unicasts>
-29013
+44858
 </input-unicasts>
       <output-unicasts>
-1485
+26196
 </output-unicasts>
       <input-broadcasts>
 0
@@ -4753,19 +5211,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-29013
+44858
 </input-packets>
       <input-reject-count>
-5782
+18236
 </input-reject-count>
       <input-reject-destination-address-count>
-458
+148
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-1485
+26196
 </output-packets>
       <output-packet-pad-count>
 0
@@ -4861,13 +5319,13 @@ Disabled
 ge-0/0/3.0
 </name>
       <local-index>
-338
+358
 </local-index>
       <snmp-index>
 561
 </snmp-index>
       <generation>
-189
+230
 </generation>
       <description>
 EVPN-VPWS-CPE24-UNI
@@ -4889,16 +5347,16 @@ Ethernet-CCC
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-1984
+1046572
 </input-bytes>
         <output-bytes>
-0
+1044718
 </output-bytes>
         <input-packets>
-22
+18165
 </input-packets>
         <output-packets>
-0
+18057
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
@@ -4917,25 +5375,25 @@ Ethernet-CCC
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-1984
+1046572
 </input-bytes>
         <input-bps>
-352
+360
 </input-bps>
         <output-bytes>
-0
+1044718
 </output-bytes>
         <output-bps>
-0
+472
 </output-bps>
         <input-packets>
-22
+18165
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-0
+18057
 </output-packets>
         <output-pps>
 0
@@ -4977,7 +5435,7 @@ ccc
 1514
 </mtu>
         <generation>
-240
+315
 </generation>
         <route-table>
 0
@@ -5005,7 +5463,7 @@ up
 153
 </local-index>
     <snmp-index>
-535
+531
 </snmp-index>
     <generation>
 156
@@ -5106,63 +5564,63 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:64:ed:45:05
+0c:00:5f:ba:16:05
 </current-physical-address>
     <hardware-physical-address>
-0c:00:64:ed:45:05
+0c:00:5f:ba:16:05
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-1447614
+805048
 </input-bytes>
       <input-bps>
-280
+488
 </input-bps>
       <output-bytes>
-681421
+664646
 </output-bytes>
       <output-bps>
-240
+592
 </output-bps>
       <input-packets>
-20995
+12518
 </input-packets>
       <input-pps>
 0
 </input-pps>
       <output-packets>
-8029
+9709
 </output-packets>
       <output-pps>
 0
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-19004
+272846
 </input-bytes>
         <input-bps>
 0
 </input-bps>
         <output-bytes>
-158
+259722
 </output-bytes>
         <output-bps>
 0
 </output-bps>
         <input-packets>
-254
+3768
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-1
+3606
 </output-packets>
         <output-pps>
 0
@@ -5264,22 +5722,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-1779037
+1020677
 </input-bytes>
       <output-bytes>
-753856
+866642
 </output-bytes>
       <input-packets>
-21528
+13071
 </input-packets>
       <output-packets>
-8029
+9713
 </output-packets>
       <input-unicasts>
-21524
+13069
 </input-unicasts>
       <output-unicasts>
-8028
+9711
 </output-unicasts>
       <input-broadcasts>
 0
@@ -5341,19 +5799,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-21524
+13069
 </input-packets>
       <input-reject-count>
-560
+955
 </input-reject-count>
       <input-reject-destination-address-count>
-497
+509
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-8028
+9711
 </output-packets>
       <output-packet-pad-count>
 0
@@ -5449,13 +5907,13 @@ Disabled
 ge-0/0/4.0
 </name>
       <local-index>
-345
+359
 </local-index>
       <snmp-index>
-552
+562
 </snmp-index>
       <generation>
-190
+231
 </generation>
       <description>
 L3VPN-CPE14-UNI
@@ -5474,92 +5932,92 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-11898
+409261
 </input-bytes>
         <output-bytes>
-5622
+439790
 </output-bytes>
         <input-packets>
-173
+6339
 </input-packets>
         <output-packets>
-62
+6550
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
-11507
+247638
 </input-bytes>
           <output-bytes>
-4072
+255126
 </output-bytes>
           <input-packets>
-149
+3350
 </input-packets>
           <output-packets>
-42
+3336
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-9916
+104357
 </input-bytes>
         <output-bytes>
-5464
+120766
 </output-bytes>
         <input-packets>
-136
+1489
 </input-packets>
         <output-packets>
-61
+1428
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-1982
+304904
 </input-bytes>
         <input-bps>
-280
+488
 </input-bps>
         <output-bytes>
-158
+319024
 </output-bytes>
         <output-bps>
-0
+488
 </output-bps>
         <input-packets>
-37
+4850
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-1
+5122
 </output-packets>
         <output-pps>
 0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-1872
+118872
 </input-bytes>
           <input-bps>
-0
+200
 </input-bps>
           <output-bytes>
-0
+129376
 </output-bytes>
           <output-bps>
-0
+200
 </output-bps>
           <input-packets>
-36
+2286
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-0
+2488
 </output-packets>
           <output-pps>
 0
@@ -5567,25 +6025,25 @@ ENET2
         </ipv4-transit-statistics>
         <ipv6-transit-statistics>
           <input-bytes>
-4142
+189516
 </input-bytes>
           <input-bps>
 280
 </input-bps>
           <output-bytes>
-158
+189648
 </output-bytes>
           <output-bps>
-0
+280
 </output-bps>
           <input-packets>
-57
+2631
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-1
+2634
 </output-packets>
           <output-pps>
 0
@@ -5617,10 +6075,10 @@ inet
 0
 </intf-dropcnt>
         <generation>
-241
+316
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -5640,16 +6098,16 @@ inet
             <ifaf-current-primary/>
           </ifa-flags>
           <ifa-destination>
-198.11.14.0/30
+198.11.14.0/29
 </ifa-destination>
           <ifa-local>
 198.11.14.1
 </ifa-local>
           <ifa-broadcast>
-198.11.14.3
+198.11.14.7
 </ifa-broadcast>
           <generation>
-195
+241
 </generation>
         </interface-address>
       </address-family>
@@ -5676,10 +6134,10 @@ inet6
 0
 </intf-dropcnt>
         <generation>
-242
+317
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -5694,10 +6152,10 @@ inet6
             <ifaf-current-primary/>
           </ifa-flags>
           <ifa-destination>
-2001:db8:11:14::a/127
+2001:db8:11:14::/64
 </ifa-destination>
           <ifa-local>
-2001:db8:11:14::a
+2001:db8:11:14::1
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -5708,7 +6166,7 @@ inet6
 Unspecified
 </ifa-broadcast>
           <generation>
-197
+243
 </generation>
         </interface-address>
         <interface-address>
@@ -5722,7 +6180,7 @@ Unspecified
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:64ff:feed:4505
+fe80::e00:5fff:feba:1605
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -5733,7 +6191,7 @@ fe80::e00:64ff:feed:4505
 Unspecified
 </ifa-broadcast>
           <generation>
-199
+245
 </generation>
         </interface-address>
       </address-family>
@@ -5745,10 +6203,10 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-243
+318
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <internal-flags>
@@ -5779,7 +6237,7 @@ up
 154
 </local-index>
     <snmp-index>
-536
+532
 </snmp-index>
     <generation>
 157
@@ -5880,45 +6338,45 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:59:d9:ea:06
+0c:00:2b:74:8c:06
 </current-physical-address>
     <hardware-physical-address>
-0c:00:59:d9:ea:06
+0c:00:2b:74:8c:06
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-240381
+416813
 </input-bytes>
       <input-bps>
-104
+0
 </input-bps>
       <output-bytes>
-366521
+586003
 </output-bytes>
       <output-bps>
-232
+112
 </output-bps>
       <input-packets>
-6331
+10870
 </input-packets>
       <input-pps>
 0
 </input-pps>
       <output-packets>
-7701
+13060
 </output-packets>
       <output-pps>
 0
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-4602
+13273
 </input-bytes>
         <input-bps>
 0
@@ -5930,7 +6388,7 @@ Never
 0
 </output-bps>
         <input-packets>
-65
+163
 </input-packets>
         <input-pps>
 0
@@ -6038,22 +6496,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-394122
+675144
 </input-bytes>
       <output-bytes>
-592265
+1020963
 </output-bytes>
       <input-packets>
-7348
+12965
 </input-packets>
       <output-packets>
-7701
+13062
 </output-packets>
       <input-unicasts>
-7346
+12965
 </input-unicasts>
       <output-unicasts>
-7699
+13062
 </output-unicasts>
       <input-broadcasts>
 0
@@ -6115,19 +6573,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-7346
+12965
 </input-packets>
       <input-reject-count>
-1051
+2636
 </input-reject-count>
       <input-reject-destination-address-count>
-986
+2050
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-7699
+13062
 </output-packets>
       <output-packet-pad-count>
 0
@@ -6223,13 +6681,13 @@ Disabled
 ge-0/0/5.0
 </name>
       <local-index>
-346
+360
 </local-index>
       <snmp-index>
-553
+563
 </snmp-index>
       <generation>
-191
+232
 </generation>
       <description>
 EVPN-VLAN-AWARE-INTERNET
@@ -6248,83 +6706,123 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-3842
+197596
 </input-bytes>
         <output-bytes>
-4170
+377897
 </output-bytes>
         <input-packets>
-79
+5262
 </input-packets>
         <output-packets>
-80
+8078
 </output-packets>
+        <ipv6-total-statistics>
+          <input-bytes>
+55503
+</input-bytes>
+          <output-bytes>
+66248
+</output-bytes>
+          <input-packets>
+691
+</input-packets>
+          <output-packets>
+700
+</output-packets>
+        </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-2666
+80968
 </input-bytes>
         <output-bytes>
-2994
+125525
 </output-bytes>
         <input-packets>
-37
+1106
 </input-packets>
         <output-packets>
-38
+1467
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-1176
+116628
 </input-bytes>
         <input-bps>
-104
+0
 </input-bps>
         <output-bytes>
-1176
+252372
 </output-bytes>
         <output-bps>
-104
+0
 </output-bps>
         <input-packets>
-42
+4156
 </input-packets>
         <input-pps>
 0
 </input-pps>
         <output-packets>
-42
+6611
 </output-packets>
         <output-pps>
 0
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-1176
+116256
 </input-bytes>
           <input-bps>
-104
+0
 </input-bps>
           <output-bytes>
-1176
+252372
 </output-bytes>
           <output-bps>
-104
+0
 </output-bps>
           <input-packets>
-42
+4152
 </input-packets>
           <input-pps>
 0
 </input-pps>
           <output-packets>
-42
+6611
 </output-packets>
           <output-pps>
 0
 </output-pps>
         </ipv4-transit-statistics>
+        <ipv6-transit-statistics>
+          <input-bytes>
+372
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+4
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv6-transit-statistics>
       </transit-traffic-statistics>
       <filter-information>
 </filter-information>
@@ -6351,7 +6849,7 @@ inet
 0
 </intf-dropcnt>
         <generation>
-244
+319
 </generation>
         <route-table>
 0
@@ -6381,7 +6879,89 @@ inet
 152.11.14.7
 </ifa-broadcast>
           <generation>
-201
+247
+</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <mtu>
+1500
+</mtu>
+        <max-local-cache>
+75000
+</max-local-cache>
+        <new-hold-limit>
+75000
+</new-hold-limit>
+        <intf-curr-cnt>
+2
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+320
+</generation>
+        <route-table>
+0
+</route-table>
+        <address-family-flags>
+          <internal-flags>
+0x0
+</internal-flags>
+        </address-family-flags>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>
+2001:abcd:11:14::/64
+</ifa-destination>
+          <ifa-local>
+2001:abcd:11:14::1
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+249
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+            <internal-flags>
+0x800
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+fe80::/64
+</ifa-destination>
+          <ifa-local>
+fe80::e00:2bff:fe74:8c06
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+251
 </generation>
         </interface-address>
       </address-family>
@@ -6393,7 +6973,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-245
+321
 </generation>
         <route-table>
 0
@@ -6427,7 +7007,7 @@ up
 155
 </local-index>
     <snmp-index>
-537
+533
 </snmp-index>
     <generation>
 158
@@ -6530,45 +7110,45 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-0c:00:06:7a:1c:07
+0c:00:4e:3e:b4:07
 </current-physical-address>
     <hardware-physical-address>
-0c:00:06:7a:1c:07
+0c:00:4e:3e:b4:07
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-36476558
+42791136
 </input-bytes>
       <input-bps>
-232
+1896
 </input-bps>
       <output-bytes>
-89950818
+94544826
 </output-bytes>
       <output-bps>
-0
+1448
 </output-bps>
       <input-packets>
-500901
+654527
 </input-packets>
       <input-pps>
-0
+3
 </input-pps>
       <output-packets>
-1226711
+1421635
 </output-packets>
       <output-pps>
-0
+3
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-0
+4356
 </input-bytes>
         <input-bps>
 0
@@ -6580,7 +7160,7 @@ Never
 0
 </output-bps>
         <input-packets>
-0
+45
 </input-packets>
         <input-pps>
 0
@@ -6688,22 +7268,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-36498748
+42874364
 </input-bytes>
       <output-bytes>
-105074522
+112547844
 </output-bytes>
       <input-packets>
-501235
+655251
 </input-packets>
       <output-packets>
-1226704
+1421583
 </output-packets>
       <input-unicasts>
-501231
+655239
 </input-unicasts>
       <output-unicasts>
-1226701
+1421571
 </output-unicasts>
       <input-broadcasts>
 0
@@ -6765,19 +7345,19 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-501231
+655239
 </input-packets>
       <input-reject-count>
-1034
+3296
 </input-reject-count>
       <input-reject-destination-address-count>
-237
+667
 </input-reject-destination-address-count>
       <input-reject-source-address-count>
 0
 </input-reject-source-address-count>
       <output-packets>
-1226701
+1421571
 </output-packets>
       <output-packet-pad-count>
 0
@@ -6873,13 +7453,13 @@ Disabled
 ge-0/0/6.4094
 </name>
       <local-index>
-355
+371
 </local-index>
       <snmp-index>
-554
+571
 </snmp-index>
       <generation>
-199
+243
 </generation>
       <description>
 MGMT-VLAN
@@ -6901,56 +7481,56 @@ VLAN-Bridge
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-9428
+31588020
 </input-bytes>
         <output-bytes>
-5258
+80685342
 </output-bytes>
         <input-packets>
-159
+480176
 </input-packets>
         <output-packets>
-114
+1188737
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-244
+1182200
 </input-bytes>
         <output-bytes>
-138
+1334
 </output-bytes>
         <input-packets>
-5
+20356
 </input-packets>
         <output-packets>
-3
+29
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-9184
+30405820
 </input-bytes>
         <input-bps>
-232
+1896
 </input-bps>
         <output-bytes>
-5120
+80684008
 </output-bytes>
         <output-bps>
-0
+1448
 </output-bps>
         <input-packets>
-154
+459820
 </input-packets>
         <input-pps>
-0
+3
 </input-pps>
         <output-packets>
-111
+1188708
 </output-packets>
         <output-pps>
-0
+3
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
@@ -6989,22 +7569,21 @@ bridge
 1522
 </mtu>
         <generation>
-254
+334
 </generation>
         <route-table>
-17
+16
 </route-table>
         <iff-vpls-status>
 up
 </iff-vpls-status>
         <iff-next-hop>
-715
+827
 </iff-next-hop>
         <vpls-mesh-group>
 __all_ces__
 </vpls-mesh-group>
         <address-family-flags>
-          <ifff-is-primary/>
           <internal-flags>
 0x4000000
 </internal-flags>
@@ -7016,13 +7595,13 @@ __all_ces__
 ge-0/0/6.32767
 </name>
       <local-index>
-347
+361
 </local-index>
       <snmp-index>
-555
+564
 </snmp-index>
       <generation>
-192
+233
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -7129,7 +7708,7 @@ multiservice
 Unlimited
 </mtu>
         <generation>
-246
+322
 </generation>
         <route-table>
 0
@@ -7155,13 +7734,13 @@ ge-0/0/7
 up
 </admin-status>
     <oper-status>
-down
+up
 </oper-status>
     <local-index>
 156
 </local-index>
     <snmp-index>
-538
+534
 </snmp-index>
     <generation>
 159
@@ -7214,7 +7793,6 @@ Disabled
     <if-device-flags>
       <ifdf-present/>
       <ifdf-running/>
-      <ifdf-down/>
     </if-device-flags>
     <ifd-specific-config-flags>
       <internal-flags>
@@ -7222,7 +7800,6 @@ Disabled
 </internal-flags>
     </ifd-specific-config-flags>
     <if-config-flags>
-      <iff-hardware-down/>
       <iff-snmp-traps/>
       <internal-flags>
 0x4000
@@ -7261,45 +7838,45 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-2c:6b:f5:1a:c4:07
+0c:00:8c:40:14:08
 </current-physical-address>
     <hardware-physical-address>
-2c:6b:f5:1a:c4:07
+0c:00:8c:40:14:08
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-0
+43884
 </input-bytes>
       <input-bps>
 0
 </input-bps>
       <output-bytes>
-0
+2142
 </output-bytes>
       <output-bps>
 0
 </output-bps>
       <input-packets>
-0
+878
 </input-packets>
       <input-pps>
 0
 </input-pps>
       <output-packets>
-0
+43
 </output-packets>
       <output-pps>
 0
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-0
+5044
 </input-bytes>
         <input-bps>
 0
@@ -7311,7 +7888,7 @@ Never
 0
 </output-bps>
         <input-packets>
-0
+52
 </input-packets>
         <input-pps>
 0
@@ -7372,7 +7949,7 @@ Never
     </input-error-list>
     <output-error-list>
       <carrier-transitions>
-2
+1
 </carrier-transitions>
       <output-errors>
 0
@@ -7401,12 +7978,12 @@ Never
     </output-error-list>
     <active-alarms>
       <interface-alarms>
-        <ethernet-alarm-link-down/>
+        <alarm-not-present/>
       </interface-alarms>
     </active-alarms>
     <active-defects>
       <interface-alarms>
-        <ethernet-alarm-link-down/>
+        <alarm-not-present/>
       </interface-alarms>
     </active-defects>
     <ethernet-pcs-statistics style="verbose">
@@ -7419,22 +7996,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-36498748
+47550
 </input-bytes>
       <output-bytes>
-105074522
+2658
 </output-bytes>
       <input-packets>
-0
+902
 </input-packets>
       <output-packets>
-0
+43
 </output-packets>
       <input-unicasts>
-501231
+902
 </input-unicasts>
       <output-unicasts>
-1226701
+43
 </output-unicasts>
       <input-broadcasts>
 0
@@ -7496,10 +8073,10 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-501231
+902
 </input-packets>
       <input-reject-count>
-0
+878
 </input-reject-count>
       <input-reject-destination-address-count>
 0
@@ -7508,7 +8085,7 @@ Never
 0
 </input-reject-source-address-count>
       <output-packets>
-1226701
+43
 </output-packets>
       <output-packet-pad-count>
 0
@@ -7604,16 +8181,16 @@ Disabled
 ge-0/0/7.16386
 </name>
       <local-index>
-356
+335
 </local-index>
       <snmp-index>
-556
+572
 </snmp-index>
       <generation>
-165
+182
 </generation>
       <if-config-flags>
-        <iff-device-down/>
+        <iff-up/>
         <iff-snmp-traps/>
         <internal-flags>
 0x4004000
@@ -7626,13 +8203,13 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-0
+1788
 </input-bytes>
         <output-bytes>
 0
 </output-bytes>
         <input-packets>
-0
+24
 </input-packets>
         <output-packets>
 0
@@ -7654,7 +8231,7 @@ ENET2
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-0
+1788
 </input-bytes>
         <input-bps>
 0
@@ -7666,7 +8243,7 @@ ENET2
 0
 </output-bps>
         <input-packets>
-0
+24
 </input-packets>
         <input-pps>
 0
@@ -7716,13 +8293,13 @@ ge-0/0/8
 up
 </admin-status>
     <oper-status>
-down
+up
 </oper-status>
     <local-index>
 157
 </local-index>
     <snmp-index>
-539
+535
 </snmp-index>
     <generation>
 160
@@ -7775,7 +8352,6 @@ Disabled
     <if-device-flags>
       <ifdf-present/>
       <ifdf-running/>
-      <ifdf-down/>
     </if-device-flags>
     <ifd-specific-config-flags>
       <internal-flags>
@@ -7783,7 +8359,6 @@ Disabled
 </internal-flags>
     </ifd-specific-config-flags>
     <if-config-flags>
-      <iff-hardware-down/>
       <iff-snmp-traps/>
       <internal-flags>
 0x4000
@@ -7822,45 +8397,45 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-2c:6b:f5:1a:c4:08
+0c:00:51:fb:7d:09
 </current-physical-address>
     <hardware-physical-address>
-2c:6b:f5:1a:c4:08
+0c:00:51:fb:7d:09
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-0
+5012
 </input-bytes>
       <input-bps>
 0
 </input-bps>
       <output-bytes>
-0
+20744
 </output-bytes>
       <output-bps>
 0
 </output-bps>
       <input-packets>
-0
+47
 </input-packets>
       <input-pps>
 0
 </input-pps>
       <output-packets>
-0
+371
 </output-packets>
       <output-pps>
 0
 </output-pps>
       <ipv6-transit-statistics>
         <input-bytes>
-0
+1788
 </input-bytes>
         <input-bps>
 0
@@ -7872,7 +8447,7 @@ Never
 0
 </output-bps>
         <input-packets>
-0
+24
 </input-packets>
         <input-pps>
 0
@@ -7933,7 +8508,7 @@ Never
     </input-error-list>
     <output-error-list>
       <carrier-transitions>
-2
+1
 </carrier-transitions>
       <output-errors>
 0
@@ -7962,12 +8537,12 @@ Never
     </output-error-list>
     <active-alarms>
       <interface-alarms>
-        <ethernet-alarm-link-down/>
+        <alarm-not-present/>
       </interface-alarms>
     </active-alarms>
     <active-defects>
       <interface-alarms>
-        <ethernet-alarm-link-down/>
+        <alarm-not-present/>
       </interface-alarms>
     </active-defects>
     <ethernet-pcs-statistics style="verbose">
@@ -7980,22 +8555,22 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-36498748
+7882
 </input-bytes>
       <output-bytes>
-105074522
+28616
 </output-bytes>
       <input-packets>
-0
+76
 </input-packets>
       <output-packets>
-0
+371
 </output-packets>
       <input-unicasts>
-501231
+76
 </input-unicasts>
       <output-unicasts>
-1226701
+371
 </output-unicasts>
       <input-broadcasts>
 0
@@ -8057,10 +8632,10 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-501231
+76
 </input-packets>
       <input-reject-count>
-0
+24
 </input-reject-count>
       <input-reject-destination-address-count>
 0
@@ -8069,7 +8644,7 @@ Never
 0
 </input-reject-source-address-count>
       <output-packets>
-1226701
+371
 </output-packets>
       <output-packet-pad-count>
 0
@@ -8165,16 +8740,16 @@ Disabled
 ge-0/0/8.16386
 </name>
       <local-index>
-357
+336
 </local-index>
       <snmp-index>
-557
+573
 </snmp-index>
       <generation>
-166
+183
 </generation>
       <if-config-flags>
-        <iff-device-down/>
+        <iff-up/>
         <iff-snmp-traps/>
         <internal-flags>
 0x4004000
@@ -8187,13 +8762,13 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-0
+1788
 </input-bytes>
         <output-bytes>
 0
 </output-bytes>
         <input-packets>
-0
+24
 </input-packets>
         <output-packets>
 0
@@ -8215,7 +8790,7 @@ ENET2
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-0
+1788
 </input-bytes>
         <input-bps>
 0
@@ -8227,7 +8802,7 @@ ENET2
 0
 </output-bps>
         <input-packets>
-0
+24
 </input-packets>
         <input-pps>
 0
@@ -8283,7 +8858,7 @@ down
 158
 </local-index>
     <snmp-index>
-540
+536
 </snmp-index>
     <generation>
 161
@@ -8383,13 +8958,13 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-2c:6b:f5:1a:c4:09
+2c:6b:f5:60:3d:09
 </current-physical-address>
     <hardware-physical-address>
-2c:6b:f5:1a:c4:09
+2c:6b:f5:60:3d:09
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27961">
+2026-09-02 14:18:01 UTC (07:46:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
@@ -8541,10 +9116,10 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-36498748
+7882
 </input-bytes>
       <output-bytes>
-105074522
+28616
 </output-bytes>
       <input-packets>
 0
@@ -8553,10 +9128,10 @@ Never
 0
 </output-packets>
       <input-unicasts>
-501231
+76
 </input-unicasts>
       <output-unicasts>
-1226701
+371
 </output-unicasts>
       <input-broadcasts>
 0
@@ -8618,7 +9193,7 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-501231
+76
 </input-packets>
       <input-reject-count>
 0
@@ -8630,7 +9205,7 @@ Never
 0
 </input-reject-source-address-count>
       <output-packets>
-1226701
+371
 </output-packets>
       <output-packet-pad-count>
 0
@@ -8726,13 +9301,13 @@ Disabled
 ge-0/0/9.16386
 </name>
       <local-index>
-358
+342
 </local-index>
       <snmp-index>
-558
+548
 </snmp-index>
       <generation>
-167
+151
 </generation>
       <if-config-flags>
         <iff-device-down/>
@@ -8844,7 +9419,7 @@ down
 159
 </local-index>
     <snmp-index>
-541
+537
 </snmp-index>
     <generation>
 162
@@ -8944,13 +9519,13 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-2c:6b:f5:1a:c4:0a
+2c:6b:f5:60:3d:0a
 </current-physical-address>
     <hardware-physical-address>
-2c:6b:f5:1a:c4:0a
+2c:6b:f5:60:3d:0a
 </hardware-physical-address>
-    <interface-flapped seconds="35158">
-2026-08-04 11:14:24 UTC (09:45:58 ago)
+    <interface-flapped seconds="27962">
+2026-09-02 14:18:01 UTC (07:46:02 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
@@ -9102,10 +9677,10 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-2239523600
+365717705
 </input-bytes>
       <output-bytes>
-1690728981
+1231952469
 </output-bytes>
       <input-packets>
 0
@@ -9114,10 +9689,10 @@ Never
 0
 </output-packets>
       <input-unicasts>
-20197273
+3410522
 </input-unicasts>
       <output-unicasts>
-13728489
+9464119
 </output-unicasts>
       <input-broadcasts>
 0
@@ -9179,7 +9754,7 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-20197273
+3410522
 </input-packets>
       <input-reject-count>
 0
@@ -9191,7 +9766,7 @@ Never
 0
 </input-reject-source-address-count>
       <output-packets>
-13728489
+9464119
 </output-packets>
       <output-packet-pad-count>
 0
@@ -9287,13 +9862,13 @@ Disabled
 ge-0/0/10.16386
 </name>
       <local-index>
-359
+343
 </local-index>
       <snmp-index>
-559
+549
 </snmp-index>
       <generation>
-168
+152
 </generation>
       <if-config-flags>
         <iff-device-down/>
@@ -9405,7 +9980,7 @@ down
 160
 </local-index>
     <snmp-index>
-542
+538
 </snmp-index>
     <generation>
 163
@@ -9505,13 +10080,13 @@ Disabled
 unsuppressed
 </damp-suppress-state>
     <current-physical-address>
-2c:6b:f5:1a:c4:0b
+2c:6b:f5:60:3d:0b
 </current-physical-address>
     <hardware-physical-address>
-2c:6b:f5:1a:c4:0b
+2c:6b:f5:60:3d:0b
 </hardware-physical-address>
-    <interface-flapped seconds="35159">
-2026-08-04 11:14:24 UTC (09:45:59 ago)
+    <interface-flapped seconds="27962">
+2026-09-02 14:18:01 UTC (07:46:02 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
@@ -9663,10 +10238,10 @@ Never
     </ethernet-pcs-statistics>
     <ethernet-mac-statistics style="verbose">
       <input-bytes>
-2239523600
+365717705
 </input-bytes>
       <output-bytes>
-1690728981
+1231952469
 </output-bytes>
       <input-packets>
 0
@@ -9675,10 +10250,10 @@ Never
 0
 </output-packets>
       <input-unicasts>
-20197273
+3410522
 </input-unicasts>
       <output-unicasts>
-13728489
+9464119
 </output-unicasts>
       <input-broadcasts>
 0
@@ -9740,7 +10315,7 @@ Never
     </ethernet-mac-statistics>
     <ethernet-filter-statistics style="verbose">
       <input-packets>
-20197273
+3410522
 </input-packets>
       <input-reject-count>
 0
@@ -9752,7 +10327,7 @@ Never
 0
 </input-reject-source-address-count>
       <output-packets>
-13728489
+9464119
 </output-packets>
       <output-packet-pad-count>
 0
@@ -9848,13 +10423,13 @@ Disabled
 ge-0/0/11.16386
 </name>
       <local-index>
-360
+344
 </local-index>
       <snmp-index>
-560
+550
 </snmp-index>
       <generation>
-169
+153
 </generation>
       <if-config-flags>
         <iff-device-down/>
@@ -10186,7 +10761,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-156
+152
 </generation>
         </interface-address>
         <interface-address>
@@ -10205,7 +10780,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-150
+146
 </generation>
         </interface-address>
         <interface-address>
@@ -10218,32 +10793,13 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-10.40.94.1
+10.111.11.1
 </ifa-local>
           <ifa-broadcast>
 Unspecified
 </ifa-broadcast>
           <generation>
-202
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <internal-flags>
-0x20000
-</internal-flags>
-          </ifa-flags>
-          <ifa-destination>
-Unspecified
-</ifa-destination>
-          <ifa-local>
-10.40.94.253
-</ifa-local>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
-204
+228
 </generation>
         </interface-address>
         <interface-address>
@@ -10281,7 +10837,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-182
+230
 </generation>
         </interface-address>
         <interface-address>
@@ -10300,7 +10856,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-200
+246
 </generation>
         </interface-address>
       </address-family>
@@ -10414,7 +10970,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-152
+148
 </generation>
         </interface-address>
         <interface-address>
@@ -10438,102 +10994,6 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-158
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <internal-flags>
-0x20000
-</internal-flags>
-          </ifa-flags>
-          <ifa-destination>
-Unspecified
-</ifa-destination>
-          <ifa-local>
-2001:abcd:11:13::a
-</ifa-local>
-          <interface-address>
-            <in6-addr-flags>
-              <ifaf-none/>
-            </in6-addr-flags>
-          </interface-address>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
-184
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <internal-flags>
-0x20000
-</internal-flags>
-          </ifa-flags>
-          <ifa-destination>
-Unspecified
-</ifa-destination>
-          <ifa-local>
-fe80::e00:5d00:d97:dd03
-</ifa-local>
-          <interface-address>
-            <in6-addr-flags>
-              <ifaf-none/>
-            </in6-addr-flags>
-          </interface-address>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
-186
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <internal-flags>
-0x20000
-</internal-flags>
-          </ifa-flags>
-          <ifa-destination>
-Unspecified
-</ifa-destination>
-          <ifa-local>
-fe80::e00:64ff:fe21:1e02
-</ifa-local>
-          <interface-address>
-            <in6-addr-flags>
-              <ifaf-none/>
-            </in6-addr-flags>
-          </interface-address>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
-160
-</generation>
-        </interface-address>
-        <interface-address>
-          <ifa-flags>
-            <internal-flags>
-0x20000
-</internal-flags>
-          </ifa-flags>
-          <ifa-destination>
-Unspecified
-</ifa-destination>
-          <ifa-local>
-fe80::e00:71ff:fef7:f401
-</ifa-local>
-          <interface-address>
-            <in6-addr-flags>
-              <ifaf-none/>
-            </in6-addr-flags>
-          </interface-address>
-          <ifa-broadcast>
-Unspecified
-</ifa-broadcast>
-          <generation>
 154
 </generation>
         </interface-address>
@@ -10547,7 +11007,55 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-fe80::e00:bd0f:fc46:400
+2001:abcd:11:14::1
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+248
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+fe80::1
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+232
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+fe80::e00:1f0f:fcfb:9000
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -10559,6 +11067,78 @@ Unspecified
 </ifa-broadcast>
           <generation>
 139
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+fe80::e00:2bff:fe74:8c06
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+250
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+fe80::e00:4bff:fe1d:c201
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+150
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+fe80::e00:62ff:fe1f:2
+</ifa-local>
+          <interface-address>
+            <in6-addr-flags>
+              <ifaf-none/>
+            </in6-addr-flags>
+          </interface-address>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+156
 </generation>
         </interface-address>
       </address-family>
@@ -11091,19 +11671,53 @@ Unlimited
           <ifff-none/>
         </address-family-flags>
       </address-family>
+      <address-family>
+        <address-family-name>
+119
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+303
+</generation>
+        <route-table>
+5
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+121
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+304
+</generation>
+        <route-table>
+5
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
     </logical-interface>
     <logical-interface>
       <name>
-.local..9
+.local..6
 </name>
       <local-index>
-330
+327
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-139
+136
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11141,10 +11755,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-159
+156
 </generation>
         <route-table>
-9
+6
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11158,10 +11772,10 @@ iso
 Unlimited
 </mtu>
         <generation>
-163
+157
 </generation>
         <route-table>
-9
+6
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11190,10 +11804,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-168
+159
 </generation>
         <route-table>
-9
+6
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11202,16 +11816,16 @@ Unlimited
     </logical-interface>
     <logical-interface>
       <name>
-.local..13
+.local..7
 </name>
       <local-index>
-334
+328
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-143
+137
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11237,10 +11851,10 @@ Unlimited
 3
 </maximum-labels>
         <generation>
-167
+158
 </generation>
         <route-table>
-13
+7
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11249,16 +11863,16 @@ Unlimited
     </logical-interface>
     <logical-interface>
       <name>
-.local..14
+.local..11
 </name>
       <local-index>
-327
+348
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-181
+157
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11296,10 +11910,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-220
+181
 </generation>
         <route-table>
-14
+11
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11315,13 +11929,13 @@ Unlimited
 Unspecified
 </ifa-destination>
           <ifa-local>
-198.11.13.1
+10.12.11.2
 </ifa-local>
           <ifa-broadcast>
 Unspecified
 </ifa-broadcast>
           <generation>
-188
+252
 </generation>
         </interface-address>
       </address-family>
@@ -11333,10 +11947,10 @@ iso
 Unlimited
 </mtu>
         <generation>
-222
+185
 </generation>
         <route-table>
-14
+11
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11365,10 +11979,138 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-224
+189
 </generation>
         <route-table>
-14
+11
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+.local..12
+</name>
+      <local-index>
+345
+</local-index>
+      <snmp-index>
+0
+</snmp-index>
+      <generation>
+219
+</generation>
+      <if-config-flags>
+        <iff-point-to-point/>
+      </if-config-flags>
+      <encapsulation>
+Unspecified
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <logical-interface-bandwidth>
+0
+</logical-interface-bandwidth>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+285
+</generation>
+        <route-table>
+12
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-primary/>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+198.11.13.1
+</ifa-local>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+234
+</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+288
+</generation>
+        <route-table>
+12
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+291
+</generation>
+        <route-table>
+12
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11394,7 +12136,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-190
+236
 </generation>
         </interface-address>
         <interface-address>
@@ -11407,7 +12149,7 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-fe80::e00:5d00:7197:dd03
+fe80::e00:e200:71de:5d03
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -11418,23 +12160,23 @@ fe80::e00:5d00:7197:dd03
 Unspecified
 </ifa-broadcast>
           <generation>
-192
+238
 </generation>
         </interface-address>
       </address-family>
     </logical-interface>
     <logical-interface>
       <name>
-.local..15
+.local..13
 </name>
       <local-index>
-328
+346
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-182
+220
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11472,10 +12214,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-221
+286
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11497,7 +12239,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-194
+240
 </generation>
         </interface-address>
       </address-family>
@@ -11509,10 +12251,10 @@ iso
 Unlimited
 </mtu>
         <generation>
-223
+289
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11541,10 +12283,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-225
+292
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11559,7 +12301,7 @@ Unlimited
 Unspecified
 </ifa-destination>
           <ifa-local>
-2001:db8:11:14::a
+2001:db8:11:14::1
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -11570,7 +12312,7 @@ Unspecified
 Unspecified
 </ifa-broadcast>
           <generation>
-196
+242
 </generation>
         </interface-address>
         <interface-address>
@@ -11583,7 +12325,7 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-fe80::e00:64ff:feed:4505
+fe80::e00:5fff:feba:1605
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -11594,23 +12336,208 @@ fe80::e00:64ff:feed:4505
 Unspecified
 </ifa-broadcast>
           <generation>
-198
+244
 </generation>
         </interface-address>
       </address-family>
     </logical-interface>
     <logical-interface>
       <name>
-.local..16
+.local..14
 </name>
       <local-index>
-349
+347
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-194
+221
+</generation>
+      <if-config-flags>
+        <iff-point-to-point/>
+      </if-config-flags>
+      <encapsulation>
+Unspecified
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <logical-interface-bandwidth>
+0
+</logical-interface-bandwidth>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+287
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-primary/>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+10.40.94.1
+</ifa-local>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+254
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+10.40.94.253
+</ifa-local>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+256
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+10.40.95.1
+</ifa-local>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+258
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x20000
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+Unspecified
+</ifa-destination>
+          <ifa-local>
+10.40.95.253
+</ifa-local>
+          <ifa-broadcast>
+Unspecified
+</ifa-broadcast>
+          <generation>
+260
+</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+290
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+293
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+.local..15
+</name>
+      <local-index>
+364
+</local-index>
+      <snmp-index>
+0
+</snmp-index>
+      <generation>
+236
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11633,7 +12560,51 @@ vpls
 Unlimited
 </mtu>
         <generation>
-249
+327
+</generation>
+        <route-table>
+15
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+.local..16
+</name>
+      <local-index>
+365
+</local-index>
+      <snmp-index>
+0
+</snmp-index>
+      <generation>
+237
+</generation>
+      <if-config-flags>
+        <iff-point-to-point/>
+      </if-config-flags>
+      <encapsulation>
+Unspecified
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <logical-interface-bandwidth>
+0
+</logical-interface-bandwidth>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+vpls
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+328
 </generation>
         <route-table>
 16
@@ -11648,13 +12619,13 @@ Unlimited
 .local..17
 </name>
       <local-index>
-350
+366
 </local-index>
       <snmp-index>
 0
 </snmp-index>
       <generation>
-195
+238
 </generation>
       <if-config-flags>
         <iff-point-to-point/>
@@ -11677,54 +12648,10 @@ vpls
 Unlimited
 </mtu>
         <generation>
-250
+329
 </generation>
         <route-table>
 17
-</route-table>
-        <address-family-flags>
-          <ifff-none/>
-        </address-family-flags>
-      </address-family>
-    </logical-interface>
-    <logical-interface>
-      <name>
-.local..18
-</name>
-      <local-index>
-352
-</local-index>
-      <snmp-index>
-0
-</snmp-index>
-      <generation>
-196
-</generation>
-      <if-config-flags>
-        <iff-point-to-point/>
-      </if-config-flags>
-      <encapsulation>
-Unspecified
-</encapsulation>
-      <policer-overhead>
-</policer-overhead>
-      <logical-interface-bandwidth>
-0
-</logical-interface-bandwidth>
-      <filter-information>
-</filter-information>
-      <address-family>
-        <address-family-name>
-vpls
-</address-family-name>
-        <mtu>
-Unlimited
-</mtu>
-        <generation>
-251
-</generation>
-        <route-table>
-18
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -11987,7 +12914,7 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-fe80::e00:bdff:fe46:400
+fe80::e00:1fff:fefb:9000
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -12080,11 +13007,11 @@ Unspecified
     <damp-suppress-state>
 unsuppressed
 </damp-suppress-state>
-    <current-physical-address format="MAC 2c:6b:f5:1a:c4:11">
-2c:6b:f5:1a:c4:11
+    <current-physical-address format="MAC 2c:6b:f5:60:3d:11">
+2c:6b:f5:60:3d:11
 </current-physical-address>
-    <hardware-physical-address format="MAC 2c:6b:f5:1a:c4:11">
-2c:6b:f5:1a:c4:11
+    <hardware-physical-address format="MAC 2c:6b:f5:60:3d:11">
+2c:6b:f5:60:3d:11
 </hardware-physical-address>
     <alternate-physical-address>
 Unspecified
@@ -12573,24 +13500,24 @@ unsuppressed
     <alternate-physical-address>
 Unspecified
 </alternate-physical-address>
-    <interface-flapped seconds="35217">
-2026-08-04 11:13:26 UTC (09:46:57 ago)
+    <interface-flapped seconds="28020">
+2026-09-02 14:17:03 UTC (07:47:00 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-178732347
+225718830
 </input-bytes>
       <output-bytes>
-227673424
+235295424
 </output-bytes>
       <input-packets>
-1290096
+1672919
 </input-packets>
       <output-packets>
-1366026
+1133579
 </output-packets>
       <ipv6-transit-statistics>
         <input-bytes>
@@ -12674,16 +13601,16 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-174219281
+222127020
 </input-bytes>
         <output-bytes>
-227180514
+234903258
 </output-bytes>
         <input-packets>
-1254665
+1644688
 </input-packets>
         <output-packets>
-1366027
+1133580
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
@@ -12702,16 +13629,16 @@ ENET2
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-174219281
+222127020
 </input-bytes>
         <output-bytes>
-227180514
+234903258
 </output-bytes>
         <input-packets>
-1254665
+1644688
 </input-packets>
         <output-packets>
-1366027
+1133580
 </output-packets>
       </local-traffic-statistics>
       <filter-information>
@@ -14439,33 +15366,33 @@ Unspecified
     <damp-suppress-state>
 unsuppressed
 </damp-suppress-state>
-    <current-physical-address format="MAC 0c:00:bd:46:04:00">
-0c:00:bd:46:04:00
+    <current-physical-address format="MAC 0c:00:1f:fb:90:00">
+0c:00:1f:fb:90:00
 </current-physical-address>
-    <hardware-physical-address format="MAC 0c:00:bd:46:04:00">
-0c:00:bd:46:04:00
+    <hardware-physical-address format="MAC 0c:00:1f:fb:90:00">
+0c:00:1f:fb:90:00
 </hardware-physical-address>
     <alternate-physical-address>
 Unspecified
 </alternate-physical-address>
-    <interface-flapped seconds="35217">
-2026-08-04 11:13:26 UTC (09:46:57 ago)
+    <interface-flapped seconds="28021">
+2026-09-02 14:17:03 UTC (07:47:01 ago)
 </interface-flapped>
     <statistics-cleared>
 Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-9861991
+21134498
 </input-bytes>
       <output-bytes>
-13755403
+37264947
 </output-bytes>
       <input-packets>
-153526
+350058
 </input-packets>
       <output-packets>
-118528
+299725
 </output-packets>
       <ipv6-transit-statistics>
         <input-bytes>
@@ -14549,44 +15476,44 @@ ENET2
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-9861991
+21134498
 </input-bytes>
         <output-bytes>
-13755537
+37265037
 </output-bytes>
         <input-packets>
-153526
+350058
 </input-packets>
         <output-packets>
-118529
+299726
 </output-packets>
         <ipv6-total-statistics>
           <input-bytes>
 0
 </input-bytes>
           <output-bytes>
-608316
+483960
 </output-bytes>
           <input-packets>
 0
 </input-packets>
           <output-packets>
-7074
+5628
 </output-packets>
         </ipv6-total-statistics>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-9861991
+21134498
 </input-bytes>
         <output-bytes>
-13755537
+37265037
 </output-bytes>
         <input-packets>
-153526
+350058
 </input-packets>
         <output-packets>
-118529
+299726
 </output-packets>
       </local-traffic-statistics>
       <filter-information>
@@ -14713,7 +15640,7 @@ Unspecified
 fe80::/64
 </ifa-destination>
           <ifa-local>
-fe80::e00:bdff:fe46:400
+fe80::e00:1fff:fefb:9000
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -14969,11 +15896,11 @@ Unspecified
     <damp-suppress-state>
 unsuppressed
 </damp-suppress-state>
-    <current-physical-address format="MAC 2c:6b:f5:1a:cb:f0">
-2c:6b:f5:1a:cb:f0
+    <current-physical-address format="MAC 2c:6b:f5:60:44:f0">
+2c:6b:f5:60:44:f0
 </current-physical-address>
-    <hardware-physical-address format="MAC 2c:6b:f5:1a:cb:f0">
-2c:6b:f5:1a:cb:f0
+    <hardware-physical-address format="MAC 2c:6b:f5:60:44:f0">
+2c:6b:f5:60:44:f0
 </hardware-physical-address>
     <alternate-physical-address>
 Unspecified
@@ -15054,22 +15981,229 @@ Never
     </output-error-list>
     <logical-interface>
       <name>
-irb.4094
+irb.2
 </name>
       <local-index>
-348
+362
 </local-index>
       <snmp-index>
-520
+565
 </snmp-index>
       <generation>
-193
+234
 </generation>
+      <description>
+MUX1 receivers POP1
+</description>
       <if-config-flags>
         <iff-up/>
         <iff-snmp-traps/>
         <internal-flags>
 0x4004000
+</internal-flags>
+      </if-config-flags>
+      <encapsulation>
+ENET2
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <logical-interface-bandwidth>
+1Gbps
+</logical-interface-bandwidth>
+      <irb-domain>
+        <irb-routing-instance>
+default-switch
+</irb-routing-instance>
+        <irb-bridge>
+BD-MUX1-B
+</irb-bridge>
+      </irb-domain>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+33993
+</input-bytes>
+        <output-bytes>
+2909043
+</output-bytes>
+        <input-packets>
+642
+</input-packets>
+        <output-packets>
+46164
+</output-packets>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+33172
+</input-bytes>
+        <output-bytes>
+34416
+</output-bytes>
+        <input-packets>
+629
+</input-packets>
+        <output-packets>
+535
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+821
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+2874627
+</output-bytes>
+        <output-bps>
+2984
+</output-bps>
+        <input-packets>
+13
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+45629
+</output-packets>
+        <output-pps>
+5
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+693
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+2874627
+</output-bytes>
+          <output-bps>
+2984
+</output-bps>
+          <input-packets>
+11
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+45629
+</output-packets>
+          <output-pps>
+5
+</output-pps>
+        </ipv4-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+1500
+</mtu>
+        <max-local-cache>
+75000
+</max-local-cache>
+        <new-hold-limit>
+75000
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+323
+</generation>
+        <route-table>
+11
+</route-table>
+        <address-family-flags>
+          <ifff-is-primary/>
+          <ifff-sendbcast-pkt-to-re/>
+          <internal-flags>
+0x0
+</internal-flags>
+        </address-family-flags>
+        <filter-information>
+</filter-information>
+        <policer-information>
+</policer-information>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-default/>
+            <ifaf-current-preferred/>
+            <ifaf-current-primary/>
+          </ifa-flags>
+          <ifa-destination>
+10.12.11.0/30
+</ifa-destination>
+          <ifa-local>
+10.12.11.2
+</ifa-local>
+          <ifa-broadcast>
+10.12.11.3
+</ifa-broadcast>
+          <generation>
+253
+</generation>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+        <mtu>
+1500
+</mtu>
+        <generation>
+324
+</generation>
+        <route-table>
+11
+</route-table>
+        <address-family-flags>
+          <internal-flags>
+0x0
+</internal-flags>
+        </address-family-flags>
+        <filter-information>
+</filter-information>
+        <policer-information>
+          <policer-input>
+__default_arp_policer__
+</policer-input>
+        </policer-information>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+irb.4094
+</name>
+      <local-index>
+363
+</local-index>
+      <snmp-index>
+566
+</snmp-index>
+      <generation>
+235
+</generation>
+      <if-config-flags>
+        <iff-up/>
+        <iff-snmp-traps/>
+        <internal-flags>
+0x4000
 </internal-flags>
       </if-config-flags>
       <encapsulation>
@@ -15093,81 +16227,81 @@ BD-4094
       </irb-domain>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-3976
+61580164
 </input-bytes>
         <output-bytes>
-3078
+649702
 </output-bytes>
         <input-packets>
-142
+970999
 </input-packets>
         <output-packets>
-108
+23185
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-0
+9162996
 </input-bytes>
         <output-bytes>
-138
+1334
 </output-bytes>
         <input-packets>
-0
+149876
 </input-packets>
         <output-packets>
-3
+29
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
         <input-bytes>
-3976
+52417168
 </input-bytes>
         <input-bps>
-96
+992
 </input-bps>
         <output-bytes>
-2940
+648368
 </output-bytes>
         <output-bps>
-0
+992
 </output-bps>
         <input-packets>
-142
+821123
 </input-packets>
         <input-pps>
-0
+4
 </input-pps>
         <output-packets>
-105
+23156
 </output-packets>
         <output-pps>
-0
+4
 </output-pps>
         <ipv4-transit-statistics>
           <input-bytes>
-3976
+828744
 </input-bytes>
           <input-bps>
-104
+992
 </input-bps>
           <output-bytes>
-2940
+648368
 </output-bytes>
           <output-bps>
-0
+992
 </output-bps>
           <input-packets>
-142
+29598
 </input-packets>
           <input-pps>
-0
+4
 </input-pps>
           <output-packets>
-105
+23156
 </output-packets>
           <output-pps>
-0
+4
 </output-pps>
         </ipv4-transit-statistics>
       </transit-traffic-statistics>
@@ -15187,7 +16321,7 @@ inet
 75000
 </new-hold-limit>
         <intf-curr-cnt>
-4
+7
 </intf-curr-cnt>
         <intf-unresolved-cnt>
 0
@@ -15196,12 +16330,13 @@ inet
 0
 </intf-dropcnt>
         <generation>
-247
+325
 </generation>
         <route-table>
-0
+14
 </route-table>
         <address-family-flags>
+          <ifff-is-primary/>
           <ifff-sendbcast-pkt-to-re/>
           <internal-flags>
 0x0
@@ -15227,11 +16362,12 @@ inet
 10.40.94.255
 </ifa-broadcast>
           <generation>
-203
+255
 </generation>
         </interface-address>
         <interface-address>
           <ifa-flags>
+            <ifaf-current-default/>
             <ifaf-current-preferred/>
             <ifaf-current-primary/>
           </ifa-flags>
@@ -15245,7 +16381,43 @@ inet
 10.40.94.255
 </ifa-broadcast>
           <generation>
-205
+257
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <internal-flags>
+0x80008
+</internal-flags>
+          </ifa-flags>
+          <ifa-destination>
+10.40.95/24
+</ifa-destination>
+          <ifa-local>
+10.40.95.1
+</ifa-local>
+          <ifa-broadcast>
+10.40.95.255
+</ifa-broadcast>
+          <generation>
+259
+</generation>
+        </interface-address>
+        <interface-address>
+          <ifa-flags>
+            <ifaf-current-preferred/>
+          </ifa-flags>
+          <ifa-destination>
+10.40.95/24
+</ifa-destination>
+          <ifa-local>
+10.40.95.253
+</ifa-local>
+          <ifa-broadcast>
+10.40.95.255
+</ifa-broadcast>
+          <generation>
+261
 </generation>
         </interface-address>
       </address-family>
@@ -15257,10 +16429,10 @@ multiservice
 1500
 </mtu>
         <generation>
-248
+326
 </generation>
         <route-table>
-0
+14
 </route-table>
         <address-family-flags>
           <internal-flags>
@@ -15700,16 +16872,16 @@ Never
 </statistics-cleared>
     <traffic-statistics style="verbose">
       <input-bytes>
-18339442
+14890124
 </input-bytes>
       <output-bytes>
-18339442
+14890124
 </output-bytes>
       <input-packets>
-54526
+44011
 </input-packets>
       <output-packets>
-54526
+44011
 </output-packets>
       <ipv6-transit-statistics>
         <input-bytes>
@@ -16072,7 +17244,7 @@ Unspecified
 Unspecified
 </ifa-destination>
           <ifa-local>
-fe80::e00:bd0f:fc46:400
+fe80::e00:1f0f:fcfb:9000
 </ifa-local>
           <interface-address>
             <in6-addr-flags>
@@ -16266,30 +17438,30 @@ Unspecified
 </policer-overhead>
       <traffic-statistics style="verbose" indent="2">
         <input-bytes>
-18339442
+14889452
 </input-bytes>
         <output-bytes>
-18339442
+14889452
 </output-bytes>
         <input-packets>
-54526
+44003
 </input-packets>
         <output-packets>
-54526
+44003
 </output-packets>
       </traffic-statistics>
       <local-traffic-statistics>
         <input-bytes>
-18339442
+14889452
 </input-bytes>
         <output-bytes>
-18339442
+14889452
 </output-bytes>
         <input-packets>
-54526
+44003
 </input-packets>
         <output-packets>
-54526
+44003
 </output-packets>
       </local-traffic-statistics>
       <transit-traffic-statistics>
@@ -16542,16 +17714,243 @@ Never
     </output-error-list>
     <logical-interface>
       <name>
-lsi.256
+lsi.3
 </name>
       <local-index>
-331
+352
 </local-index>
       <snmp-index>
-566
+554
 </snmp-index>
       <generation>
-183
+161
+</generation>
+      <if-config-flags>
+        <iff-up/>
+        <iff-point-to-point/>
+        <iff-snmp-traps/>
+      </if-config-flags>
+      <encapsulation>
+LSI-NULL
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+336
+</input-bytes>
+        <output-bytes>
+0
+</output-bytes>
+        <input-packets>
+4
+</input-packets>
+        <output-packets>
+0
+</output-packets>
+        <ipv6-total-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <output-bytes>
+0
+</output-bytes>
+          <input-packets>
+0
+</input-packets>
+          <output-packets>
+0
+</output-packets>
+        </ipv6-total-statistics>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+336
+</input-bytes>
+        <output-bytes>
+0
+</output-bytes>
+        <input-packets>
+4
+</input-packets>
+        <output-packets>
+0
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+0
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+0
+</output-bytes>
+        <output-bps>
+0
+</output-bps>
+        <input-packets>
+0
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+0
+</output-packets>
+        <output-pps>
+0
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv4-transit-statistics>
+        <ipv6-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv6-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+201
+</generation>
+        <route-table>
+11
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+197
+</generation>
+        <route-table>
+11
+</route-table>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+196
+</generation>
+        <route-table>
+11
+</route-table>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+lsi.7
+</name>
+      <local-index>
+349
+</local-index>
+      <snmp-index>
+577
+</snmp-index>
+      <generation>
+222
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -16711,10 +18110,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-230
+300
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -16728,10 +18127,10 @@ iso
 Unlimited
 </mtu>
         <generation>
-227
+295
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -16760,10 +18159,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-226
+294
 </generation>
         <route-table>
-14
+12
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -16772,16 +18171,16 @@ Unlimited
     </logical-interface>
     <logical-interface>
       <name>
-lsi.257
+lsi.8
 </name>
       <local-index>
-332
+350
 </local-index>
       <snmp-index>
-567
+578
 </snmp-index>
       <generation>
-184
+223
 </generation>
       <if-config-flags>
         <iff-up/>
@@ -16938,10 +18337,10 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-231
+301
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-none/>
@@ -16955,10 +18354,10 @@ iso
 Unlimited
 </mtu>
         <generation>
-229
+297
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-is-primary/>
@@ -16987,13 +18386,240 @@ Unlimited
 0
 </intf-dropcnt>
         <generation>
-228
+296
 </generation>
         <route-table>
-15
+13
 </route-table>
         <address-family-flags>
           <ifff-none/>
+        </address-family-flags>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+lsi.9
+</name>
+      <local-index>
+351
+</local-index>
+      <snmp-index>
+579
+</snmp-index>
+      <generation>
+224
+</generation>
+      <if-config-flags>
+        <iff-up/>
+        <iff-point-to-point/>
+        <iff-snmp-traps/>
+      </if-config-flags>
+      <encapsulation>
+LSI-NULL
+</encapsulation>
+      <policer-overhead>
+</policer-overhead>
+      <traffic-statistics style="verbose" indent="2">
+        <input-bytes>
+0
+</input-bytes>
+        <output-bytes>
+0
+</output-bytes>
+        <input-packets>
+0
+</input-packets>
+        <output-packets>
+0
+</output-packets>
+        <ipv6-total-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <output-bytes>
+0
+</output-bytes>
+          <input-packets>
+0
+</input-packets>
+          <output-packets>
+0
+</output-packets>
+        </ipv6-total-statistics>
+      </traffic-statistics>
+      <local-traffic-statistics>
+        <input-bytes>
+0
+</input-bytes>
+        <output-bytes>
+0
+</output-bytes>
+        <input-packets>
+0
+</input-packets>
+        <output-packets>
+0
+</output-packets>
+      </local-traffic-statistics>
+      <transit-traffic-statistics>
+        <input-bytes>
+0
+</input-bytes>
+        <input-bps>
+0
+</input-bps>
+        <output-bytes>
+0
+</output-bytes>
+        <output-bps>
+0
+</output-bps>
+        <input-packets>
+0
+</input-packets>
+        <input-pps>
+0
+</input-pps>
+        <output-packets>
+0
+</output-packets>
+        <output-pps>
+0
+</output-pps>
+        <ipv4-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv4-transit-statistics>
+        <ipv6-transit-statistics>
+          <input-bytes>
+0
+</input-bytes>
+          <input-bps>
+0
+</input-bps>
+          <output-bytes>
+0
+</output-bytes>
+          <output-bps>
+0
+</output-bps>
+          <input-packets>
+0
+</input-packets>
+          <input-pps>
+0
+</input-pps>
+          <output-packets>
+0
+</output-packets>
+          <output-pps>
+0
+</output-pps>
+        </ipv6-transit-statistics>
+      </transit-traffic-statistics>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+302
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-none/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <generation>
+299
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-is-primary/>
+        </address-family-flags>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <mtu>
+Unlimited
+</mtu>
+        <max-local-cache>
+0
+</max-local-cache>
+        <new-hold-limit>
+0
+</new-hold-limit>
+        <intf-curr-cnt>
+0
+</intf-curr-cnt>
+        <intf-unresolved-cnt>
+0
+</intf-unresolved-cnt>
+        <intf-dropcnt>
+0
+</intf-dropcnt>
+        <generation>
+298
+</generation>
+        <route-table>
+14
+</route-table>
+        <address-family-flags>
+          <ifff-is-primary/>
         </address-family-flags>
       </address-family>
     </logical-interface>
@@ -17475,11 +19101,11 @@ Unspecified
     <damp-suppress-state>
 unsuppressed
 </damp-suppress-state>
-    <current-physical-address format="MAC 2c:6b:f5:1a:cb:b0">
-2c:6b:f5:1a:cb:b0
+    <current-physical-address format="MAC 2c:6b:f5:60:44:b0">
+2c:6b:f5:60:44:b0
 </current-physical-address>
-    <hardware-physical-address format="MAC 2c:6b:f5:1a:cb:b0">
-2c:6b:f5:1a:cb:b0
+    <hardware-physical-address format="MAC 2c:6b:f5:60:44:b0">
+2c:6b:f5:60:44:b0
 </hardware-physical-address>
     <alternate-physical-address>
 Unspecified

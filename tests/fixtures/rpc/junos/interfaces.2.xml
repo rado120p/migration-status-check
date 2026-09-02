@@ -47,7 +47,7 @@ inet6
         </interface-address>
         <interface-address>
           <ifa-local emit="emit">
-fe80::e00:1dff:fe00:7401/64
+fe80::e00:4bff:fe1d:c201/64
 </ifa-local>
         </interface-address>
       </address-family>
@@ -221,7 +221,7 @@ inet6
         </interface-address>
         <interface-address>
           <ifa-local emit="emit">
-fe80::e00:77ff:fe8b:9402/64
+fe80::e00:62ff:fe1f:2/64
 </ifa-local>
         </interface-address>
       </address-family>
@@ -249,7 +249,7 @@ up
 </oper-status>
     <logical-interface>
       <name>
-ge-0/0/2.16386
+ge-0/0/2.11
 </name>
       <admin-status>
 up
@@ -259,6 +259,210 @@ up
 </oper-status>
       <filter-information>
 </filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+10.111.11.1/30
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.12
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.13
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+152.11.13.1/30
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+fe80::1/64
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.113
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+198.11.13.1/30
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+2001:db8:11:13::a/127
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+fe80::e00:e200:71de:5d03/64
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.213
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+ccc
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.313
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.413
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.4094
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/2.32767
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
     </logical-interface>
   </physical-interface>
   <physical-interface>
@@ -273,7 +477,7 @@ up
 </oper-status>
     <logical-interface>
       <name>
-ge-0/0/3.16386
+ge-0/0/3.0
 </name>
       <admin-status>
 up
@@ -283,6 +487,11 @@ up
 </oper-status>
       <filter-information>
 </filter-information>
+      <address-family>
+        <address-family-name>
+ccc
+</address-family-name>
+      </address-family>
     </logical-interface>
   </physical-interface>
   <physical-interface>
@@ -297,7 +506,7 @@ up
 </oper-status>
     <logical-interface>
       <name>
-ge-0/0/4.16386
+ge-0/0/4.0
 </name>
       <admin-status>
 up
@@ -307,6 +516,36 @@ up
 </oper-status>
       <filter-information>
 </filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+198.11.14.1/29
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+2001:db8:11:14::1/64
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+fe80::e00:5fff:feba:1605/64
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
     </logical-interface>
   </physical-interface>
   <physical-interface>
@@ -321,7 +560,7 @@ up
 </oper-status>
     <logical-interface>
       <name>
-ge-0/0/5.16386
+ge-0/0/5.0
 </name>
       <admin-status>
 up
@@ -331,6 +570,36 @@ up
 </oper-status>
       <filter-information>
 </filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+152.11.14.1/29
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+2001:abcd:11:14::1/64
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+fe80::e00:2bff:fe74:8c06/64
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
     </logical-interface>
   </physical-interface>
   <physical-interface>
@@ -345,7 +614,7 @@ up
 </oper-status>
     <logical-interface>
       <name>
-ge-0/0/6.16386
+ge-0/0/6.4094
 </name>
       <admin-status>
 up
@@ -355,6 +624,29 @@ up
 </oper-status>
       <filter-information>
 </filter-information>
+      <address-family>
+        <address-family-name>
+bridge
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+ge-0/0/6.32767
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
     </logical-interface>
   </physical-interface>
   <physical-interface>
@@ -365,7 +657,7 @@ ge-0/0/7
 up
 </admin-status>
     <oper-status>
-down
+up
 </oper-status>
     <logical-interface>
       <name>
@@ -375,7 +667,7 @@ ge-0/0/7.16386
 up
 </admin-status>
       <oper-status>
-down
+up
 </oper-status>
       <filter-information>
 </filter-information>
@@ -389,7 +681,7 @@ ge-0/0/8
 up
 </admin-status>
     <oper-status>
-down
+up
 </oper-status>
     <logical-interface>
       <name>
@@ -399,7 +691,7 @@ ge-0/0/8.16386
 up
 </admin-status>
       <oper-status>
-down
+up
 </oper-status>
       <filter-information>
 </filter-information>
@@ -721,7 +1013,7 @@ inet6
         </interface-address>
         <interface-address>
           <ifa-local emit="emit">
-fe80::e00:a9ff:fe2d:e700/64
+fe80::e00:1fff:fefb:9000/64
 </ifa-local>
         </interface-address>
       </address-family>
@@ -759,6 +1051,77 @@ up
     <oper-status>
 up
 </oper-status>
+    <logical-interface>
+      <name>
+irb.2
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+10.12.11.2/30
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+irb.4094
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+        <interface-address>
+          <ifa-local emit="emit">
+10.40.94.1/24
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+10.40.94.253/24
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+10.40.95.1/24
+</ifa-local>
+        </interface-address>
+        <interface-address>
+          <ifa-local emit="emit">
+10.40.95.253/24
+</ifa-local>
+        </interface-address>
+      </address-family>
+      <address-family>
+        <address-family-name>
+multiservice
+</address-family-name>
+      </address-family>
+    </logical-interface>
   </physical-interface>
   <physical-interface>
     <name>
@@ -852,7 +1215,7 @@ inet6
         </interface-address>
         <interface-address>
           <ifa-local>
-fe80::e00:a90f:fc2d:e700
+fe80::e00:1f0f:fcfb:9000
 </ifa-local>
           <ifa-destination emit="emit">
 </ifa-destination>
@@ -914,6 +1277,118 @@ up
     <oper-status>
 up
 </oper-status>
+    <logical-interface>
+      <name>
+lsi.3
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+lsi.7
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+lsi.8
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+      </address-family>
+    </logical-interface>
+    <logical-interface>
+      <name>
+lsi.9
+</name>
+      <admin-status>
+up
+</admin-status>
+      <oper-status>
+up
+</oper-status>
+      <filter-information>
+</filter-information>
+      <address-family>
+        <address-family-name>
+inet
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+iso
+</address-family-name>
+      </address-family>
+      <address-family>
+        <address-family-name>
+inet6
+</address-family-name>
+      </address-family>
+    </logical-interface>
   </physical-interface>
   <physical-interface>
     <name>

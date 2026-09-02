@@ -16,13 +16,6 @@
       <isis-spf-holddown>5000</isis-spf-holddown>
       <isis-spf-rapid-runs>3</isis-spf-rapid-runs>
     </isis-spf-information>
-    <isis-overload-information>
-      <isis-overload-enabled/>
-      <isis-overload-high-metrics>enabled</isis-overload-high-metrics>
-      <isis-overload-allow-route-leaking>disabled</isis-overload-allow-route-leaking>
-      <isis-overload-internal-prefixes>disabled</isis-overload-internal-prefixes>
-      <isis-overload-external-prefixes>disabled</isis-overload-external-prefixes>
-    </isis-overload-information>
     <isis-routing>
       <isis-routing-ipv4/>
       <isis-routing-ipv6/>

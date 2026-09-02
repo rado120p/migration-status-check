@@ -1,17 +1,18 @@
 <bfd-session-information style="detail">
   <bfd-session>
-    <session-neighbor>152.11.13.2</session-neighbor>
+    <session-neighbor>10.1.0.5</session-neighbor>
     <session-state>Up</session-state>
-    <session-interface>ge-0/0/2.13</session-interface>
-    <session-detection-time>9.000</session-detection-time>
-    <session-transmission-interval>3.000</session-transmission-interval>
+    <session-interface>ge-0/0/1.0</session-interface>
+    <session-detection-time>30.000</session-detection-time>
+    <session-transmission-interval>10.000</session-transmission-interval>
     <session-adaptive-multiplier>3</session-adaptive-multiplier>
     <bfd-client>
-      <client-name>BGP</client-name>
-      <client-transmission-interval>3.000</client-transmission-interval>
-      <client-reception-interval>3.000</client-reception-interval>
+      <client-name>ISIS L2</client-name>
+      <client-transmission-interval>10.000</client-transmission-interval>
+      <client-reception-interval>10.000</client-reception-interval>
     </bfd-client>
-    <session-up-time>00:02:41</session-up-time>
+    <session-up-time>01:36:12</session-up-time>
+    <previous-down-time>00:00:26</previous-down-time>
     <local-diagnostic>None</local-diagnostic>
     <remote-diagnostic>None</remote-diagnostic>
     <session-version>1</session-version>
@@ -19,28 +20,75 @@
     <session-type>Single hop BFD</session-type>
   </bfd-session>
   <bfd-session>
-    <session-neighbor>198.11.13.2</session-neighbor>
-    <session-state>Down</session-state>
-    <session-interface>ge-0/0/2.113</session-interface>
-    <session-detection-time>0.000</session-detection-time>
-    <session-transmission-interval>3.000</session-transmission-interval>
+    <session-neighbor>10.1.2.0</session-neighbor>
+    <session-state>Up</session-state>
+    <session-interface>ge-0/0/0.0</session-interface>
+    <session-detection-time>30.000</session-detection-time>
+    <session-transmission-interval>10.000</session-transmission-interval>
     <session-adaptive-multiplier>3</session-adaptive-multiplier>
     <bfd-client>
-      <client-name>BGP</client-name>
-      <client-transmission-interval>3.000</client-transmission-interval>
-      <client-reception-interval>3.000</client-reception-interval>
+      <client-name>ISIS L2</client-name>
+      <client-transmission-interval>10.000</client-transmission-interval>
+      <client-reception-interval>10.000</client-reception-interval>
     </bfd-client>
+    <session-up-time>05:58:41</session-up-time>
     <local-diagnostic>None</local-diagnostic>
     <remote-diagnostic>None</remote-diagnostic>
     <session-version>1</session-version>
-    <remote-state>AdminDown</remote-state>
+    <remote-state>Up</remote-state>
     <session-type>Single hop BFD</session-type>
   </bfd-session>
-  <sessions-shop>2</sessions-shop>
-  <sessions-down>1</sessions-down>
-  <sessions-up>1</sessions-up>
-  <sessions>2</sessions>
+  <bfd-session>
+    <session-neighbor>152.11.13.2</session-neighbor>
+    <session-state>AdminDown</session-state>
+    <session-interface>ge-0/0/2.13</session-interface>
+    <session-detection-time>9.000</session-detection-time>
+    <session-transmission-interval>3.000</session-transmission-interval>
+    <session-adaptive-multiplier>3</session-adaptive-multiplier>
+    <session-down-time>00:02:15</session-down-time>
+    <previous-up-time>00:01:36</previous-up-time>
+    <local-diagnostic>AdminDown</local-diagnostic>
+    <remote-diagnostic>CtlExpire</remote-diagnostic>
+    <session-version>1</session-version>
+    <remote-state>Down</remote-state>
+    <session-type>Single hop BFD</session-type>
+  </bfd-session>
+  <bfd-session>
+    <session-neighbor>198.11.14.4</session-neighbor>
+    <session-state>AdminDown</session-state>
+    <session-interface/>
+    <session-detection-time>9.000</session-detection-time>
+    <session-transmission-interval>3.000</session-transmission-interval>
+    <session-adaptive-multiplier>3</session-adaptive-multiplier>
+    <session-down-time>00:00:07</session-down-time>
+    <previous-up-time>00:34:54</previous-up-time>
+    <local-diagnostic>AdminDown</local-diagnostic>
+    <remote-diagnostic>None</remote-diagnostic>
+    <session-version>1</session-version>
+    <remote-state>Up</remote-state>
+    <session-type>Multi hop BFD</session-type>
+  </bfd-session>
+  <bfd-session>
+    <session-neighbor>2001:db8:11:14::4</session-neighbor>
+    <session-state>AdminDown</session-state>
+    <session-interface/>
+    <session-detection-time>9.000</session-detection-time>
+    <session-transmission-interval>3.000</session-transmission-interval>
+    <session-adaptive-multiplier>3</session-adaptive-multiplier>
+    <session-down-time>00:00:07</session-down-time>
+    <previous-up-time>00:03:09</previous-up-time>
+    <local-diagnostic>AdminDown</local-diagnostic>
+    <remote-diagnostic>None</remote-diagnostic>
+    <session-version>1</session-version>
+    <remote-state>Up</remote-state>
+    <session-type>Multi hop BFD</session-type>
+  </bfd-session>
+  <sessions-shop>3</sessions-shop>
+  <sessions-mhop>2</sessions-mhop>
+  <sessions-admindown>3</sessions-admindown>
+  <sessions-up>2</sessions-up>
+  <sessions>5</sessions>
   <clients>2</clients>
-  <cumulative-transmission-rate>0.7</cumulative-transmission-rate>
-  <cumulative-reception-rate>0.3</cumulative-reception-rate>
+  <cumulative-transmission-rate>1.2</cumulative-transmission-rate>
+  <cumulative-reception-rate>1.2</cumulative-reception-rate>
 </bfd-session-information>

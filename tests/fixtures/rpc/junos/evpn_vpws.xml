@@ -19,7 +19,7 @@
         <evpn-vpws-service-id-local-status-table style="normal">
           <evpn-vpws-sid-local style="normal">
             <evpn-vpws-sid-local-value>1000</evpn-vpws-sid-local-value>
-            <evpn-vpws-sid-advertised-label>300464</evpn-vpws-sid-advertised-label>
+            <evpn-vpws-sid-advertised-label>302608</evpn-vpws-sid-advertised-label>
             <evpn-vpws-sid-pe-status-table style="normal">
 </evpn-vpws-sid-pe-status-table>
           </evpn-vpws-sid-local>
@@ -31,10 +31,59 @@
               <evpn-vpws-sid-pe-info style="normal">
                 <evpn-vpws-sid-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-sid-interface-esi>
                 <evpn-vpws-sid-pe-ipaddr>150.0.0.13</evpn-vpws-sid-pe-ipaddr>
-                <evpn-vpws-sid-pe-label>300016</evpn-vpws-sid-pe-label>
+                <evpn-vpws-sid-pe-label>299808</evpn-vpws-sid-pe-label>
                 <evpn-vpws-sid-pe-mode>single-homed</evpn-vpws-sid-pe-mode>
                 <evpn-vpws-sid-pe-role>Primary</evpn-vpws-sid-pe-role>
-                <evpn-vpws-sid-pe-ts>2026-08-04 12:13:42.071</evpn-vpws-sid-pe-ts>
+                <evpn-vpws-sid-pe-ts>2026-09-02 20:27:09.885</evpn-vpws-sid-pe-ts>
+                <evpn-vpws-sid-pe-status>Resolved</evpn-vpws-sid-pe-status>
+              </evpn-vpws-sid-pe-info>
+            </evpn-vpws-sid-pe-status-table>
+          </evpn-vpws-sid-remote>
+        </evpn-vpws-service-id-remote-status-table>
+      </evpn-vpws-interface>
+    </evpn-vpws-interface-status-table>
+    <num-protect-interfaces>0</num-protect-interfaces>
+    <evpn-protect-interface-status-table style="normal">
+</evpn-protect-interface-status-table>
+    <evpn-vpws-esi-info-status-table style="normal">
+</evpn-vpws-esi-info-status-table>
+  </evpn-vpws-instance>
+  <evpn-vpws-instance style="normal">
+    <evpn-vpws-instance-name>EVPN-VPWS-CPE24-UNI</evpn-vpws-instance-name>
+    <evpn-vpws-instance-type>EVPN VPWS</evpn-vpws-instance-type>
+    <evpn-vpws-instance-encap-type>MPLS</evpn-vpws-instance-encap-type>
+    <route-distinguisher>65000:224</route-distinguisher>
+    <local-interfaces>1</local-interfaces>
+    <local-interfaces-up>1</local-interfaces-up>
+    <evpn-vpws-interface-status-table style="normal">
+      <evpn-vpws-interface style="normal">
+        <evpn-vpws-interface-name>ge-0/0/3.0</evpn-vpws-interface-name>
+        <evpn-vpws-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-interface-esi>
+        <evpn-vpws-interface-mode>single-homed</evpn-vpws-interface-mode>
+        <evpn-vpws-interface-role>Primary</evpn-vpws-interface-role>
+        <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+        <evpn-vpws-control-word>Yes</evpn-vpws-control-word>
+        <evpn-vpws-flow-label-transmit>No</evpn-vpws-flow-label-transmit>
+        <evpn-vpws-flow-label-receive>No</evpn-vpws-flow-label-receive>
+        <evpn-vpws-service-id-local-status-table style="normal">
+          <evpn-vpws-sid-local style="normal">
+            <evpn-vpws-sid-local-value>1000</evpn-vpws-sid-local-value>
+            <evpn-vpws-sid-advertised-label>302560</evpn-vpws-sid-advertised-label>
+            <evpn-vpws-sid-pe-status-table style="normal">
+</evpn-vpws-sid-pe-status-table>
+          </evpn-vpws-sid-local>
+        </evpn-vpws-service-id-local-status-table>
+        <evpn-vpws-service-id-remote-status-table style="normal">
+          <evpn-vpws-sid-remote style="normal">
+            <evpn-vpws-sid-remote-value>2000</evpn-vpws-sid-remote-value>
+            <evpn-vpws-sid-pe-status-table style="normal">
+              <evpn-vpws-sid-pe-info style="normal">
+                <evpn-vpws-sid-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-sid-interface-esi>
+                <evpn-vpws-sid-pe-ipaddr>150.0.0.14</evpn-vpws-sid-pe-ipaddr>
+                <evpn-vpws-sid-pe-label>299776</evpn-vpws-sid-pe-label>
+                <evpn-vpws-sid-pe-mode>single-homed</evpn-vpws-sid-pe-mode>
+                <evpn-vpws-sid-pe-role>Primary</evpn-vpws-sid-pe-role>
+                <evpn-vpws-sid-pe-ts>2026-09-02 20:27:10.035</evpn-vpws-sid-pe-ts>
                 <evpn-vpws-sid-pe-status>Resolved</evpn-vpws-sid-pe-status>
               </evpn-vpws-sid-pe-info>
             </evpn-vpws-sid-pe-status-table>

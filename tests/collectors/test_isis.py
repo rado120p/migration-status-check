@@ -2,9 +2,12 @@
 
 Adjacency a interface maji na obou platformach stejny tvar - jen jina jmena
 rozhrani (ge-0/0/0.0 na junos, et-0/0/0.0 na junos-evo; lo0.0 na obou).
-Overview je zajimavy prave tim, ze se lisi: junos ma isis-overload-enabled
-(True), junos-evo overload informaci vubec nenese (False) - obe hodnoty
-kryji skutecne nahravky, synteticke overview neni potreba.
+Overview byl drive zajimavy tim, ze se lisi: junos mel isis-overload-enabled
+(True), junos-evo overload informaci vubec nenese (False). Nahravka
+2026-09-02 (task 5b, idealni pre-migracni stav .4) ukazala, ze overload byl
+v labu mezitim vypnuty - junos ted nese stejne "chybi" jako junos-evo, takze
+True-vetev uz zadna nahravka nekryje a testuje se na synteticke XML (stejny
+duvod jako EMPTY_OUTPUT u BFD: aby o pokryti nerozhodoval stav laborky).
 """
 
 from __future__ import annotations
@@ -58,9 +61,19 @@ def test_isis_interface_physical_is_not_passive(rpc_fixture, platform):
     assert entry["levels"]["2"]["passive"] is False
 
 
-def test_isis_overview_overload_flag_on_junos(rpc_fixture):
-    """Fixture nese <isis-overload-enabled/> - lab overload ma zapnute."""
-    data = IsisOverviewCollector().parse(rpc_fixture("junos", "isis_overview"), "junos")
+def test_isis_overview_overload_flag_on_junos():
+    """<isis-overload-enabled/> pritomny v odpovedi znamena True.
+
+    Synteticke XML od 2026-09-02 (task 5b): nahravka z .4 uz overload
+    vypnuty nema (viz docstring modulu), takze tuhle vetev uz zadna
+    nahravka nekryje.
+    """
+    xml = etree.fromstring(
+        b"<isis-overview-information><isis-overview>"
+        b"<isis-overload-enabled/>"
+        b"</isis-overview></isis-overview-information>"
+    )
+    data = IsisOverviewCollector().parse(xml, "junos")
     assert data == {"overload_enabled": True}
 
 
@@ -171,7 +184,9 @@ def test_seconds_attr_reads_unprefixed_attribute_from_fixture(rpc_fixture, platf
     """Nahravky nemaji zadny prefix - kryje vetev `key == 'seconds'`."""
     root = rpc_fixture(platform, "isis_adjacency")
     node = next(root.iter("{*}last-transition-time"))
-    expected = 3325 if platform == "junos" else 4383
+    # junos hodnota aktualizovana na nahravku 2026-09-02 (task 5b) - adjacency
+    # bezi dal, seconds jen rostou s casem od posledniho capture.
+    expected = 27915 if platform == "junos" else 4383
     assert _seconds_attr(node) == expected
 
 

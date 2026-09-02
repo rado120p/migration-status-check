@@ -1,32 +1,32 @@
 <multicast-route-information>
   <route-family>
-    <multicast-instance>master</multicast-instance>
+    <multicast-instance>MULTICAST-STREAM-B-MUX1-RECEIVER</multicast-instance>
     <address-family>INET</address-family>
     <multicast-route style="extensive">
-      <multicast-group-address>232.1.1.1</multicast-group-address>
-      <multicast-source-address>10.11.11.1</multicast-source-address>
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
       <multicast-source-prefix-length>32</multicast-source-prefix-length>
-      <upstream-interface-name>ge-0/0/0.0</upstream-interface-name>
+      <upstream-interface-name>lsi.3</upstream-interface-name>
       <downstream-interface-names>
-        <interface-name>ge-0/0/2.11</interface-name>
+        <interface-name>irb.2</interface-name>
       </downstream-interface-names>
       <outgoing-interface-count>1</outgoing-interface-count>
       <for-blank-line-line/>
-      <session-name>Source specific multicast</session-name>
+      <session-name>Organisational Local Scope</session-name>
       <forwarding-rate-kilobytes>0</forwarding-rate-kilobytes>
       <forwarding-rate-packets>6</forwarding-rate-packets>
-      <forwarded-packet-count>38001</forwarded-packet-count>
-      <next-hop-id>1048581</next-hop-id>
-      <upstream-protocol>Upstream protocol: PIM</upstream-protocol>
+      <forwarded-packet-count>33954</forwarded-packet-count>
+      <next-hop-id>1048646</next-hop-id>
+      <upstream-protocol>Upstream protocol: MVPN</upstream-protocol>
       <multicast-route-state>Active</multicast-route-state>
       <multicast-route-forwarding-state>Forwarding</multicast-route-forwarding-state>
       <multicast-route-timeout>forever</multicast-route-timeout>
-      <interface-mismatch-count>984</interface-mismatch-count>
-      <multicast-route-uptime seconds="7939">02:12:19</multicast-route-uptime>
+      <interface-mismatch-count>523</interface-mismatch-count>
+      <multicast-route-uptime seconds="5817">01:36:57</multicast-route-uptime>
     </multicast-route>
   </route-family>
   <route-family>
-    <multicast-instance>master</multicast-instance>
+    <multicast-instance>MULTICAST-STREAM-B-MUX1-RECEIVER</multicast-instance>
     <address-family>INET6</address-family>
   </route-family>
 </multicast-route-information>

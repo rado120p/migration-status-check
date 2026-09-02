@@ -19,7 +19,7 @@
         <pim-neighbor-t-bit-flag/>
         <pim-neighbor-a-bit-flag/>
       </pim-neighbor-flags>
-      <pim-neighbor-uptime seconds="4398">01:13:18</pim-neighbor-uptime>
+      <pim-neighbor-uptime seconds="27958">07:45:58</pim-neighbor-uptime>
       <pim-neighbor-address>10.1.2.0</pim-neighbor-address>
     </pim-neighbor>
   </pim-interface>
@@ -36,7 +36,7 @@
         <pim-neighbor-t-bit-flag/>
         <pim-neighbor-a-bit-flag/>
       </pim-neighbor-flags>
-      <pim-neighbor-uptime seconds="4373">01:12:53</pim-neighbor-uptime>
+      <pim-neighbor-uptime seconds="27936">07:45:36</pim-neighbor-uptime>
       <pim-neighbor-address>10.1.0.5</pim-neighbor-address>
     </pim-neighbor>
   </pim-interface>

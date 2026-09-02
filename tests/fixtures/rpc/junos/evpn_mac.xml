@@ -20,19 +20,41 @@
     </l2ald-rtb-learn-vlan-mac-count>
   </l2ald-rtb-mac-count-entry>
   <l2ald-rtb-mac-count-entry>
-    <rtb-mac-count>4</rtb-mac-count>
+    <rtb-mac-count>6</rtb-mac-count>
     <rtb-name>EVPN-VLAN-AWARE-POP1</rtb-name>
     <bd-name>BD-4094</bd-name>
     <l2ald-rtb-if-mac-count>
       <l2ald-rtb-if-mac-count-entry>
+        <interface-name>ge-0/0/2.4094:4094</interface-name>
+        <mac-count>1</mac-count>
+      </l2ald-rtb-if-mac-count-entry>
+      <l2ald-rtb-if-mac-count-entry>
         <interface-name>ge-0/0/6.4094:4094</interface-name>
-        <mac-count>4</mac-count>
+        <mac-count>5</mac-count>
       </l2ald-rtb-if-mac-count-entry>
     </l2ald-rtb-if-mac-count>
     <l2ald-rtb-learn-vlan-mac-count>
       <l2ald-rtb-learn-vlan-mac-count-entry>
         <learn-vlan>4094</learn-vlan>
-        <mac-count>4</mac-count>
+        <mac-count>6</mac-count>
+        <static-mac-count>0</static-mac-count>
+      </l2ald-rtb-learn-vlan-mac-count-entry>
+    </l2ald-rtb-learn-vlan-mac-count>
+  </l2ald-rtb-mac-count-entry>
+  <l2ald-rtb-mac-count-entry>
+    <rtb-mac-count>1</rtb-mac-count>
+    <rtb-name>default-switch</rtb-name>
+    <bd-name>BD-MUX1-B</bd-name>
+    <l2ald-rtb-if-mac-count>
+      <l2ald-rtb-if-mac-count-entry>
+        <interface-name>ge-0/0/2.12:12</interface-name>
+        <mac-count>1</mac-count>
+      </l2ald-rtb-if-mac-count-entry>
+    </l2ald-rtb-if-mac-count>
+    <l2ald-rtb-learn-vlan-mac-count>
+      <l2ald-rtb-learn-vlan-mac-count-entry>
+        <learn-vlan>12</learn-vlan>
+        <mac-count>1</mac-count>
         <static-mac-count>0</static-mac-count>
       </l2ald-rtb-learn-vlan-mac-count-entry>
     </l2ald-rtb-learn-vlan-mac-count>

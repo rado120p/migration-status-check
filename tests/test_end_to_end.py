@@ -16,20 +16,23 @@ DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 DEVICE_5 = str(FIXTURES / "172.20.20.5.yml")
 
 
-# Bod v laborce, ktery pri regeneraci 2026-09-02 vysel jako realny rozdil
-# mezi MX (.4, baseline) a EVO (.5, subject) konfiguraci, ne jako regrese
-# parseru/kodu: L3VPN-CPE13-NNI ma na MX pod BGP peerem
-# 2001:db8:11:13::b nakonfigurovany bfd-liveness-detection, na EVO tenhle
-# neighbor stanzu nema (bgp/group CPE13/neighbor 2001:db8:11:13::b je bez
-# <bfd-liveness-detection>, zatimco 198.11.13.2 ji ma na obou). Overeno
-# primo v `show configuration routing-instances L3VPN-CPE13-NNI` na obou
-# zarizenich - neni to artefakt syntetickych faktu ani chyba checku
-# (bfd_session_state spravne hlasi chybejici session). Bod k proverovani
-# operatorem laborky: je to zamerny rozdil, nebo mezera v post-migracnim
-# setupu z Ukolu 1/2?
-KNOWN_LAB_ASYMMETRIES = (
-    ("bfd_session_state", "2001:db8:11:13::b"),
-)
+# Task 5 (regenerace 2026-09-02) zaznamenal realny rozdil MX (.4, baseline)
+# vs. EVO (.5, subjekt): L3VPN-CPE13-NNI mela na MX pod BGP peerem
+# 2001:db8:11:13::b nakonfigurovany bfd-liveness-detection, na EVO ne.
+# Task 5b (2026-09-02, idealni pre-migracni stav .4) overil primo v `show
+# configuration routing-instances`/`show configuration protocols bgp` na .4,
+# ze bfd-liveness-detection byl mezitim (commit-user ansible) odebran z CELE
+# BGP konfigurace na .4 - nejen z tohoto peera. Asymetrie tedy zmizela sama:
+# .4 uz pro tohoto peera zadny zamer ani session nema (peer vypadl i z
+# operacni tabulky), takze union treti zdroju (AR-14) neprodukuje zadny
+# nalez a puvodni vyjimka by uz nic nefiltrovala (overeno: prazdny tuple
+# nechava test zelenym). Mechanismus se necha na miste pro pripadne dalsi
+# nalezy, ale ZADNA aktualni polozka neni potreba.
+#
+# Nevyresena otazka pro operatora laborky zustava: byla to zamerna
+# normalizace (misto pridani BFD na EVO se odebralo z MX), nebo vedlejsi
+# efekt pripravy multicast scenare? Viz task-5b-report.md.
+KNOWN_LAB_ASYMMETRIES: tuple[tuple[str, str], ...] = ()
 
 
 def _deactivate_only_in_subject(old, new) -> None:
@@ -601,6 +604,24 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     """
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+
+    # Nahravka 2026-09-02 (task 5b, idealni pre-migracni stav .4) ukazala,
+    # ze bfd-liveness-detection byl z BGP konfigurace na .4 odebran cely -
+    # 172.20.20.4.yml uz pro tohoto peera nema zadny bfd_peers zamer, takze
+    # _facts_for() (conftest.py) uz pro nej v old.facts["bfd"] nic
+    # nesyntetizuje. Test overuje blok postaveny nad BASELINE session (viz
+    # docstring), takze mu jedna Up session v baseline musi zustat - dopsana
+    # rucne, protoze uz ji nejde odvodit ze skutecne .4 inventory.
+    old.facts["bfd"]["152.11.13.2"] = {
+        "state": "Up",
+        "interface": "ge-0/0/2.13",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": ["BGP"],
+        "detection_time": "9.000",
+        "transmission_interval": "3.000",
+        "multiplier": 3,
+    }
 
     # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
     target = next(

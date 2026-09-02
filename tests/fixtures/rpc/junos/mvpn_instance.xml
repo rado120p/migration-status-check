@@ -12,10 +12,6 @@
         </provider-tunnel>
         <neighbor>
           <neighbor-entry>
-            <neighbor-identifier>150.0.0.12</neighbor-identifier>
-            <provider-tunnel-id/>
-          </neighbor-entry>
-          <neighbor-entry>
             <neighbor-identifier>150.0.0.13</neighbor-identifier>
             <provider-tunnel-id>RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13</provider-tunnel-id>
             <label-in>19</label-in>

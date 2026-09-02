@@ -85,12 +85,16 @@ COLLECTORS = (
     MvpnInstanceCollector(),
 )
 
-# optics na junos (vMX) nema fixture zamerne: RPC existuje, ale vMX na nej
-# odpovida prazdnym <interface-information/> (zadny fyzicky opticky modul
-# k zaznamenani neni). MX tvary (s lanes / bez lanes / slevani RX variant)
-# kryji syntetiky v test_optics.py; conformance na junos-evo overuje skutecny
-# XML z labu.
-NO_FIXTURE_ON: set[tuple[str, str]] = {("junos", "optics")}
+# optics na junos (vMX) drive nemela fixture vubec - `record` na RPC padalo
+# a nezapsal nic. Nahravka z 2026-09-02 (task 5b) ukazala, ze RPC uz nepada,
+# jen vraci prazdne <interface-information/> (zadny fyzicky opticky modul
+# k zaznamenani neni) - presne to, co tenhle vyjimkovy mechanismus drive
+# simuloval rucne. `tests/fixtures/rpc/junos/optics.xml` uz na disku je,
+# takze zadna platforma-collector dvojice vyjimku nepotrebuje. MX tvary
+# (s lanes / bez lanes / slevani RX variant) dal kryji syntetiky v
+# test_optics.py; conformance na obou platformach uz overuje skutecny XML
+# z labu.
+NO_FIXTURE_ON: set[tuple[str, str]] = set()
 
 
 def _fixture_paths(platform: str, collector) -> list[Path]:
@@ -378,23 +382,31 @@ def test_static_route_check_really_reads_the_routing_table():
 
 
 def test_bfd_check_really_reads_the_session_table():
-    """U BFD na junos "ne-SKIP" na sev take nestaci - musi to byt PASS.
+    """U BFD "ne-SKIP" na sev take nestaci - musi to byt PASS.
 
     bfd_session_state iteruje pres sjednoceni tri zdroju (AR-14), takze
     verdikt vyda i tehdy, kdyz oblast `bfd` z faktu vubec neprecte: ze
     sameho zameru s BGP Established vyrobi FAIL 'bez session', a to je
     ne-SKIP. Overeno mutaci: po zmene ctenoho klice na
-    ctx.subject.get("bfd_x") zustava test_specific_check_sees_data[junos-
-    bfd_session_state] zeleny, protoze BGP je na junos Established a check
+    ctx.subject.get("bfd_x") zustava test_specific_check_sees_data[*-
+    bfd_session_state] zeleny, protoze BGP je Established a check
     manufakturuje FAIL bez toho, aby session tabulku videl.
 
-    Na .4 ma svc:INTERNET-CPE13-NNI:Internet peera 152.11.13.2 s session Up
-    (PASS) a svc:L3VPN-CPE13-NNI:IPVPN peera 198.11.13.2 s session Down
-    (FAIL). FAIL je tedy dosazitelny naslepo - proto sev drzi PASS, ne
-    ne-SKIP: PASS muze vzniknout JEDINE tak, ze check tabulku session
-    opravdu videl.
+    Puvodne testovano na junos (.4): svc:INTERNET-CPE13-NNI:Internet mel
+    peera 152.11.13.2 s session Up (PASS) a svc:L3VPN-CPE13-NNI:IPVPN peera
+    198.11.13.2 s session Down (FAIL). Nahravka 2026-09-02 (task 5b) ukazala,
+    ze `.4` uz v idealnim pre-migracnim stavu nema zadny bfd-liveness-detection
+    zamer vubec (BGP skupiny/sousede ho ztratili globalne) - kazdy peer je
+    proto "configured=False" a check nikdy nedosahne PASS, jen DEGRADED
+    ("v konfiguraci sluzby neni"). Presunuto na junos-evo (.5, touto vlnou
+    nedotcene), kde stejna dvojice sluzeb existuje se stejnym tvarem
+    (et-0/0/8.13 / et-0/0/8.113 misto ge-0/0/2.13 / ge-0/0/2.113) a
+    bfd-liveness-detection je porad nakonfigurovane - FAIL je tedy dosazitelny
+    naslepo, ale PASS muze vzniknout JEDINE tak, ze check tabulku session
+    opravdu videl. Check kod je platform-agnostic (cte ctx.subject["bfd"]
+    bez ohledu na platformu), takze presun neoslabuje pokryti mutanta.
     """
-    result = api.evaluate(_snapshot("junos"), now=NOW)
+    result = api.evaluate(_snapshot("junos-evo"), now=NOW)
     matching = [
         check
         for scope in result.scopes
