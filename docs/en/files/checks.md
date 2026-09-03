@@ -147,6 +147,14 @@ the report can show which of the two is actually broken instead of just "interfa
 The message is `<name>: admin_status <state>` resp. `<name>: oper_status <state>`; the value
 column carries the state capitalised (`Up`, `Down`).
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no interface data in the subject | `SKIP` | SKIP | `bez dat` |
+| `admin_status == "up"` | `ok` | PASS | `Up` |
+| `admin_status != "up"` (missing → `"unknown"`) | `broken` | FAIL | capitalised state, e.g. `Down`, `Unknown` |
+| `oper_status == "up"` | `ok` | PASS | `Up` |
+| `oper_status != "up"` (missing → `"unknown"`) | `broken` | FAIL | capitalised state |
+
 ### `interface_errors` (state, advisory)
 
 The sum of `input_errors`, `output_errors` and `framing_errors` must be 0. Transit interfaces
@@ -157,6 +165,16 @@ the three counter keys at all is `degraded` (not a silent `ok`) — the interfac
 report error counters, which is not the same claim as "measured, zero errors": message
 `<name>: chybove countery nebyly zmereny (rozhrani nevraci error countery)`, `value` =
 `nezmereno`.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| service scope with an L3 link whose L2 side has no transit interface | `INFO` | INFO | `mereno na L2 (<peers>) - viz blok/bloky nize` |
+| service scope with an L1 (layer1) parent absorbing the transit interface | *(no finding)* | — | — |
+| scope has transit interfaces but only logical units, no physical one | `SKIP` | SKIP | `jen unity` |
+| no transit interface at all | `SKIP` | SKIP | `netranzitni rozhrani` |
+| physical transit interface, none of the three counter keys present | `degraded` | WARN | `nezmereno` |
+| physical transit interface, sum of counters == 0 | `ok` | PASS | `bez chyb` |
+| physical transit interface, sum of counters > 0 | `broken` | WARN (advisory) | comma-joined non-zero counters, e.g. `input_errors=3` |
 
 ### `interface_traffic` (both, advisory)
 
@@ -184,6 +202,17 @@ which.
 The baseline data arrives with its interfaces already renamed — see
 `engine._aligned_baseline_data()`.
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| service scope with an L3 link whose L2 side has no transit interface | *(no finding)* | — | — |
+| no transit interface at all | `SKIP` | SKIP | `netranzitni rozhrani` |
+| no baseline for the interface, `require_nonzero` and pps == 0 | `broken` | WARN (advisory) | `0 pps` |
+| no baseline for the interface, otherwise | `ok` | PASS | measured pps |
+| baseline pps == 0, subject pps == 0 | `ok` | PASS | `0 pps` |
+| baseline pps == 0, subject pps > 0 | `ok` | PASS | measured pps |
+| baseline pps > 0, drop past `tolerance_percent` | `broken` | WARN (advisory) | measured pps |
+| baseline pps > 0, within tolerance (including any growth) | `ok` | PASS | measured pps |
+
 ### `traffic_ceased` (compare, advisory, **disabled by default**)
 
 Inverted logic: it verifies that traffic on the **old** interface dropped to zero after the
@@ -193,6 +222,15 @@ capture (the old box after the migration) — in the CLI that is a normal `captu
 
 It returns `SKIP` (not WARN) when the interface is missing from the baseline, or when the
 baseline carried no traffic at all — in which case ceasing cannot be verified.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| service scope with an L3 link whose L2 side has no transit interface | *(no finding)* | — | — |
+| no transit interface at all | `SKIP` | SKIP | `netranzitni rozhrani` |
+| interface missing from the baseline entirely | `SKIP` | SKIP | `bez baseline` |
+| baseline had zero traffic in both directions | `SKIP` | SKIP | `bez provozu v baseline` |
+| residual (max of both directions) > `max_residual_pps` | `broken` | WARN (advisory) | residual pps |
+| residual within the threshold | `ok` | PASS | residual pps |
 
 ---
 
@@ -443,6 +481,13 @@ Shared helpers:
 - otherwise **one `Finding` per ARP entry**: message `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` when the MAC is missing).
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no IPv4 address configured | *(no finding)* | — | — |
+| IPv4 configured, no ARP entry with an `ip` at all | `broken` | WARN (advisory) | `zadny zaznam` |
+| entry MAC is `00:00:00:00:00:00` (unresolved) | `broken` | WARN (advisory) | `incomplete -> <ip>` |
+| entry resolved (any other MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
+
 ### `nd_present` (state, advisory)
 
 Mirrors `arp_present` for IPv6:
@@ -458,6 +503,13 @@ Mirrors `arp_present` for IPv6:
 - otherwise **one `Finding` per ND entry**: message `ND zaznam <ip>`, `label="ND"`,
   `family=6`, `value` = `<mac> -> <ip>`; `subject` additionally carries `state` (ND, unlike
   ARP, has an entry state).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no IPv6 address configured | *(no finding)* | — | — |
+| IPv6 configured, no usable entry (all filtered or empty) | `broken` | WARN (advisory) | `zadny zaznam` |
+| entry state `incomplete` or `unreachable` (unresolved) | `broken` | WARN (advisory) | `<state> -> <ip>` |
+| entry resolved (any other state) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `ping_reachability` (state, advisory)
 
@@ -488,6 +540,17 @@ could not be measured), then always `  <target>` — e.g. `5/5  2.1 ms  10.1.1.1
 it is `  <target> neodpovedel`. `details` carries `resolved_from` (`arp` | `nd` |
 `subnet-fallback`) and `address` (`owning_prefix()`), so the result shows which configured
 range the target belongs to and whether it came from ARP/ND or was derived from the subnet.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| `ping_skipped` set, profile known | `SKIP` | SKIP | `mimo profil (<profile>)` |
+| `ping_skipped` set, profile unknown | `SKIP` | SKIP | `mimo profil` |
+| no probes and no oversized subnet | `SKIP` | SKIP | `bez cile` |
+| local subnet above the P2P threshold with no target in it | `SKIP` | SKIP | `<net>  bez cile (subnet > /<threshold>)` |
+| probe with `sent == 0` | `SKIP` | SKIP | `<target> neodeslan` |
+| probe with `received > 0` | `ok` | PASS | `<received>/<sent>[  <rtt> ms]  <target>` |
+| probe with `sent > 0` and `received == 0` | `broken` | WARN (advisory) | `<received>/<sent>  <target> neodpovedel` |
+| probe with an unrecognised `family` | `SKIP` | SKIP | `bez rodiny` |
 
 ---
 
@@ -744,6 +807,19 @@ Mutant kill (2026-09-03, verified by running it): flipping `Outcome.RECOVERED` �
 `Outcome.OK` in the "Up now / not Up in baseline" branch makes
 `test_baseline_state_down_before_up_now_is_recovered` fail.
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| interface missing from the adjacency output | `broken` | FAIL | `chybi v outputu` |
+| neighbor (`system-name`) row, baseline present and name differs | `degraded` | WARN | measured name (or `chybi v outputu` if `None`) |
+| neighbor row, baseline present and name matches | `ok` | PASS | measured name |
+| neighbor row, no baseline (or no baseline row for the interface) | `info` | INFO | measured name |
+| `adjacency-state` row, state ≠ `Up` | `broken` | FAIL | measured state |
+| `adjacency-state` row, state `Up` now, baseline state present and ≠ `Up` | `recovered` | RECV | `Up` |
+| `adjacency-state` row, state `Up` now, baseline `Up` or absent | `ok` | PASS | `Up` |
+| IPv4/IPv6 neighbor address row, baseline present and address differs | `degraded` | WARN | measured address (or `chybi v outputu` if `None`) |
+| address row, unchanged (or no baseline), address present | `ok` | PASS | measured address |
+| address row, unchanged (or no baseline), address `None` | `broken` | FAIL | `chybi v outputu` |
+
 ### `isis_interface_info` (transit + loopback, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **one check for both
@@ -764,20 +840,29 @@ Mutant kill (2026-08-26, verified by running it): `ok = passive if loopback else
 passive` → `ok = passive` makes both `test_transit_non_passive_level2_is_pass` and
 `test_transit_passive_level2_is_fail` fail (plus the end-to-end regression).
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| interface missing from the ISIS interface output | `broken` | FAIL | `chybi v outputu` |
+| level 2 present in `levels` | `ok` | PASS | `nakonfigurovan` |
+| level 2 missing from `levels` (no passive row emitted for this interface) | `broken` | FAIL | `chybi v outputu` |
+| level 1 present in `levels` | `broken` | FAIL | `nakonfigurovan` |
+| level 2 present, passive flag matches the role (loopback: passive; transit: not passive) | `ok` | PASS | `Passive` (loopback) / `bez Passive` (transit) |
+| level 2 present, passive flag mismatches the role | `broken` | FAIL | `bez Passive` (loopback) / `Passive` (transit) |
+
 ### `ldp_neighbor_state` (transit, critical) — always expected
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `ldp_neighbor`. **No gate
 on intent** — LDP on a transit Core interface is always expected (2026-08-26 decision), so a
 missing neighbor is a straight FAIL, never quiet nothing.
 
-| situation | Outcome | value |
-|---|---|---|
-| neighbor missing from output | FAIL | `Down` |
-| `uptime_seconds > 0` | PASS | `Up for <uptime>` |
-| `uptime_seconds` missing or `0` | FAIL | `Down` |
-| neighbor address is `None`, unchanged vs. baseline (or no baseline) | FAIL | `chybi v outputu` (message `adresa souseda chybi`) |
-| neighbor address present, unchanged vs. baseline (or no baseline) | INFO | address |
-| neighbor address changed vs. baseline (present or `None`) | WARN | address |
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| neighbor missing from output | `broken` | FAIL | `Down` |
+| `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
+| `uptime_seconds` missing or `0` | `broken` | FAIL | `Down` |
+| neighbor address is `None`, unchanged vs. baseline (or no baseline) | `broken` | FAIL | `chybi v outputu` (message `adresa souseda chybi`) |
+| neighbor address present, unchanged vs. baseline (or no baseline) | `info` | INFO | address |
+| neighbor address changed vs. baseline (present or `None`) | `degraded` | WARN | address |
 
 The collector drops `lo0.*` records for LDP already at parse time (LDP on the loopback has
 no meaning for this check) — see `collectors.md`.
@@ -800,6 +885,16 @@ Mutant kill (2026-08-26, verified by running it): deleting the `if "pim" not in 
 makes `test_pim_neighbor_without_intent_is_silent_not_skip` fail (plus the end-to-end
 regression).
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| `"pim"` not in `scope.selectors.protocols` | *(no finding)* | — | — |
+| neighbor missing from output | `broken` | FAIL | `Down` |
+| `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
+| `uptime_seconds` missing or `0` | `broken` | FAIL | `Down` |
+| neighbor address is `None`, unchanged vs. baseline (or no baseline) | `broken` | FAIL | `chybi v outputu` |
+| neighbor address present, unchanged vs. baseline (or no baseline) | `info` | INFO | address |
+| neighbor address changed vs. baseline (present or `None`) | `degraded` | WARN | address |
+
 ### `mpls_interface_state` (transit, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `mpls_interface`.
@@ -808,6 +903,13 @@ PASS if state is `Up`, FAIL if `Dn` or anything else, FAIL `chybi v outputu` on 
 **With a baseline, `Up` now and the baseline state was something else (not `Up`) is `RECV`**
 (`recovered`), not a silent PASS — message adds `(v baseline <state>)`; `Up` now matching a
 baseline of `Up`, or no baseline at all, stays `ok`.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| interface missing from the MPLS output | `broken` | FAIL | `chybi v outputu` |
+| state `Up`, baseline state was something else (not `Up`) | `recovered` | RECV | `Up` |
+| state `Up`, baseline `Up` or no baseline | `ok` | PASS | `Up` |
+| state anything else (e.g. `Dn`, `unknown`) | `broken` | FAIL | `Down` |
 
 ### `bfd_transit_state` (transit, critical) — always expected
 
@@ -819,12 +921,12 @@ section above).
 Sessions are matched by **interface**, not by peer address — `by_interface` is built from
 `data.get("interface")` on every BFD session in the subject.
 
-| situation | Outcome | value |
-|---|---|---|
-| no session on the interface | FAIL | `Down` |
-| session exists, state `Up`, baseline for that peer was also `Up` or absent | PASS | `Up` (raw state, same vocabulary as `bfd.py:113`) |
-| session exists, state `Up`, baseline for that peer was something else | **RECV** (`recovered`; message adds `(v baseline <state>)`) | `Up` |
-| session exists, other state | FAIL | the measured state |
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no session on the interface | `broken` | FAIL | `Down` |
+| session exists, state `Up`, baseline for that peer was also `Up` or absent | `ok` | PASS | `Up` (raw state, same vocabulary as `bfd.py:113`) |
+| session exists, state `Up`, baseline for that peer was something else | `recovered` (message adds `(v baseline <state>)`) | RECV | `Up` |
+| session exists, other state | `broken` | FAIL | the measured state |
 
 Multiple sessions on the same interface get multiple rows (sorted by peer).
 
@@ -850,6 +952,12 @@ from a measured "not set") → `WARN | IS-IS overload bit : bez dat` (message `c
 collectoru isis_overview`); `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (the
 router avoids transit traffic), else `PASS | IS-IS overload bit : nenastaven`. The baseline
 adds nothing (`mode = STATE`).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| `isis_overview` area empty entirely (collector reported nothing) | `degraded` | WARN | `bez dat` |
+| `overload_enabled` truthy | `degraded` | WARN | `nastaven` |
+| `overload_enabled` falsy (with data present) | `ok` | PASS | `nenastaven` |
 
 Mutant kill (2026-08-26, verified by running it): deleting the `if self.service_subtype ==
 "loopback"` condition in `Scope.select()` (for `isis_overview`) makes
@@ -897,6 +1005,12 @@ empty").
 Mutant kill (2026-09-03, verified by running it): `Outcome.DEGRADED` → `Outcome.OK` in the
 "set differs" branch makes `test_igmp_report_changed_set_is_warn` fail.
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no groups on the service's interfaces | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| baseline had groups, current set differs | `degraded` | WARN | current `(S, G)` set, joined |
+| current set matches baseline (or no baseline, or baseline had none) | `ok` | PASS | current `(S, G)` set, joined |
+
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
 
 Same two subtypes. Requires `igmp_group`, `multicast_route`.
@@ -931,6 +1045,22 @@ Mutant kill (2026-09-03, verified by running each):
   `test_stream_rows_skip_when_rate_missing` (and the resulting `TypeError` in
   `int(None)` also takes down `test_forwarding_missing_rate_is_skip_not_failure` and
   `test_core_missing_rate_is_skip`).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no IGMP groups on the scope | `SKIP` | SKIP | `bez IGMP reportu` |
+| summary row: at least one (S,G) failed | `broken` | FAIL | `<failed>/<total> S,G nefunguje` |
+| summary row: none failed | `ok` | PASS | `<total> S,G` |
+| pair has no matching route in the table at all | `broken` | FAIL | `S,G neni v multicast tabulce` |
+| per matched route, service interface in `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
+| per matched route, service interface not in `downstream_interfaces` | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
+| per matched route, upstream empty | `broken` | FAIL | upstream name or `-` |
+| per matched route, upstream present with the wrong role prefix | `broken` | FAIL | upstream name |
+| per matched route, upstream present with the expected role prefix | `ok` | PASS | upstream name |
+| per matched route, `forwarding_rate_pps` is `None` | `SKIP` | SKIP | `statistiky nedostupne` |
+| per matched route, `pps > 0` | `ok` | PASS | `<pps> pps` |
+| per matched route, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
+| per matched route, route uptime (always) | `info` | INFO | formatted uptime or `-` |
 
 ### `core_multicast_forwarding` (Core/loopback, both, critical)
 
@@ -967,6 +1097,24 @@ Mutant kill (2026-09-03, verified by running each):
   `test_core_upstream_must_be_one_of_via` (an ECMP scenario with two `via`, only one of
   which matches).
 
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no inet.2 statics in the scope's selectors | *(no finding)* | — | — |
+| summary row: at least one inet.2 prefix has no stream | `broken` | FAIL | `<k>/<m> bez streamu` |
+| summary row: every inet.2 prefix has a stream | `ok` | PASS | `<m> inet.2 prefixu` |
+| prefix with no assigned route at all | `broken` | FAIL | `Neexistuje S,G pro <prefix>` |
+| prefix with assigned route(s), baseline S,G set differs | `degraded` | WARN | `Existuje S,G pro <prefix>` |
+| prefix with assigned route(s), set unchanged (or no baseline) | `ok` | PASS | `Existuje S,G pro <prefix>` |
+| per route, inet.2 route not in the table at all | `SKIP` | SKIP | `routa neni v tabulce` |
+| per route, upstream not among the inet.2 route's `via` | `broken` | FAIL | upstream name or `-` |
+| per route, upstream is one of the `via` values | `ok` | PASS | upstream name |
+| per route, `downstream_interfaces` empty | `broken` | FAIL | `Zadne downstream interfacy` |
+| per route, `downstream_interfaces` non-empty | `ok` | PASS | comma-joined list |
+| per route, `forwarding_rate_pps` is `None` | `SKIP` | SKIP | `statistiky nedostupne` |
+| per route, `pps > 0` | `ok` | PASS | `<pps> pps` |
+| per route, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
+| per route, route uptime (always) | `info` | INFO | formatted uptime or `-` |
+
 ### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
 
 `service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Requires `igmp_group`,
@@ -989,6 +1137,16 @@ Mutant kill (2026-09-03, verified by running it): `_tunnel_row`: replacing the
 `was_pe != pe` comparison with `was_tunnel != tunnel` (the full string instead of the
 sender PE) makes `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not` fail
 (a re-signaled tunnel with the same PE address would get a false `DEGRADED`).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no IGMP groups on the scope | `SKIP` | SKIP | `bez IGMP reportu` |
+| instance missing from the `mvpn_instance` listing | `broken` | FAIL | `instance neni v mvpn vypisu` |
+| pair has no matching c-multicast entry | `broken` | FAIL | `chybi c-multicast zaznam` |
+| pair has a matching c-multicast entry | `ok` | PASS | `<source_prefix>:<group_prefix>` |
+| tunnel row, `sender_pe` empty/falsy | `broken` | FAIL | tunnel id or `-` |
+| tunnel row, `sender_pe` present, baseline sender PE differs | `degraded` | WARN | tunnel id |
+| tunnel row, `sender_pe` present, baseline sender PE matches (or no baseline) | `ok` | PASS | tunnel id |
 
 ---
 

@@ -140,6 +140,14 @@ report umí ukázat, který z obou je rozbitý, ne jen že „rozhraní není v 
 `<jméno>: admin_status <stav>` resp. `<jméno>: oper_status <stav>`, hodnota ve sloupci je
 stav s velkým první písmenem (`Up`, `Down`).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| pro scope nejsou žádná data o rozhraních | `SKIP` | SKIP | `bez dat` |
+| `admin_status == "up"` | `ok` | PASS | `Up` |
+| `admin_status != "up"` (chybí → `"unknown"`) | `broken` | FAIL | stav s velkým písmenem, např. `Down`, `Unknown` |
+| `oper_status == "up"` | `ok` | PASS | `Up` |
+| `oper_status != "up"` (chybí → `"unknown"`) | `broken` | FAIL | stav s velkým písmenem |
+
 ### `interface_errors` (state, advisory)
 
 Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Běží jen na
@@ -158,6 +166,16 @@ Fyzické tranzitní rozhraní, jehož fakta neobsahují **žádný** ze tří kl
 `degraded` (ne tiché `ok`) — rozhraní error countery prostě nevrací, což není totéž tvrzení
 jako „změřeno, nula chyb": zpráva `<jméno>: chybove countery nebyly zmereny (rozhrani
 nevraci error countery)`, `value` = `nezmereno`.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| service scope s L3 linkem, jehož L2 strana nemá tranzitní rozhraní | `INFO` | INFO | `mereno na L2 (<peers>) - viz blok/bloky nize` |
+| service scope s L1 (layer1) rodičem, který tranzitní rozhraní pohlcuje | *(žádný nález)* | — | — |
+| scope má tranzitní rozhraní, ale jen logické unity, žádné fyzické | `SKIP` | SKIP | `jen unity` |
+| žádné tranzitní rozhraní vůbec | `SKIP` | SKIP | `netranzitni rozhrani` |
+| fyzické tranzitní rozhraní, žádný ze tří klíčů counterů není přítomen | `degraded` | WARN | `nezmereno` |
+| fyzické tranzitní rozhraní, součet counterů == 0 | `ok` | PASS | `bez chyb` |
+| fyzické tranzitní rozhraní, součet counterů > 0 | `broken` | WARN (advisory) | čárkou spojené nenulové countery, např. `input_errors=3` |
 
 ### `interface_traffic` (both, advisory)
 
@@ -180,6 +198,17 @@ sloupci `ZMENA` — a nešlo by poznat, které rozhraní je které.
 
 Baseline data má už přejmenovaná rozhraní — viz `engine._aligned_baseline_data()`.
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| service scope s L3 linkem, jehož L2 strana nemá tranzitní rozhraní | *(žádný nález)* | — | — |
+| žádné tranzitní rozhraní vůbec | `SKIP` | SKIP | `netranzitni rozhrani` |
+| bez baseline pro rozhraní, `require_nonzero` a pps == 0 | `broken` | WARN (advisory) | `0 pps` |
+| bez baseline pro rozhraní, jinak | `ok` | PASS | naměřené pps |
+| baseline pps == 0, subjekt pps == 0 | `ok` | PASS | `0 pps` |
+| baseline pps == 0, subjekt pps > 0 | `ok` | PASS | naměřené pps |
+| baseline pps > 0, pokles pod `tolerance_percent` | `broken` | WARN (advisory) | naměřené pps |
+| baseline pps > 0, v toleranci (i nárůst) | `ok` | PASS | naměřené pps |
+
 ### `traffic_ceased` (compare, advisory, **výchozí stav: vypnuto**)
 
 Obrácená logika: ověřuje, že na **starém** rozhraní provoz po migraci klesl k nule. Chytá
@@ -188,6 +217,15 @@ v CLI je to normální `capture` + `evaluate`, žádný speciální režim.
 
 `SKIP` (ne WARN) dostane, když rozhraní v baseline chybí nebo když v baseline nebyl žádný
 provoz — utichnutí se pak nedá ověřit.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| service scope s L3 linkem, jehož L2 strana nemá tranzitní rozhraní | *(žádný nález)* | — | — |
+| žádné tranzitní rozhraní vůbec | `SKIP` | SKIP | `netranzitni rozhrani` |
+| rozhraní úplně chybí v baseline | `SKIP` | SKIP | `bez baseline` |
+| baseline měla nulový provoz na obou směrech | `SKIP` | SKIP | `bez provozu v baseline` |
+| reziduál (max obou směrů) > `max_residual_pps` | `broken` | WARN (advisory) | reziduál v pps |
+| reziduál v mezích prahu | `ok` | PASS | reziduál v pps |
 
 ---
 
@@ -445,6 +483,13 @@ Sdílené pomocné funkce:
 - jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` když MAC chybí).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| žádná IPv4 adresa nakonfigurovaná | *(žádný nález)* | — | — |
+| IPv4 nakonfigurováno, žádný ARP záznam s `ip` | `broken` | WARN (advisory) | `zadny zaznam` |
+| MAC záznamu je `00:00:00:00:00:00` (nerozresolvovaný) | `broken` | WARN (advisory) | `incomplete -> <ip>` |
+| záznam resolvovaný (jakýkoli jiný MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
+
 ### `nd_present` (state, advisory)
 
 Zrcadlí `arp_present` pro IPv6:
@@ -460,6 +505,13 @@ Zrcadlí `arp_present` pro IPv6:
 - jinak **jeden `Finding` na ND záznam**: zpráva `ND zaznam <ip>`, `label="ND"`, `family=6`,
   `value` = `<mac> -> <ip>`, `subject` navíc nese `state` (ND má na rozdíl od ARP stav
   záznamu).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| žádná IPv6 adresa nakonfigurovaná | *(žádný nález)* | — | — |
+| IPv6 nakonfigurováno, žádný použitelný záznam (vše vyfiltrováno nebo prázdné) | `broken` | WARN (advisory) | `zadny zaznam` |
+| stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný) | `broken` | WARN (advisory) | `<state> -> <ip>` |
+| záznam resolvovaný (jakýkoli jiný stav) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `ping_reachability` (state, advisory)
 
@@ -490,6 +542,17 @@ nepodařilo změřit RTT), pak vždy `  <cil>` — např. `5/5  2.1 ms  10.1.1.1
 `  <cil> neodpovedel`. `details` nese `resolved_from` (`arp` | `nd` | `subnet-fallback`) a
 `address` (`owning_prefix()`), takže je z výsledku vidět, který nakonfigurovaný rozsah cíl
 zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| `ping_skipped` nastaveno, profil znám | `SKIP` | SKIP | `mimo profil (<profile>)` |
+| `ping_skipped` nastaveno, profil neznám | `SKIP` | SKIP | `mimo profil` |
+| žádné probe a žádný předimenzovaný subnet | `SKIP` | SKIP | `bez cile` |
+| lokální subnet nad P2P prahem bez jediného cíle | `SKIP` | SKIP | `<sit>  bez cile (subnet > /<threshold>)` |
+| probe se `sent == 0` | `SKIP` | SKIP | `<cil> neodeslan` |
+| probe s `received > 0` | `ok` | PASS | `<received>/<sent>[  <rtt> ms]  <cil>` |
+| probe se `sent > 0` a `received == 0` | `broken` | WARN (advisory) | `<received>/<sent>  <cil> neodpovedel` |
+| probe s nerozpoznanou `family` | `SKIP` | SKIP | `bez rodiny` |
 
 ---
 
@@ -736,6 +799,19 @@ Mutant kill (2026-09-03, ověřeno spuštěním): prohození `Outcome.RECOVERED`
 ve větvi „Up teď / v baseline ne-Up" nechá padnout
 `test_baseline_state_down_before_up_now_is_recovered`.
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| rozhraní chybí v adjacency výpisu | `broken` | FAIL | `chybi v outputu` |
+| řádek soused (`system-name`), baseline je a jméno se liší | `degraded` | WARN | naměřené jméno (nebo `chybi v outputu`, je-li `None`) |
+| řádek soused, baseline je a jméno sedí | `ok` | PASS | naměřené jméno |
+| řádek soused, bez baseline (nebo bez baseline řádku pro rozhraní) | `info` | INFO | naměřené jméno |
+| řádek `adjacency-state`, stav ≠ `Up` | `broken` | FAIL | naměřený stav |
+| řádek `adjacency-state`, stav `Up` teď, baseline stav je a ≠ `Up` | `recovered` | RECV | `Up` |
+| řádek `adjacency-state`, stav `Up` teď, baseline `Up` nebo bez baseline | `ok` | PASS | `Up` |
+| řádek adresy IPv4/IPv6 souseda, baseline je a adresa se liší | `degraded` | WARN | naměřená adresa (nebo `chybi v outputu`, je-li `None`) |
+| řádek adresy, beze změny (nebo bez baseline), adresa je | `ok` | PASS | naměřená adresa |
+| řádek adresy, beze změny (nebo bez baseline), adresa `None` | `broken` | FAIL | `chybi v outputu` |
+
 ### `isis_interface_info` (transit + loopback, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **jeden check pro
@@ -755,20 +831,29 @@ Mutant kill (2026-08-26, ověřeno spuštěním): `ok = passive if loopback else
 `ok = passive` nechá padnout `test_transit_non_passive_level2_is_pass` i
 `test_transit_passive_level2_is_fail` (a taky end-to-end regresi).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| rozhraní chybí v ISIS interface výpisu | `broken` | FAIL | `chybi v outputu` |
+| level 2 přítomen v `levels` | `ok` | PASS | `nakonfigurovan` |
+| level 2 chybí v `levels` (passive řádek se pro rozhraní neemituje) | `broken` | FAIL | `chybi v outputu` |
+| level 1 přítomen v `levels` | `broken` | FAIL | `nakonfigurovan` |
+| level 2 je, passive flag sedí na roli (loopback: passive; transit: ne passive) | `ok` | PASS | `Passive` (loopback) / `bez Passive` (transit) |
+| level 2 je, passive flag na roli nesedí | `broken` | FAIL | `bez Passive` (loopback) / `Passive` (transit) |
+
 ### `ldp_neighbor_state` (transit, critical) — očekávaný vždy
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `ldp_neighbor`. **Žádný
 gate na záměr** — LDP na tranzitním Core rozhraní je očekávaný vždy (rozhodnutí 2026-08-26),
 takže chybějící soused je rovnou FAIL, ne tiché nic.
 
-| situace | Outcome | value |
-|---|---|---|
-| soused ve výpisu není | FAIL | `Down` |
-| `uptime_seconds > 0` | PASS | `Up for <uptime>` |
-| `uptime_seconds` chybí nebo `0` | FAIL | `Down` |
-| adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | FAIL | `chybi v outputu` (zpráva `adresa souseda chybi`) |
-| adresa souseda je, beze změny proti baseline (nebo bez baseline) | INFO | adresa |
-| adresa souseda se změnila proti baseline (je nebo `None`) | WARN | adresa |
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| soused ve výpisu není | `broken` | FAIL | `Down` |
+| `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
+| `uptime_seconds` chybí nebo `0` | `broken` | FAIL | `Down` |
+| adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | `broken` | FAIL | `chybi v outputu` (zpráva `adresa souseda chybi`) |
+| adresa souseda je, beze změny proti baseline (nebo bez baseline) | `info` | INFO | adresa |
+| adresa souseda se změnila proti baseline (je nebo `None`) | `degraded` | WARN | adresa |
 
 Collector u LDP zahazuje záznamy pro `lo0.*` už při parsování (LDP na loopbacku nemá
 smysl měřit tímhle checkem) — viz `collectors.md`.
@@ -789,6 +874,16 @@ chybějící soused je FAIL `Down`, jinak PASS/FAIL podle `uptime_seconds`, adre
 Mutant kill (2026-08-26, ověřeno spuštěním): smazání gate `if "pim" not in ...` nechá padnout
 `test_pim_neighbor_without_intent_is_silent_not_skip` (a end-to-end regresi).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| `"pim"` není v `scope.selectors.protocols` | *(žádný nález)* | — | — |
+| soused ve výpisu není | `broken` | FAIL | `Down` |
+| `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
+| `uptime_seconds` chybí nebo `0` | `broken` | FAIL | `Down` |
+| adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | `broken` | FAIL | `chybi v outputu` |
+| adresa souseda je, beze změny proti baseline (nebo bez baseline) | `info` | INFO | adresa |
+| adresa souseda se změnila proti baseline (je nebo `None`) | `degraded` | WARN | adresa |
+
 ### `mpls_interface_state` (transit, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `mpls_interface`.
@@ -797,6 +892,13 @@ PASS pokud stav `Up`, FAIL pokud `Dn` nebo jiný, FAIL `chybi v outputu` při ab
 **S baseline: `Up` teď a baseline stav byl jiný (ne `Up`) je `RECV`** (`recovered`), ne tiché
 PASS — zpráva přidává `(v baseline <state>)`; `Up` teď proti baseline `Up`, nebo bez baseline
 vůbec, zůstává `ok`.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| rozhraní chybí v MPLS výpisu | `broken` | FAIL | `chybi v outputu` |
+| stav `Up`, baseline stav byl jiný (ne `Up`) | `recovered` | RECV | `Up` |
+| stav `Up`, baseline `Up` nebo bez baseline | `ok` | PASS | `Up` |
+| stav cokoli jiného (např. `Dn`, `unknown`) | `broken` | FAIL | `Down` |
 
 ### `bfd_transit_state` (transit, critical) — očekávaná vždy
 
@@ -807,12 +909,12 @@ se navíc na žádném Core scope vůbec nespustí (viz gate v sekci `bfd.py` v�
 Session se páruje podle **rozhraní**, ne podle peer adresy — `by_interface` je postavené
 z `data.get("interface")` každé BFD session v subjektu.
 
-| situace | Outcome | value |
-|---|---|---|
-| na rozhraní není žádná session | FAIL | `Down` |
-| session existuje, stav `Up`, baseline daného peera byl taky `Up` nebo bez baseline | PASS | `Up` (syrový stav, stejný slovník jako `bfd.py:113`) |
-| session existuje, stav `Up`, baseline daného peera byl jiný | **RECV** (`recovered`; zpráva přidává `(v baseline <state>)`) | `Up` |
-| session existuje, jiný stav | FAIL | naměřený stav |
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| na rozhraní není žádná session | `broken` | FAIL | `Down` |
+| session existuje, stav `Up`, baseline daného peera byl taky `Up` nebo bez baseline | `ok` | PASS | `Up` (syrový stav, stejný slovník jako `bfd.py:113`) |
+| session existuje, stav `Up`, baseline daného peera byl jiný | `recovered` (zpráva přidává `(v baseline <state>)`) | RECV | `Up` |
+| session existuje, jiný stav | `broken` | FAIL | naměřený stav |
 
 Víc session na stejném rozhraní dostane víc řádků (setříděných podle peera).
 
@@ -837,6 +939,12 @@ naměřené „nenastaven") → `WARN | IS-IS overload bit : bez dat` (zpráva `
 collectoru isis_overview`); `overload_enabled` → `WARN | IS-IS overload bit : nastaven`
 (router se vyhýbá tranzitnímu provozu), jinak `PASS | IS-IS overload bit : nenastaven`.
 Baseline nic nepřidává (`mode = STATE`).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| oblast `isis_overview` úplně prázdná (collector nic nevrátil) | `degraded` | WARN | `bez dat` |
+| `overload_enabled` truthy | `degraded` | WARN | `nastaven` |
+| `overload_enabled` falsy (data jsou) | `ok` | PASS | `nenastaven` |
 
 Mutant kill (2026-08-26, ověřeno spuštěním): smazání podmínky `if self.service_subtype ==
 "loopback"` v `Scope.select()` (u `isis_overview`) nechá padnout
@@ -882,6 +990,12 @@ prázdno").
 Mutant kill (2026-09-03, ověřeno spuštěním): `Outcome.DEGRADED` → `Outcome.OK` ve
 větvi „množina se liší" nechá padnout `test_igmp_report_changed_set_is_warn`.
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| na rozhraních služby žádné skupiny | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| baseline měla skupiny, aktuální množina se liší | `degraded` | WARN | aktuální množina `(S, G)`, spojená |
+| aktuální množina sedí na baseline (nebo bez baseline, nebo baseline žádnou neměla) | `ok` | PASS | aktuální množina `(S, G)`, spojená |
+
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
 
 Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`.
@@ -917,6 +1031,22 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
   s sebou i `test_forwarding_missing_rate_is_skip_not_failure` a
   `test_core_missing_rate_is_skip`).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| bez IGMP skupin na scopu | `SKIP` | SKIP | `bez IGMP reportu` |
+| souhrnný řádek: aspoň jedno S,G selhalo | `broken` | FAIL | `<failed>/<total> S,G nefunguje` |
+| souhrnný řádek: žádné neselhalo | `ok` | PASS | `<total> S,G` |
+| pár nemá v tabulce žádnou odpovídající routu | `broken` | FAIL | `S,G neni v multicast tabulce` |
+| per spárovaná routa, servisní rozhraní je v `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
+| per spárovaná routa, servisní rozhraní v `downstream_interfaces` není | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
+| per spárovaná routa, upstream prázdný | `broken` | FAIL | jméno upstreamu nebo `-` |
+| per spárovaná routa, upstream je, ale se špatným prefixem role | `broken` | FAIL | jméno upstreamu |
+| per spárovaná routa, upstream odpovídá očekávané roli | `ok` | PASS | jméno upstreamu |
+| per spárovaná routa, `forwarding_rate_pps` je `None` | `SKIP` | SKIP | `statistiky nedostupne` |
+| per spárovaná routa, `pps > 0` | `ok` | PASS | `<pps> pps` |
+| per spárovaná routa, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
+| per spárovaná routa, route uptime (vždy) | `info` | INFO | formátovaný uptime nebo `-` |
+
 ### `core_multicast_forwarding` (Core/loopback, both, critical)
 
 `service_types={"Core"}`, `service_subtypes={"loopback"}`. Vyžaduje `multicast_route`,
@@ -950,6 +1080,24 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
   `test_core_upstream_must_be_one_of_via` (ECMP scénář se dvěma `via`, kde jen jeden
   odpovídá).
 
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| žádné inet.2 statiky v selektorech scopu | *(žádný nález)* | — | — |
+| souhrnný řádek: aspoň jeden inet.2 prefix bez streamu | `broken` | FAIL | `<k>/<m> bez streamu` |
+| souhrnný řádek: každý inet.2 prefix má stream | `ok` | PASS | `<m> inet.2 prefixu` |
+| prefix bez přiřazené routy vůbec | `broken` | FAIL | `Neexistuje S,G pro <prefix>` |
+| prefix s přiřazenou routou/routami, množina S,G se liší od baseline | `degraded` | WARN | `Existuje S,G pro <prefix>` |
+| prefix s přiřazenou routou/routami, množina beze změny (nebo bez baseline) | `ok` | PASS | `Existuje S,G pro <prefix>` |
+| per routa, inet.2 routa vůbec není v tabulce | `SKIP` | SKIP | `routa neni v tabulce` |
+| per routa, upstream není mezi `via` inet.2 routy | `broken` | FAIL | jméno upstreamu nebo `-` |
+| per routa, upstream je jednou z hodnot `via` | `ok` | PASS | jméno upstreamu |
+| per routa, `downstream_interfaces` prázdné | `broken` | FAIL | `Zadne downstream interfacy` |
+| per routa, `downstream_interfaces` neprázdné | `ok` | PASS | seznam spojený čárkou |
+| per routa, `forwarding_rate_pps` je `None` | `SKIP` | SKIP | `statistiky nedostupne` |
+| per routa, `pps > 0` | `ok` | PASS | `<pps> pps` |
+| per routa, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
+| per routa, route uptime (vždy) | `info` | INFO | formátovaný uptime nebo `-` |
+
 ### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
 
 `service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Vyžaduje `igmp_group`,
@@ -972,6 +1120,16 @@ Mutant kill (2026-09-03, ověřeno spuštěním): `_tunnel_row`: porovnání `wa
 nahrazeno `was_tunnel != tunnel` (celý řetězec místo sender PE) nechá padnout
 `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not` (re-signalizovaný
 tunnel se stejnou PE adresou by dostal falešné `DEGRADED`).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| bez IGMP skupin na scopu | `SKIP` | SKIP | `bez IGMP reportu` |
+| instance chybí ve výpisu `mvpn_instance` | `broken` | FAIL | `instance neni v mvpn vypisu` |
+| pár nemá odpovídající c-multicast záznam | `broken` | FAIL | `chybi c-multicast zaznam` |
+| pár má odpovídající c-multicast záznam | `ok` | PASS | `<source_prefix>:<group_prefix>` |
+| řádek tunelu, `sender_pe` prázdný/falsy | `broken` | FAIL | tunnel id nebo `-` |
+| řádek tunelu, `sender_pe` je, baseline sender PE se liší | `degraded` | WARN | tunnel id |
+| řádek tunelu, `sender_pe` je, baseline sender PE sedí (nebo bez baseline) | `ok` | PASS | tunnel id |
 
 ---
 
