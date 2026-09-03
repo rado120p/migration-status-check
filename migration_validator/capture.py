@@ -118,6 +118,7 @@ def capture_device(
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
     on_progress: ProgressCallback | None = None,
+    profile_name: str | None = None,
 ) -> Snapshot:
     started_at = now or _timestamp()
     platform = detect_platform(device)
@@ -158,7 +159,7 @@ def capture_device(
             # Marker misto ticha: evaluate z nej udela SKIP s duvodem,
             # jinak by odfiltrovany ping vypadal jako "bez cile".
             ping_skipped = [
-                {"scope_id": s.id, "reason": "mimo profil"}
+                {"scope_id": s.id, "reason": "mimo profil", "profile": profile_name}
                 for s in scopes
                 if s.kind == "service" and s.service_type not in allowed
             ]

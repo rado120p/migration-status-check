@@ -24,6 +24,9 @@ from migration_validator.probes.ping import (
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 
+ZERO_MAC = "00:00:00:00:00:00"
+UNRESOLVED_ND_STATES = frozenset({"incomplete", "unreachable"})
+
 
 def owning_prefix(address: str, prefixes: list[str]) -> str | None:
     """Ktery nakonfigurovany rozsah tuhle adresu obsahuje.
@@ -105,22 +108,44 @@ class ArpPresentCheck(Check):
                 )
             ]
 
-        return [
-            Finding(
-                Outcome.OK,
-                f"ARP zaznam {entry['ip']}",
-                label="ARP",
-                family=4,
-                value=_entry_value(entry),
-                subject={
-                    "ip": entry["ip"],
-                    "mac": entry.get("mac"),
-                    "learned_via": entry.get("learned_via"),
-                },
-                details={"address": owning_prefix(str(entry["ip"]), prefixes)},
+        findings: list[Finding] = []
+        for entry in entries:
+            ip = entry["ip"]
+            if entry.get("mac") == ZERO_MAC:
+                # Incomplete ARP zaznam neni "zadny zaznam" - je to konkretni,
+                # ohlaseny stav, ktery report musi ukazat jako FAIL, ne mlcet.
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"ARP zaznam {ip} neni resolved (incomplete)",
+                        label="ARP",
+                        family=4,
+                        value=f"incomplete -> {ip}",
+                        subject={
+                            "ip": ip,
+                            "mac": entry.get("mac"),
+                            "learned_via": entry.get("learned_via"),
+                        },
+                        details={"address": owning_prefix(str(ip), prefixes)},
+                    )
+                )
+                continue
+            findings.append(
+                Finding(
+                    Outcome.OK,
+                    f"ARP zaznam {ip}",
+                    label="ARP",
+                    family=4,
+                    value=_entry_value(entry),
+                    subject={
+                        "ip": ip,
+                        "mac": entry.get("mac"),
+                        "learned_via": entry.get("learned_via"),
+                    },
+                    details={"address": owning_prefix(str(ip), prefixes)},
+                )
             )
-            for entry in entries
-        ]
+        return findings
 
 
 @register
@@ -159,23 +184,47 @@ class NdPresentCheck(Check):
                 )
             ]
 
-        return [
-            Finding(
-                Outcome.OK,
-                f"ND zaznam {entry['ip']}",
-                label="ND",
-                family=6,
-                value=_entry_value(entry),
-                subject={
-                    "ip": entry["ip"],
-                    "mac": entry.get("mac"),
-                    "state": entry.get("state"),
-                    "learned_via": entry.get("learned_via"),
-                },
-                details={"address": owning_prefix(str(entry["ip"]), prefixes)},
+        findings: list[Finding] = []
+        for entry in entries:
+            ip = entry["ip"]
+            state = (entry.get("state") or "").lower()
+            if state in UNRESOLVED_ND_STATES:
+                # Stejne jako u ARP: incomplete/unreachable je konkretni,
+                # ohlaseny stav, ktery report musi ukazat jako FAIL, ne mlcet.
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"ND zaznam {ip} neni resolved ({state})",
+                        label="ND",
+                        family=6,
+                        value=f"{state} -> {ip}",
+                        subject={
+                            "ip": ip,
+                            "mac": entry.get("mac"),
+                            "state": entry.get("state"),
+                            "learned_via": entry.get("learned_via"),
+                        },
+                        details={"address": owning_prefix(str(ip), prefixes)},
+                    )
+                )
+                continue
+            findings.append(
+                Finding(
+                    Outcome.OK,
+                    f"ND zaznam {ip}",
+                    label="ND",
+                    family=6,
+                    value=_entry_value(entry),
+                    subject={
+                        "ip": ip,
+                        "mac": entry.get("mac"),
+                        "state": entry.get("state"),
+                        "learned_via": entry.get("learned_via"),
+                    },
+                    details={"address": owning_prefix(str(ip), prefixes)},
+                )
             )
-            for entry in entries
-        ]
+        return findings
 
 
 @register
@@ -191,15 +240,26 @@ class PingReachabilityCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         probes: list[dict[str, Any]] = ctx.subject.get("ping", [])
-        if not probes and ctx.subject.get("ping_skipped"):
+        skipped = ctx.subject.get("ping_skipped")
+        if not probes and skipped:
             # Odfiltrovano profilem pri capture - vedome nesbirano,
-            # ne chybejici cil. Stav se nefabuluje: rekneme proc.
+            # ne chybejici cil. Stav se nefabuluje: rekneme proc - a pokud
+            # capture zaznamenala jmeno profilu, rekneme rovnou ktereho.
+            profile = next(
+                (s.get("profile") for s in skipped if s.get("profile")), None
+            )
+            if profile:
+                message = f"ping neproveden - mimo profil ({profile})"
+                value = f"mimo profil ({profile})"
+            else:
+                message = "ping neproveden - mimo profil"
+                value = "mimo profil"
             return [
                 Finding(
                     Outcome.SKIP,
-                    "ping neproveden - mimo profil",
+                    message,
                     label="Ping",
-                    value="mimo profil",
+                    value=value,
                 )
             ]
 
@@ -314,7 +374,21 @@ def _ping_findings(
             "address": owning_prefix(target, prefixes),
         }
 
-        if received:
+        if sent == 0:
+            # Nic neodeslano neni totez jako "odeslano a bez odpovedi" -
+            # ping proste nebehl (napr. resolver cil vyhodil az pozdeji).
+            findings.append(
+                Finding(
+                    Outcome.SKIP,
+                    f"{target}: ping neodeslan",
+                    label="Ping",
+                    family=family,
+                    value=f"{target} neodeslan",
+                    subject={"target": target, "sent": 0, "received": received},
+                    details=details,
+                )
+            )
+        elif received:
             findings.append(
                 Finding(
                     Outcome.OK,

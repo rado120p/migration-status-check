@@ -39,6 +39,7 @@ def capture(
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
     on_progress: ProgressCallback | None = None,
+    profile_name: str | None = None,
 ) -> Snapshot:
     """Sebere stav zarizeni a vrati self-contained snapshot.
 
@@ -61,6 +62,7 @@ def capture(
             baselines=baselines,
             service_types=service_types,
             on_progress=on_progress,
+            profile_name=profile_name,
         )
 
 

@@ -188,6 +188,7 @@ def capture_into_run(
         baselines=baselines or None,
         service_types=service_types,
         on_progress=on_progress,
+        profile_name=profile.name or None,
     )
 
     if node not in manifest.devices:

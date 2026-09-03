@@ -483,7 +483,12 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
     device = FakeDevice()
 
     snapshot = capture_device(
-        device, "172.20.20.4", inventory=inventory, now=NOW, service_types=["IPVPN"]
+        device,
+        "172.20.20.4",
+        inventory=inventory,
+        now=NOW,
+        service_types=["IPVPN"],
+        profile_name="core-only",
     )
 
     expected_scopes = build_scopes(inventory)
@@ -498,6 +503,9 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
 
     assert internet_scope_ids  # sanity - fixture musi mit Internet sluzby
     assert all(sid in skipped for sid in internet_scope_ids)
+    assert all(
+        p["profile"] == "core-only" for p in snapshot.probes["ping_skipped"]
+    )
     assert not (pinged_scopes & internet_scope_ids)
     # pozitivni tvrzeni: filtr nesmi umlcet ping uplne - IPVPN sluzby, ktere
     # v profilu jsou, se skutecne pingly. irb.4094 je vyjimka bez cile:

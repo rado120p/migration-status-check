@@ -1,3 +1,5 @@
+import pytest
+
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.reachability import (
     ArpPresentCheck,
@@ -299,11 +301,56 @@ def test_ping_oversized_ipv6_subnet_reason_uses_ipv6_threshold():
 def test_ping_mimo_profil_je_skip_s_duvodem():
     """Prazdne pingy s markerem ping_skipped jsou vedomy vynechani profilem,
     ne chybejici cil - zprava musi rozlisit proc."""
-    ctx = _ctx({"ping": [], "ping_skipped": True})
+    ctx = _ctx({"ping": [], "ping_skipped": [{"scope_id": "svc:x", "reason": "mimo profil"}]})
     findings = PingReachabilityCheck().run(ctx)
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.SKIP
     assert "mimo profil" in findings[0].message
+
+
+def test_ping_out_of_profile_names_profile():
+    """Kdyz capture zaznamenala jmeno profilu u ping_skipped markeru, report
+    ho musi ukazat - "mimo profil" samo o sobe nerika, ktereho."""
+    ctx = _ctx(
+        {
+            "ping": [],
+            "ping_skipped": [
+                {"scope_id": "svc:x", "reason": "mimo profil", "profile": "core-only"}
+            ],
+        }
+    )
+    findings = PingReachabilityCheck().run(ctx)
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.SKIP
+    assert findings[0].message == "ping neproveden - mimo profil (core-only)"
+    assert findings[0].value == "mimo profil (core-only)"
+
+
+def test_ping_out_of_profile_without_name_falls_back():
+    """Bez jmena profilu (napr. default profil s prazdnym nazvem) drzime
+    puvodni text - nefabrikujeme jmeno, ktere capture neposlala."""
+    ctx = _ctx(
+        {
+            "ping": [],
+            "ping_skipped": [{"scope_id": "svc:x", "reason": "mimo profil"}],
+        }
+    )
+    findings = PingReachabilityCheck().run(ctx)
+    assert len(findings) == 1
+    assert findings[0].message == "ping neproveden - mimo profil"
+    assert findings[0].value == "mimo profil"
+
+
+def test_ping_zero_sent_is_skip():
+    """Nic neodeslano neni totez jako "odeslano a bez odpovedi" - ping proste
+    nebehl."""
+    ctx = _ctx(
+        {"ping": [{"target": "10.0.0.2", "family": 4, "sent": 0, "received": 0}]}
+    )
+    result = run_check(PingReachabilityCheck(), ctx)[0]
+    assert result.status is Status.SKIP
+    assert result.message == "10.0.0.2: ping neodeslan"
+    assert result.value == "10.0.0.2 neodeslan"
 
 
 def test_ping_probe_without_family_skips_instead_of_vanishing():
@@ -501,6 +548,52 @@ def test_arp_without_entries_is_broken():
 
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].family == 4
+
+
+def test_arp_zero_mac_is_broken():
+    """Incomplete ARP zaznam (nulovy MAC) neni "zadny zaznam" - je to
+    konkretni, ohlaseny stav a report ho musi ukazat jako FAIL."""
+    ctx = _service_ctx(
+        {
+            "arp": [
+                {
+                    "ip": "152.11.13.2",
+                    "mac": "00:00:00:00:00:00",
+                    "interface": "et-0/0/8.13",
+                }
+            ]
+        }
+    )
+
+    findings = ArpPresentCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].message == "ARP zaznam 152.11.13.2 neni resolved (incomplete)"
+    assert findings[0].value == "incomplete -> 152.11.13.2"
+
+
+@pytest.mark.parametrize("state", ["incomplete", "unreachable"])
+def test_nd_unresolved_states_are_broken(state):
+    ctx = _service_ctx(
+        {
+            "nd": [
+                {
+                    "ip": "2001:abcd:11:13::b",
+                    "mac": None,
+                    "state": state,
+                    "interface": "et-0/0/8.13",
+                }
+            ]
+        }
+    )
+
+    findings = NdPresentCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].message == f"ND zaznam 2001:abcd:11:13::b neni resolved ({state})"
+    assert findings[0].value == f"{state} -> 2001:abcd:11:13::b"
 
 
 def test_finding_records_which_configured_range_it_belongs_to():

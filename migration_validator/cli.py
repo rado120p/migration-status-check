@@ -404,6 +404,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
             ping_count=ping_count,
             record_raw=args.record_raw,
             service_types=service_types,
+            profile_name=profile.name or None,
         )
     except JunosConnectionError as error:
         raise ToolError(str(error)) from error
