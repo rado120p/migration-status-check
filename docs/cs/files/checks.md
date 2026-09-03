@@ -69,6 +69,10 @@ odkud vzít nic lepšího.
 
 ### `run_check()` — jediná cesta ke statusu
 
+Status se odvozuje z `Finding.outcome` a severity checku z `config`. `Finding` může nést
+vlastní `severity`, která pro ten jeden řádek severity checku přebije — používá to
+`arp_present`/`nd_present`: prázdná tabulka zůstává WARN, nerozřešený záznam je FAIL.
+
 Pořadí bran, kterými check projde:
 
 1. `config.enabled(id)` je `False` → **prázdný seznam** (check v reportu vůbec není),
@@ -478,7 +482,8 @@ Sdílené pomocné funkce:
   v bloku vynutila sekci rodiny, kterou má renderer vynechat (rozhodnutí R-1);
 - žádný ARP záznam na rozhraních služby → `broken` → FAIL/WARN, zpráva `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
-- MAC `00:00:00:00:00:00` (nerozresolvovaný ARP záznam) → `broken`, zpráva `ARP zaznam
+- MAC `00:00:00:00:00:00` (nerozresolvovaný ARP záznam) → `broken` s `Finding.severity=critical`,
+  tedy FAIL i když je check advisory; zpráva `ARP zaznam
   <ip> neni resolved (incomplete)`, `value` = `incomplete -> <ip>`;
 - jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` když MAC chybí).
@@ -487,7 +492,7 @@ Sdílené pomocné funkce:
 |---|---|---|---|
 | žádná IPv4 adresa nakonfigurovaná | *(žádný nález)* | — | — |
 | IPv4 nakonfigurováno, žádný ARP záznam s `ip` | `broken` | WARN (advisory) | `zadny zaznam` |
-| MAC záznamu je `00:00:00:00:00:00` (nerozresolvovaný) | `broken` | WARN (advisory) | `incomplete -> <ip>` |
+| MAC záznamu je `00:00:00:00:00:00` (nerozresolvovaný) | `broken` | **FAIL** (řádek si vynucuje `critical`) | `incomplete -> <ip>` |
 | záznam resolvovaný (jakýkoli jiný MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `nd_present` (state, advisory)
@@ -500,8 +505,8 @@ Zrcadlí `arp_present` pro IPv6:
 - žádný **použitelný** ND záznam nezbyde → `broken`, zpráva `na rozhranich sluzby neni zadny
   pouzitelny ND zaznam` (všimni si slova „pouzitelny" navíc oproti ARP — právě kvůli
   odfiltrovaným link-local sousedům), `value` = `zadny zaznam`;
-- stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný ND záznam) → `broken`,
-  zpráva `ND zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
+- stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný ND záznam) → `broken`
+  s `Finding.severity=critical` (FAIL), zpráva `ND zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
 - jinak **jeden `Finding` na ND záznam**: zpráva `ND zaznam <ip>`, `label="ND"`, `family=6`,
   `value` = `<mac> -> <ip>`, `subject` navíc nese `state` (ND má na rozdíl od ARP stav
   záznamu).
@@ -510,7 +515,7 @@ Zrcadlí `arp_present` pro IPv6:
 |---|---|---|---|
 | žádná IPv6 adresa nakonfigurovaná | *(žádný nález)* | — | — |
 | IPv6 nakonfigurováno, žádný použitelný záznam (vše vyfiltrováno nebo prázdné) | `broken` | WARN (advisory) | `zadny zaznam` |
-| stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný) | `broken` | WARN (advisory) | `<state> -> <ip>` |
+| stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný) | `broken` | **FAIL** (řádek si vynucuje `critical`) | `<state> -> <ip>` |
 | záznam resolvovaný (jakýkoli jiný stav) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `ping_reachability` (state, advisory)

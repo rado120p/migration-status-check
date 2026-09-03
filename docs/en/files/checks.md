@@ -71,6 +71,10 @@ not the renderer, which would have nothing better to reach for.
 
 ### `run_check()` — the only path to a status
 
+Status is derived from `Finding.outcome` and the check's severity from `config`. A `Finding`
+may carry its own `severity`, which overrides the check's one for that single row — used by
+`arp_present`/`nd_present`, where an empty table stays WARN but an unresolved entry is FAIL.
+
 The gates a check passes through, in order:
 
 1. `config.enabled(id)` is `False` → **empty list** (the check does not appear in the report
@@ -476,7 +480,8 @@ Shared helpers:
   exactly what forced a section for a family the renderer is supposed to omit (decision R-1);
 - no ARP entry on the service's interfaces → `broken` → FAIL/WARN, message `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
-- a MAC of `00:00:00:00:00:00` (an unresolved ARP entry) → `broken`, message `ARP zaznam
+- a MAC of `00:00:00:00:00:00` (an unresolved ARP entry) → `broken` with `Finding.severity=critical`,
+  so FAIL even though the check is advisory; message `ARP zaznam
   <ip> neni resolved (incomplete)`, `value` = `incomplete -> <ip>`;
 - otherwise **one `Finding` per ARP entry**: message `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` when the MAC is missing).
@@ -485,7 +490,7 @@ Shared helpers:
 |---|---|---|---|
 | no IPv4 address configured | *(no finding)* | — | — |
 | IPv4 configured, no ARP entry with an `ip` at all | `broken` | WARN (advisory) | `zadny zaznam` |
-| entry MAC is `00:00:00:00:00:00` (unresolved) | `broken` | WARN (advisory) | `incomplete -> <ip>` |
+| entry MAC is `00:00:00:00:00:00` (unresolved) | `broken` | **FAIL** (row forces `critical`) | `incomplete -> <ip>` |
 | entry resolved (any other MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `nd_present` (state, advisory)
@@ -498,7 +503,8 @@ Mirrors `arp_present` for IPv6:
 - no **usable** ND entry remains → `broken`, message `na rozhranich sluzby neni zadny
   pouzitelny ND zaznam` (note the extra word "pouzitelny" compared to ARP — precisely
   because of the filtered-out link-local neighbours), `value` = `zadny zaznam`;
-- entry state `incomplete` or `unreachable` (an unresolved ND entry) → `broken`, message `ND
+- entry state `incomplete` or `unreachable` (an unresolved ND entry) → `broken` with
+  `Finding.severity=critical` (FAIL), message `ND
   zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
 - otherwise **one `Finding` per ND entry**: message `ND zaznam <ip>`, `label="ND"`,
   `family=6`, `value` = `<mac> -> <ip>`; `subject` additionally carries `state` (ND, unlike
@@ -508,7 +514,7 @@ Mirrors `arp_present` for IPv6:
 |---|---|---|---|
 | no IPv6 address configured | *(no finding)* | — | — |
 | IPv6 configured, no usable entry (all filtered or empty) | `broken` | WARN (advisory) | `zadny zaznam` |
-| entry state `incomplete` or `unreachable` (unresolved) | `broken` | WARN (advisory) | `<state> -> <ip>` |
+| entry state `incomplete` or `unreachable` (unresolved) | `broken` | **FAIL** (row forces `critical`) | `<state> -> <ip>` |
 | entry resolved (any other state) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `ping_reachability` (state, advisory)

@@ -7,7 +7,7 @@ from migration_validator.checks.reachability import (
     PingReachabilityCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome, Status
+from migration_validator.models.result import Outcome, Severity, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
@@ -668,3 +668,33 @@ def test_owning_prefix_picks_the_containing_range():
     assert owning_prefix("152.11.20.2", prefixes) == "152.11.20.1/29"
     assert owning_prefix("10.9.9.9", prefixes) is None
     assert owning_prefix("2001:db8::1", prefixes) is None
+
+
+def test_arp_unresolved_row_is_fail_despite_advisory_check():
+    """Prazdna ARP tabulka je advisory (WARN), ale nerozreseny zaznam je
+    konkretni porucha - radek si vynuti critical a v reportu je FAIL."""
+    ctx = _service_ctx(
+        {"arp": [{"ip": "152.11.13.2", "mac": "00:00:00:00:00:00", "interface": "et-0/0/8.13"}]}
+    )
+
+    result = run_check(ArpPresentCheck(), ctx)[0]
+
+    assert result.status is Status.FAIL
+    assert result.severity is Severity.CRITICAL
+
+
+def test_nd_unresolved_row_is_fail_despite_advisory_check():
+    ctx = _service_ctx(
+        {"nd": [{"ip": "2001:abcd:11:13::b", "mac": None, "state": "incomplete", "interface": "et-0/0/8.13"}]}
+    )
+
+    result = run_check(NdPresentCheck(), ctx)[0]
+
+    assert result.status is Status.FAIL
+    assert result.severity is Severity.CRITICAL
+
+
+def test_arp_empty_table_stays_warn():
+    result = run_check(ArpPresentCheck(), _service_ctx({"arp": []}))[0]
+
+    assert result.status is Status.WARN

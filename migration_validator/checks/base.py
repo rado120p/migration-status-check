@@ -210,8 +210,8 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
         CheckResult(
             id=check.id,
             mode=check.mode.value,
-            status=derive_status(finding.outcome, severity),
-            severity=severity,
+            status=derive_status(finding.outcome, finding.severity or severity),
+            severity=finding.severity or severity,
             message=finding.message,
             # Popisek doplnuje framework, ne renderer: renderer vidi jen
             # CheckResult, takze by nemel odkud vzit nic lepsiho nez id
