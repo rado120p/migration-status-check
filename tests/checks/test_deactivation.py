@@ -69,7 +69,7 @@ def test_deactivation_outcome_table(subject_off, baseline_off, expected):
     [
         (True, True, Outcome.DEGRADED),
         (True, False, Outcome.BROKEN),
-        (False, True, Outcome.DEGRADED),
+        (False, True, Outcome.RECOVERED),
         (True, None, Outcome.DEGRADED),
     ],
 )
@@ -78,12 +78,28 @@ def test_matrix(subject_off, baseline_off, expected):
 
     Zabiji mutanta: kterakoli zamena dvojice vetvi. Radek (True, False) je
     ten, ktery odlisuje "deaktivovano i drive" od "deaktivovano az ted" -
-    bez nej by slo obe hlasit jako PASS.
+    bez nej by slo obe hlasit jako PASS. Radek (False, True) je reaktivace:
+    check ho hlasi jako Outcome.RECOVERED, i kdyz sdilena
+    `deactivation_outcome` pro nej porad pocita DEGRADED (viz
+    test_deactivation_outcome_table) - RECOVERED dosazuje az
+    DeactivationStateCheck.run.
     """
     findings = DeactivationStateCheck().run(_ctx(subject_off, baseline_off))
 
     assert len(findings) == 1
     assert findings[0].outcome is expected
+
+
+def test_reactivated_service_is_recovered():
+    """Zlepseni je RECOVERED, ne varovani (R-2) - hlaska se nemeni."""
+    findings = DeactivationStateCheck().run(_ctx(False, True))
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.RECOVERED
+    assert findings[0].message == (
+        "sluzba byla v baseline deaktivovana (interface deactivated), "
+        "ted je aktivni"
+    )
 
 
 @pytest.mark.parametrize("baseline_off", [False, None])

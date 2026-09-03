@@ -36,7 +36,10 @@ def deactivation_outcome(subject_off: bool, baseline_off: bool | None) -> Outcom
     dostat radek, ktery nic nerika (R-1).
 
     Radek 4 tabulky (`subject_off=False`, `baseline_off=True` - aktivni ted,
-    vypnuty v baselinu) patri jen sluzbe samotne. checks/routes.py a
+    vypnuty v baselinu) patri jen sluzbe samotne. Tahle funkce pro nej porad
+    vraci DEGRADED (tabulka nize se nemeni), ale DeactivationStateCheck.run
+    vysledek pro tenhle radek prepisuje na Outcome.RECOVERED - zlepseni je
+    RECOVERED, ne varovani (R-2). checks/routes.py a
     checks/bgp.py volaji tuhle funkci pro podprvky vzdy s `subject_off=True`
     - znovuzapnuta routa nebo peer zadny deaktivovany prvek nenesou a
     zlepseni neni varovani (R-2), takze pro ne se `deactivation_outcome`
@@ -106,9 +109,13 @@ class DeactivationStateCheck(Check):
                 )
             ]
 
+        # subject_off=False, baseline_off=True: sluzba byla v baselinu
+        # deaktivovana a ted je aktivni. Zlepseni je RECOVERED, ne
+        # varovani (R-2) - deactivation_outcome tuhle vyjimku nezna
+        # (vraci DEGRADED, viz jeji docstring), takze se prepisuje az tady.
         return [
             Finding(
-                outcome,
+                Outcome.RECOVERED,
                 "sluzba byla v baseline deaktivovana "
                 f"({ctx.baseline_scope.deactivation_reason}), ted je aktivni",
                 label=self.label,

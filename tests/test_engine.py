@@ -935,12 +935,14 @@ def test_service_deactivated_only_in_subject_is_fail():
     assert result.scopes[0].status is Status.FAIL
 
 
-def test_service_reactivated_after_migration_is_warn():
-    """V baseline deaktivovana, ted nahozena - zmena proti baseline."""
+def test_service_reactivated_after_migration_is_recovered():
+    """V baseline deaktivovana, ted nahozena - zlepseni je RECOVERED, ne
+    varovani (R-2), oprava opravneho kola 2026-09-03.
+    """
     result = api.evaluate(_new(), baseline=_deactivated(_old()), now=NOW)
 
     assert result.scopes
-    assert result.scopes[0].status is Status.WARN
+    assert result.scopes[0].status is Status.RECV
 
 
 def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snapshot):

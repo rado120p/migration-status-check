@@ -174,14 +174,17 @@ def _presence_finding(
 
     if subject is None:
         # Bez inventory neni zamer znam, takze se rozpor nehlasi
-        # (AR-17). Sem se v device scope dostane jen routa, ktera byla
-        # v baseline a v subjektu neni.
-        value = MISSING_FROM_TABLE if configured and not is_device else MISSING_ENTIRELY
-        message = (
-            f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
-            if value == MISSING_FROM_TABLE
-            else f"{rib} {prefix}: v baseline byla, v subjektu neni"
-        )
+        # (AR-17). Rozliseni je podle toho, jestli je co srovnavat s
+        # baselinem, ne podle scope: baseline zaznam existuje -> chybi
+        # proti baselinu; baseline zaznam neni -> jen konfigurace tvrdi,
+        # ze routa ma byt v tabulce, a neni (plati i v device scope, ktery
+        # zamer nezna, ale tady jde jen o to, co rika samotna tabulka).
+        if baseline is not None:
+            value = MISSING_ENTIRELY
+            message = f"{rib} {prefix}: v baseline byla, v subjektu neni"
+        else:
+            value = MISSING_FROM_TABLE
+            message = f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
         return Finding(
             Outcome.BROKEN,
             message,
@@ -223,6 +226,7 @@ def _presence_finding(
 
         # Bez baseline neni z ceho poznat, ze neaktivni byla i predtim -
         # podle R-2 se nejednoznacnost na FAIL neeskaluje.
+        baseline_value = was
         if was_active is True:
             outcome = Outcome.BROKEN
             message = f"{rib} {prefix}: v baseline forwardovala, ted neni aktivni"
@@ -232,6 +236,10 @@ def _presence_finding(
                 f"{rib} {prefix}: je v tabulce, ale neni aktivni; "
                 "baseline aktivitu neuvadi"
             )
+            # Baseline zaznam existuje, ale klic "active" ne - fabulovat
+            # z neho "bylo X" by predstiralo znalost, kterou mereni
+            # nenese (R-2 pro baseline_value, ne jen pro outcome).
+            baseline_value = None
         else:
             outcome = Outcome.DEGRADED
             message = f"{rib} {prefix}: je v tabulce, ale neni aktivni"
@@ -242,7 +250,26 @@ def _presence_finding(
             group=group,
             family=family,
             value=NOT_ACTIVE,
-            baseline_value=was,
+            baseline_value=baseline_value,
+            baseline=baseline,
+            subject=subject,
+        )
+
+    if baseline is not None and baseline.get("active") is False:
+        # Reaktivace: subjekt forwarduje, ale v baselinu nebyl aktivni.
+        # Zlepseni je RECOVERED, ne varovani (R-2) - stejny princip jako
+        # u deaktivace v deactivation.py, jen tady se to tyka aktivity,
+        # ne konfiguracni deaktivace. baseline_value se tu nepocita z
+        # `was` (next-hop text / pritomnost), protoze "co bylo" je tady
+        # "nebylo aktivni", ne minula hodnota next-hopu/pritomnosti.
+        return Finding(
+            Outcome.RECOVERED,
+            f"{rib} {prefix}: {value_ok} (v baseline nebyla aktivni)",
+            label=label,
+            group=group,
+            family=family,
+            value=value_ok,
+            baseline_value=NOT_ACTIVE,
             baseline=baseline,
             subject=subject,
         )
@@ -476,7 +503,15 @@ class StaticRouteStatusCheck(Check):
         baseline_hop_map = {
             (h.get("to"), h.get("interface")): h for h in baseline_hops
         }
-        rank = {Outcome.OK: 0, Outcome.DEGRADED: 1, Outcome.BROKEN: 2}
+        # RECOVERED sedi na stejnou urovni jako OK: deaktivovany next-hop
+        # eskaluje z obou stejne, worse vyhrava (DEGRADED/BROKEN nad
+        # RECOVERED stejne jako nad OK).
+        rank = {
+            Outcome.OK: 0,
+            Outcome.RECOVERED: 0,
+            Outcome.DEGRADED: 1,
+            Outcome.BROKEN: 2,
+        }
         worst = outcome
         newly_deactivated = False
         same_as_baseline = False

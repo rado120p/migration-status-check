@@ -169,29 +169,32 @@ def test_inactive_route_without_baseline_is_degraded():
     assert findings[0].value == "neni aktivni"
 
 
-def test_route_that_became_active_passes():
-    """Zlepseni neni nalez (R-2).
+def test_static_route_active_after_inactive_baseline_is_recovered():
+    """Zlepseni je RECOVERED, ne OK a ne varovani (R-2).
 
-    Upresneno 2026-08-19 (checks/routes.py po QNH prepisu, puvodni popis
-    "porovnani na nerovnost misto na smer zmeny" uz neodpovida kodu):
-    testovana dvojice ma stejny next-hop v subjektu i baselinu ("was ==
-    now"), lisi se jen priznakem aktivity. Tenhle test proto nehlida
-    zadne porovnavani aktivity - tu je OK zarucene strukturalne, kdyz je
-    subject aktivni, _presence_finding vetev "neaktivni" se nevyvolava.
-    Chyta ale mutaci ZMENA vetve v `_finding`: kdyby se podminka
+    Predelano z puvodniho 'test_route_that_became_active_passes' (do
+    2026-09-03 tahle dvojice davala OK) - reaktivace routy je pozitivni
+    nalez, ne tiche nic. Testovana dvojice ma stejny next-hop v subjektu
+    i baselinu ("was == now"), lisi se jen priznakem aktivity, takze
+    tenhle test nehlida porovnavani next-hopu - to ma
+    test_changed_next_hop_is_degraded_and_carries_the_old_value. Chyta ale
+    mutaci ZMENA vetve v `_finding`: kdyby se podminka
     `reached_active_table and was is not None and was != now` zmutovala
-    tak, aby platila i pri rovnosti (napr. vypusteni `!= now`), tenhle
-    test by ZMENA vetev vyvolal falesne (was == now, ale hlaska by
-    rikala "next-hop se zmenil X -> X") a dostal by DEGRADED misto OK.
-    Overeno rucne: nahrada `was != now` za `True` shodi presne tenhle
-    test.
+    tak, aby platila i pri rovnosti next-hopu, tahle dvojice by spadla do
+    ZMENA vetve misto RECOVERED (was == now, ale hlaska by rikala
+    "next-hop se zmenil X -> X").
     """
     findings = StaticRouteStatusCheck().run(
         _ctx(_installed(), _installed_inactive())
     )
 
     assert len(findings) == 1
-    assert findings[0].outcome is Outcome.OK
+    assert findings[0].outcome is Outcome.RECOVERED
+    assert findings[0].message == (
+        "inet.0 198.62.1.0/29: 152.11.13.2 (v baseline nebyla aktivni)"
+    )
+    assert findings[0].value == "152.11.13.2"
+    assert findings[0].baseline_value == NOT_ACTIVE
 
 
 def test_installed_route_passes():
@@ -203,11 +206,18 @@ def test_installed_route_passes():
 
 
 def test_configured_but_not_installed_is_broken():
-    """Presne to, co laborka delala 2026-07-29: 5 statik v konfiguraci, 0 v tabulce."""
+    """Presne to, co laborka delala 2026-07-29: 5 statik v konfiguraci, 0 v tabulce.
+
+    Baseline mereni tu existuje (routa v nem byla), takze rozpor se hlasi
+    proti baselinu ("chybi"), ne jako "neni v tabulce" - tu hlasku dostane
+    jen pripad bez baseline mereni vubec (viz
+    test_service_scope_reports_missing_from_table_without_baseline).
+    """
     findings = StaticRouteStatusCheck().run(_ctx({}, _installed()))
 
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "neni v tabulce"
+    assert findings[0].value == "chybi"
+    assert findings[0].message == "inet.0 198.62.1.0/29: v baseline byla, v subjektu neni"
     assert findings[0].baseline_value == "152.11.13.2"
 
 
@@ -342,15 +352,15 @@ def test_service_without_static_routes_gets_no_row():
     assert findings == []
 
 
-def test_device_scope_does_not_claim_a_route_is_missing_from_the_table():
-    """Device scope nezna zamer, takze 'neni v tabulce' rict nesmi (AR-17).
+def test_device_scope_with_baseline_record_says_missing_against_baseline():
+    """Rozliseni je podle baselinu, ne podle scope (device vs service).
 
-    Zabiji mutanta: odebrani 'and not is_device' z checks/routes.py:130.
-    Aby ta vetev mela co rozhodovat, musi byt 'configured' pravda - proto se
-    tu stavi scope s kind="device" A NEPRAZDNYMI static_routes. Puvodni test
-    pouzival device_scope(), ktery ma vzdy prazdne selektory, takze
-    'configured' bylo vzdy False a cela podminka nepravda bez ohledu na
-    is_device.
+    Puvodne rozhodoval 'configured and not is_device' - device scope nikdy
+    nesmel rict 'neni v tabulce', protoze zamer nezna (AR-17). Ta uvaha je
+    porad spravna, ale spatne provedena: kdyz baseline mereni routu ma,
+    rozpor se hlasi proti nemu ('chybi') uplne stejne v device i service
+    scope - o zameru tu nejde nic tvrdit o nic vic ani min nez v service
+    scope se stejnym baselinem (viz test_configured_but_not_installed_is_broken).
     """
     scope = Scope(
         id="dev:172.20.20.4",
@@ -369,18 +379,47 @@ def test_device_scope_does_not_claim_a_route_is_missing_from_the_table():
 
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "chybi", (
-        "device scope ohlasil 'neni v tabulce' - to tvrdi, ze zna zamer, "
-        "a ten v nem znat neni"
+    assert findings[0].value == "chybi"
+    assert findings[0].message == "inet.0 198.62.1.0/29: v baseline byla, v subjektu neni"
+
+
+def test_service_scope_reports_missing_from_table_without_baseline():
+    """Bez baseline mereni je rozpor jen proti konfiguraci - 'neni v tabulce'.
+
+    Zabiji mutanta: zamena podminky 'baseline is not None' na 'True' v
+    checks/routes.py - s ni by kazda chybejici routa hlasila 'chybi' i bez
+    jakehokoli baseline zaznamu.
+    """
+    ctx = _ctx({})
+
+    findings = StaticRouteStatusCheck().run(ctx)
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "neni v tabulce"
+    assert findings[0].message == (
+        "inet.0 198.62.1.0/29: nakonfigurovana, ale neni v routovaci tabulce"
     )
 
 
-def test_service_scope_does_claim_a_route_is_missing_from_the_table():
-    """Protejsek predchoziho testu - bez nej by 'chybi' slo vratit vzdycky.
+def test_device_scope_configured_route_missing_is_not_blamed_on_baseline():
+    """Stejna hlaska 'neni v tabulce' plati i v device scope bez baselinu.
 
-    Zabiji mutanta: zamena cele podminky na 'False' v checks/routes.py:130.
+    Device scope zamer nezna (AR-17), ale tady jde jen o to, co rika
+    samotna tabulka - baseline zaznam neni, takze neni co "chybelo".
     """
-    ctx = _ctx({}, _installed())
+    scope = Scope(
+        id="dev:172.20.20.4",
+        kind="device",
+        key=None,
+        selectors=Selectors(static_routes=list(CONFIGURED)),
+    )
+    ctx = CheckContext(
+        scope=scope,
+        subject={"routes": {}},
+        baseline=None,
+        config=default_config(),
+    )
 
     findings = StaticRouteStatusCheck().run(ctx)
 
@@ -423,6 +462,19 @@ def test_inactive_route_with_silent_baseline_is_degraded():
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.DEGRADED
     assert findings[0].value == "neni aktivni"
+
+
+def test_silent_baseline_has_no_baseline_value():
+    """Baseline bez klice 'active' nesmi tvrdit 'byvala neaktivni' ani nic
+    jineho - fabulace baseline_value z chybejiciho udaje je presne to, co
+    R-2 zakazuje uz na urovni outcome. Tenhle test to overuje na hodnote.
+    """
+    findings = StaticRouteStatusCheck().run(
+        _ctx(_installed_inactive(), _installed_without_active())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].baseline_value is None
 
 
 def test_silent_baseline_has_its_own_message():
@@ -856,6 +908,44 @@ def test_aggregate_neaktivni_v_baseline_ukaze_bylo_neni_aktivni():
     )
     (finding,) = AggregateRouteStatusCheck().run(ctx)
     assert finding.baseline_value == NOT_ACTIVE
+
+
+def test_aggregate_active_after_inactive_baseline_is_recovered():
+    """Aggregat, analogie testu pro statiku: reaktivace je RECOVERED.
+
+    Stejna dvojice jako test_aggregate_neaktivni_v_baseline_ukaze_bylo_neni_aktivni
+    (aktivni ted, neaktivni v baselinu), tenhle test navic hlida outcome
+    a zpravu, ktere ten predchozi nechava bez kontroly.
+    """
+    ctx = _ctx(
+        _aggregate_installed(),
+        baseline_routes=_aggregate_installed(active=False),
+        scope=_scope([_aggregate()]),
+    )
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.outcome is Outcome.RECOVERED
+    assert finding.message == (
+        "inet6.0 2001:abcd::/32: v tabulce (v baseline nebyla aktivni)"
+    )
+    assert finding.baseline_value == NOT_ACTIVE
+
+
+def test_aggregate_baseline_without_activity_has_no_baseline_value():
+    """Baseline zaznam bez klice 'active' nesmi tvrdit 'byval neaktivni'.
+
+    Subjekt je neaktivni, baseline zaznam existuje, ale o aktivite mlci -
+    fabulovat z toho baseline_value je presne to, co R-2 zakazuje.
+    """
+    baseline = _aggregate_installed()
+    del baseline["inet6.0"]["2001:abcd::/32"]["active"]
+    ctx = _ctx(
+        _aggregate_installed(active=False),
+        baseline_routes=baseline,
+        scope=_scope([_aggregate()]),
+    )
+    (finding,) = AggregateRouteStatusCheck().run(ctx)
+    assert finding.message.endswith("baseline aktivitu neuvadi")
+    assert finding.baseline_value is None
 
 
 def test_static_zaznamy_aggregate_check_ignoruje():
