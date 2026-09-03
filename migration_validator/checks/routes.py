@@ -105,10 +105,8 @@ def _hop_text(hop: dict[str, Any]) -> str:
 
 def _presence_finding(
     identity: tuple[str, str],
-    configured: bool,
     subject: dict[str, Any] | None,
     baseline: dict[str, Any] | None,
-    is_device: bool,
     deactivated: bool,
     baseline_deactivated: bool | None,
     label_prefix: str,
@@ -365,10 +363,8 @@ class StaticRouteStatusCheck(Check):
             findings.append(
                 self._finding(
                     identity,
-                    configured=identity in configured,
                     subject=subject.get(identity),
                     baseline=baseline.get(identity),
-                    is_device=ctx.scope.is_device,
                     deactivated=identity in deactivated,
                     baseline_deactivated=(
                         identity in baseline_deactivated
@@ -384,10 +380,8 @@ class StaticRouteStatusCheck(Check):
     def _finding(
         self,
         identity: tuple[str, str],
-        configured: bool,
         subject: dict[str, Any] | None,
         baseline: dict[str, Any] | None,
-        is_device: bool,
         deactivated: bool,
         baseline_deactivated: bool | None,
         hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
@@ -464,10 +458,8 @@ class StaticRouteStatusCheck(Check):
 
         presence = _presence_finding(
             identity,
-            configured=configured,
             subject=subject,
             baseline=baseline,
-            is_device=is_device,
             deactivated=deactivated,
             baseline_deactivated=baseline_deactivated,
             label_prefix=self.label,
@@ -595,10 +587,8 @@ class AggregateRouteStatusCheck(Check):
         return [
             _presence_finding(
                 identity,
-                configured=identity in configured,
                 subject=subject.get(identity),
                 baseline=baseline.get(identity),
-                is_device=ctx.scope.is_device,
                 deactivated=identity in deactivated,
                 baseline_deactivated=(
                     identity in baseline_deactivated

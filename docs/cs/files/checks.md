@@ -853,7 +853,8 @@ takže chybějící soused je rovnou FAIL, ne tiché nic.
 | `uptime_seconds` chybí nebo `0` | `broken` | FAIL | `Down` |
 | adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | `broken` | FAIL | `chybi v outputu` (zpráva `adresa souseda chybi`) |
 | adresa souseda je, beze změny proti baseline (nebo bez baseline) | `info` | INFO | adresa |
-| adresa souseda se změnila proti baseline (je nebo `None`) | `degraded` | WARN | adresa |
+| adresa souseda se změnila proti baseline, nová adresa je | `degraded` | WARN | adresa |
+| adresa souseda se změnila proti baseline, nová adresa je `None` | `degraded` | WARN | `chybi v outputu` |
 
 Collector u LDP zahazuje záznamy pro `lo0.*` už při parsování (LDP na loopbacku nemá
 smysl měřit tímhle checkem) — viz `collectors.md`.
@@ -882,7 +883,8 @@ Mutant kill (2026-08-26, ověřeno spuštěním): smazání gate `if "pim" not i
 | `uptime_seconds` chybí nebo `0` | `broken` | FAIL | `Down` |
 | adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | `broken` | FAIL | `chybi v outputu` |
 | adresa souseda je, beze změny proti baseline (nebo bez baseline) | `info` | INFO | adresa |
-| adresa souseda se změnila proti baseline (je nebo `None`) | `degraded` | WARN | adresa |
+| adresa souseda se změnila proti baseline, nová adresa je | `degraded` | WARN | adresa |
+| adresa souseda se změnila proti baseline, nová adresa je `None` | `degraded` | WARN | `chybi v outputu` |
 
 ### `mpls_interface_state` (transit, critical)
 

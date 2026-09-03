@@ -957,6 +957,23 @@ def test_bfd_transit_up_after_up_baseline_stays_ok():
     assert findings[0].baseline_value == "Up"
 
 
+def test_bfd_transit_up_after_down_baseline_on_renamed_interface_is_recovered():
+    """Tranzitni port se pri migraci bezne prejmenuje (ge-0/0/1.0 ->
+    et-0/0/1.0) - baseline session se ma dohledat podle peera, ne podle
+    rozhrani, jinak RECOVERED nikdy nenaskoci (nalez finalniho review)."""
+    findings = BfdTransitStateCheck().run(
+        _ctx_area(
+            "bfd",
+            {"10.0.0.9": {"state": "Up", "interface": "et-0/0/1.0"}},
+            baseline_value={"10.0.0.9": {"state": "Down", "interface": "ge-0/0/1.0"}},
+            scope=_scope(interfaces=("et-0/0/1.0",)),
+        )
+    )
+
+    assert findings[0].outcome is Outcome.RECOVERED
+    assert findings[0].baseline_value == "Down"
+
+
 def test_bfd_transit_missing_session_baseline_value_from_first_sorted_peer():
     """Zadna session ted, ale v baseline byla vic nez jedna - baseline_value
     se odvozuje ze stavu prvni (podle peer serazene), ne z pevneho 'Up'."""

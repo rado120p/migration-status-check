@@ -390,7 +390,7 @@ def test_changed_session_carries_baseline_value():
     baseline' - protoze DEGRADED vetev nastavovala jen `baseline` (dict
     pro JSON), ne `baseline_value` (pole, ze ktereho report sklada sloupec
     ZMENA). Bez `baseline_value` ZMENA cte baseline_value is None jako
-    'bez baseline', presestoze check presne vi, jaky stav byl predtim.
+    'bez baseline', prestoze check presne vi, jaky stav byl predtim.
     """
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer(state="Established")}},
@@ -492,7 +492,7 @@ def test_prefix_counts_rib_missing_in_baseline_skips_that_rib():
 
 
 def test_prefix_growth_beyond_tolerance_is_a_problem():
-    """Narust nad toleranci uz neni tiche PASS (bod 26-BGP): symetricka
+    """Narust nad toleranci uz neni tiche PASS (bod 20-BGP): symetricka
     tolerance k poklesu znamena, ze prekvapiva zmena v obou smerech ma
     dostat nalez, ne jen ta smerem dolu."""
     ctx = _ctx(
@@ -680,7 +680,7 @@ def test_configured_peer_without_session_does_not_hide_behind_a_sibling():
 
 def test_peer_only_in_baseline_value_is_full_sentence():
     """Hodnota v tabulce je uplna veta, ne kratka znacka 'neni ve sluzbe'
-    (bod 4) - analogicky bfd.py."""
+    (bod 5) - analogicky bfd.py."""
     ctx = _ctx(
         {"bgp": {}},
         baseline={"bgp": {"198.11.13.5": _peer(state="Established")}},
@@ -696,7 +696,7 @@ def test_deactivated_peer_carries_baseline_state():
     """Deaktivovany peer ma taky ukazat, jaky stav mel v baseline (bod 6).
 
     Bez ni sloupec ZMENA u deaktivovaneho peera vzdy tvrdi 'bez baseline',
-    presestoze baseline stav check zna - stejna regrese, kterou u normalni
+    prestoze baseline stav check zna - stejna regrese, kterou u normalni
     vetve resil test_changed_session_carries_baseline_value.
     """
     ctx = _ctx(
@@ -714,7 +714,7 @@ def test_deactivated_peer_carries_baseline_state():
 
 def test_established_after_idle_is_recovered():
     """Zlepseni baseline stavu ma byt videt jako RECOVERED, ne tiche PASS
-    (bod 20) - operator ma vedet, ze se relace behem migrace zotavila."""
+    (bod 26) - operator ma vedet, ze se relace behem migrace zotavila."""
     ctx = _ctx(
         subject={"bgp": {"10.0.0.2": _peer(state="Established")}},
         baseline={"bgp": {"10.0.0.2": _peer(state="Idle")}},
@@ -728,7 +728,7 @@ def test_established_after_idle_is_recovered():
 
 
 def test_prefix_growth_over_tolerance_is_degraded():
-    """Narust prefixu nad toleranci je WARN, ne tiche PASS (bod 26-BGP)."""
+    """Narust prefixu nad toleranci je WARN, ne tiche PASS (bod 20-BGP)."""
     ctx = _ctx(
         subject={"bgp": {"10.0.0.2": _peer(received=120, accepted=120)}},
         baseline={"bgp": {"10.0.0.2": _peer(received=100, accepted=100)}},
@@ -744,7 +744,7 @@ def test_prefix_growth_over_tolerance_is_degraded():
 
 def test_rib_missing_in_subject_is_broken():
     """RIB, ktera v baselinu byla a v subjektu chybi, je BROKEN nalez, ne
-    tiche vynechani (bod 26-BGP).
+    tiche vynechani (bod 20-BGP).
 
     Status z toho vyjde WARN, ne FAIL: BgpPrefixCountsCheck ma
     default_severity ADVISORY, takze BROKEN se u nej mapuje na WARN stejne

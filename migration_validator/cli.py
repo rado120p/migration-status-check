@@ -564,7 +564,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--format", choices=("text", "json"), default="text")
     evaluate.add_argument("--output")
     evaluate.add_argument("--filter", help="podretezec v description nebo scope id")
-    evaluate.add_argument("--status", help="carkou oddeleny seznam: pass,warn,fail,skip,info")
+    evaluate.add_argument("--status", help="carkou oddeleny seznam: pass,recv,warn,fail,skip,info")
     evaluate.add_argument(
         "--detail",
         action="store_true",

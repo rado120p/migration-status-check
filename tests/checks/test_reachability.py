@@ -573,6 +573,50 @@ def test_arp_zero_mac_is_broken():
     assert findings[0].value == "incomplete -> 152.11.13.2"
 
 
+def test_arp_mixed_list_gives_one_ok_and_one_broken_row():
+    """Mix resolved + incomplete zaznamu ma dat po jednom radku za kazdy,
+    ne 'zadny zaznam' (ten je jen pro prazdny seznam)."""
+    ctx = _service_ctx(
+        {
+            "arp": [
+                {"ip": "152.11.13.1", "mac": "0c:00:ca:ea:58:03", "interface": "et-0/0/8.13"},
+                {"ip": "152.11.13.2", "mac": "00:00:00:00:00:00", "interface": "et-0/0/8.13"},
+            ]
+        }
+    )
+
+    findings = ArpPresentCheck().run(ctx)
+
+    assert len(findings) == 2
+    by_outcome = {f.outcome: f for f in findings}
+    assert set(by_outcome) == {Outcome.OK, Outcome.BROKEN}
+    assert by_outcome[Outcome.BROKEN].message == "ARP zaznam 152.11.13.2 neni resolved (incomplete)"
+    assert all(f.value != "zadny zaznam" for f in findings)
+
+
+def test_nd_mixed_list_gives_one_ok_and_one_broken_row():
+    """Mix reachable + incomplete zaznamu ma dat po jednom radku za kazdy,
+    ne 'zadny pouzitelny ND zaznam'."""
+    ctx = _service_ctx(
+        {
+            "nd": [
+                {"ip": "2001:abcd:11:13::a", "mac": "0c:00:ca:ea:58:03",
+                 "state": "reachable", "interface": "et-0/0/8.13"},
+                {"ip": "2001:abcd:11:13::b", "mac": None,
+                 "state": "incomplete", "interface": "et-0/0/8.13"},
+            ]
+        }
+    )
+
+    findings = NdPresentCheck().run(ctx)
+
+    assert len(findings) == 2
+    by_outcome = {f.outcome: f for f in findings}
+    assert set(by_outcome) == {Outcome.OK, Outcome.BROKEN}
+    assert by_outcome[Outcome.BROKEN].message == "ND zaznam 2001:abcd:11:13::b neni resolved (incomplete)"
+    assert all(f.value != "zadny zaznam" for f in findings)
+
+
 @pytest.mark.parametrize("state", ["incomplete", "unreachable"])
 def test_nd_unresolved_states_are_broken(state):
     ctx = _service_ctx(

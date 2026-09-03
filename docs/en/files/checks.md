@@ -862,7 +862,8 @@ missing neighbor is a straight FAIL, never quiet nothing.
 | `uptime_seconds` missing or `0` | `broken` | FAIL | `Down` |
 | neighbor address is `None`, unchanged vs. baseline (or no baseline) | `broken` | FAIL | `chybi v outputu` (message `adresa souseda chybi`) |
 | neighbor address present, unchanged vs. baseline (or no baseline) | `info` | INFO | address |
-| neighbor address changed vs. baseline (present or `None`) | `degraded` | WARN | address |
+| neighbor address changed vs. baseline, new address present | `degraded` | WARN | address |
+| neighbor address changed vs. baseline, new address is `None` | `degraded` | WARN | `chybi v outputu` |
 
 The collector drops `lo0.*` records for LDP already at parse time (LDP on the loopback has
 no meaning for this check) — see `collectors.md`.
@@ -893,7 +894,8 @@ regression).
 | `uptime_seconds` missing or `0` | `broken` | FAIL | `Down` |
 | neighbor address is `None`, unchanged vs. baseline (or no baseline) | `broken` | FAIL | `chybi v outputu` |
 | neighbor address present, unchanged vs. baseline (or no baseline) | `info` | INFO | address |
-| neighbor address changed vs. baseline (present or `None`) | `degraded` | WARN | address |
+| neighbor address changed vs. baseline, new address present | `degraded` | WARN | address |
+| neighbor address changed vs. baseline, new address is `None` | `degraded` | WARN | `chybi v outputu` |
 
 ### `mpls_interface_state` (transit, critical)
 

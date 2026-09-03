@@ -164,7 +164,7 @@ test("buildView: address qualifier only when family has >1 address", () => {
   assert.strictEqual(ipv4.rows[0].label, "ARP zaznam (10.0.0.1)"); // details.address below
 });
 
-test("countStatuses: five counters, lowercase keys", () => {
+test("countStatuses: six counters, lowercase keys", () => {
   assert.deepStrictEqual(MigView.countStatuses(["PASS", "PASS", "WARN", "INFO"]),
     { pass: 2, recv: 0, warn: 1, fail: 0, skip: 0, info: 1 });
 });

@@ -288,7 +288,7 @@ def test_check_reads_the_area_named_by_its_collector():
 
 
 def test_device_scope_reports_state_without_intent():
-    """Bez inventory se nehlasi ani 'bez session', ani 'bez konfigurace'."""
+    """Bez inventory se nehlasi ani 'bez session', ani 'parser nenasel konfiguraci'."""
     ctx = CheckContext(
         scope=device_scope(),
         subject={"bfd": {"152.11.13.2": {"state": "Up"}}, "bgp": {}},

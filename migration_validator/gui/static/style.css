@@ -420,6 +420,7 @@ a:hover { color: #0e3fa9; }
 .detail-block.status-warn { border-left-color: #d97706; }
 .detail-block.status-fail { border-left-color: #dc2626; }
 .detail-block.status-skip { border-left-color: #d1d5db; }
+.detail-block.status-recv { border-left-color: #0e7490; }
 
 .detail-cols, .detail-row {
   display: grid;

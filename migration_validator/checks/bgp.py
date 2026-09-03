@@ -12,7 +12,7 @@ v opacnem smeru (`change > abs(tolerance)`) je DEGRADED, tedy vzdy WARN -
 prekvapivy skok poctu prefixu nahoru je stejne tak varovani jako pokles,
 i kdyz nejde o vypadek. RIB, kterou baseline mela a subjekt ji vubec
 nezmeril, je BROKEN nalez ("RIB v baseline byla, v subjektu chybi") - bez
-teho by o zmizele rodine report tise mlcel.
+toho by o zmizele rodine report tise mlcel.
 """
 
 from __future__ import annotations
@@ -162,7 +162,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             # behem migrace ZLEPSILA, a zlepseni neni varovani (R-2):
             # oranzovy radek na zdrave sluzbe je falesny poplach a operator
             # si zvykne vypis preskakovat. Zmena nezmizi - pojmenuje ji
-            # hlaska a sloupec ZMENA pise, jaky byl stav predtim. Od bodu 20
+            # hlaska a sloupec ZMENA pise, jaky byl stav predtim. Od bodu 26
             # je to RECOVERED, ne tiche OK - operator ma vedet, ze se relace
             # zotavila, ne to precist stejne jako "vzdy byla v poradku".
             changed = baseline_state is not None and baseline_state != state
@@ -332,7 +332,7 @@ class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
 
             # RIB, kterou baseline mela a subjekt uz vubec nemeri - typicky
             # rodina odpojena pri migraci. Bez tehle vetve by o ni report
-            # tise mlcel, presestoze pro peera je videt jen zbyla RIB.
+            # tise mlcel, prestoze pro peera je videt jen zbyla RIB.
             for rib_name in sorted(set(baseline_ribs) - set(subject_ribs)):
                 findings.append(
                     Finding(

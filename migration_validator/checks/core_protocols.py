@@ -413,10 +413,12 @@ class BfdTransitStateCheck(Check):
             baseline_entries = baseline_by_interface.get(name, {})
             if not entries:
                 # BFD je na tranzitu ocekavane vzdy (rozhodnuti
-                # 2026-08-26) - zadny zamer se neparsuje. baseline_value
-                # se odvozuje ze stavu prvni (podle peer serazene) baseline
-                # session pro tenhle interface, ne z pevneho "Up" - stav se
-                # nikdy nefabuluje.
+                # 2026-08-26) - zadny zamer se neparsuje. Tady na rozdil od
+                # per-session vetve nemame subjektovy peer, podle ktereho by
+                # se dal baseline dohledat, takze rozhrani je jen fallback:
+                # baseline_value se odvozuje ze stavu prvni (podle peer
+                # serazene) baseline session pro tenhle interface, ne z
+                # pevneho "Up" - stav se nikdy nefabuluje.
                 baseline_value = None
                 if baseline_entries:
                     first_peer = sorted(baseline_entries)[0]
@@ -432,7 +434,11 @@ class BfdTransitStateCheck(Check):
                 continue
             for peer, data in sorted(entries):
                 state = str(data.get("state", "unknown"))
-                was_raw_state = baseline_entries.get(peer, {}).get("state")
+                # Baseline session se hleda podle peera, ne podle rozhrani -
+                # tranzitni port se pri migraci bezne prejmenuje (napr.
+                # ge-0/0/1.0 -> et-0/0/1.0), takze baseline_by_interface by
+                # tu session nikdy nenaslo a RECOVERED by nikdy nenaskocilo.
+                was_raw_state = baseline_sessions.get(peer, {}).get("state")
                 was_state = str(was_raw_state) if was_raw_state is not None else None
                 message = f"{name}: BFD session s {peer} {state}"
                 if state == "Up" and was_state is not None and was_state != "Up":
