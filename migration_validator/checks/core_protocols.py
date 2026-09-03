@@ -13,7 +13,7 @@ from migration_validator.checks.ifaces import is_transit, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
-MISSING = "chybí v outputu"
+MISSING = "chybi v outputu"
 CORE = frozenset({"Core"})
 
 
@@ -93,20 +93,23 @@ class IsisAdjacencyStateCheck(Check):
             rows.append(Finding(
                 outcome, f"{name}: IS-IS soused {system}",
                 label=qualified("IS-IS neighbor name", name), value=system_value,
+                baseline_value=was_system_value,
             ))
 
         state = str(adj.get("state", "unknown"))
         was_raw_state = was.get("state") if was else None
         was_state = str(was_raw_state) if was_raw_state is not None else None
+        message = f"{name}: adjacency {state}"
         if state != "Up":
             outcome = Outcome.BROKEN
         elif has_baseline and was_state is not None and was_state != "Up":
-            # Up ted, ale v baseline nebyl - zlepseni je porad zmena
-            outcome = Outcome.DEGRADED
+            # Up ted, v baseline nebyl - zlepseni proti baseline, ne tiche OK
+            outcome = Outcome.RECOVERED
+            message = f"{name}: adjacency Up (v baseline {was_state})"
         else:
             outcome = Outcome.OK
         rows.append(Finding(
-            outcome, f"{name}: adjacency {state}",
+            outcome, message,
             label=qualified(self.label, name),
             value=state, baseline_value=was_state,
         ))
@@ -166,14 +169,18 @@ class IsisInterfaceInfoCheck(Check):
                 Outcome.OK if "2" in levels else Outcome.BROKEN,
                 f"{name}: IS-IS level 2 {'nakonfigurovan' if '2' in levels else 'chybi'}",
                 label=qualified("IS-IS level 2", name),
-                value="nakonfigurován" if "2" in levels else MISSING,
+                value="nakonfigurovan" if "2" in levels else MISSING,
             ))
             if "1" in levels:
                 findings.append(Finding(
                     Outcome.BROKEN,
                     f"{name}: IS-IS level 1 nema na Core rozhrani co delat",
-                    label=qualified("IS-IS level 1", name), value="nakonfigurován",
+                    label=qualified("IS-IS level 1", name), value="nakonfigurovan",
                 ))
+            if "2" not in levels:
+                # Chybejici level 2 uz sam nese BROKEN - passive radek by
+                # meril neco, co bez adjacency nema smysl (jeden FAIL, ne dva).
+                continue
             passive = bool(levels.get("2", {}).get("passive"))
             # Loopback pasivni byt musi (nema souseda), transit nesmi
             # (pasivni port nesestavi adjacency, kterou meri
@@ -226,10 +233,23 @@ def _neighbor_findings(
         was_address = was.get("neighbor_address") if was else None
         changed = ctx.has_baseline and was is not None and address != was_address
         # address muze byt None (klic pritomny, hodnota chybi) - str(None)
-        # by do sloupce hodnot poslalo doslovny retezec "None".
+        # by do sloupce hodnot poslalo doslovny retezec "None". Chybejici
+        # adresa bez zmeny proti baseline je BROKEN (mereni je poctive
+        # "adresa chybi", ne pouhe INFO); zmena proti baseline zustava
+        # DEGRADED - je to porovnani, ne absence.
+        if address is None and not changed:
+            outcome = Outcome.BROKEN
+        elif changed:
+            outcome = Outcome.DEGRADED
+        else:
+            outcome = Outcome.INFO
+        message = (
+            f"{name}: adresa souseda chybi"
+            if address is None
+            else f"{name}: adresa souseda {address}"
+        )
         findings.append(Finding(
-            Outcome.DEGRADED if changed else Outcome.INFO,
-            f"{name}: adresa souseda {address}",
+            outcome, message,
             label=qualified(address_label, name),
             value=str(address) if address is not None else MISSING,
             baseline_value=str(was_address) if was_address is not None else None,
@@ -318,11 +338,17 @@ class MplsInterfaceStateCheck(Check):
                 ))
                 continue
             state = str(entry.get("state", "unknown"))
+            up = state == "Up"
+            message = f"{name}: MPLS {state}"
+            if up and was_state not in (None, "Up"):
+                outcome = Outcome.RECOVERED
+                message = f"{name}: MPLS Up (v baseline {was_state})"
+            else:
+                outcome = Outcome.OK if up else Outcome.BROKEN
             findings.append(Finding(
-                Outcome.OK if state == "Up" else Outcome.BROKEN,
-                f"{name}: MPLS {state}",
+                outcome, message,
                 label=qualified(self.label, name),
-                value="Up" if state == "Up" else "Down",
+                value="Up" if up else "Down",
                 baseline_value=was_state,
             ))
         return findings
@@ -342,6 +368,11 @@ class IsisOverviewCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         overview: dict[str, Any] = ctx.subject.get("isis_overview", {})
+        if not overview:
+            return [Finding(
+                Outcome.DEGRADED, "chybi data z collectoru isis_overview",
+                value="bez dat",
+            )]
         overload = bool(overview.get("overload_enabled"))
         return [Finding(
             Outcome.DEGRADED if overload else Outcome.OK,
@@ -369,27 +400,52 @@ class BfdTransitStateCheck(Check):
         for peer, data in sessions.items():
             by_interface.setdefault(str(data.get("interface", "")), []).append((peer, data))
 
+        baseline_sessions: dict[str, Any] = (ctx.baseline or {}).get("bfd", {})
+        baseline_by_interface: dict[str, dict[str, Any]] = {}
+        for peer, data in baseline_sessions.items():
+            baseline_by_interface.setdefault(
+                str(data.get("interface", "")), {}
+            )[peer] = data
+
         findings: list[Finding] = []
         for name in _scope_transit_interfaces(ctx):
             entries = by_interface.get(name)
+            baseline_entries = baseline_by_interface.get(name, {})
             if not entries:
                 # BFD je na tranzitu ocekavane vzdy (rozhodnuti
-                # 2026-08-26) - zadny zamer se neparsuje.
+                # 2026-08-26) - zadny zamer se neparsuje. baseline_value
+                # se odvozuje ze stavu prvni (podle peer serazene) baseline
+                # session pro tenhle interface, ne z pevneho "Up" - stav se
+                # nikdy nefabuluje.
+                baseline_value = None
+                if baseline_entries:
+                    first_peer = sorted(baseline_entries)[0]
+                    baseline_value = str(
+                        baseline_entries[first_peer].get("state", "unknown")
+                    )
                 findings.append(Finding(
                     Outcome.BROKEN,
                     f"{name}: zadna BFD session",
                     label=qualified(self.label, name), value="Down",
+                    baseline_value=baseline_value,
                 ))
                 continue
             for peer, data in sorted(entries):
                 state = str(data.get("state", "unknown"))
+                was_raw_state = baseline_entries.get(peer, {}).get("state")
+                was_state = str(was_raw_state) if was_raw_state is not None else None
+                message = f"{name}: BFD session s {peer} {state}"
+                if state == "Up" and was_state is not None and was_state != "Up":
+                    outcome = Outcome.RECOVERED
+                    message = f"{name}: BFD session s {peer} Up (v baseline {was_state})"
+                else:
+                    outcome = Outcome.OK if state == "Up" else Outcome.BROKEN
                 findings.append(Finding(
-                    Outcome.OK if state == "Up" else Outcome.BROKEN,
-                    f"{name}: BFD session s {peer} {state}",
+                    outcome, message,
                     label=qualified(self.label, name),
                     # Syrovy stav, ne .capitalize() - to by z "AdminDown"
                     # udelalo "Admindown" (nalez finalniho review). Sesterky
                     # check bfd.py:113 vypisuje stav taky syrovy - stejny slovnik.
-                    value=state, subject=data,
+                    value=state, baseline_value=was_state, subject=data,
                 ))
         return findings

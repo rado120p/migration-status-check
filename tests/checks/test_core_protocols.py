@@ -202,12 +202,12 @@ def test_baseline_state_up_now_and_up_before_is_pass():
     assert state_row.baseline_value == "Up"
 
 
-def test_baseline_state_down_before_up_now_is_warn():
-    """Zlepseni je porad zmena - hlasi se jako DEGRADED, ne jako tiche OK.
+def test_baseline_state_down_before_up_now_is_recovered():
+    """Zlepseni proti baseline je RECOVERED, ne tiche OK ani DEGRADED.
 
-    Mutant kill (2026-08-26, overeno spustenim): flip DEGRADED->OK ve vetvi
-    "Up ted / Down v baseline" v IsisAdjacencyStateCheck._rows -> tenhle test
-    padne."""
+    Mutant kill (2026-09-03, overeno spustenim): flip RECOVERED->OK (nebo
+    ->DEGRADED) ve vetvi "Up ted / ne-Up v baseline" v
+    IsisAdjacencyStateCheck._rows -> tenhle test padne."""
     findings = IsisAdjacencyStateCheck().run(
         _ctx(
             {
@@ -230,7 +230,8 @@ def test_baseline_state_down_before_up_now_is_warn():
     )
 
     state_row = findings[1]
-    assert state_row.outcome is Outcome.DEGRADED
+    assert state_row.outcome is Outcome.RECOVERED
+    assert state_row.message == f"{IFACE}: adjacency Up (v baseline Down)"
     assert state_row.value == "Up"
     assert state_row.baseline_value == "Down"
 
@@ -314,6 +315,33 @@ def test_interface_missing_baseline_without_state_key_does_not_leak_none():
     assert findings[0].baseline_value is None
 
 
+def test_missing_marker_has_no_diacritics():
+    assert MISSING == "chybi v outputu"
+
+
+def test_name_row_match_carries_baseline_value():
+    """Soused se shoduje s baselinem - name_row nese baseline_value, ne jen
+    value (brief 2026-09-03, bod 26-ISIS)."""
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx(
+            {IFACE: {"system_name": "P1", "state": "Up"}},
+            baseline_adj={IFACE: {"system_name": "P1", "state": "Up"}},
+        )
+    )
+
+    name_row = findings[0]
+    assert name_row.baseline_value == "P1"
+
+
+def test_name_row_no_baseline_does_not_leak_literal_none():
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx({IFACE: {"system_name": "P1", "state": "Up"}})
+    )
+
+    name_row = findings[0]
+    assert name_row.baseline_value is None
+
+
 def test_loopback_scope_does_not_apply():
     check = IsisAdjacencyStateCheck()
     scope = _scope(service_subtype="loopback")
@@ -378,7 +406,7 @@ def test_level1_present_is_fail_row_on_loopback():
 
     level1_row = next(f for f in findings if f.label == f"IS-IS level 1 ({LOOPBACK})")
     assert level1_row.outcome is Outcome.BROKEN
-    assert level1_row.value == "nakonfigurován"
+    assert level1_row.value == "nakonfigurovan"
 
 
 def test_level1_present_is_fail_row_on_transit():
@@ -392,7 +420,7 @@ def test_level1_present_is_fail_row_on_transit():
 
     level1_row = next(f for f in findings if f.label == f"IS-IS level 1 ({IFACE})")
     assert level1_row.outcome is Outcome.BROKEN
-    assert level1_row.value == "nakonfigurován"
+    assert level1_row.value == "nakonfigurovan"
 
 
 def test_transit_non_passive_level2_is_pass():
@@ -434,6 +462,54 @@ def test_transit_passive_level2_is_fail():
     )
     assert passive_row.outcome is Outcome.BROKEN
     assert passive_row.value == "Passive"
+
+
+def test_level2_missing_emits_single_broken_row_no_passive_row():
+    """Chybejici level 2 znamena, ze IS-IS na rozhrani nesestavi adjacency -
+    passive radek uz nema smysl merit a nesmi se vypsat (brief 2026-09-03)."""
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    labels = [f.label for f in findings if f.outcome is Outcome.BROKEN]
+    assert labels == [f"IS-IS level 2 ({LOOPBACK})"]
+    assert not any(
+        f.label.startswith("IS-IS level 2 passive") for f in findings
+    )
+    assert findings[0].value == MISSING
+
+
+def test_level2_present_still_emits_passive_row():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {"2": {"passive": True}}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    assert any(
+        f.label == f"IS-IS level 2 passive ({LOOPBACK})" for f in findings
+    )
+
+
+def test_level1_and_missing_level2_still_emits_level1_row():
+    findings = IsisInterfaceInfoCheck().run(
+        _ctx_for(
+            "isis_interface",
+            {LOOPBACK: {"levels": {"1": {"passive": True}}}},
+            scope=_loopback_scope(),
+        )
+    )
+
+    labels = [f.label for f in findings]
+    assert f"IS-IS level 2 ({LOOPBACK})" in labels
+    assert f"IS-IS level 1 ({LOOPBACK})" in labels
+    assert not any(label.startswith("IS-IS level 2 passive") for label in labels)
 
 
 def test_interface_missing_from_isis_interface_output_is_fail():
@@ -484,6 +560,30 @@ def test_overload_disabled_is_pass():
     )
 
     assert len(findings) == 1
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "nenastaven"
+
+
+def test_isis_overview_empty_is_degraded_bez_dat():
+    findings = IsisOverviewCheck().run(
+        _ctx_for("isis_overview", {}, scope=_loopback_scope())
+    )
+
+    assert len(findings) == 1
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].message == "chybi data z collectoru isis_overview"
+    assert findings[0].value == "bez dat"
+
+
+def test_isis_overview_disabled_flag_is_not_treated_as_empty():
+    """Dict s overload_enabled False zustava OK 'nenastaven', ne DEGRADED
+    'bez dat' - prazdny je jen chybejici/{} subject."""
+    findings = IsisOverviewCheck().run(
+        _ctx_for(
+            "isis_overview", {"overload_enabled": False}, scope=_loopback_scope()
+        )
+    )
+
     assert findings[0].outcome is Outcome.OK
     assert findings[0].value == "nenastaven"
 
@@ -660,6 +760,33 @@ def test_mpls_interface_baseline_state_present_but_none_is_not_literal_none():
     assert findings[0].baseline_value is None
 
 
+def test_mpls_up_after_down_baseline_is_recovered():
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area(
+            "mpls_interface",
+            {IFACE: {"state": "Up"}},
+            baseline_value={IFACE: {"state": "Down"}},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.RECOVERED
+    assert findings[0].message == f"{IFACE}: MPLS Up (v baseline Down)"
+    assert findings[0].value == "Up"
+    assert findings[0].baseline_value == "Down"
+
+
+def test_mpls_up_after_up_baseline_stays_ok():
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area(
+            "mpls_interface",
+            {IFACE: {"state": "Up"}},
+            baseline_value={IFACE: {"state": "Up"}},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.OK
+
+
 def test_ldp_neighbor_address_none_is_missing_not_literal_none():
     findings = LdpNeighborStateCheck().run(
         _ctx_area(
@@ -669,6 +796,57 @@ def test_ldp_neighbor_address_none_is_missing_not_literal_none():
     )
 
     address_row = findings[1]
+    assert address_row.value == MISSING
+
+
+def test_ldp_neighbor_address_missing_no_baseline_change_is_broken():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": None, "uptime_seconds": 60}},
+        )
+    )
+
+    address_row = next(
+        f for f in findings if f.label == f"LDP neighbor address ({IFACE})"
+    )
+    assert address_row.outcome is Outcome.BROKEN
+    assert address_row.message == f"{IFACE}: adresa souseda chybi"
+    assert address_row.value == MISSING
+
+
+def test_ldp_neighbor_address_missing_with_baseline_change_stays_degraded():
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": None, "uptime_seconds": 60}},
+            baseline_value={IFACE: {"neighbor_address": "10.0.0.9", "uptime_seconds": 60}},
+        )
+    )
+
+    address_row = next(
+        f for f in findings if f.label == f"LDP neighbor address ({IFACE})"
+    )
+    assert address_row.outcome is Outcome.DEGRADED
+    assert address_row.value == MISSING
+    assert address_row.baseline_value == "10.0.0.9"
+
+
+def test_pim_neighbor_address_missing_no_baseline_change_is_broken():
+    scope = _scope(protocols=("pim",))
+    findings = PimNeighborStateCheck().run(
+        _ctx_area(
+            "pim_neighbor",
+            {IFACE: {"neighbor_address": None, "uptime_seconds": 60}},
+            scope=scope,
+        )
+    )
+
+    address_row = next(
+        f for f in findings if f.label == f"PIM neighbor address ({IFACE})"
+    )
+    assert address_row.outcome is Outcome.BROKEN
+    assert address_row.message == f"{IFACE}: adresa souseda chybi"
     assert address_row.value == MISSING
 
 
@@ -749,6 +927,58 @@ def test_bfd_transit_two_sessions_on_one_interface_two_rows_no_phantom_fail():
     assert len(findings) == 2
     assert all(f.outcome is Outcome.OK for f in findings)
     assert all(f.value == "Up" for f in findings)
+
+
+def test_bfd_transit_up_after_down_baseline_is_recovered():
+    findings = BfdTransitStateCheck().run(
+        _ctx_area(
+            "bfd",
+            {"10.0.0.9": {"state": "Up", "interface": IFACE}},
+            baseline_value={"10.0.0.9": {"state": "Down", "interface": IFACE}},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.RECOVERED
+    assert findings[0].message == f"{IFACE}: BFD session s 10.0.0.9 Up (v baseline Down)"
+    assert findings[0].value == "Up"
+    assert findings[0].baseline_value == "Down"
+
+
+def test_bfd_transit_up_after_up_baseline_stays_ok():
+    findings = BfdTransitStateCheck().run(
+        _ctx_area(
+            "bfd",
+            {"10.0.0.9": {"state": "Up", "interface": IFACE}},
+            baseline_value={"10.0.0.9": {"state": "Up", "interface": IFACE}},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].baseline_value == "Up"
+
+
+def test_bfd_transit_missing_session_baseline_value_from_first_sorted_peer():
+    """Zadna session ted, ale v baseline byla vic nez jedna - baseline_value
+    se odvozuje ze stavu prvni (podle peer serazene), ne z pevneho 'Up'."""
+    findings = BfdTransitStateCheck().run(
+        _ctx_area(
+            "bfd",
+            {},
+            baseline_value={
+                "10.0.0.9": {"state": "Down", "interface": IFACE},
+                "10.0.0.1": {"state": "AdminDown", "interface": IFACE},
+            },
+        )
+    )
+
+    assert len(findings) == 1
+    assert findings[0].baseline_value == "AdminDown"
+
+
+def test_bfd_transit_missing_session_no_baseline_session_is_none():
+    findings = BfdTransitStateCheck().run(_ctx_area("bfd", {}))
+
+    assert findings[0].baseline_value is None
 
 
 def test_bfd_transit_does_not_apply_to_customer_scope():
