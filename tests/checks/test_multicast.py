@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.multicast import (
-    CORE_SKIP_LABELS,
     NO_REPORT,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
@@ -227,7 +226,36 @@ def test_forwarding_internet_upstream_must_be_transit():
     row = _by_label(findings, sg_label(*SG))["Upstream interface"]
     assert row.outcome is Outcome.BROKEN
     assert row.value == "lsi.1048576"
-    assert "nema upstream interface" in row.message
+    assert row.message == (
+        "(10.11.11.1, 232.1.1.1): upstream lsi.1048576 neni z ocekavane role "
+        "(ocekavano ge-/xe-/et-/ae)"
+    )
+
+
+def test_upstream_wrong_role_uses_mvpn_prefixes():
+    """Mvpn-igmp scope hlasi jinou ocekavanou roli nez Internet/multicast."""
+    scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
+    routes = {"10.12.12.1,239.1.1.1": _route(upstream="et-0/0/0.0", downstream=["irb.2"])}
+    pair = (("10.12.12.1", "239.1.1.1"),)
+    findings = MulticastForwardingStatusCheck().run(
+        _ctx(_facts("irb.2", "RI", pair, routes), scope=scope))
+    row = _by_label(findings, "(10.12.12.1, 239.1.1.1)")["Upstream interface"]
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == (
+        "(10.12.12.1, 239.1.1.1): upstream et-0/0/0.0 neni z ocekavane role "
+        "(ocekavano lsi./vt-)"
+    )
+
+
+def test_upstream_missing_message_unchanged():
+    routes = {f"{SG[0]},{SG[1]}": _route(upstream=None)}
+    findings = MulticastForwardingStatusCheck().run(_ctx(_facts(routes=routes)))
+    row = _by_label(findings, sg_label(*SG))["Upstream interface"]
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == (
+        "(10.11.11.1, 232.1.1.1): upstream - - S,G je v tabulce ale nema "
+        "upstream interface"
+    )
 
 
 def test_forwarding_mvpn_upstream_must_be_lsi_or_vt():
@@ -333,9 +361,12 @@ def test_core_pass_block_shape():
     findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(), scope=_core_scope()))
     assert findings[0].outcome is Outcome.OK
     assert findings[0].label == "Multicast forwarding status"
-    assert findings[0].value == f"Existuje S,G pro {PREFIX}"
+    assert findings[0].message == "1 inet.2 prefixu se streamem"
+    assert findings[0].value == "1 inet.2 prefixu"
+    assert findings[1].outcome is Outcome.OK
+    assert findings[1].value == f"Existuje S,G pro {PREFIX}"
     rows = _by_label(findings, sg_label(*SG))
-    assert [f.label for f in findings[1:]] == [
+    assert [f.label for f in findings[2:]] == [
         "Upstream interface", "Downstream interfaces", "Forwarding rate packets", "Route uptime"]
     assert rows["Upstream interface"].outcome is Outcome.OK
     assert rows["Upstream interface"].value == "et-0/0/0.0"
@@ -343,36 +374,55 @@ def test_core_pass_block_shape():
     assert rows["Forwarding rate packets"].value == "6 pps"
 
 
-def test_core_no_stream_for_prefix_fails_with_four_skips():
+def test_core_no_stream_for_prefix_fails_without_filler_skips():
+    """Prazdne SKIP radky (S,G / Forwarding rate / Upstream / Downstream)
+    zmizely - zustava jen souhrn a per-prefix BROKEN radek."""
     findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(routes={}), scope=_core_scope()))
+    assert not any(f.outcome is Outcome.SKIP and f.value == "" for f in findings)
+    assert findings[0].label == "Multicast forwarding status"
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == f"Neexistuje S,G pro {PREFIX}"
-    assert [(f.outcome, f.label, f.value, f.group) for f in findings[1:]] == [
-        (Outcome.SKIP, "S,G", "", PREFIX),
-        (Outcome.SKIP, "Forwarding rate packets", "", PREFIX),
-        (Outcome.SKIP, "Upstream interface", "", PREFIX),
-        (Outcome.SKIP, "Downstream interfaces", "", PREFIX),
-    ]
+    assert findings[0].message == "1 z 1 inet.2 prefixu bez streamu"
+    assert findings[0].value == "1/1 bez streamu"
+    assert findings[1].outcome is Outcome.BROKEN
+    assert findings[1].value == f"Neexistuje S,G pro {PREFIX}"
+    assert len(findings) == 2
 
 
-def test_core_no_stream_for_two_prefixes_skips_carry_own_prefix():
-    """Bug fix 2026-09-03 (finding 2): s vice inet.2 statikami a zadnymi
-    streamy musi mit kazda ctverice SKIP radku group rovny svemu prefixu,
-    jinak jsou v reportu nerozlisitelne."""
+def test_core_no_stream_has_no_filler_skip_rows_and_summary():
+    """Jeden prefix se streamem, druhy bez nej - souhrn pocita oba, i kdyz
+    jen jeden chybi."""
     prefix2 = "10.11.11.2/32"
     static_routes = INET2 + ({
         "rib": "inet.2", "prefix": prefix2, "route_type": "static",
         "next_hops": [{"to": "10.1.1.3", "interface": None, "qualified": False, "active": True}],
         "active": True,
     },)
+    routes = {f"{SG[0]},{SG[1]}": _route(downstream=["et-0/0/8.11", "irb.2"])}
     findings = CoreMulticastForwardingCheck().run(
-        _ctx(_core_facts(routes={}), scope=_core_scope(static_routes=static_routes)))
-    groups_by_prefix = {}
-    for f in findings:
-        if f.outcome is Outcome.SKIP:
-            groups_by_prefix.setdefault(f.group, set()).add(f.label)
-    assert groups_by_prefix[PREFIX] == set(CORE_SKIP_LABELS)
-    assert groups_by_prefix[prefix2] == set(CORE_SKIP_LABELS)
+        _ctx(_core_facts(routes=routes), scope=_core_scope(static_routes=static_routes)))
+    assert not any(f.outcome is Outcome.SKIP and f.value == "" for f in findings)
+    assert findings[0].label == "Multicast forwarding status"
+    assert findings[0].message == "1 z 2 inet.2 prefixu bez streamu"
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == "1/2 bez streamu"
+
+
+def test_core_all_streams_summary_ok():
+    prefix2 = "10.11.11.2/32"
+    static_routes = INET2 + ({
+        "rib": "inet.2", "prefix": prefix2, "route_type": "static",
+        "next_hops": [{"to": "10.1.1.3", "interface": None, "qualified": False, "active": True}],
+        "active": True,
+    },)
+    routes = {
+        f"{SG[0]},{SG[1]}": _route(downstream=["et-0/0/8.11", "irb.2"]),
+        "10.11.11.2,232.1.1.1": _route(downstream=["et-0/0/8.11", "irb.2"]),
+    }
+    findings = CoreMulticastForwardingCheck().run(
+        _ctx(_core_facts(routes=routes), scope=_core_scope(static_routes=static_routes)))
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].message == "2 inet.2 prefixu se streamem"
+    assert findings[0].value == "2 inet.2 prefixu"
 
 
 def test_core_upstream_must_be_one_of_via():
@@ -406,12 +456,12 @@ def test_core_sg_set_compared_against_baseline():
         f"{SG[0]},{SG[1]}": _route(), "10.11.11.1,232.1.1.9": _route()})
     findings = CoreMulticastForwardingCheck().run(_ctx(
         _core_facts(), baseline=baseline, scope=_core_scope(), baseline_scope=_core_scope()))
-    assert findings[0].outcome is Outcome.DEGRADED
-    assert findings[0].baseline_value == "(10.11.11.1, 232.1.1.1), (10.11.11.1, 232.1.1.9)"
+    assert findings[1].outcome is Outcome.DEGRADED
+    assert findings[1].baseline_value == "(10.11.11.1, 232.1.1.1), (10.11.11.1, 232.1.1.9)"
     same = CoreMulticastForwardingCheck().run(_ctx(
         _core_facts(), baseline=_core_facts(), scope=_core_scope(), baseline_scope=_core_scope()))
-    assert same[0].outcome is Outcome.OK
-    assert same[0].baseline_value == "(10.11.11.1, 232.1.1.1)"
+    assert same[1].outcome is Outcome.OK
+    assert same[1].baseline_value == "(10.11.11.1, 232.1.1.1)"
 
 
 def test_core_check_applies_only_to_loopback():
@@ -504,7 +554,21 @@ def test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not():
     moved = MvpnCmulticastStatusCheck().run(_ctx(
         _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=other_pe, pe="150.0.0.11")]),
         scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
-    assert _by_label(moved, sg_label(*MSG))["Provider tunnel"].outcome is Outcome.DEGRADED
+    row = _by_label(moved, sg_label(*MSG))["Provider tunnel"]
+    assert row.outcome is Outcome.DEGRADED
+
+
+def test_mvpn_sender_pe_change_names_both():
+    """Hlaska musi jmenovat obe PE - stare i nove - ne jen tu starou."""
+    other_pe = "RSVP-TE P2MP:150.0.0.11, 24209,150.0.0.11"
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=other_pe, pe="150.0.0.11")]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    row = _by_label(findings, sg_label(*MSG))["Provider tunnel"]
+    assert row.message == (
+        f"{sg_label(*MSG)}: provider tunnel {TUNNEL} - "
+        "sender PE se zmenil 150.0.0.11 -> 150.0.0.13"
+    )
 
 
 def test_mvpn_asm_report_matches_by_group_only():

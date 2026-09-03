@@ -167,11 +167,15 @@ class IgmpMembershipReportCheck(Check):
 
 # --- multicast_forwarding_status --------------------------------------------
 
-def _upstream_ok(subtype: str | None, upstream: str | None) -> bool:
+def _upstream_problem(subtype: str | None, upstream: str | None) -> str | None:
+    """None = upstream v poradku. Jinak text pripojeny za 'upstream <hodnota>'
+    - odlisuje chybejici upstream od upstreamu ze spatne role."""
     if not upstream:
-        return False
+        return " - S,G je v tabulce ale nema upstream interface"
     prefixes = MVPN_UPSTREAM_PREFIXES if subtype == "mvpn-igmp" else INTERNET_UPSTREAM_PREFIXES
-    return upstream.startswith(prefixes)
+    if upstream.startswith(prefixes):
+        return None
+    return f" neni z ocekavane role (ocekavano {'/'.join(prefixes)})"
 
 
 def _summary(label: str, total: int, failed: int) -> Finding:
@@ -236,6 +240,7 @@ class MulticastForwardingStatusCheck(Check):
         downstream = route.get("downstream_interfaces") or []
         on_iface = iface in downstream
         upstream = route.get("upstream_interface")
+        problem = _upstream_problem(subtype, upstream)
         return [
             Finding(
                 Outcome.OK if on_iface else Outcome.BROKEN,
@@ -247,11 +252,8 @@ class MulticastForwardingStatusCheck(Check):
                 ),
             ),
             Finding(
-                Outcome.OK if _upstream_ok(subtype, upstream) else Outcome.BROKEN,
-                f"{sg}: upstream {upstream or '-'}" + (
-                    "" if _upstream_ok(subtype, upstream)
-                    else " - S,G je v tabulce ale nema upstream interface"
-                ),
+                Outcome.OK if problem is None else Outcome.BROKEN,
+                f"{sg}: upstream {upstream or '-'}{problem or ''}",
                 label="Upstream interface", group=sg, value=upstream or "-",
             ),
             *stream_rows(sg, route, rate_label="Forwarding-rate"),
@@ -259,9 +261,6 @@ class MulticastForwardingStatusCheck(Check):
 
 
 # --- core_multicast_forwarding -----------------------------------------------
-
-CORE_SKIP_LABELS = ("S,G", "Forwarding rate packets", "Upstream interface", "Downstream interfaces")
-
 
 def assign_sources(
     table: dict[str, dict[str, Any]], prefixes: list[str]
@@ -339,10 +338,6 @@ class CoreMulticastForwardingCheck(Check):
                     Outcome.BROKEN, f"neexistuje S,G se zdrojem v {prefix}",
                     label=self.label, value=f"Neexistuje S,G pro {prefix}", baseline_value=was_value,
                 ))
-                findings.extend(
-                    Finding(Outcome.SKIP, f"{prefix}: bez streamu", label=label, group=prefix, value="")
-                    for label in CORE_SKIP_LABELS
-                )
                 continue
             changed = bool(was) and {k for k, _ in was} != {k for k, _ in streams}
             findings.append(Finding(
@@ -356,6 +351,15 @@ class CoreMulticastForwardingCheck(Check):
             for key, route in streams:
                 sg = sg_label(*key.split(",", 1))
                 findings.extend(self._stream(sg, route, vias))
+        missing = [p for p in prefixes if not assigned.get(p)]
+        findings.insert(0, Finding(
+            Outcome.BROKEN if missing else Outcome.OK,
+            f"{len(missing)} z {len(prefixes)} inet.2 prefixu bez streamu" if missing
+            else f"{len(prefixes)} inet.2 prefixu se streamem",
+            label=self.label,
+            value=f"{len(missing)}/{len(prefixes)} bez streamu" if missing
+            else f"{len(prefixes)} inet.2 prefixu",
+        ))
         return findings
 
     @staticmethod
@@ -476,7 +480,7 @@ class MvpnCmulticastStatusCheck(Check):
         elif was_pe and was_pe != pe:
             # Jen sender PE, ne cely retezec: tunnel id se pri re-signalizaci
             # LSP zmeni bez zmeny sluzby (rozhodnuti 2026-09-02).
-            outcome, note = Outcome.DEGRADED, f" - sender PE se zmenil z {was_pe}"
+            outcome, note = Outcome.DEGRADED, f" - sender PE se zmenil {was_pe} -> {pe}"
         else:
             outcome, note = Outcome.OK, ""
         return Finding(
