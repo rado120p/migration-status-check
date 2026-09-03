@@ -55,6 +55,13 @@ def test_session_down_is_broken():
     assert findings[0].value == "Down"
 
 
+def test_session_down_message_states_expectation():
+    """Hlaska ma rict, co se ocekavalo, ne jen aktualni stav (bod 3)."""
+    f = BfdSessionStateCheck().run(_ctx({"198.11.13.2": {"state": "Down"}}))[0]
+
+    assert f.message == "198.11.13.2: session Down, ocekavano Up"
+
+
 def test_session_down_since_baseline_carries_previous_state():
     """ZMENA sloupec ma vypsat 'bylo Up' i u session, ktera od te doby spadla."""
     findings = BfdSessionStateCheck().run(
@@ -102,10 +109,24 @@ def test_bfd_removed_since_baseline_is_broken():
     )
 
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "neni ve sluzbe"
+    assert findings[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
     assert findings[0].message == "198.11.13.2: v baseline patril k teto sluzbe, v subjektu uz ne"
     assert findings[0].baseline_value == "Up"
     assert findings[0].family == 4
+
+
+def test_peer_only_in_baseline_value_is_full_sentence():
+    """Hodnota v tabulce je uplna veta, ne kratka znacka (bod 4).
+
+    Puvodni hodnota 'neni ve sluzbe' rikala, ze peer neni ve sluzbe, ne ze
+    v baseline byl a uz neni - v tabulkovem sloupci bez kontextu hlasky to
+    ctenari nedavalo smysl.
+    """
+    f = BfdSessionStateCheck().run(
+        _ctx({}, baseline_sessions={"198.11.13.2": {"state": "Up"}}, scope=_scope(bfd_peers=[], bgp_neighbors=()))
+    )[0]
+
+    assert f.value == "v baseline patril k teto sluzbe, v subjektu uz ne"
 
 
 def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():
@@ -130,7 +151,7 @@ def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():
     )
 
     assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "neni ve sluzbe"
+    assert findings[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
 
 
 def test_session_without_intent_is_degraded():
@@ -144,8 +165,20 @@ def test_session_without_intent_is_degraded():
     )
 
     assert findings[0].outcome is Outcome.DEGRADED
-    assert findings[0].value == "bez konfigurace"
+    assert findings[0].value == "parser nenasel konfiguraci"
     assert findings[0].family == 4
+
+
+def test_unconfigured_session_blames_parser():
+    """Hlaska ma rict, ze problem je v parseru, ne v konfiguraci sluzby
+    (bod 5) - session existuje, parser ji jen nedohledal."""
+    f = BfdSessionStateCheck().run(
+        _ctx({"198.11.13.2": {"state": "Up"}}, scope=_scope(bfd_peers=[]))
+    )[0]
+
+    assert f.outcome is Outcome.DEGRADED
+    assert f.message == "198.11.13.2: BFD session existuje (Up), ale parser ji nenasel v konfiguraci sluzby"
+    assert f.value == "parser nenasel konfiguraci"
 
 
 def test_service_without_bfd_gets_no_row():

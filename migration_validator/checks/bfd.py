@@ -15,16 +15,14 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.bgp import ESTABLISHED, peer_family
+from migration_validator.checks.bgp import ESTABLISHED, NOT_IN_SERVICE, peer_family
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 NO_SESSION = "bez session"
 BGP_NOT_UP = "BGP neni Established"
-NO_INTENT = "bez konfigurace"
+PARSER_MISSED = "parser nenasel konfiguraci"
 
-# Dve konstanty na jeden stav "session byla v baseline, v subjektu neni",
-# stejne jako routes.py rozlisuje MISSING_FROM_TABLE a MISSING_ENTIRELY.
 # NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni,
 # a to jde rict jen v service scope. Peer, ktereho uz tato sluzba nenarokuje,
 # muze na zarizeni dal bezet pod jinou sluzbou - engine.py:_unassigned_bfd_sessions
@@ -32,8 +30,8 @@ NO_INTENT = "bez konfigurace"
 # nema, takze `configured` je tam vzdy False a o konfiguraci nejde tvrdit nic
 # (AR-17) - zbyva ciste stav session. Rozdil musi byt v hodnote, ne jen v
 # hlasce: do reportu jde sloupec s hodnotou (F-7/AR-4), hlaska se v textovem
-# vypisu neobjevi.
-NOT_IN_SERVICE = "neni ve sluzbe"
+# vypisu neobjevi. Konstanta je sdilena s bgp.py - stejny konstrukt, stejna
+# formulace.
 SESSION_GONE = "session zmizela"
 
 
@@ -55,7 +53,7 @@ class BfdSessionStateCheck(Check):
             # Scope.select ted tahne interni peery i do Core-loopback scope,
             # ale zadny check jejich session nemeri. Kdyby tu tenhle check
             # bezel dal, kazda takova session (zamer v konfiguraci existuje)
-            # by dostala nepravdive WARN "bez konfigurace" - loopback BFD
+            # by dostala nepravdive DEGRADED "parser nenasel konfiguraci" - loopback BFD
             # zamer se totiz z inventory neparsuje. Radeji zadny check nez
             # lhavy.
             return False
@@ -110,18 +108,24 @@ class BfdSessionStateCheck(Check):
             if not configured and not is_device:
                 return Finding(
                     Outcome.DEGRADED,
-                    f"{peer}: session existuje ({state}), v konfiguraci sluzby neni",
+                    f"{peer}: BFD session existuje ({state}), ale parser ji nenasel "
+                    "v konfiguraci sluzby",
                     label=label,
                     family=family,
-                    value=NO_INTENT,
+                    value=PARSER_MISSED,
                     baseline_value=was,
                     subject=session,
                 )
 
             outcome = Outcome.OK if state == "Up" else Outcome.BROKEN
+            message = (
+                f"{peer}: session {state}"
+                if outcome is Outcome.OK
+                else f"{peer}: session {state}, ocekavano Up"
+            )
             return Finding(
                 outcome,
-                f"{peer}: session {state}",
+                message,
                 label=label,
                 family=family,
                 value=state,

@@ -5,6 +5,14 @@ zaklade shody se subnetem rozhrani, takze scope uz ma spravny seznam.
 
 Pocty prefixu se porovnavaji s toleranci, ne 1:1. Presna shoda generuje
 mnozstvi FAILu kvuli rozdilu nekolika rout, coz neni signifikantni.
+
+Tolerance je symetricka: pokles pod `tolerance_percent` je BROKEN (WARN pri
+vychozi ADVISORY severity teto skupiny checku), narust nad stejnou hranici
+v opacnem smeru (`change > abs(tolerance)`) je DEGRADED, tedy vzdy WARN -
+prekvapivy skok poctu prefixu nahoru je stejne tak varovani jako pokles,
+i kdyz nejde o vypadek. RIB, kterou baseline mela a subjekt ji vubec
+nezmeril, je BROKEN nalez ("RIB v baseline byla, v subjektu chybi") - bez
+teho by o zmizele rodine report tise mlcel.
 """
 
 from __future__ import annotations
@@ -20,6 +28,10 @@ from migration_validator.models.result import Finding, Outcome, Severity
 
 CUSTOMER_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 ESTABLISHED = "Established"
+# Sdilena s bfd.py (stejny konstrukt "clenstvi ve sluzbe zmizelo") - hodnota
+# je uplna veta, ne kratka znacka, protoze v tabulkovem sloupci bez hlasky
+# vedle by kratka znacka "neni ve sluzbe" rikala neco jineho, nez se stalo.
+NOT_IN_SERVICE = "v baseline patril k teto sluzbe, v subjektu uz ne"
 # Countery, ktere se dostanou do reportu - jeden radek na counter.
 # `suppressed` tu chybi zamerne (rozhodnuti 2026-07-29): damping se v
 # tomhle nasazeni nepouziva, takze radek by byl vzdy nulovy. Odpada s nim
@@ -150,11 +162,13 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             # behem migrace ZLEPSILA, a zlepseni neni varovani (R-2):
             # oranzovy radek na zdrave sluzbe je falesny poplach a operator
             # si zvykne vypis preskakovat. Zmena nezmizi - pojmenuje ji
-            # hlaska a sloupec ZMENA pise, jaky byl stav predtim.
+            # hlaska a sloupec ZMENA pise, jaky byl stav predtim. Od bodu 20
+            # je to RECOVERED, ne tiche OK - operator ma vedet, ze se relace
+            # zotavila, ne to precist stejne jako "vzdy byla v poradku".
             changed = baseline_state is not None and baseline_state != state
             findings.append(
                 Finding(
-                    Outcome.OK,
+                    Outcome.RECOVERED if changed else Outcome.OK,
                     (
                         f"{peer}: stav se zmenil {baseline_state} -> {state}"
                         if changed
@@ -208,6 +222,11 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
                     value="deaktivovan",
+                    baseline_value=(
+                        str(baseline_peers[peer].get("state", "unknown"))
+                        if peer in baseline_peers
+                        else None
+                    ),
                 )
             )
 
@@ -232,10 +251,10 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     # ptat na nefiltrovana fakta, ktera nema.
                     f"{peer}: nakonfigurovan, ale session neexistuje"
                     if in_config
-                    else f"{peer}: v baseline patril k teto sluzbe, v subjektu uz ne",
+                    else f"{peer}: {NOT_IN_SERVICE}",
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
-                    value="bez session" if in_config else "neni ve sluzbe",
+                    value="bez session" if in_config else NOT_IN_SERVICE,
                     baseline_value=(
                         str(baseline_peers[peer].get("state", "unknown"))
                         if peer in baseline_peers
@@ -310,6 +329,20 @@ class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
                             tolerance, family,
                         )
                     )
+
+            # RIB, kterou baseline mela a subjekt uz vubec nemeri - typicky
+            # rodina odpojena pri migraci. Bez tehle vetve by o ni report
+            # tise mlcel, presestoze pro peera je videt jen zbyla RIB.
+            for rib_name in sorted(set(baseline_ribs) - set(subject_ribs)):
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{peer}/{rib_name}: RIB v baseline byla, v subjektu chybi",
+                        label=f"{self.label} ({rib_name})",
+                        family=family,
+                        value="chybi",
+                    )
+                )
         return findings
 
 
@@ -341,6 +374,12 @@ def _prefix_finding(
         message = (
             f"{peer}/{rib_name}: pokles {key} {baseline} -> {subject}, "
             f"prah je {tolerance:.0f} %"
+        )
+    elif change is not None and change > abs(tolerance):
+        outcome = Outcome.DEGRADED
+        message = (
+            f"{peer}/{rib_name}: narust {key} {baseline} -> {subject}, "
+            f"prah je +{abs(tolerance):.0f} %"
         )
 
     return Finding(

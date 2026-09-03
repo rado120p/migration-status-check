@@ -682,7 +682,7 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     block = _block_of(rendered, "INTERNET-CPE13-NNI", "Internet")
     assert "BGP status (152.11.13.2)" in block
     assert "BFD (152.11.13.2)" in block
-    assert block.count("neni ve sluzbe") == 2
+    assert block.count("v baseline patril k teto sluzbe, v subjektu uz ne") == 2
 
     # Hledat uvnitr sekce, ne kdekoli ve vystupu: NEZARAZENO sdili
     # formatovaci literaly se sousednimi sekcemi, takze `x in rendered` by

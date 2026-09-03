@@ -6,7 +6,7 @@ from migration_validator.checks.bgp import (
     peer_family,
 )
 from migration_validator.config import CheckConfig, default_config
-from migration_validator.models.result import Status
+from migration_validator.models.result import Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -360,13 +360,15 @@ def test_peer_active_now_deactivated_in_baseline_without_session_gets_no_deactiv
     assert "deaktivovan" not in results[0].message
 
 
-def test_state_change_to_established_is_pass_not_warn():
-    """Rozhodnuti R-2: zlepseni neni varovani.
+def test_state_change_to_established_is_recovered_not_warn():
+    """Rozhodnuti R-2: zlepseni neni varovani - a od bodu 20 uz ani tiche PASS.
 
     Tahle vetev je dosazitelna jen kdyz je stav Established (horsi stavy
     odchazi drive), takze pokryva presne a pouze pripad, kdy se relace
     behem migrace zlepsila. WARN na zdrave sluzbe je falesny poplach -
     presne ten trvaly oranzovy svit, proti kteremu se rozhodovalo v Tasku 7.
+    RECOVERED misto PASS ale operatorovi rekne, ze doslo ke zmene k lepsimu,
+    ne ze relace byla v poradku po celou dobu.
 
     Zmena nezmizi: hlaska ji pojmenuje a sloupec ZMENA pise 'bylo Active',
     takze nezdrava baseline zustane videt.
@@ -377,7 +379,7 @@ def test_state_change_to_established_is_pass_not_warn():
     )
     result = run_check(BgpSessionStateCheck(), ctx)[0]
 
-    assert result.status is Status.PASS
+    assert result.status is Status.RECV
     assert "Active" in result.message and "Established" in result.message
     assert result.baseline_value == "Active"
 
@@ -396,7 +398,7 @@ def test_changed_session_carries_baseline_value():
     )
     result = run_check(BgpSessionStateCheck(), ctx)[0]
 
-    assert result.status is Status.PASS
+    assert result.status is Status.RECV
     assert result.baseline_value == "Connect"
 
 
@@ -489,14 +491,17 @@ def test_prefix_counts_rib_missing_in_baseline_skips_that_rib():
     assert result.label == "BGP prefixy (inet6.0)"
 
 
-def test_prefix_growth_is_not_a_problem():
+def test_prefix_growth_beyond_tolerance_is_a_problem():
+    """Narust nad toleranci uz neni tiche PASS (bod 26-BGP): symetricka
+    tolerance k poklesu znamena, ze prekvapiva zmena v obou smerech ma
+    dostat nalez, ne jen ta smerem dolu."""
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer(received=40, accepted=40)}},
         baseline={"bgp": {"198.11.13.2": _peer(received=14, accepted=14)}},
     )
     results = run_check(BgpPrefixCountsCheck(), ctx)
     result = _by_label(results, "received-prefix-count")
-    assert result.status is Status.PASS
+    assert result.status is Status.WARN
 
 
 def test_prefix_counts_are_reported_per_rib_not_summed():
@@ -673,6 +678,117 @@ def test_configured_peer_without_session_does_not_hide_behind_a_sibling():
     assert by_label["BGP status (198.11.13.9)"].status is Status.PASS
 
 
+def test_peer_only_in_baseline_value_is_full_sentence():
+    """Hodnota v tabulce je uplna veta, ne kratka znacka 'neni ve sluzbe'
+    (bod 4) - analogicky bfd.py."""
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {"198.11.13.5": _peer(state="Established")}},
+        bgp_neighbors=[],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert results[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
+
+
+def test_deactivated_peer_carries_baseline_state():
+    """Deaktivovany peer ma taky ukazat, jaky stav mel v baseline (bod 6).
+
+    Bez ni sloupec ZMENA u deaktivovaneho peera vzdy tvrdi 'bez baseline',
+    presestoze baseline stav check zna - stejna regrese, kterou u normalni
+    vetve resil test_changed_session_carries_baseline_value.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {"198.11.13.9": _peer(state="Established")}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+    )
+
+    results = run_check(BgpSessionStateCheck(), ctx)
+
+    assert len(results) == 1
+    assert results[0].baseline_value == "Established"
+
+
+def test_established_after_idle_is_recovered():
+    """Zlepseni baseline stavu ma byt videt jako RECOVERED, ne tiche PASS
+    (bod 20) - operator ma vedet, ze se relace behem migrace zotavila."""
+    ctx = _ctx(
+        subject={"bgp": {"10.0.0.2": _peer(state="Established")}},
+        baseline={"bgp": {"10.0.0.2": _peer(state="Idle")}},
+        bgp_neighbors=["10.0.0.2"],
+    )
+
+    f = BgpSessionStateCheck().run(ctx)[0]
+
+    assert f.outcome is Outcome.RECOVERED
+    assert f.message == "10.0.0.2: stav se zmenil Idle -> Established"
+
+
+def test_prefix_growth_over_tolerance_is_degraded():
+    """Narust prefixu nad toleranci je WARN, ne tiche PASS (bod 26-BGP)."""
+    ctx = _ctx(
+        subject={"bgp": {"10.0.0.2": _peer(received=120, accepted=120)}},
+        baseline={"bgp": {"10.0.0.2": _peer(received=100, accepted=100)}},
+        bgp_neighbors=["10.0.0.2"],
+    )
+
+    results = run_check(BgpPrefixCountsCheck(), ctx)
+    result = _by_label(results, "received-prefix-count")
+
+    assert result.status is Status.WARN
+    assert result.message == "10.0.0.2/inet.0: narust received 100 -> 120, prah je +10 %"
+
+
+def test_rib_missing_in_subject_is_broken():
+    """RIB, ktera v baselinu byla a v subjektu chybi, je BROKEN nalez, ne
+    tiche vynechani (bod 26-BGP).
+
+    Status z toho vyjde WARN, ne FAIL: BgpPrefixCountsCheck ma
+    default_severity ADVISORY, takze BROKEN se u nej mapuje na WARN stejne
+    jako u vetve 'pokles' - severity je vlastnost celeho checku, ne
+    jednotliveho nalezu (checks/base.py:derive_status).
+    """
+    ctx = _ctx(
+        subject={"bgp": {"10.0.0.2": _peer(rib="inet.0")}},
+        baseline={
+            "bgp": {
+                "10.0.0.2": {
+                    "state": "Established",
+                    "routing_instance": None,
+                    "ribs": {
+                        "inet.0": {
+                            "received": 14, "accepted": 14, "advertised": 3,
+                            "active": 14, "suppressed": 0,
+                        },
+                        "inet6.0": {
+                            "received": 5, "accepted": 5, "advertised": 1,
+                            "active": 5, "suppressed": 0,
+                        },
+                    },
+                }
+            }
+        },
+        bgp_neighbors=["10.0.0.2"],
+    )
+
+    findings = BgpPrefixCountsCheck().run(ctx)
+    missing = [f for f in findings if f.value == "chybi"]
+
+    assert len(missing) == 1
+    assert missing[0].outcome is Outcome.BROKEN
+    assert missing[0].message == "10.0.0.2/inet6.0: RIB v baseline byla, v subjektu chybi"
+    assert missing[0].label == "BGP prefixy (inet6.0)"
+
+    results = run_check(BgpPrefixCountsCheck(), ctx)
+    result = next(r for r in results if r.value == "chybi")
+    assert result.status is Status.WARN
+    assert missing[0].message == "10.0.0.2/inet6.0: RIB v baseline byla, v subjektu chybi"
+    assert missing[0].label == "BGP prefixy (inet6.0)"
+
+
 def test_peer_measured_only_in_baseline_is_fail():
     """Peer, ktery v baselinu bezel a zadny subjektovy scope si ho nenarokuje.
 
@@ -694,7 +810,7 @@ def test_peer_measured_only_in_baseline_is_fail():
     assert len(results) == 1
     assert results[0].status is Status.FAIL
     assert "v baseline patril k teto sluzbe, v subjektu uz ne" in results[0].message
-    assert results[0].value == "neni ve sluzbe"
+    assert results[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
 
 
 def test_configured_peer_without_session_takes_identity_from_selectors():
