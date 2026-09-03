@@ -394,6 +394,18 @@ def test_mac_count_interface_missing_in_subject_is_broken():
     assert row.baseline_value == "1"
 
 
+def test_mac_count_baseline_only_interface_outside_units_is_omitted():
+    # Baseline melo i ae0.15, ale scope (_vlan_aware_ctx) drzi jen ae0.14 -
+    # relevance filtr musi chybejici-v-baseline radek stejne jako ostatni
+    # per-interface radky vynechat, kdyz neni vlastnim unitem sluzby.
+    subject = _mac_subject_aware()
+    del subject["evpn_mac"]["EVPN-VLAN-AWARE-POP1"]["interfaces"]["ae0.15"]
+    ctx = _mac_ctx(subject)
+    ctx.baseline = _mac_subject_aware()
+    findings = EvpnMacCountCheck().run(ctx)
+    assert not [f for f in findings if "ae0.15" in (f.label or "")]
+
+
 def test_mac_count_interface_compares_via_renamed_key():
     # Engine (Task 4) preklici baseline interfaces na jmena subjektu,
     # check tedy najde baseline pod svym klicem.
@@ -598,20 +610,46 @@ def test_instance_info_rows_list_names():
 
 
 def test_instance_status_rows_carry_baseline_value():
+    # Baseline se od subjektu lisi (status i mnozina adres), aby test
+    # odhalil zamenu subjekt<->baseline v dohledavani a rozlisil
+    # "baseline adresu ma" od "baseline ji nema".
     subject = _instance_subject()
+    subject["evpn_instance"]["EVPN-AWARE-CPE13"]["neighbors"]["addresses"] = [
+        "150.0.0.13", "150.0.0.55",
+    ]
     baseline = _instance_subject()
+    baseline["evpn_instance"]["EVPN-AWARE-CPE13"]["local_interfaces"]["entries"][0][
+        "status"
+    ] = "Down"
+    baseline["evpn_instance"]["EVPN-AWARE-CPE13"]["neighbors"]["addresses"] = [
+        "150.0.0.13", "150.0.0.99",
+    ]
     findings = _instance_findings(subject, baseline=baseline)
-    assert _by_label(findings, "EVPN interface").baseline_value == "ge-0/0/2.313 Up"
-    neighbor_row = _by_label(findings, "EVPN neighbor")
-    assert neighbor_row.baseline_value == "150.0.0.13"
+
+    interface_row = _by_label(findings, "EVPN interface")
+    assert interface_row.value == "ge-0/0/2.313 Up"
+    assert interface_row.baseline_value == "ge-0/0/2.313 Down"
+
+    neighbor_by_value = {
+        f.value: f.baseline_value for f in findings if f.label == "EVPN neighbor"
+    }
+    assert neighbor_by_value["150.0.0.13"] == "150.0.0.13"  # v obou - ma baseline
+    assert neighbor_by_value["150.0.0.55"] is None  # jen v subjektu - baseline chybi
 
 
 def test_irb_instance_status_row_carries_baseline_value():
+    # Baseline IRB status se od subjektu lisi, aby test odhalil zamenu
+    # subjekt<->baseline v dohledavani podle jmena.
     ctx = _vlan_aware_ctx(_aware_subject(), link=LINK_L2)
-    ctx.baseline = _aware_subject()
+    baseline = _aware_subject()
+    baseline["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"][0][
+        "status"
+    ] = "Down"
+    ctx.baseline = baseline
     findings = EvpnInstanceStatusCheck().run(ctx)
     row = _by_label(findings, "IRB interface")
-    assert row.baseline_value == "irb.14 Up (master)"
+    assert row.value == "irb.14 Up (master)"
+    assert row.baseline_value == "irb.14 Down (master)"
 
 
 def test_instance_missing_data_skips():
