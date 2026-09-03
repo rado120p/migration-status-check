@@ -825,7 +825,10 @@ INET2_WITH_CORE = """
 def test_globalni_inet2_statika_patri_lo0_ne_tranzitu(parser_cls):
     """Next-hop 10.1.1.2 lezi v subnetu et-0/0/0.0 - dnesni subnet pravidlo
     by routu dalo tranzitu. Spec 2026-09-02: vsechny globalni inet.2
-    statiky patri Core lo0.0 (stejne jako globalni agregaty)."""
+    statiky patri Core lo0.0 (stejne jako globalni agregaty).
+
+    Mutant kill (2026-09-03, overeno spustenim, obe platformy): smazani
+    'if route.rib == "inet.2"' vetve."""
     by_iface = {s.interface: s for s in parser_cls(etree.fromstring(INET2_WITH_CORE)).parse()}
 
     lo0 = [(r["rib"], r["prefix"]) for r in by_iface["lo0.0"].static_route]

@@ -34,6 +34,10 @@ Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loop
 | `pim_neighbor_state` | both | critical | Core (transit) | only where the interface is under `protocols pim` (otherwise no finding at all, not SKIP); otherwise same as LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS on the interface is `Up`; interface missing from output = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | a BFD session bound to the interface (not a peer address) is always expected and `Up` |
+| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | the receiver sends an IGMP membership report; the (S,G) set against baseline — a different set is WARN |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | a single SKIP with no IGMP report; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`) |
+| `core_multicast_forwarding` | both | critical | Core (loopback) | driven by the global `inet.2` statics, not IGMP; no rows at all without inet.2 statics; upstream against the `via` of the inet.2 route |
+| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | the c-multicast entry and provider tunnel exist; against baseline only the tunnel's sender PE is compared, not the full tunnel id |
 
 `mode` semantics:
 
@@ -250,7 +254,7 @@ Reasons in `unmatched`:
 
 ## 4. Snapshot format
 
-`schema_version: 11`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
+`schema_version: 12`. A snapshot is **self-contained** — `evaluate` needs neither an inventory
 nor the network. A different schema version is a hard error (`SnapshotVersionError`), not an
 attempt at data migration.
 
@@ -265,6 +269,7 @@ Version history:
 | 5 → 6 | ARP/ND over IRB carry `learned_via`, the entry no longer escapes the scope filter — commit `6df6e1a` |
 | 6 → 7 | the `evpn_mac` collector reads the `count` RPC (per-VLAN and per-interface counts, shape `{vlans, interfaces}`); the `evpn_instance` area was added — commit `e547a24` |
 | 10 → 11 | six new fact areas (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) for the Core transit/loopback checks — 2026-08-26 wave |
+| 11 → 12 | three new fact areas (`igmp_group`, `multicast_route`, `mvpn_instance`) for four multicast checks — 2026-09-02 wave |
 
 Further bumps happened between 7 and 10 without an entry in this table — the gap is a
 knowingly disclosed omission, not something backfilled here (see
@@ -277,13 +282,13 @@ knowingly disclosed omission, not something backfilled here (see
 > uninstalled route would pass as healthy. Anyone needing such a snapshot evaluated must
 > **take a fresh `capture`**; the missing areas cannot be derived from the old file.
 >
-> **`runs/mig01` was recaptured on 2026-08-26 at `schema_version: 11`** (inventory at 7).
+> **`runs/mig01` was recaptured on 2026-09-02/03 at `schema_version: 12`** (inventory at 8).
 > The earlier 6 → 7 bump required the same recapture at the time (a version-7 tool rejected
 > `pre`/`post` files still at 6) — the history repeats on every bump, not just this one.
 
 ```jsonc
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -613,6 +618,22 @@ L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
 ```
 L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
 ```
+
+**IRB without an EVPN link (global bridge-domain/vlan, 2026-09-02 wave).** The access
+ports of a domain routed by an IRB are not always in an EVPN mac-vrf instance — an IRB can
+route a purely local (global) bridge-domain/vlan with no EVPN link at all. Such a port has
+no block of its own, so the `L3 cast:`/`L2 cast:` pairing above never happens; instead the
+L3 block's header gets a note listing the ports directly:
+
+```
+L2: ge-0/0/3.4094, ge-0/0/4.4094
+```
+
+The source is `ServiceEntry.l2_interface` (inventory schema 8, `Selectors.l2_interfaces`)
+— see [files/models.md](files/models.md) and
+[files/parsers.md](files/parsers.md#multicast-igmp-intent-inet2--lo00-irb-l2_interface-2026-09-02-wave).
+The `L2 cast:`/`L3 cast:` note from an EVPN link takes precedence when an IRB link exists
+too.
 
 If `--filter`/`--status` selects one side of the pair, the filter keeps the other partner too,
 even though it doesn't match the criteria itself — otherwise the "blok nize/vyse" pointer would

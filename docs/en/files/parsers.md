@@ -301,6 +301,45 @@ cannot be deactivated on its own, only as the whole route.
 
 ---
 
+## Multicast: IGMP intent, `inet.2` → lo0.0, IRB `l2_interface` (2026-09-02 wave)
+
+**IGMP intent** is read from `protocols igmp interface X` — both globally and inside
+`routing-instances/instance/protocols/igmp` (`_parse_igmp_interfaces()`). The XPath is
+unified across both branches (`|`), because intent is tied to the interface, not the
+instance — using `RoutingInstance.protocols` instead would give IGMP intent to every
+interface of the instance, not just the one under `igmp interface`. Interfaces with this
+intent live in `self.igmp_interfaces`.
+
+**Subtypes `multicast` and `mvpn-igmp`.** Service detection (`_detect_service`):
+
+- An Internet interface in `self.igmp_interfaces` → `("Internet", "multicast", "high", …)`.
+- An IPVPN interface in `self.igmp_interfaces` **and** its instance has `protocols mvpn`
+  → `("IPVPN", "mvpn-igmp", "high", …)` (`_ipvpn_subtype()`). Without IGMP intent on the
+  interface or without `protocols mvpn` in the instance, the IPVPN subtype stays whatever
+  it was before (plain IPVPN, no multicast).
+
+**Global `inet.2` statics belong to Core lo0.0.** `ServiceInstance._matches_route()`: a
+route with `route.rib == "inet.2"` belongs to `service.service_type == "Core" and
+service.interface == "lo0.0"` regardless of the next hop — not the interface whose subnet
+the next hop happens to fall into (the general rule for other routes). `<RI>.inet.2` does
+not fall into this — `rib_instance("X.inet.2")` returns `"X"`, not `None`, so the earlier
+filter `rib_instance(route.rib) != service.routing_instance` catches it first. Rationale:
+multicast RPF statics belong to the router as a whole (`core_multicast_forwarding` reads
+them from the lo0.0 scope and compares upstream against their `via`), not to whichever
+transit link the next hop happens to point at.
+
+**IRB `l2_interface`.** `ServiceEntry.l2_interface` (the field is singular; `Selectors.
+l2_interfaces` is plural — the builder translates) is filled from
+`_domains_routed_by()` — bridge-domains/vlans (global or inside any routing instance)
+whose `routing-interface` (MX) / `l3-interface` (EVO) is this IRB. This works across
+instances too: `irb.4094` in `MGMT` picks up the `bridge_domain`/`customer_vlan` of
+domain `BD-4094`, even though that domain lives in a different (EVPN) instance — that is
+the spec's intent, "the IRB records its L2 side", an N L2 : 1 L3 relationship. For checks
+the field is inert (nothing reads it for branching yet); it only feeds the `L2: …` note in
+the report header.
+
+---
+
 ## Where the two files differ
 
 The difference is concentrated in the detection of EVPN E-LAN and EVPN/VPLS instances:

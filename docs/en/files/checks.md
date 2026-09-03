@@ -709,6 +709,132 @@ the transit scope would receive the overview fact too.
 
 ---
 
+## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (2026-09-02 wave)
+
+Four new checks over three new collectors (`igmp_group`, `multicast_route`,
+`mvpn_instance`). They cover three roles: **Internet/multicast** (a customer receiver
+under `protocols igmp`), **Core/loopback** (global `inet.2` statics on lo0.0) and
+**IPVPN/mvpn-igmp** (an IRB in an MVPN VRF with an IGMP receiver). They share the module,
+two shared helper sections (`igmp_pairs`, `multicast_table`, `stream_rows`) and one rule
+across all of them:
+
+- **A missing IGMP set cascades into SKIP.** `igmp_membership_report` defines the expected
+  streams; `multicast_forwarding_status` and `mvpn_cmulticast_status` without it return a
+  single `SKIP` row, not an independent lookup into the table.
+- **Against baseline, only the (S,G) set and the tunnel's sender PE are compared** —
+  upstream, downstream, forwarding rate and route uptime are never compared, because by
+  definition they change with the migration (different interfaces, different lsi.X
+  numbers).
+- **Absence of `forwarding_rate_pps` is not zero.** junos-evo often returns
+  `<multicast-statistics-timed-out/>` even on a live Forwarding route — `stream_rows()`
+  on `None` returns `SKIP | ... : statistics unavailable`, not `BROKEN` with an invented
+  zero.
+- **Per-stream group header.** The rows for each (S,G) sit under their own group header
+  `   -- (S, G)`, so `Forwarding-rate`/`Route uptime` are unambiguous with more than one
+  stream.
+
+### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
+
+`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
+Requires `igmp_group`.
+
+Groups on the service interface from the scope, sorted, deduplicated; ASM entries
+(no source) render as `(*, G)`. No groups → `BROKEN | IGMP membership report : Receiver
+neposila zadny IGMP membership report`. Against baseline: same set → `OK`; a different
+set → `DEGRADED`, `value` is the current set, `baseline_value` the old one; baseline with
+no groups → no comparison (no-baseline rule — `baseline_value` is `None`, not "it was
+empty").
+
+Mutant kill (2026-09-03, verified by running it): `Outcome.DEGRADED` → `Outcome.OK` in the
+"set differs" branch makes `test_igmp_report_changed_set_is_warn` fail.
+
+### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
+
+Same two subtypes. Requires `igmp_group`, `multicast_route`.
+
+No IGMP groups → a single `SKIP | Multicast forwarding status : bez IGMP reportu`, no
+stream rows at all. Otherwise a summary row (`OK` `{n} S,G`, or `BROKEN`
+`{k}/{n} S,G nefunguje`, counted from whether the S,G is missing from the table or its
+Stream/Upstream row fails) and for each pair:
+
+- **Stream** — `OK` if the service interface is in the route's `downstream_interfaces`;
+  otherwise `BROKEN`.
+- **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
+  IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Match → `OK` with the name; otherwise
+  `BROKEN`, value the found name or `-`.
+- **Forwarding-rate**, **Route uptime** — `stream_rows()`, see above.
+
+If the S,G is missing from the table entirely, only `BROKEN | Stream : S,G neni v
+multicast tabulce` is emitted, no further stream rows. No baseline comparison at all
+(`mode = STATE`).
+
+Mutant kill (2026-09-03, verified by running each):
+- `_upstream_ok`: always return `True` → fails `test_forwarding_internet_upstream_must_be_transit`
+  and `test_forwarding_mvpn_upstream_must_be_lsi_or_vt` (and, as a bonus,
+  `test_forwarding_missing_upstream_renders_dash`).
+- `iface in downstream` → `bool(downstream)` → fails
+  `test_forwarding_downstream_without_service_interface_fails_stream_row`.
+- `stream_rows`: `raw_pps is None` → `raw_pps == 0` (the rate SKIP branch) → fails
+  `test_stream_rows_skip_when_rate_missing` (and the resulting `TypeError` in
+  `int(None)` also takes down `test_forwarding_missing_rate_is_skip_not_failure` and
+  `test_core_missing_rate_is_skip`).
+
+### `core_multicast_forwarding` (Core/loopback, both, critical)
+
+`service_types={"Core"}`, `service_subtypes={"loopback"}`. Requires `multicast_route`,
+`routes`. Driven by the **global `inet.2` statics from `Selectors.static_routes`**, not
+the IGMP set — Core lo0.0 has no IGMP intent at all.
+
+A scope with no inet.2 statics → **no rows at all** (silence, not SKIP — an intent gate
+just like `pim_neighbor_state`). Otherwise, for each inet.2 prefix, `assign_sources()`
+assigns routes from the multicast table by whether the source lies inside the prefix —
+with several covering prefixes, the longest wins, and each route is counted only once.
+
+- At least one route with a source inside the prefix → `OK | Multicast forwarding status
+  : Existuje S,G pro {prefix}` (`DEGRADED` if the S,G set differs against baseline);
+  otherwise `BROKEN | ... : Neexistuje S,G pro {prefix}` and four `SKIP` rows (`S,G`,
+  `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`, value `""`).
+- Per assigned (S,G): **Upstream interface** — `OK` if the upstream is one of the `via`
+  values measured by the route collector for that inet.2 prefix
+  (`routes["inet.2"][prefix]["via"]`, ECMP/qualified-next-hop give several `via`); if the
+  inet.2 route is not in the table at all → `SKIP : routa neni v tabulce` (the `FAIL` for
+  that cause belongs to `static_route_status`, not this check again). **Downstream
+  interfaces** — `OK` with a comma-joined list if non-empty; otherwise `BROKEN : Zadne
+  downstream interfacy`. **Forwarding rate packets**, **Route uptime** —
+  `stream_rows()`.
+
+Mutant kill (2026-09-03, verified by running each):
+- `assign_sources`: sort by `prefixlen` ascending instead of descending → fails
+  `test_assign_sources_longest_prefix_wins_and_each_route_once`.
+- `upstream in vias` → `upstream.startswith(("ge-", "xe-", "et-", "ae"))` → fails
+  `test_core_upstream_must_be_one_of_via` (an ECMP scenario with two `via`, only one of
+  which matches).
+
+### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
+
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Requires `igmp_group`,
+`mvpn_instance`.
+
+No IGMP groups → `SKIP | C-Multicast status : bez IGMP reportu`. The instance is missing
+from the `mvpn_instance` listing → `BROKEN | ... : instance neni v mvpn vypisu`.
+Otherwise, for each (S,G) pair:
+
+- **C-Multicast status** — `OK` with `S/32:G/32`, if a c-multicast entry exists with a
+  matching source and group prefix (`_cmulticast_entry`, ASM `(*, G)` compares group
+  only); otherwise `BROKEN : chybi c-multicast zaznam`.
+- **Provider tunnel** — `OK` with the full `provider_tunnel_id`, if `sender_pe` parsed;
+  `BROKEN : bez provider tunelu` if it is empty or `I-P-tnl:invalid`. Against baseline:
+  `DEGRADED` if **only the sender PE** differs (the first address after `P2MP:`) — the
+  tunnel id changes on LSP re-signaling without a service change, so the full string is
+  never compared.
+
+Mutant kill (2026-09-03, verified by running it): `_tunnel_row`: replacing the
+`was_pe != pe` comparison with `was_tunnel != tunnel` (the full string instead of the
+sender PE) makes `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not` fail
+(a re-signaled tunnel with the same PE address would get a false `DEGRADED`).
+
+---
+
 ## `deactivation.py` — deactivation state
 
 ### `deactivation_state` (both, critical)

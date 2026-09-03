@@ -404,3 +404,65 @@ collector bere první a další tiše zahazuje — v nahrávkách z laborky k to
 
 `{rozhraní: {state}}`. `state` defaultuje na `"unknown"`, pokud `mpls-interface-state`
 chybí.
+
+## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (vlna 2026-09-02)
+
+Tři collectory pro čtyři nové checky z `checks/multicast.py`: `igmp_group`,
+`multicast_route`, `mvpn_instance`. CLI ekvivalenty:
+
+| fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI ekvivalent |
+|---|---|---|
+| `igmp_group` | `get_igmp_group_information` | `show igmp group` |
+| `multicast_route` | `get_multicast_route_information(extensive=True[, instance=...])` | `show multicast route instance all extensive` |
+| `mvpn_instance` | `get_mvpn_instance_information(inet=True)` | `show mvpn instance inet` |
+
+Žádný z collectorů neinterpretuje verdikt — `local` u IGMP se zahazuje jen proto, že to
+není rozhraní (nikdy nemůže být servisní rozhraní), ne kvůli PASS/FAIL. Absence
+rozhraní/instance ve výpisu znamená absenci klíče, ne prázdný seznam.
+
+### `IgmpGroupCollector` (`igmp_group`)
+
+`{rozhraní: [{source, group}]}`. `multicast-source-address` `"0.0.0.0"` (ASM `(*, G)`) se
+mapuje na `source: None`, ne na text `"0.0.0.0"` — check pak testuje `is None`, ne
+magický řetězec. Pseudo-rozhraní `local` (skupiny, které si router sám nasadil, ne
+receiver) se zahazuje při parsování. Rozhraní bez skupin nedostává klíč s prázdným
+seznamem — absence je absence.
+
+### `MulticastRouteCollector` (`multicast_route`)
+
+`{instance: {"S,G": {upstream_interface, downstream_interfaces, forwarding_rate_pps,
+uptime_seconds, state, forwarding_state}}}`. Jen `address-family INET` (IPv6 multicast se
+nesbírá). Klíč `S,G` je řetězec `f"{source},{group}"` (`route_key()`), ne tuple — snapshot
+musí zůstat JSON-safe.
+
+**`forwarding_rate_pps` je `int | None`, nikdy vymyšlená nula.** junos-evo často vrací
+`<multicast-statistics-timed-out/>` místo `forwarding-rate-packets` i na živé Forwarding
+routě (změřeno 2026-09-02) — element pak v odpovědi chybí a `_int()` vrací `None`.
+Checky na `None` renderují `SKIP : statistiky nedostupne`, ne `BROKEN` s 0 pps.
+
+**MX nezná `instance="all"`.** `get-multicast-route-information(instance="all")` na MX
+vrací `<output>instance is not running</output>` (probe 2026-09-02) — MX žádnou
+all-instances formu nemá. Proto má collector dvě různé cesty podle platformy:
+
+- **junos-evo**: jedno volání `rpc_kwargs()` → `{"extensive": True, "instance": "all"}`.
+- **junos (MX)**: `rpc_kwargs()` vrátí jen `{"extensive": True}` (master instance bez
+  argumentu); `record_calls(device, platform)` navíc dynamicky zjistí seznam VRF
+  (`get-instance-information(brief=True)`, filtr `instance-type == "vrf"`) a přidá jedno
+  volání s `instance=<jméno>` za každou RI. Jména RI se **nikdy** neberou z inventory —
+  collector inventory nemá, a hardcodovat je zakázáno.
+
+`record_calls()` je hook v `collect()`/`record` (default = `rpc_calls()`), díky kterému
+`mig-validate record` uloží MX odpovědi jako `multicast_route.xml` (master) +
+`multicast_route.2.xml`, `.3.xml`… (jedna na RI), zatímco junos-evo pořád jen jednu
+`multicast_route.xml`. `_fixture_paths` v conformance testech proto globuje
+`name.xml` + `name.N.xml` místo počítání položek v `rpc_names`.
+
+### `MvpnInstanceCollector` (`mvpn_instance`)
+
+`{instance: {"c_multicast": [{source_prefix, group_prefix, provider_tunnel_id,
+sender_pe}]}}`. `c-multicast-address` má tvar `"S/32:G/32"` — rozdělí se na první
+dvojtečce na `source_prefix`/`group_prefix`. `sender_pe` je vytažená PE adresa z
+`provider_tunnel_id` (`parse_sender_pe()`, regex `P2MP:(\d+\.\d+\.\d+\.\d+)`) — `None`,
+pokud tunnel id chybí nebo obsahuje `"invalid"` (`I-P-tnl:invalid`). Instance, která je ve
+výpisu, ale bez c-multicast záznamů, si klíč nechává s prázdným seznamem — check tak
+rozlišuje „instance není ve výpisu vůbec" od „instance je, ale bez c-multicast".

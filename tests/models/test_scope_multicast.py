@@ -39,6 +39,8 @@ def test_mvpn_scope_gets_ri_table_and_mvpn_instance():
 
 
 def test_core_loopback_gets_master_table_but_transit_does_not():
+    """Mutant kill (2026-09-03, overeno spustenim): smazani
+    'measures_multicast' gate (transit by dostal tabulku)."""
     loopback = _scope("Core", "loopback", ["lo0.0"]).select(FACTS)
     transit = _scope("Core", "transit", ["et-0/0/0.0"]).select(FACTS)
     assert set(loopback["multicast_route"]) == {"master"}

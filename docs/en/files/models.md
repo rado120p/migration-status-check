@@ -31,6 +31,7 @@ One entry = one interface and the service running on it.
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
 | `static_route` | `list[dict]` | intent from the configuration: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | intent from the configuration: `{peer, minimum_interval, multiplier, source}` |
+| `l2_interface` | `list[str]` | (schema 8) L2 access ports of the bridge-domains/vlans this IRB routes — singular field, matching the `bridge_domain`/`customer_vlan` convention; on `Selectors` it is the plural `l2_interfaces` (the builder translates) |
 
 `static_route` and `bfd` are **configured intent, not measurement**. They are exactly what
 `static_route_status` and `bfd_session_state` compare the table and the session against —
@@ -54,7 +55,7 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
-The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 7`).
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 8`).
 `load_inventory()` **rejects any other value outright** rather than tolerating it.
 
 The reason is the same for every bump: a missing field would not surface as an error but as
@@ -78,6 +79,11 @@ a green service.
   an old inventory without it would lose the role distinction, and the new protocol checks
   (`isis_adjacency_state` and the others, bound via `service_subtypes`) would not run on the
   old file at all.
+- **7 → 8** (2026-09-02 wave): `ServiceEntry` gained `l2_interface` (an IRB routes the L2
+  access ports of global or in-instance bridge-domains/vlans — see
+  [parsers.md](parsers.md#multicast-igmp-intent-inet2--lo00-irb-l2_interface-2026-09-02-wave)).
+  A tolerant read of an old inventory would silently produce an empty list — the report
+  header would just lose the `L2: …` note, not surface an error.
 
 After a version bump the inventory therefore has to be **regenerated with the parser**, not
 patched by hand.
@@ -98,7 +104,11 @@ serve as a dict key — which `builder.py` relies on when detecting duplicates.
 
 Lists of strings: `interfaces`, `physical_interfaces`, `routing_instances`,
 `bgp_neighbors`, `bgp_neighbors_inactive`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`,
-`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `protocols`. Addresses and
+`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `l2_interfaces`, `protocols`.
+`l2_interfaces` (schema 8, plural — `ServiceEntry.l2_interface` is singular, the builder
+translates) carries the L2 access ports of domains routed by an IRB; it **does not** feed
+fact selection (an L2 port does not belong to the IRB scope), it only feeds the `L2: …`
+note in the report header. Addresses and
 virtual-gateway are split by family here too — same as on `ServiceEntry` above — because
 ping and the report both need to pick a source/target by the target's family, not by
 position in one mixed list.
@@ -205,15 +215,17 @@ channel through which a failed collection turns into a `SKIP` in the checks
 printing both versions). No attempt is made to migrate old data: loud failure beats a silent
 misinterpretation.
 
-Current `SCHEMA_VERSION = 11` (`models/snapshot.py`). The bump from 5 to 6 carried the
+Current `SCHEMA_VERSION = 12` (`models/snapshot.py`). The bump from 5 to 6 carried the
 normalization of ARP/ND records learned over an IRB (`interface` + `learned_via` instead of
 the untrimmed `irb.14[ ae0.14 ]`, see `collectors.md`) and a new `evpn_vpws` schema
 (`interfaces`/`local_sid`/`remote_sid`/`peers` instead of a flat
 `status`/`local_sid`/`remote_sid`). The bump from 10 to 11 (2026-08-26 wave) added six new
 fact areas to `FACT_AREAS` (`isis_adjacency`, `isis_interface`, `isis_overview`,
 `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) — see [collectors.md](collectors.md) for
-the shape of each area. Old snapshot data therefore has to be recaptured, not patched by
-hand.
+the shape of each area. The bump from 11 to 12 (2026-09-02 wave) added three multicast
+fact areas (`igmp_group`, `multicast_route`, `mvpn_instance`) — see
+[collectors.md](collectors.md#multicastpy--igmp-multicast-forwarding-mvpn-c-multicast-2026-09-02-wave).
+Old snapshot data therefore has to be recaptured, not patched by hand.
 
 `save_snapshot()` / `load_snapshot()` write and read UTF‑8 JSON with `ensure_ascii=False` and
 create the target directory. The disk round-trip is asserted by

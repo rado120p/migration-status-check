@@ -700,6 +700,130 @@ scope by dostal overview taky.
 
 ---
 
+## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (vlna 2026-09-02)
+
+Čtyři nové checky nad třemi novými collectory (`igmp_group`, `multicast_route`,
+`mvpn_instance`). Pokrývají tři role: **Internet/multicast** (zákaznický receiver pod
+`protocols igmp`), **Core/loopback** (globální `inet.2` statiky na lo0.0) a
+**IPVPN/mvpn-igmp** (IRB v MVPN VRF s IGMP receiverem). Sdílejí modul, dvě sdílené
+sekce (`igmp_pairs`, `multicast_table`, `stream_rows`) a jedno pravidlo napříč všemi:
+
+- **Chybějící IGMP množina kaskáduje do SKIP.** `igmp_membership_report` definuje
+  očekávané streamy; `multicast_forwarding_status` a `mvpn_cmulticast_status` bez ní
+  vrátí jediný `SKIP` řádek, ne nezávislé hledání v tabulce.
+- **Proti baseline se porovnává jen množina (S,G) a sender PE tunelu** — upstream,
+  downstream, forwarding rate a route uptime se neporovnávají nikdy, protože se
+  migrací mění z definice (jiná rozhraní, jiná lsi.X čísla).
+- **Absence `forwarding_rate_pps` není nula.** junos-evo často vrací
+  `<multicast-statistics-timed-out/>` i na živé Forwarding routě — `stream_rows()`
+  na `None` vrátí `SKIP | ... : statistiky nedostupne`, ne `BROKEN` s vymyšlenou
+  nulou.
+- **Per-stream group header.** Řádky každého (S,G) sedí pod vlastní skupinou
+  `   -- (S, G)`, aby `Forwarding-rate`/`Route uptime` nebyly u víc streamů
+  nejednoznačné.
+
+### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
+
+`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
+Vyžaduje `igmp_group`.
+
+Skupiny na servisním rozhraní ze scopu, seřazené, bez duplicit; ASM položky (bez
+zdroje) jako `(*, G)`. Žádné skupiny → `BROKEN | IGMP membership report : Receiver
+neposila zadny IGMP membership report`. Proti baseline: shodná množina → `OK`; jiná
+množina → `DEGRADED`, `value` je aktuální množina, `baseline_value` ta stará; baseline
+bez skupin → bez porovnání (no-baseline pravidlo — `baseline_value` `None`, ne "bylo
+prázdno").
+
+Mutant kill (2026-09-03, ověřeno spuštěním): `Outcome.DEGRADED` → `Outcome.OK` ve
+větvi „množina se liší" nechá padnout `test_igmp_report_changed_set_is_warn`.
+
+### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
+
+Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`.
+
+Bez IGMP skupin → jediný `SKIP | Multicast forwarding status : bez IGMP reportu`,
+žádné řádky streamů. Jinak souhrnný řádek (`OK` `{n} S,G`, nebo `BROKEN`
+`{k}/{n} S,G nefunguje`, počítáno z toho, jestli S,G chybí v tabulce nebo mu selže
+Stream/Upstream řádek) a pro každý pár:
+
+- **Stream** — `OK`, je-li servisní rozhraní v `downstream_interfaces` routy; jinak
+  `BROKEN`.
+- **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
+  IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Splněno → `OK` se jménem; jinak
+  `BROKEN`, hodnota nalezené jméno nebo `-`.
+- **Forwarding-rate**, **Route uptime** — `stream_rows()`, viz výš.
+
+Chybí-li S,G v tabulce vůbec, vydá se jen `BROKEN | Stream : S,G neni v multicast
+tabulce`, další řádky streamu se nevydávají. Žádné porovnání proti baseline
+(`mode = STATE`).
+
+Mutant kill (2026-09-03, ověřeno spuštěním):
+- `_upstream_ok`: vrať `True` vždy → padne `test_forwarding_internet_upstream_must_be_transit`
+  i `test_forwarding_mvpn_upstream_must_be_lsi_or_vt` (a bonusem
+  `test_forwarding_missing_upstream_renders_dash`).
+- `iface in downstream` → `bool(downstream)` → padne
+  `test_forwarding_downstream_without_service_interface_fails_stream_row`.
+- `stream_rows`: `raw_pps is None` → `raw_pps == 0` (rate SKIP větev) → padne
+  `test_stream_rows_skip_when_rate_missing` (a `TypeError` v `int(None)` strhne
+  s sebou i `test_forwarding_missing_rate_is_skip_not_failure` a
+  `test_core_missing_rate_is_skip`).
+
+### `core_multicast_forwarding` (Core/loopback, both, critical)
+
+`service_types={"Core"}`, `service_subtypes={"loopback"}`. Vyžaduje `multicast_route`,
+`routes`. Řízeno **globálními `inet.2` statikami ze `Selectors.static_routes`**, ne
+IGMP množinou — Core lo0.0 žádný IGMP záměr nemá.
+
+Scope bez inet.2 statik → **žádné řádky** (ticho, ne SKIP — gate na záměr jako
+u `pim_neighbor_state`). Jinak pro každý inet.2 prefix `assign_sources()` přiřadí
+routy z multicast tabulky podle toho, jestli zdroj leží uvnitř prefixu — při víc
+pokrývajících prefixech vyhrává nejdelší, každá routa se počítá jen jednou.
+
+- Existuje aspoň jedna routa se zdrojem v prefixu → `OK | Multicast forwarding
+  status : Existuje S,G pro {prefix}` (`DEGRADED`, liší-li se množina S,G proti
+  baseline); jinak `BROKEN | ... : Neexistuje S,G pro {prefix}` a čtyři `SKIP` řádky
+  (`S,G`, `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`,
+  hodnota `""`).
+- Per přiřazené (S,G): **Upstream interface** — `OK`, je-li upstream jedním z `via`
+  změřených route collectorem pro ten inet.2 prefix (`routes["inet.2"][prefix]["via"]`,
+  ECMP/qualified-next-hop dávají víc `via`); není-li inet.2 routa v tabulce vůbec →
+  `SKIP : routa neni v tabulce` (`FAIL` za tuhle příčinu nese `static_route_status`,
+  ne tenhle check znovu). **Downstream interfaces** — `OK` se seznamem spojeným
+  čárkou, je-li neprázdný; jinak `BROKEN : Zadne downstream interfacy`.
+  **Forwarding rate packets**, **Route uptime** — `stream_rows()`.
+
+Mutant kill (2026-09-03, ověřeno spuštěním):
+- `assign_sources`: sort podle `prefixlen` vzestupně místo sestupně → padne
+  `test_assign_sources_longest_prefix_wins_and_each_route_once`.
+- `upstream in vias` → `upstream.startswith(("ge-", "xe-", "et-", "ae"))` → padne
+  `test_core_upstream_must_be_one_of_via` (ECMP scénář se dvěma `via`, kde jen jeden
+  odpovídá).
+
+### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
+
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Vyžaduje `igmp_group`,
+`mvpn_instance`.
+
+Bez IGMP skupin → `SKIP | C-Multicast status : bez IGMP reportu`. Instance chybí
+v `mvpn_instance` výpisu → `BROKEN | ... : instance neni v mvpn vypisu`. Jinak pro
+každý (S,G) pár:
+
+- **C-Multicast status** — `OK` s `S/32:G/32`, existuje-li c-multicast záznam
+  se shodným source i group prefixem (`_cmulticast_entry`, ASM `(*, G)` porovnává jen
+  group); jinak `BROKEN : chybi c-multicast zaznam`.
+- **Provider tunnel** — `OK` s celým `provider_tunnel_id`, je-li `sender_pe`
+  parsovaný; `BROKEN : bez provider tunelu`, je-li prázdný nebo `I-P-tnl:invalid`.
+  Proti baseline: `DEGRADED`, liší-li se **jen sender PE** (první adresa za
+  `P2MP:`) — tunnel id se při re-signalizaci LSP mění bez zmeny služby, takže se
+  neporovnává celý řetězec.
+
+Mutant kill (2026-09-03, ověřeno spuštěním): `_tunnel_row`: porovnání `was_pe != pe`
+nahrazeno `was_tunnel != tunnel` (celý řetězec místo sender PE) nechá padnout
+`test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not` (re-signalizovaný
+tunnel se stejnou PE adresou by dostal falešné `DEGRADED`).
+
+---
+
 ## `deactivation.py` — stav deaktivace
 
 ### `deactivation_state` (both, critical)

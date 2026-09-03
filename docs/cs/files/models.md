@@ -32,6 +32,7 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
 | `static_route` | `list[dict]` | záměr z konfigurace: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | záměr z konfigurace: `{peer, minimum_interval, multiplier, source}` |
+| `l2_interface` | `list[str]` | (schema 8) L2 access porty bridge-domains/vlanů, které IRB routuje — singulár pole podle konvence `bridge_domain`/`customer_vlan`; v `Selectors` je plurál `l2_interfaces` (builder překládá) |
 
 `static_route` a `bfd` jsou **konfigurační záměr, ne měření**. Právě proti nim checky
 `static_route_status` a `bfd_session_state` porovnávají, co se v tabulce a v session
@@ -75,6 +76,11 @@ zelená služba.
   transit). Subtype je odvozený, ne volitelný — stará inventory bez něj by nerozlišila roli
   a nové protokolové checky (`isis_adjacency_state` a další, vázané přes
   `service_subtypes`) by na starém souboru neběžely vůbec.
+- **7 → 8** (vlna 2026-09-02): `ServiceEntry` dostal `l2_interface` (IRB routuje L2
+  access porty globálních i uvnitř-instančních bridge-domains/vlanů — viz
+  [parsers.md](parsers.md#multicast-igmp-zamer-inet2--lo00-irb-l2_interface-vlna-2026-09-02)).
+  Stará inventory bez pole by prošla tolerantním čtením s prázdným seznamem — hlavička
+  reportu by mlčky přišla o poznámku `L2: …`, ne o chybu.
 
 Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 
@@ -94,7 +100,10 @@ použít jako klíč slovníku — čehož využívá `builder.py` při detekci 
 
 Seznamy řetězců: `interfaces`, `physical_interfaces`, `routing_instances`,
 `bgp_neighbors`, `bgp_neighbors_inactive`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`,
-`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `protocols`. Adresy i
+`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `l2_interfaces`, `protocols`.
+`l2_interfaces` (schema 8, plurál — `ServiceEntry.l2_interface` je singulár, builder
+překládá) nese L2 access porty domén routovaných IRB; do výběru faktů se **nepromítá**
+(L2 port do IRB scopu nepatří), slouží jen jako poznámka `L2: …` v hlavičce reportu. Adresy i
 virtual-gateway jsou rozdělené podle rodiny — stejně jako `ServiceEntry` výš — protože ping
 a report musí umět zdroj/cíl vybrat podle rodiny cíle, ne podle pořadí v jednom smíchaném
 seznamu.
@@ -196,14 +205,16 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 11` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 12` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
 `peers` místo plochého `status`/`local_sid`/`remote_sid`). Zvýšení z 10 na 11 (vlna
 2026-08-26) přidalo šest nových fact areas do `FACT_AREAS`
 (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`,
-`mpls_interface`) — viz [collectors.md](collectors.md) pro tvar každé area. Stará snapshot
-data se proto musí znovu nasbírat, ne doupravit.
+`mpls_interface`) — viz [collectors.md](collectors.md) pro tvar každé area. Zvýšení z 11 na
+12 (vlna 2026-09-02) přidalo tři multicast fact areas (`igmp_group`, `multicast_route`,
+`mvpn_instance`) — viz [collectors.md](collectors.md#multicastpy--igmp-multicast-forwarding-mvpn-c-multicast-vlna-2026-09-02).
+Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
 
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje

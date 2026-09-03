@@ -85,7 +85,9 @@ def test_format_uptime_hms():
 
 
 def test_stream_rows_skip_when_rate_missing():
-    """junos-evo: multicast-statistics-timed-out, absence neni nula."""
+    """junos-evo: multicast-statistics-timed-out, absence neni nula.
+    Mutant kill (2026-09-03, overeno spustenim): 'raw_pps is None' ->
+    'raw_pps == 0' (TypeError v int(None), padne cely test)."""
     for route in ({}, {"forwarding_rate_pps": None}):
         rate_row, uptime_row = stream_rows("(*, 232.1.1.1)", route, rate_label="Upstream")
         assert rate_row.outcome is Outcome.SKIP
@@ -123,8 +125,8 @@ def test_igmp_report_same_set_against_baseline_is_pass():
 
 
 def test_igmp_report_changed_set_is_warn():
-    """Mutant: nahrazeni DEGRADED -> OK ve vetvi 'mnozina se lisi' tenhle
-    test polozi (overit spustenim v Tasku 11)."""
+    """Mutant kill (2026-09-03, overeno spustenim): nahrazeni DEGRADED -> OK
+    ve vetvi 'mnozina se lisi' tenhle test polozi."""
     (row,) = IgmpMembershipReportCheck().run(_ctx(
         _igmp(POST, SG), baseline=_igmp(PRE, SG, ("10.11.11.2", "232.1.1.2")),
         baseline_scope=_scope(PRE),
@@ -205,6 +207,8 @@ def test_forwarding_sg_missing_from_table():
 
 
 def test_forwarding_downstream_without_service_interface_fails_stream_row():
+    """Mutant kill (2026-09-03, overeno spustenim): 'iface in downstream'
+    -> 'bool(downstream)' by proslo s libovolnym neprazdnym downstream."""
     routes = {f"{SG[0]},{SG[1]}": _route(downstream=["et-0/0/8.99"])}
     findings = MulticastForwardingStatusCheck().run(_ctx(_facts(routes=routes)))
     rows = _by_label(findings, sg_label(*SG))
@@ -214,6 +218,9 @@ def test_forwarding_downstream_without_service_interface_fails_stream_row():
 
 
 def test_forwarding_internet_upstream_must_be_transit():
+    """Mutant kill (2026-09-03, overeno spustenim, spolu s
+    test_forwarding_mvpn_upstream_must_be_lsi_or_vt): '_upstream_ok' vraci
+    True vzdy."""
     routes = {f"{SG[0]},{SG[1]}": _route(upstream="lsi.1048576")}
     findings = MulticastForwardingStatusCheck().run(_ctx(_facts(routes=routes)))
     row = _by_label(findings, sg_label(*SG))["Upstream interface"]
@@ -223,6 +230,9 @@ def test_forwarding_internet_upstream_must_be_transit():
 
 
 def test_forwarding_mvpn_upstream_must_be_lsi_or_vt():
+    """Mutant kill (2026-09-03, overeno spustenim, spolu s
+    test_forwarding_internet_upstream_must_be_transit): '_upstream_ok'
+    vraci True vzdy."""
     scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
     ok = {"10.12.12.1,239.1.1.1": _route(upstream="lsi.1048576", downstream=["irb.2"])}
     bad = {"10.12.12.1,239.1.1.1": _route(upstream="et-0/0/0.0", downstream=["irb.2"])}
@@ -294,6 +304,8 @@ def _core_facts(routes=None, via=("et-0/0/0.0",), inet2_present=True):
 
 
 def test_assign_sources_longest_prefix_wins_and_each_route_once():
+    """Mutant kill (2026-09-03, overeno spustenim): sort podle prefixlen
+    vzestupne misto sestupne."""
     table = {"10.11.11.1,232.1.1.1": {}, "10.11.12.1,232.1.1.2": {}, "192.0.2.1,232.9.9.9": {}}
     assigned = assign_sources(table, ["10.11.0.0/16", "10.11.11.0/24"])
     assert [k for k, _ in assigned["10.11.11.0/24"]] == ["10.11.11.1,232.1.1.1"]
@@ -332,7 +344,8 @@ def test_core_no_stream_for_prefix_fails_with_four_skips():
 
 def test_core_upstream_must_be_one_of_via():
     """ECMP / qualified-next-hop: inet.2 routa ma vic via, upstream staci
-    jeden z nich."""
+    jeden z nich. Mutant kill (2026-09-03, overeno spustenim): 'upstream in
+    vias' -> 'upstream.startswith((\"ge-\",\"xe-\",\"et-\",\"ae\"))'."""
     findings = CoreMulticastForwardingCheck().run(_ctx(
         _core_facts(via=("et-0/0/1.0", "et-0/0/0.0")), scope=_core_scope()))
     assert _by_label(findings, sg_label(*SG))["Upstream interface"].outcome is Outcome.OK
@@ -445,8 +458,8 @@ def test_mvpn_invalid_tunnel_is_fail():
 
 
 def test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not():
-    """Mutant: porovnani celeho retezce misto sender_pe polozi druhou
-    polovinu testu (overit spustenim v Tasku 11)."""
+    """Mutant kill (2026-09-03, overeno spustenim): porovnani celeho retezce
+    (was_tunnel != tunnel) misto sender_pe polozi druhou polovinu testu."""
     resignaled = "RSVP-TE P2MP:150.0.0.13, 99999,150.0.0.13"
     same_pe = MvpnCmulticastStatusCheck().run(_ctx(
         _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=resignaled)]),

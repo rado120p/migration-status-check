@@ -39,6 +39,8 @@ def test_igmp_group_parses_fixture(rpc_fixture, platform):
 
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_igmp_group_drops_local_pseudo_interface(rpc_fixture, platform):
+    """Mutant kill (2026-09-03, overeno spustenim, obe platformy): odstraneni
+    'interface == "local"' filtru necha 'local' pseudo-rozhrani projit."""
     data = IgmpGroupCollector().parse(rpc_fixture(platform, "igmp_group"), platform)
     assert "local" not in data
 

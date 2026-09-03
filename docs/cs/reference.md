@@ -34,6 +34,10 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/lo
 | `pim_neighbor_state` | both | critical | Core (transit) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález, ne SKIP); jinak stejně jako LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS na rozhraní je `Up`; chybějící rozhraní v outputu = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | BFD session vázaná na rozhraní (ne na peer adresu) je vždy očekávaná a `Up` |
+| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | receiver posílá IGMP membership report; množina (S,G) proti baseline — jiná množina = WARN |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | bez IGMP reportu jediný SKIP; jinak per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream role-aware (transit prefix vs. `lsi.`/`vt-`) |
+| `core_multicast_forwarding` | both | critical | Core (loopback) | řízeno globálními `inet.2` statikami, ne IGMP; bez inet.2 statik žádné řádky (ticho); upstream proti `via` inet.2 routy |
+| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | c-multicast záznam a provider tunnel existují; proti baseline se porovnává jen sender PE tunelu, ne celý tunnel id |
 
 Význam `mode`:
 
@@ -243,7 +247,7 @@ Důvody v `unmatched`:
 
 ## 4. Formát snapshotu
 
-`schema_version: 11`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 12`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -258,6 +262,7 @@ Historie verzí:
 | 5 → 6 | ARP/ND přes IRB nesou `learned_via`, záznam už neutíká scope filtru — commit `6df6e1a` |
 | 6 → 7 | `evpn_mac` collector čte `count` RPC (per-VLAN a per-interface počty, tvar `{vlans, interfaces}`); přibyla oblast `evpn_instance` — commit `e547a24` |
 | 10 → 11 | šest nových fact areas (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) pro Core transit/loopback checky — vlna 2026-08-26 |
+| 11 → 12 | tři nové fact areas (`igmp_group`, `multicast_route`, `mvpn_instance`) pro čtyři multicast checky — vlna 2026-09-02 |
 
 Mezi 7 a 10 proběhly další bumpy beze zápisu do téhle tabulky — mezera je vědomě
 přiznaná, ne dopočítaná (viz [`files/models.md`](files/models.md) pro aktuální hodnotu
@@ -270,13 +275,13 @@ konstanty).
 > jako zdravá. Kdo takový snímek potřebuje vyhodnotit, musí **pořídit nový `capture`**;
 > dopočítat chybějící oblasti ze starého souboru nejde.
 >
-> **`runs/mig01` je od 2026-08-26 přesnímaný na `schema_version: 11`** (inventory na 7).
+> **`runs/mig01` je od 2026-09-02/03 přesnímaný na `schema_version: 12`** (inventory na 8).
 > Předchozí bump 6 → 7 svého času vyžadoval totéž přesnímání (`pre`/`post` na verzi 6
 > nástroj verze 7 odmítal) — historie se opakuje při každém zvýšení, ne jen u tohohle.
 
 ```jsonc
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -596,6 +601,20 @@ L3 cast: irb.15 v L3VPN-CPE14-UNI (blok vyse)
 ```
 L2 cast: ae0.15 v EVPN-VLAN-AWARE-POP1 (blok nize)
 ```
+
+**IRB bez EVPN linku (globální bridge-domain/vlan, vlna 2026-09-02).** Access porty domény
+routované IRB nejsou vždy v EVPN mac-vrf instanci — IRB může routovat i čistě lokální
+(globální) bridge-domain/vlan bez EVPN vazby vůbec. Takový port nemá vlastní blok, takže
+párování `L3 cast:`/`L2 cast:` výš neproběhne; místo toho hlavička L3 bloku dostane
+poznámku vyjmenovávající porty přímo:
+
+```
+L2: ge-0/0/3.4094, ge-0/0/4.4094
+```
+
+Zdroj je `ServiceEntry.l2_interface` (inventory schema 8, `Selectors.l2_interfaces`) —
+viz [files/models.md](files/models.md) a [files/parsers.md](files/parsers.md#multicast-igmp-zamer-inet2--lo00-irb-l2_interface-vlna-2026-09-02).
+Poznámka `L2 cast:`/`L3 cast:` z EVPN vazby má přednost, pokud IRB link existuje zároveň.
 
 Pokud `--filter`/`--status` vybere jeden z páru, filtr ponechá i druhého partnera, i když sám
 kritériu neodpovídá — jinak by odkaz „blok nize/vyse" ukazoval do prázdna. Partner se počítá až

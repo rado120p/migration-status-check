@@ -412,3 +412,67 @@ rest — the lab recordings never hit this case (1:1).
 
 `{interface: {state}}`. `state` defaults to `"unknown"` when `mpls-interface-state` is
 missing.
+
+## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (2026-09-02 wave)
+
+Three collectors for four new checks in `checks/multicast.py`: `igmp_group`,
+`multicast_route`, `mvpn_instance`. CLI equivalents:
+
+| fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI equivalent |
+|---|---|---|
+| `igmp_group` | `get_igmp_group_information` | `show igmp group` |
+| `multicast_route` | `get_multicast_route_information(extensive=True[, instance=...])` | `show multicast route instance all extensive` |
+| `mvpn_instance` | `get_mvpn_instance_information(inet=True)` | `show mvpn instance inet` |
+
+None of the collectors interprets a verdict — `local` under IGMP is dropped only because it
+is not an interface (it can never be a service interface), not because of PASS/FAIL. A
+missing interface/instance in the reply means an absent key, not an empty list.
+
+### `IgmpGroupCollector` (`igmp_group`)
+
+`{interface: [{source, group}]}`. `multicast-source-address` `"0.0.0.0"` (ASM `(*, G)`)
+maps to `source: None`, not to the literal text `"0.0.0.0"` — checks then test `is None`,
+not a magic string. The `local` pseudo-interface (groups the router joined itself, not a
+receiver) is dropped while parsing. An interface with no groups gets no key with an empty
+list — absence is absence.
+
+### `MulticastRouteCollector` (`multicast_route`)
+
+`{instance: {"S,G": {upstream_interface, downstream_interfaces, forwarding_rate_pps,
+uptime_seconds, state, forwarding_state}}}`. Only `address-family INET` (IPv6 multicast is
+not collected). The `S,G` key is the string `f"{source},{group}"` (`route_key()`), not a
+tuple — the snapshot must stay JSON-safe.
+
+**`forwarding_rate_pps` is `int | None`, never an invented zero.** junos-evo often returns
+`<multicast-statistics-timed-out/>` instead of `forwarding-rate-packets`, even on a live
+Forwarding route (measured 2026-09-02) — the element is then absent from the reply and
+`_int()` returns `None`. Checks render `SKIP : statistics unavailable` on `None`, not
+`BROKEN` with 0 pps.
+
+**MX does not know `instance="all"`.** `get-multicast-route-information(instance="all")` on
+MX returns `<output>instance is not running</output>` (probed 2026-09-02) — MX has no
+all-instances form at all. The collector therefore has two different paths per platform:
+
+- **junos-evo**: one call, `rpc_kwargs()` → `{"extensive": True, "instance": "all"}`.
+- **junos (MX)**: `rpc_kwargs()` returns just `{"extensive": True}` (master instance,
+  no argument); `record_calls(device, platform)` additionally discovers the list of VRFs
+  live (`get-instance-information(brief=True)`, filtered on `instance-type == "vrf"`) and
+  adds one call with `instance=<name>` per RI. RI names are **never** taken from
+  inventory — the collector has no inventory, and hardcoding them is forbidden.
+
+`record_calls()` is a hook in `collect()`/`record` (default = `rpc_calls()`) that makes
+`mig-validate record` save MX replies as `multicast_route.xml` (master) plus
+`multicast_route.2.xml`, `.3.xml`… (one per RI), while junos-evo still writes a single
+`multicast_route.xml`. `_fixture_paths` in the conformance tests globs `name.xml` +
+`name.N.xml` instead of counting entries in `rpc_names`.
+
+### `MvpnInstanceCollector` (`mvpn_instance`)
+
+`{instance: {"c_multicast": [{source_prefix, group_prefix, provider_tunnel_id,
+sender_pe}]}}`. `c-multicast-address` has the shape `"S/32:G/32"` — split on the first
+colon into `source_prefix`/`group_prefix`. `sender_pe` is the PE address extracted from
+`provider_tunnel_id` (`parse_sender_pe()`, regex `P2MP:(\d+\.\d+\.\d+\.\d+)`) — `None`
+when the tunnel id is missing or contains `"invalid"` (`I-P-tnl:invalid`). An instance
+present in the reply but with no c-multicast entries keeps its key with an empty list — this
+is how the check distinguishes "instance not in the mvpn listing at all" from "instance is
+there, but no c-multicast".

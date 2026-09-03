@@ -282,6 +282,42 @@ viz sekci „Statické routy: per-hop next-hopy a agregáty" výš. Holý `next-
 
 ---
 
+## Multicast: IGMP záměr, `inet.2` → lo0.0, IRB `l2_interface` (vlna 2026-09-02)
+
+**IGMP záměr** se čte z `protocols igmp interface X` — globálně i uvnitř `routing-instances/
+instance/protocols/igmp` (`_parse_igmp_interfaces()`). XPath je sjednocený přes obě větve
+(`|`), protože záměr se váže na rozhraní, ne na instanci — kdyby se místo toho použilo
+`RoutingInstance.protocols`, dostalo by IGMP záměr každé rozhraní instance, ne jen to pod
+`igmp interface`. Rozhraní pod tímhle záměrem jsou v `self.igmp_interfaces`.
+
+**Subtypy `multicast` a `mvpn-igmp`.** Detekce služby (`_detect_service`):
+
+- Internet rozhraní v `self.igmp_interfaces` → `("Internet", "multicast", "high", …)`.
+- IPVPN rozhraní v `self.igmp_interfaces` **a** jeho instance má `protocols mvpn` →
+  `("IPVPN", "mvpn-igmp", "high", …)` (`_ipvpn_subtype()`). Bez IGMP záměru na rozhraní
+  nebo bez `protocols mvpn` v instanci zůstává IPVPN subtype, jaký byl předtím (plain
+  IPVPN, žádný multicast).
+
+**Globální `inet.2` statiky patří Core lo0.0.** `ServiceInstance._matches_route()`: routa
+s `route.rib == "inet.2"` patří `service.service_type == "Core" and service.interface ==
+"lo0.0"` bez ohledu na next-hop — ne rozhraní, do jehož subnetu next-hop padne (obecné
+pravidlo pro ostatní routy). `<RI>.inet.2` sem nespadá — `rib_instance("X.inet.2")` vrací
+`"X"`, ne `None`, takže filtr `rib_instance(route.rib) != service.routing_instance` ho
+zachytí dřív. Zdůvodnění: multicast RPF statiky patří routeru jako celku
+(`core_multicast_forwarding` je čte z lo0.0 scopu a upstream porovnává s jejich `via`),
+ne konkrétní tranzitní lince, kterou náhodou ukazuje next-hop.
+
+**IRB `l2_interface`.** `ServiceEntry.l2_interface` (plurál pole je `Selectors.l2_interfaces`,
+builder překládá) se plní z `_domains_routed_by()` — bridge-domains/vlans (globální i
+uvnitř libovolné routing-instance), jejichž `routing-interface` (MX) / `l3-interface` (EVO)
+je zrovna tenhle IRB. Funguje i napříč instancemi: `irb.4094` v `MGMT` dostane
+`bridge_domain`/`customer_vlan` domény `BD-4094`, i když ta doména žije v jiné (EVPN)
+instanci — to je záměr specu „IRB nese svou L2 stranu", je to N L2 : 1 L3 vztah. Pro
+checky je pole inertní (nikdo ho zatím nečte pro branching), slouží jen jako poznámka
+`L2: …` v hlavičce reportu.
+
+---
+
 ## Kde se ty dva soubory liší
 
 Rozdíl je soustředěný do detekce EVPN E-LAN a EVPN/VPLS instancí:
