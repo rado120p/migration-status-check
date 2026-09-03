@@ -42,6 +42,23 @@ def test_status_worst_ranks_skip_above_pass():
     assert Status.worst([]) is Status.SKIP
 
 
+def test_recovered_maps_to_recv_regardless_of_severity():
+    assert derive_status(Outcome.RECOVERED, Severity.CRITICAL) is Status.RECV
+    assert derive_status(Outcome.RECOVERED, Severity.ADVISORY) is Status.RECV
+
+
+def test_recv_ranks_between_pass_and_skip():
+    assert Status.worst([Status.PASS, Status.RECV]) is Status.RECV
+    assert Status.worst([Status.RECV, Status.SKIP]) is Status.SKIP
+    assert Status.worst([Status.RECV, Status.WARN]) is Status.WARN
+
+
+def test_count_statuses_has_recv_counter():
+    assert count_statuses([Status.RECV, Status.PASS]) == {
+        "pass": 1, "warn": 0, "fail": 0, "skip": 0, "info": 0, "recv": 1,
+    }
+
+
 def test_finding_defaults():
     finding = Finding(outcome=Outcome.OK, message="vse ok")
     assert finding.label is None

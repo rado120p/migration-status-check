@@ -541,6 +541,9 @@ Properties:
   per interface. `bgp_prefix_counts` returns
   one per **RIB × counter** (`label="<counter>-prefix-count"`, `group=f"BGP {peer} / {rib}"`),
   not one summary across RIBs.
+- Status list: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (rank order between PASS and
+  SKIP, worst-wins). `RECV` — measurement is healthy now and was not in the baseline
+  (recovered); does not affect exit code.
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
   better to report); `summary` aggregates across **checks**. The terminal derives the service
   counts from `scopes` itself — the same computation holds for the whole run and for a
@@ -688,7 +691,7 @@ scope entirely.
 | `2` | `EXIT_TOOL_ERROR` | tool error: could not connect, snapshot missing / broken / wrong `schema_version`, unknown collector, invalid YAML |
 
 WARN on its own does not change the exit code — otherwise CI would fail constantly and stop
-being believed.
+being believed. RECV does not change the exit code either.
 
 *The tool failed* and *a test failed* are two different things and must not blur — hence 2 vs 1.
 

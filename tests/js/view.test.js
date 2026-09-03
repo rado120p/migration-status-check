@@ -67,6 +67,14 @@ test("worstMessage: PASS scope -> empty; else message of worst status in FAIL>WA
   assert.strictEqual(MigView.worstMessage(scope), "prefixu mene");
 });
 
+test("worstMessage: RECV scope with no worse status -> its message", () => {
+  const scope = { status: "RECV", checks: [
+    { status: "PASS", message: "fine" },
+    { status: "RECV", message: "opet up/up" },
+  ]};
+  assert.strictEqual(MigView.worstMessage(scope), "opet up/up");
+});
+
 function sampleScope() {
   return {
     scope_id: "svc:et-0/0/8.13:ACME",
@@ -158,7 +166,7 @@ test("buildView: address qualifier only when family has >1 address", () => {
 
 test("countStatuses: five counters, lowercase keys", () => {
   assert.deepStrictEqual(MigView.countStatuses(["PASS", "PASS", "WARN", "INFO"]),
-    { pass: 2, warn: 1, fail: 0, skip: 0, info: 1 });
+    { pass: 2, recv: 0, warn: 1, fail: 0, skip: 0, info: 1 });
 });
 
 test("unassignedRow: bgp peer -> RI detail", () => {
@@ -187,8 +195,8 @@ test("unassignedRow: static route -> next_hop arrow, via fallback, aggregate suf
 
 test("countStatuses: unknown status ignored, known ones still counted, no stray key", () => {
   const counts = MigView.countStatuses(["PASS", "BOGUS", "WARN", "PASS"]);
-  assert.deepStrictEqual(counts, { pass: 2, warn: 1, fail: 0, skip: 0, info: 0 });
-  assert.strictEqual(Object.keys(counts).length, 5);
+  assert.deepStrictEqual(counts, { pass: 2, recv: 0, warn: 1, fail: 0, skip: 0, info: 0 });
+  assert.strictEqual(Object.keys(counts).length, 6);
 });
 
 test("unassignedRow: bfd session -> interface + state detail", () => {

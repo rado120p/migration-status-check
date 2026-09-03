@@ -1050,7 +1050,7 @@ class App {
   }
 
   buildCountsStrip(services, checks, matchedLine) {
-    const order = ["pass", "warn", "fail", "skip", "info"];
+    const order = ["pass", "recv", "warn", "fail", "skip", "info"];
     const group = (label, counts, keys) =>
       el("div", {
         className: "counts-group",
@@ -1139,7 +1139,7 @@ class App {
     const services = MigView.countStatuses(
       results.flatMap((r) => (r.scopes || []).map((s) => s.status))
     );
-    const checks = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+    const checks = { pass: 0, recv: 0, warn: 0, fail: 0, skip: 0, info: 0 };
     let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0;
     for (const result of results) {
       const summary = result.summary || {};

@@ -26,6 +26,7 @@ from migration_validator.reporting.view import (
 
 SYMBOL = {
     Status.PASS: "PASS",
+    Status.RECV: "RECV",
     Status.WARN: "WARN",
     Status.FAIL: "FAIL",
     Status.SKIP: "SKIP",
@@ -39,6 +40,7 @@ SYMBOL = {
 # a nevyzaduje detekci schopnosti terminalu.
 _ANSI = {
     Status.PASS: "\x1b[32m",
+    Status.RECV: "\x1b[36;1m",  # tucna cyan, lisi se od zelene PASS i od INFO
     Status.WARN: "\x1b[33m",
     Status.FAIL: "\x1b[31m",
     Status.SKIP: "\x1b[2m",
@@ -327,7 +329,10 @@ def _block(view: ServiceView, has_baseline: bool, color: bool) -> list[str]:
 # Vzdy se ukazuji vsechny stavy - i kdyz je pocet nulovy, aby byl report
 # konzistentni. INFO se vzhledem k tomu, ze je nove, prida na konec, aby
 # starsi skript nectici posledni sloupec neparazil.
-COUNT_NAMES = (("pass", "PASS"), ("warn", "WARN"), ("fail", "FAIL"), ("skip", "SKIP"), ("info", "INFO"))
+COUNT_NAMES = (
+    ("pass", "PASS"), ("recv", "RECV"), ("warn", "WARN"), ("fail", "FAIL"),
+    ("skip", "SKIP"), ("info", "INFO"),
+)
 
 
 def _counts_lines(services: dict[str, int], checks: dict[str, int], color: bool) -> list[str]:

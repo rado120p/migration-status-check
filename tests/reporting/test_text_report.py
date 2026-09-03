@@ -67,7 +67,7 @@ def _legacy_result() -> RunResult:
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
         summary={
-            "pass": 3, "warn": 1, "fail": 1, "skip": 0, "info": 0,
+            "pass": 3, "warn": 1, "fail": 1, "skip": 0, "info": 0, "recv": 0,
             "scopes_matched": 2, "unmatched_baseline": 1, "unmatched_subject": 1,
         },
         scopes=[
@@ -253,6 +253,30 @@ def test_summary_names_its_two_units():
     assert _counts_of(_line_starting(output, "Sluzby:")) == {
         "PASS": 1, "WARN": 1, "FAIL": 1, "SKIP": 0
     }
+
+
+def test_recv_token_rendered_and_counted():
+    # RECV se resi stejnou cestou jako ostatni statusy - jeden scope/check
+    # se stavem RECV musi vytisknout token i policko v souhrnu.
+    result = replace(
+        _legacy_result(),
+        summary={
+            "pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0, "recv": 1,
+            "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0,
+        },
+        scopes=[
+            ScopeResult(
+                scope_id="svc:RECOVERED-SVC:Internet",
+                key={"description": "RECOVERED-SVC", "service_type": "Internet"},
+                status=Status.RECV,
+                match=MatchInfo(status="matched", method="description+service_type"),
+                checks=[_legacy_check("interface_state", Status.RECV, "opet up/up")],
+            ),
+        ],
+    )
+    text = render(result, color=False)
+    assert "RECV" in text
+    assert re.search(r"\b1 RECV\b", text)
 
 
 def test_service_counts_agree_with_the_rows_of_the_table_below():
@@ -532,7 +556,7 @@ def _result(scopes, *, baseline=True) -> RunResult:
             if baseline
             else None
         ),
-        summary={"pass": 1, "warn": 1, "fail": 0, "skip": 0, "info": 0,
+        summary={"pass": 1, "warn": 1, "fail": 0, "skip": 0, "info": 0, "recv": 0,
                  "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0},
         scopes=scopes,
     )
@@ -950,7 +974,7 @@ def test_deactivated_service_shows_the_reason_in_the_report():
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline=None,
         summary={
-            "pass": 0, "warn": 0, "fail": 0, "skip": 1, "info": 0,
+            "pass": 0, "warn": 0, "fail": 0, "skip": 1, "info": 0, "recv": 0,
             "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0,
         },
         scopes=[
@@ -1030,7 +1054,7 @@ def _grouped_result(checks) -> RunResult:
         subject={"address": "172.20.20.5", "phase": "post-migration"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration"},
         summary={
-            "pass": 1, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+            "pass": 1, "warn": 0, "fail": 0, "skip": 0, "info": 0, "recv": 0,
             "scopes_matched": 1, "unmatched_baseline": 0, "unmatched_subject": 0,
         },
         scopes=[
@@ -1473,7 +1497,7 @@ def _run_result(scopes) -> RunResult:
         evaluated_at="2026-08-12T00:00:00Z",
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
-        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0, "recv": 0,
                  "scopes_matched": len(scopes), "unmatched_baseline": 0, "unmatched_subject": 0},
         scopes=scopes,
     )
@@ -1575,7 +1599,7 @@ def _step_result(*, step=None, excluded=None):
         evaluated_at="2026-08-17T11:40:02Z",
         subject={"address": "172.20.20.5", "phase": "post-migration", "captured_at": "x"},
         baseline={"address": "172.20.20.4", "phase": "pre-migration", "captured_at": "y"},
-        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0,
+        summary={"pass": 0, "warn": 0, "fail": 0, "skip": 0, "info": 0, "recv": 0,
                  "scopes_matched": 0, "unmatched_baseline": 0, "unmatched_subject": 0},
         scopes=[],
         step=step,

@@ -530,6 +530,9 @@ Vlastnosti:
   na rozhraní. `bgp_prefix_counts` vrací jeden na
   **RIB × counter** (`label="<counter>-prefix-count"`, `group=f"BGP {peer} / {rib}"`), ne
   souhrn napříč RIB.
+- Seznam statusů: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (pořadí mezi PASS a SKIP,
+  počítá se nejhorší). `RECV` — měření je teď zdravé a v baseline zdravé nebylo (zlepšení
+  proti baseline); na exit code nemá vliv.
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
   `summary` = agregát přes **checky**. Počty služeb si terminál dopočítá ze `scopes` — je to
   týž výpočet za celý běh i za filtrovaný výběr, takže v `summary` být nemusí.
@@ -666,6 +669,7 @@ je v L2 bloku. Podrobnosti viz katalog checků výše.
 | `2` | `EXIT_TOOL_ERROR` | chyba nástroje: nepřipojil se, snapshot chybí / je rozbitý / má jinou `schema_version`, neznámý collector, nevalidní YAML |
 
 WARN sám o sobě návratový kód nemění — jinak by CI padalo pořád a přestalo by se tomu věřit.
+RECV návratový kód také nemění.
 
 *Nástroj selhal* a *test selhal* jsou dvě různé věci a nesmí splynout — proto 2 vs. 1.
 

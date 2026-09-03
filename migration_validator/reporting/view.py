@@ -24,7 +24,7 @@ from migration_validator.models.result import (
 # sekce nese adresu a tyhle radky zadnou nemaji.
 FAMILY_ORDER = (None, 4, 6)
 
-_STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.PASS)
+_STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.RECV, Status.PASS)
 
 NO_BASELINE = "bez baseline"
 

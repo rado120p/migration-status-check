@@ -53,7 +53,7 @@ function checkRow(check, qualify) {
 
 function worstMessage(scope) {
   if (scope.status === "PASS") return "";
-  for (const status of ["FAIL", "WARN", "SKIP"]) {
+  for (const status of ["FAIL", "WARN", "SKIP", "RECV"]) {
     for (const check of scope.checks || []) {
       if (check.status === status) return check.message;
     }
@@ -137,7 +137,7 @@ function buildView(scope, opts) {
 }
 
 function countStatuses(statuses) {
-  const counts = { pass: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+  const counts = { pass: 0, recv: 0, warn: 0, fail: 0, skip: 0, info: 0 };
   for (const status of statuses) {
     const key = status.toLowerCase();
     if (Object.prototype.hasOwnProperty.call(counts, key)) counts[key] += 1;

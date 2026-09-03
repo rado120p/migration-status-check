@@ -271,6 +271,7 @@ a:hover { color: #0e3fa9; }
 .counts-group .counts-label { color: #6b7280; }
 .counts-group b { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
 .count-pass { color: #059669; }
+.count-recv { color: #0e7490; }
 .count-warn { color: #b45309; }
 .count-fail { color: #b91c1c; }
 .count-skip { color: #6b7280; }
@@ -397,6 +398,7 @@ a:hover { color: #0e3fa9; }
 .results-row .chevron.open { transform: rotate(90deg); }
 .status-token { font: 600 11.5px 'IBM Plex Mono', monospace; }
 .status-token.pass { color: #059669; }
+.status-token.recv { color: #0e7490; font-weight: 600; }
 .status-token.warn { color: #b45309; }
 .status-token.fail { color: #b91c1c; }
 .status-token.skip { color: #9ca3af; }
