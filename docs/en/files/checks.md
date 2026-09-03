@@ -104,7 +104,7 @@ here"* should not count towards the summary, *"not measured"* should.
 ## `registry.py`
 
 `@register` stores an instance under `cls.id`; a duplicate raises `ValueError`. `all_checks()`
-returns an alphabetically sorted list — which is why check ordering in the output is stable.
+returns the list sorted by `(order, id)` — `Check.order` defaults to 0 (alphabetical by id, as before); the multicast checks set 10–13 so their rows sit together after the interface rows. This order is the row order inside a report block.
 `checks_for(scope, config)` and `get_check(id)` are auxiliary queries (the engine uses
 `all_checks()` and filters inside `run_check`).
 

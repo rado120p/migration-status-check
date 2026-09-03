@@ -18,7 +18,8 @@ def register(cls: type[Check]) -> type[Check]:
 
 
 def all_checks() -> list[Check]:
-    return [_REGISTRY[key] for key in sorted(_REGISTRY)]
+    """Poradi (order, id) je zaroven poradi radku v bloku reportu."""
+    return sorted(_REGISTRY.values(), key=lambda check: (check.order, check.id))
 
 
 def get_check(check_id: str) -> Check:

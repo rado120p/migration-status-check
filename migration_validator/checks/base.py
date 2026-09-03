@@ -74,6 +74,11 @@ class Check(ABC):
     # Bezi check i na Layer1 scopu (fyzicky port)? Vychozi ne - vetsina
     # checku meri sluzbu, ne port, a SKIP radky by L1 blok jen zaplevelily.
     layer1: ClassVar[bool] = False
+    # Poradi radku v bloku = poradi registru (order, id). Vychozi 0 drzi
+    # dnesni abecedni poradi; vyssi hodnota posune check za vsechny nulove,
+    # aby souvisejici radky (multicast) sedely u sebe a ne mezi bgp_* a
+    # interface_* (2026-09-03).
+    order: ClassVar[int] = 0
 
     def applies_to(self, scope: Scope) -> bool:
         """Device scope dostane vsechny checky - filtrovat nema podle ceho."""
@@ -107,6 +112,7 @@ class Check(ABC):
                 sorted(self.service_subtypes) if self.service_subtypes else None
             ),
             "default_severity": self.default_severity.value,
+            "order": self.order,
         }
 
 

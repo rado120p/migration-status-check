@@ -99,7 +99,7 @@ roztáhla blok na 270 znaků šířky.
 ## `registry.py`
 
 `@register` zapíše instanci pod `cls.id`; duplicita je `ValueError`. `all_checks()` vrací
-abecedně seřazený seznam — proto je pořadí checků ve výstupu stabilní. `checks_for(scope,
+seznam seřazený podle `(order, id)` — `Check.order` je výchozí 0 (abecedně podle id, jako dřív); multicast checky mají 10–13, aby jejich řádky seděly pohromadě až za interface řádky. Tohle pořadí je zároveň pořadí řádků v bloku reportu. `checks_for(scope,
 config)` a `get_check(id)` jsou pomocné dotazy (engine používá `all_checks()` a filtruje
 až v `run_check`).
 

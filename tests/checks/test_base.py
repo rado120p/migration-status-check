@@ -356,3 +356,26 @@ def test_group_travels_from_finding_to_check_result():
 
     results = run_check(_Grouped(), _ctx())
     assert [r.group for r in results] == ["Skupina", None]
+
+
+def test_registry_orders_by_order_then_id():
+    """Radky bloku jdou v poradi registru. Bez `order` je registr abecedni
+    podle id, takze igmp_membership_report sedel mezi bgp_* a interface_*
+    a multicast_forwarding_status az za interface radky (uzivatel
+    2026-09-03). Multicast checky maji order 10+, vsechny ostatni 0."""
+    from migration_validator.checks.registry import all_checks
+
+    ids = [check.id for check in all_checks()]
+    orders = [check.order for check in all_checks()]
+    assert orders == sorted(orders)
+    zero = [check.id for check in all_checks() if check.order == 0]
+    assert zero == sorted(zero)
+    multicast = [i for i in ids if i in {
+        "igmp_membership_report", "multicast_forwarding_status",
+        "core_multicast_forwarding", "mvpn_cmulticast_status",
+    }]
+    assert multicast == [
+        "igmp_membership_report", "multicast_forwarding_status",
+        "core_multicast_forwarding", "mvpn_cmulticast_status",
+    ]
+    assert ids.index("traffic_ceased") < ids.index("igmp_membership_report")

@@ -132,6 +132,7 @@ def _baseline_pairs(ctx: CheckContext) -> list[tuple[str | None, str]] | None:
 @register
 class IgmpMembershipReportCheck(Check):
     id = "igmp_membership_report"
+    order = 10
     title = "IGMP membership report receiveru"
     label = "IGMP membership report"
     mode = Mode.BOTH
@@ -185,6 +186,7 @@ def _summary(label: str, total: int, failed: int) -> Finding:
 @register
 class MulticastForwardingStatusCheck(Check):
     id = "multicast_forwarding_status"
+    order = 11
     title = "Multicast forwarding na servisnim rozhrani"
     label = "Multicast forwarding status"
     mode = Mode.STATE
@@ -303,6 +305,7 @@ def _labels_of(streams: list[tuple[str, dict[str, Any]]]) -> str:
 @register
 class CoreMulticastForwardingCheck(Check):
     id = "core_multicast_forwarding"
+    order = 12
     title = "Multicast forwarding pro inet.2 statiky"
     label = "Multicast forwarding status"
     mode = Mode.BOTH
@@ -411,6 +414,7 @@ def _cmulticast_entry(
 @register
 class MvpnCmulticastStatusCheck(Check):
     id = "mvpn_cmulticast_status"
+    order = 13
     title = "MVPN c-multicast a provider tunnel"
     label = "C-Multicast status"
     mode = Mode.BOTH
