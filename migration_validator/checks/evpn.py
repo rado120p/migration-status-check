@@ -234,10 +234,15 @@ class EvpnVpwsStatusCheck(Check):
             baseline_peer = _find_baseline_peer(baseline_peers, peer.get("ipaddr"))
             resolved = (peer.get("status") or "").strip().lower() == "resolved"
             outcome = Outcome.OK if resolved else Outcome.BROKEN
+            reason = (
+                ""
+                if resolved
+                else f" neni Resolved ({peer.get('status') or 'chybi'})"
+            )
             findings.append(
                 Finding(
                     outcome,
-                    f"{instance}: {side} peer {peer.get('ipaddr')}",
+                    f"{instance}: {side} peer {peer.get('ipaddr')}{reason}",
                     label=label(peer_label),
                     value=str(peer.get("ipaddr") or "?"),
                     baseline_value=(
@@ -265,7 +270,7 @@ class EvpnVpwsStatusCheck(Check):
                     findings.append(
                         Finding(
                             Outcome.INFO,
-                            f"{instance}: {side} peer {key} {peer[key]}",
+                            f"{instance}: {side} peer {info_label} {peer[key]}",
                             label=label(f"{prefix} {info_label}"),
                             value=str(peer[key]),
                             baseline_value=(
@@ -364,18 +369,22 @@ class EvpnEsiStatusCheck(Check):
             )
         )
 
-        df = data.get("df_role")
+        # "" se chova jako chybejici hodnota (stejny stav, jiny zdroj dat).
+        df = data.get("df_role") or None
         if df is None:
             # DF blok ve vypisu chybi - zadny verdikt, stav se nefabuluje.
             df_outcome = Outcome.INFO
-        elif "not elected" in df.lower():
-            df_outcome = Outcome.BROKEN
+            df_message = f"{esi}: DF bez zaznamu"
         else:
-            df_outcome = Outcome.OK
+            df_outcome = Outcome.BROKEN if "not elected" in df.lower() else Outcome.OK
+            # Junos uz sam vraci "DF not elected yet" - kdyz text s "DF" uz
+            # zacina, dalsi "DF " by hlaseni zdvojilo ("DF DF not elected...").
+            text = df if df.upper().startswith("DF") else f"DF {df}"
+            df_message = f"{esi}: {text}"
         findings.append(
             Finding(
                 df_outcome,
-                f"{esi}: DF {df or 'bez zaznamu'}",
+                df_message,
                 label="ESI DF",
                 value=df or "-",
                 baseline_value=baseline.get("df_role"),
@@ -540,6 +549,7 @@ class EvpnInstanceStatusCheck(Check):
             )
         )
 
+        baseline_neighbor_addresses = set((baseline.get("neighbors") or {}).get("addresses", []))
         for address in neighbors.get("addresses", []):
             findings.append(
                 Finding(
@@ -547,6 +557,7 @@ class EvpnInstanceStatusCheck(Check):
                     f"{instance}: neighbor {address}",
                     label=label("EVPN neighbor"),
                     value=address,
+                    baseline_value=address if address in baseline_neighbor_addresses else None,
                 )
             )
 
@@ -555,10 +566,15 @@ class EvpnInstanceStatusCheck(Check):
         local = data.get("local_interfaces", {})
         local_entries = local.get("entries", [])
         local_names = {entry["name"] for entry in local_entries}
+        baseline_local_by_name = {
+            entry["name"]: entry
+            for entry in baseline.get("local_interfaces", {}).get("entries", [])
+        }
         for entry in local_entries:
             if units.active and entry["name"] not in units.interfaces:
                 continue
             up = _is_up(str(entry["status"]))
+            baseline_entry = baseline_local_by_name.get(entry["name"])
             findings.append(
                 Finding(
                     Outcome.OK if up else Outcome.BROKEN,
@@ -566,6 +582,11 @@ class EvpnInstanceStatusCheck(Check):
                     + ("" if up else f", ocekavano {UP}"),
                     label=label("EVPN interface"),
                     value=f"{entry['name']} {entry['status']}",
+                    baseline_value=(
+                        f"{baseline_entry['name']} {baseline_entry['status']}"
+                        if baseline_entry
+                        else None
+                    ),
                 )
             )
         # IFL, ktery se do mac-vrf teto instance vubec nedostal, by jinak
@@ -589,6 +610,10 @@ class EvpnInstanceStatusCheck(Check):
         irb = data.get("irb_interfaces", {})
         irb_entries = irb.get("entries", [])
         irb_names = {entry["name"] for entry in irb_entries}
+        baseline_irb_by_name = {
+            entry["name"]: entry
+            for entry in baseline.get("irb_interfaces", {}).get("entries", [])
+        }
         for entry in irb_entries:
             if units.active and entry["name"] != units.irb:
                 continue
@@ -597,6 +622,13 @@ class EvpnInstanceStatusCheck(Check):
             if context:
                 value += f" ({context})"
             up = _is_up(str(entry["status"]))
+            baseline_entry = baseline_irb_by_name.get(entry["name"])
+            baseline_value = None
+            if baseline_entry:
+                baseline_value = f"{baseline_entry['name']} {baseline_entry['status']}"
+                baseline_context = baseline_entry.get("l3_context")
+                if baseline_context:
+                    baseline_value += f" ({baseline_context})"
             findings.append(
                 Finding(
                     Outcome.OK if up else Outcome.BROKEN,
@@ -604,6 +636,7 @@ class EvpnInstanceStatusCheck(Check):
                     + ("" if up else f", ocekavano {UP}"),
                     label=label("IRB interface"),
                     value=value,
+                    baseline_value=baseline_value,
                 )
             )
         if units.active and not qualify and units.irb and units.irb not in irb_names:
@@ -751,9 +784,9 @@ class EvpnMacCountCheck(Check):
                     )
 
             baseline_interfaces = baseline.get("interfaces", {})
-            # Per-interface se iteruje jen subject: kdyz box interface-name
-            # nevrati (EVO count vypis), radek se vynechava - rozhodnuti
-            # ze specu, per-VLAN uroven je vzdy pokryta.
+            # Nejdriv rozhrani, ktera vidi subjekt (EVO count vypis
+            # interface-name nekdy nevrati - takove se proste neobjevi).
+            # Ta, ktera videla jen baseline, resi samostatna smycka nize.
             for key in sorted(data.get("interfaces", {})):
                 if units.active and key not in units.interfaces:
                     continue
@@ -775,6 +808,29 @@ class EvpnMacCountCheck(Check):
                             tolerance,
                         )
                     )
+
+            subject_ifaces = data.get("interfaces", {})
+            # Rozhrani, ktere baseline melo a subjekt o nem mlci, nesmi
+            # tise zmizet - jinak by ztraceny IFL vypadal jako by v mac-vrf
+            # nikdy nebyl (stejny duvod jako union pro per-VLAN vyse).
+            for key in sorted(set(baseline_interfaces) - set(subject_ifaces)):
+                if units.active and key not in units.interfaces:
+                    continue
+                baseline_entry = baseline_interfaces[key]
+                domain = baseline_entry.get("domain")
+                prefix = f"{domain} " if domain else ""
+                row_label = label(f"{prefix}Interface {baseline_entry['name']} MAC count")
+                b = int(baseline_entry["count"])
+                findings.append(
+                    Finding(
+                        Outcome.BROKEN,
+                        f"{row_label}: v baseline {b} MAC, v subjektu chybi",
+                        label=row_label,
+                        value="chybi",
+                        baseline_value=str(b),
+                        baseline={"mac_count": b},
+                    )
+                )
         return findings
 
 

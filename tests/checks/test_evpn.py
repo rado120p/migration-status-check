@@ -33,8 +33,9 @@ def _vpws_ctx(subject, baseline=None):
 
 
 def _vpws_subject(*, status="Up", mode="single-homed", iface_name="ge-0/0/2.213",
-                  local_peers=(), remote_peers=(), remote_value=2000):
-    return {"evpn_vpws": {"EVPN-VPWS-X": {"interfaces": [{
+                  local_peers=(), remote_peers=(), remote_value=2000,
+                  instance="EVPN-VPWS-X"):
+    return {"evpn_vpws": {instance: {"interfaces": [{
         "name": iface_name, "status": status, "mode": mode,
         "local_sid": {"value": 1000, "peers": list(local_peers)},
         "remote_sid": {"value": remote_value, "peers": list(remote_peers)},
@@ -202,6 +203,29 @@ def test_vpws_without_baseline_context_stays_none():
         assert f.baseline_value is None
 
 
+def test_vpws_unresolved_peer_message_carries_reason():
+    peer = {**PEER_OK, "status": "Unresolved"}
+    findings = run_findings(_vpws_subject(instance="ELINE-1", remote_peers=[peer]))
+    row = _by_label(findings, "EVPN VPWS SID remote PE")
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == "ELINE-1: remote peer 150.0.0.14 neni Resolved (Unresolved)"
+
+
+def test_vpws_missing_peer_status_message_says_chybi():
+    peer = {**PEER_OK}
+    del peer["status"]
+    findings = run_findings(_vpws_subject(instance="ELINE-1", remote_peers=[peer]))
+    row = _by_label(findings, "EVPN VPWS SID remote PE")
+    assert row.outcome is Outcome.BROKEN
+    assert row.message.endswith("neni Resolved (chybi)")
+
+
+def test_vpws_esi_info_row_uses_uppercase():
+    findings = run_findings(_vpws_subject(instance="ELINE-1", remote_peers=[PEER_OK]))
+    row = _by_label(findings, "EVPN VPWS SID remote ESI")
+    assert row.message == "ELINE-1: remote peer ESI 00:00:00:00:00:00:00:00:00:00"
+
+
 def test_vpws_missing_remote_peer_borrows_baseline_from_first_peer():
     # Subjekt nema remote peer vubec, ale baseline ho mel Resolved - rozdil
     # "bylo Resolved" je presne informace, kterou operator potrebuje.
@@ -275,6 +299,21 @@ def test_esi_df_not_elected_fails_without_double_df():
     assert df.value == "DF not elected yet"
 
 
+def test_esi_df_not_elected_no_double_df():
+    ctx = _ctx({"evpn_esi": {"00:11": _esi_entry(df="DF not elected yet")}})
+    df = _by_label(EvpnEsiStatusCheck().run(ctx), "ESI DF")
+    assert df.outcome is Outcome.BROKEN
+    assert df.message == "00:11: DF not elected yet"
+
+
+def test_esi_df_role_empty_string_is_info_bez_zaznamu():
+    ctx = _ctx({"evpn_esi": {"00:11": _esi_entry(df="")}})
+    df = _by_label(EvpnEsiStatusCheck().run(ctx), "ESI DF")
+    assert df.outcome is Outcome.INFO
+    assert df.value == "-"
+    assert df.message == "00:11: DF bez zaznamu"
+
+
 def test_esi_without_resolved_status_omits_the_status_row():
     # Stary snapshot pole resolved_status nema - radek se vynechava,
     # nefabuluje se ([[stav-se-nikdy-nefabuluje]]).
@@ -338,13 +377,21 @@ def test_mac_count_vlan_missing_in_subject_fails():
     assert row.baseline_value == "5"
 
 
-def test_mac_count_interface_missing_in_subject_is_omitted():
-    # EVO count vypis interface-name nekdy nevrati - per-interface radek
-    # se pak vynechava a porovnava se jen per-VLAN (rozhodnuti ze specu).
+def test_mac_count_interface_missing_in_subject_is_broken():
+    # EVO count vypis interface-name nekdy nevrati, ale kdyz baseline
+    # interface s MAC adresami znala a subjekt o ni mlci, jde o ztracenou
+    # viditelnost, ne o legitimni zmizeni - radek je BROKEN, ne ticho.
     subject = _mac_subject()
     del subject["evpn_mac"]["EVPN-AWARE-CPE13"]["interfaces"]["ge-0/0/2.313"]
     findings = EvpnMacCountCheck().run(_ctx(subject, baseline=_mac_subject()))
-    assert not [f for f in findings if "Interface" in (f.label or "")]
+    row = _by_label(findings, "BD-313 Interface ge-0/0/2.313:313 MAC count")
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == (
+        "BD-313 Interface ge-0/0/2.313:313 MAC count: "
+        "v baseline 1 MAC, v subjektu chybi"
+    )
+    assert row.value == "chybi"
+    assert row.baseline_value == "1"
 
 
 def test_mac_count_interface_compares_via_renamed_key():
@@ -548,6 +595,23 @@ def test_instance_info_rows_list_names():
     assert "ge-0/0/2.313 Up" in values
     neighbor_values = [f.value for f in findings if f.label == "EVPN neighbor"]
     assert "150.0.0.13" in neighbor_values
+
+
+def test_instance_status_rows_carry_baseline_value():
+    subject = _instance_subject()
+    baseline = _instance_subject()
+    findings = _instance_findings(subject, baseline=baseline)
+    assert _by_label(findings, "EVPN interface").baseline_value == "ge-0/0/2.313 Up"
+    neighbor_row = _by_label(findings, "EVPN neighbor")
+    assert neighbor_row.baseline_value == "150.0.0.13"
+
+
+def test_irb_instance_status_row_carries_baseline_value():
+    ctx = _vlan_aware_ctx(_aware_subject(), link=LINK_L2)
+    ctx.baseline = _aware_subject()
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    row = _by_label(findings, "IRB interface")
+    assert row.baseline_value == "irb.14 Up (master)"
 
 
 def test_instance_missing_data_skips():
