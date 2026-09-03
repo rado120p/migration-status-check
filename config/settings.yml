@@ -1,6 +1,7 @@
 connection:
   netconf_port: 830
   timeout: 30
-  username: rmohyla
-  ssh_key_paths: []
-  password_env: MIG_LAB_PASSWORD
+  username: ansible
+  ssh_key_paths:
+    - /home/rado/.ssh/id_rsa
+  password_env: 
