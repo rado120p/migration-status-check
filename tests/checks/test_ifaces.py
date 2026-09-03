@@ -236,6 +236,18 @@ def test_errors_only_units_present_gives_skip_with_truthful_message():
     assert "ae0.15" in findings[0].message
 
 
+def test_errors_missing_counters_is_degraded():
+    # fyzicke tranzitni rozhrani bez klicu input_errors/output_errors/framing_errors
+    ctx = _ctx({"interfaces": {"xe-0/0/1": {"admin_status": "up", "oper_status": "up"}}},
+               interfaces=("xe-0/0/1",))
+    findings = InterfaceErrorsCheck().run(ctx)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.outcome is Outcome.DEGRADED
+    assert f.message == "xe-0/0/1: chybove countery nebyly zmereny (rozhrani nevraci error countery)"
+    assert f.value == "nezmereno"
+
+
 def test_errors_no_transit_interfaces_uses_old_skip():
     # Pokud nejsou zadne tranzitni rozhrani - ani fyzicka ani unity -
     # pouzije se _no_transit_finding, stejne jako pred timto fixem.
@@ -275,6 +287,28 @@ def test_traffic_state_mode_passes_when_flowing():
     by_label = {r.label: r for r in results}
     assert by_label["Interface traffic in (ge-0/0/2.113)"].value == "412 pps"
     assert by_label["Interface traffic out (ge-0/0/2.113)"].value == "388 pps"
+
+
+def test_traffic_zero_without_baseline_says_why():
+    ctx = _ctx(
+        {"interfaces": {"xe-0/0/1": {"input_pps": 0, "output_pps": 5}}},
+        interfaces=("xe-0/0/1",),
+    )
+    f = [r for r in InterfaceTrafficCheck().run(ctx) if "input_pps" in r.message][0]
+    assert f.outcome is Outcome.BROKEN
+    assert f.message == "xe-0/0/1: input_pps 0 pps, ocekavan nenulovy provoz"
+
+
+def test_traffic_zero_same_as_baseline_zero_is_ok_with_message():
+    ctx = _ctx(
+        subject={"interfaces": {"xe-0/0/1": {"input_pps": 0, "output_pps": 5}}},
+        baseline={"interfaces": {"xe-0/0/1": {"input_pps": 0, "output_pps": 5}}},
+        interfaces=("xe-0/0/1",),
+    )
+    f = [r for r in InterfaceTrafficCheck().run(ctx) if "input_pps" in r.message][0]
+    assert f.outcome is Outcome.OK
+    assert f.message == "xe-0/0/1: input_pps stejne jako baseline (0 pps)"
+    assert f.value == "0 pps" and f.baseline_value == "0 pps"
 
 
 def test_traffic_compare_within_tolerance_passes():

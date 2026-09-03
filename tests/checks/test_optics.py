@@ -74,6 +74,14 @@ def test_alarms_zvednuty_alarm_je_broken_warn_degraded():
     assert "bez alarmu" not in by_value
 
 
+def test_alarm_message_says_aktivni():
+    lane = _lane(alarms={"rx_los": True})
+    findings = OpticalAlarmsCheck().run(
+        _ctx({"optics": {"ae0": {"lanes": [lane]}}}))
+    f = [x for x in findings if x.outcome is Outcome.BROKEN][0]
+    assert f.message == "ae0: rx_los je aktivni"
+
+
 def test_flag_off_se_nevypisuje():
     lane = _lane(alarms={"laser-rx-power-low-alarm": False})
     findings = OpticalAlarmsCheck().run(

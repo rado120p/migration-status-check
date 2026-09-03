@@ -201,12 +201,23 @@ class InterfaceErrorsCheck(Check):
         findings = []
         for name in names:
             data = ctx.subject["interfaces"][name]
-            counters = {
-                key: int(data.get(key, 0))
+            label = "Interface errors" if layer1_scope else qualified("Interface errors", name)
+            raw_counters = {
+                key: data[key]
                 for key in ("input_errors", "output_errors", "framing_errors")
                 if key in data
             }
-            label = "Interface errors" if layer1_scope else qualified("Interface errors", name)
+            if not raw_counters:
+                findings.append(
+                    Finding(
+                        Outcome.DEGRADED,
+                        f"{name}: chybove countery nebyly zmereny (rozhrani nevraci error countery)",
+                        label=label,
+                        value="nezmereno",
+                    )
+                )
+                continue
+            counters = {key: int(value) for key, value in raw_counters.items()}
             total = sum(counters.values())
             if total == 0:
                 findings.append(
@@ -298,6 +309,10 @@ def _traffic_finding(
     Bez baseline se hodnoti jen absolutni hodnota; delta zustava None a
     report ve sloupci ZMENA nevypise nic. `label` prichazi hotovy - jestli
     ponese jmeno rozhrani v zavorce, rozhoduje volajici podle scopu.
+
+    require_nonzero se uplatni jen bez baseline. S baseline 0 vraci
+    percent_change None (deleni nulou) a 0 -> 0 je zamerne OK, aby sluzba,
+    ktera nefungovala uz pred migraci, nesvitila FAIL.
     """
     value = f"{subject} pps"
 
@@ -305,7 +320,7 @@ def _traffic_finding(
         broken = require_nonzero and subject == 0
         return Finding(
             Outcome.BROKEN if broken else Outcome.OK,
-            f"{name}: {key} {subject} pps",
+            f"{name}: {key} {subject} pps" + (", ocekavan nenulovy provoz" if broken else ""),
             label=label,
             value=value,
             subject={key: subject},
@@ -315,14 +330,23 @@ def _traffic_finding(
     delta = None if change is None else f"{change:+.0f} %"
     broken = change is not None and change < tolerance
 
-    return Finding(
-        Outcome.BROKEN if broken else Outcome.OK,
-        (
+    if change is None:
+        message = (
+            f"{name}: {key} stejne jako baseline (0 pps)"
+            if subject == 0
+            else f"{name}: {key} v toleranci {tolerance:.0f} %"
+        )
+    elif broken:
+        message = (
             f"{name}: {key} kleslo o {abs(round(change))} % "
             f"({baseline} -> {subject}), prah je {tolerance:.0f} %"
-            if broken
-            else f"{name}: {key} v toleranci {tolerance:.0f} %"
-        ),
+        )
+    else:
+        message = f"{name}: {key} v toleranci {tolerance:.0f} %"
+
+    return Finding(
+        Outcome.BROKEN if broken else Outcome.OK,
+        message,
         label=label,
         value=value,
         baseline_value=f"{baseline} pps",

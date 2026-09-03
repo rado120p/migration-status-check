@@ -229,7 +229,7 @@ class OpticalAlarmsCheck(Check):
                 findings.append(
                     Finding(
                         outcome,
-                        f"{name}: {tag} je zvednuty",
+                        f"{name}: {tag} je aktivni",
                         label=_optics_label(self.label, name, lane_no, port),
                         value=tag,
                     )
