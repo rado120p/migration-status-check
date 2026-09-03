@@ -1,0 +1,4069 @@
+{
+  "schema_version": 12,
+  "device": {
+    "address": "172.20.20.4",
+    "hostname": "clab-pop-migration-MX1-POP1",
+    "platform": "junos",
+    "model": "VMX",
+    "version": "24.2R1-S2.5",
+    "uptime_seconds": null
+  },
+  "capture": {
+    "started_at": "2026-09-03T10:32:48Z",
+    "finished_at": "2026-09-03T10:33:01Z",
+    "phase": "pre",
+    "collectors": {
+      "arp": {
+        "status": "ok"
+      },
+      "bfd": {
+        "status": "ok"
+      },
+      "bgp": {
+        "status": "ok"
+      },
+      "evpn_esi": {
+        "status": "ok"
+      },
+      "evpn_instance": {
+        "status": "ok"
+      },
+      "evpn_mac": {
+        "status": "ok"
+      },
+      "evpn_vpws": {
+        "status": "ok"
+      },
+      "igmp_group": {
+        "status": "ok"
+      },
+      "interfaces": {
+        "status": "ok"
+      },
+      "isis_adjacency": {
+        "status": "ok"
+      },
+      "isis_interface": {
+        "status": "ok"
+      },
+      "isis_overview": {
+        "status": "ok"
+      },
+      "ldp_neighbor": {
+        "status": "ok"
+      },
+      "mpls_interface": {
+        "status": "ok"
+      },
+      "multicast_route": {
+        "status": "ok"
+      },
+      "mvpn_instance": {
+        "status": "ok"
+      },
+      "nd": {
+        "status": "ok"
+      },
+      "optics": {
+        "status": "ok"
+      },
+      "pim_neighbor": {
+        "status": "ok"
+      },
+      "routes": {
+        "status": "ok"
+      }
+    }
+  },
+  "inventory": [
+    {
+      "interface": "fxp0",
+      "description": null,
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "fxp0.0",
+      "description": null,
+      "service_type": "Internet",
+      "service_subtype": null,
+      "ipv4_address": [
+        "10.0.0.15/24"
+      ],
+      "ipv6_address": [
+        "2001:db8::2/64"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp"
+      ],
+      "bgp_neighbor": [
+        "2001:db8::1"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/0",
+      "description": "clab-pop-migration-P1;et-0/0/0",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/0.0",
+      "description": "clab-pop-migration-P1;et-0/0/0",
+      "service_type": "Core",
+      "service_subtype": "transit",
+      "ipv4_address": [
+        "10.1.2.1/31"
+      ],
+      "ipv6_address": [
+        "2001:db8:2::2/127"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "iso",
+        "inet6",
+        "mpls",
+        "pim"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/1",
+      "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/1.0",
+      "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+      "service_type": "Core",
+      "service_subtype": "transit",
+      "ipv4_address": [
+        "10.1.0.4/31"
+      ],
+      "ipv6_address": [
+        "2001:db8:6::1/127"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "iso",
+        "inet6",
+        "mpls",
+        "pim"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2",
+      "description": "NNI1-TO-CPE1",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.11",
+      "description": "MULTICAST-STREAM-A-MUX1-RECEIVER-1",
+      "service_type": "Internet",
+      "service_subtype": "multicast",
+      "ipv4_address": [
+        "10.111.11.1/30"
+      ],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "igmp"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "11"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.12",
+      "description": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+      "service_type": "Unknown",
+      "service_subtype": "layer2",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "12"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.13",
+      "description": "INTERNET-CPE13-NNI",
+      "service_type": "Internet",
+      "service_subtype": null,
+      "ipv4_address": [
+        "152.11.13.1/30"
+      ],
+      "ipv6_address": [
+        "fe80::1/64"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp"
+      ],
+      "bgp_neighbor": [
+        "152.11.13.2"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "13"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "inet.0",
+          "prefix": "198.62.1.0/29",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "152.11.13.2",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        },
+        {
+          "rib": "inet.0",
+          "prefix": "198.62.2.0/24",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "152.11.13.2",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        },
+        {
+          "rib": "inet6.0",
+          "prefix": "2001:abcd:11:13::/64",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "fe80::2",
+              "interface": "ge-0/0/2.13",
+              "qualified": true,
+              "active": true
+            }
+          ],
+          "active": true
+        }
+      ],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.113",
+      "description": "L3VPN-CPE13-NNI",
+      "service_type": "IPVPN",
+      "service_subtype": null,
+      "ipv4_address": [
+        "198.11.13.1/30"
+      ],
+      "ipv6_address": [
+        "2001:db8:11:13::a/127"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "L3VPN-CPE13-NNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp",
+        "vrf"
+      ],
+      "bgp_neighbor": [
+        "198.11.13.2",
+        "2001:db8:11:13::b"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "113"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "L3VPN-CPE13-NNI.inet.0",
+          "prefix": "172.26.1.0/29",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "198.11.13.2",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        },
+        {
+          "rib": "L3VPN-CPE13-NNI.inet6.0",
+          "prefix": "2001:eeee::/64",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "2001:db8:11:13::b",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        }
+      ],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.213",
+      "description": "EVPN-VPWS-CPE13-NNI",
+      "service_type": "E-Line",
+      "service_subtype": "vpws",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VPWS-CPE13-NNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "ccc",
+        "evpn",
+        "evpn-vpws"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "213"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.313",
+      "description": "EVPN-VLAN-AWARE-CPE13-NNI",
+      "service_type": "E-LAN",
+      "service_subtype": "vlan-aware",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VLAN-AWARE-CPE13-NNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge",
+        "evpn",
+        "virtual-switch"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [
+        "BD-313"
+      ],
+      "customer_vlan": [
+        "313"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.413",
+      "description": "EVPN-VLAN-BASED-CPE13-NNI",
+      "service_type": "E-LAN",
+      "service_subtype": "vlan-based",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VLAN-BASED-CPE13-NNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge",
+        "evpn"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "413"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.4094",
+      "description": "MGMT-DEVICE4",
+      "service_type": "E-LAN",
+      "service_subtype": "vlan-aware",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VLAN-AWARE-POP1",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge",
+        "evpn",
+        "virtual-switch"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [
+        "BD-4094"
+      ],
+      "customer_vlan": [
+        "0x8100.4093",
+        "0x8100.4094",
+        "4094"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/3",
+      "description": "EVPN-VPWS-CPE24-UNI",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/3.0",
+      "description": "EVPN-VPWS-CPE24-UNI",
+      "service_type": "E-Line",
+      "service_subtype": "vpws",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VPWS-CPE24-UNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "ccc",
+        "evpn",
+        "evpn-vpws"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/4",
+      "description": "L3VPN-CPE14-UNI",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/4.0",
+      "description": "L3VPN-CPE14-UNI",
+      "service_type": "IPVPN",
+      "service_subtype": null,
+      "ipv4_address": [
+        "198.11.14.1/29"
+      ],
+      "ipv6_address": [
+        "2001:db8:11:14::1/64"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "L3VPN-CPE14-UNI",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp",
+        "vrf"
+      ],
+      "bgp_neighbor": [
+        "198.11.14.4",
+        "2001:db8:11:14::4"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/5",
+      "description": "EVPN-VLAN-AWARE-INTERNET",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/5.0",
+      "description": "EVPN-VLAN-AWARE-INTERNET",
+      "service_type": "Internet",
+      "service_subtype": null,
+      "ipv4_address": [
+        "152.11.14.1/29"
+      ],
+      "ipv6_address": [
+        "2001:abcd:11:14::1/64"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp"
+      ],
+      "bgp_neighbor": [
+        "152.11.14.4",
+        "2001:abcd:11:14::4"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "inet6.0",
+          "prefix": "2001:aaaa::/64",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "2001:abcd:11:14::4",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        }
+      ],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/6",
+      "description": "MGMT-SWITCH;ge-0/0/0",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/6.4094",
+      "description": "MGMT-VLAN",
+      "service_type": "E-LAN",
+      "service_subtype": "vlan-aware",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "EVPN-VLAN-AWARE-POP1",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge",
+        "evpn",
+        "virtual-switch"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [
+        "BD-4094"
+      ],
+      "customer_vlan": [
+        "0x8100.4094",
+        "4094"
+      ],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "irb",
+      "description": null,
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "irb.2",
+      "description": "MUX1 receivers POP1",
+      "service_type": "IPVPN",
+      "service_subtype": "mvpn-igmp",
+      "ipv4_address": [
+        "10.12.11.2/30"
+      ],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "igmp",
+        "mvpn",
+        "pim",
+        "vrf"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [
+        "BD-MUX1-B"
+      ],
+      "customer_vlan": [
+        "12"
+      ],
+      "l2_interface": [
+        "ge-0/0/2.12"
+      ],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "irb.4094",
+      "description": null,
+      "service_type": "IPVPN",
+      "service_subtype": null,
+      "ipv4_address": [
+        "10.40.95.253/24",
+        "10.40.94.253/24"
+      ],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [
+        "10.40.95.1",
+        "10.40.94.1"
+      ],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": "MGMT",
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "vrf"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [
+        "BD-4094"
+      ],
+      "customer_vlan": [
+        "4094"
+      ],
+      "l2_interface": [
+        "ge-0/0/6.4094",
+        "ge-0/0/2.4094"
+      ],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "MGMT.inet.0",
+          "prefix": "10.40.96.0/24",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "10.40.94.10",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        },
+        {
+          "rib": "MGMT.inet.0",
+          "prefix": "10.40.94.0/23",
+          "route_type": "aggregate",
+          "next_hops": [],
+          "active": true
+        }
+      ],
+      "bfd": []
+    },
+    {
+      "interface": "lo0",
+      "description": null,
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "lo0.0",
+      "description": null,
+      "service_type": "Core",
+      "service_subtype": "loopback",
+      "ipv4_address": [
+        "150.0.0.11/32"
+      ],
+      "ipv6_address": [
+        "2001:db8::11/128"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "iso",
+        "inet6",
+        "bgp"
+      ],
+      "bgp_neighbor": [
+        "150.0.0.1",
+        "150.0.0.2",
+        "2001:db8::1"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "inet.0",
+          "prefix": "10.1.0.0/23",
+          "route_type": "aggregate",
+          "next_hops": [],
+          "active": true
+        },
+        {
+          "rib": "inet.0",
+          "prefix": "150.0.0.0/24",
+          "route_type": "aggregate",
+          "next_hops": [],
+          "active": true
+        },
+        {
+          "rib": "inet.2",
+          "prefix": "10.11.11.1/32",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "10.1.2.0",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        },
+        {
+          "rib": "inet6.0",
+          "prefix": "2001:abcd::/32",
+          "route_type": "aggregate",
+          "next_hops": [],
+          "active": true
+        }
+      ],
+      "bfd": []
+    }
+  ],
+  "scopes": [
+    {
+      "id": "svc:clab-pop-migration-P1;et-0/0/0:Core",
+      "kind": "service",
+      "key": {
+        "description": "clab-pop-migration-P1;et-0/0/0",
+        "service_type": "Core",
+        "service_subtype": "transit"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/0.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/0"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "10.1.2.1/31"
+        ],
+        "local_ipv6": [
+          "2001:db8:2::2/127"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "iso",
+          "inet6",
+          "mpls",
+          "pim"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:clab-pop-migration-PTX1-POP1;et-0/0/1:Core",
+      "kind": "service",
+      "key": {
+        "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+        "service_type": "Core",
+        "service_subtype": "transit"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/1.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/1"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "10.1.0.4/31"
+        ],
+        "local_ipv6": [
+          "2001:db8:6::1/127"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "iso",
+          "inet6",
+          "mpls",
+          "pim"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:MULTICAST-STREAM-A-MUX1-RECEIVER-1:Internet",
+      "kind": "service",
+      "key": {
+        "description": "MULTICAST-STREAM-A-MUX1-RECEIVER-1",
+        "service_type": "Internet",
+        "service_subtype": "multicast"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.11"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "10.111.11.1/30"
+        ],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "11"
+        ],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "igmp"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:INTERNET-CPE13-NNI:Internet",
+      "kind": "service",
+      "key": {
+        "description": "INTERNET-CPE13-NNI",
+        "service_type": "Internet",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.13"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [
+          "152.11.13.2"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "152.11.13.1/30"
+        ],
+        "local_ipv6": [
+          "fe80::1/64"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "13"
+        ],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [
+          {
+            "rib": "inet.0",
+            "prefix": "198.62.1.0/29",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "152.11.13.2",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          },
+          {
+            "rib": "inet.0",
+            "prefix": "198.62.2.0/24",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "152.11.13.2",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          },
+          {
+            "rib": "inet6.0",
+            "prefix": "2001:abcd:11:13::/64",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "fe80::2",
+                "interface": "ge-0/0/2.13",
+                "qualified": true,
+                "active": true
+              }
+            ],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "inet6",
+          "bgp"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:L3VPN-CPE13-NNI:IPVPN",
+      "kind": "service",
+      "key": {
+        "description": "L3VPN-CPE13-NNI",
+        "service_type": "IPVPN",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.113"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [
+          "L3VPN-CPE13-NNI"
+        ],
+        "bgp_neighbors": [
+          "198.11.13.2",
+          "2001:db8:11:13::b"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "198.11.13.1/30"
+        ],
+        "local_ipv6": [
+          "2001:db8:11:13::a/127"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "113"
+        ],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [
+          {
+            "rib": "L3VPN-CPE13-NNI.inet.0",
+            "prefix": "172.26.1.0/29",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "198.11.13.2",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          },
+          {
+            "rib": "L3VPN-CPE13-NNI.inet6.0",
+            "prefix": "2001:eeee::/64",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "2001:db8:11:13::b",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "inet6",
+          "bgp",
+          "vrf"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:EVPN-VPWS-CPE13-NNI:E-Line",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VPWS-CPE13-NNI",
+        "service_type": "E-Line",
+        "service_subtype": "vpws"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.213"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [
+          "EVPN-VPWS-CPE13-NNI"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "213"
+        ],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "ccc",
+          "evpn",
+          "evpn-vpws"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:EVPN-VLAN-AWARE-CPE13-NNI:E-LAN",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VLAN-AWARE-CPE13-NNI",
+        "service_type": "E-LAN",
+        "service_subtype": "vlan-aware"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.313"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [
+          "EVPN-VLAN-AWARE-CPE13-NNI"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "313"
+        ],
+        "bridge_domains": [
+          "BD-313"
+        ],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "bridge",
+          "evpn",
+          "virtual-switch"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:EVPN-VLAN-BASED-CPE13-NNI:E-LAN",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VLAN-BASED-CPE13-NNI",
+        "service_type": "E-LAN",
+        "service_subtype": "vlan-based"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.413"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [
+          "EVPN-VLAN-BASED-CPE13-NNI"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "413"
+        ],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "bridge",
+          "evpn"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:MGMT-DEVICE4:E-LAN",
+      "kind": "service",
+      "key": {
+        "description": "MGMT-DEVICE4",
+        "service_type": "E-LAN",
+        "service_subtype": "vlan-aware"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2.4094"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/2"
+        ],
+        "routing_instances": [
+          "EVPN-VLAN-AWARE-POP1"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "0x8100.4093",
+          "0x8100.4094",
+          "4094"
+        ],
+        "bridge_domains": [
+          "BD-4094"
+        ],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "bridge",
+          "evpn",
+          "virtual-switch"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:EVPN-VPWS-CPE24-UNI:E-Line",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VPWS-CPE24-UNI",
+        "service_type": "E-Line",
+        "service_subtype": "vpws"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/3.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/3"
+        ],
+        "routing_instances": [
+          "EVPN-VPWS-CPE24-UNI"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "ccc",
+          "evpn",
+          "evpn-vpws"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:L3VPN-CPE14-UNI:IPVPN",
+      "kind": "service",
+      "key": {
+        "description": "L3VPN-CPE14-UNI",
+        "service_type": "IPVPN",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/4.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/4"
+        ],
+        "routing_instances": [
+          "L3VPN-CPE14-UNI"
+        ],
+        "bgp_neighbors": [
+          "198.11.14.4",
+          "2001:db8:11:14::4"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "198.11.14.1/29"
+        ],
+        "local_ipv6": [
+          "2001:db8:11:14::1/64"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "inet6",
+          "bgp",
+          "vrf"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VLAN-AWARE-INTERNET",
+        "service_type": "Internet",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/5.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/5"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [
+          "152.11.14.4",
+          "2001:abcd:11:14::4"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "152.11.14.1/29"
+        ],
+        "local_ipv6": [
+          "2001:abcd:11:14::1/64"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [
+          {
+            "rib": "inet6.0",
+            "prefix": "2001:aaaa::/64",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "2001:abcd:11:14::4",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "inet6",
+          "bgp"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:MGMT-VLAN:E-LAN",
+      "kind": "service",
+      "key": {
+        "description": "MGMT-VLAN",
+        "service_type": "E-LAN",
+        "service_subtype": "vlan-aware"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/6.4094"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/6"
+        ],
+        "routing_instances": [
+          "EVPN-VLAN-AWARE-POP1"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "0x8100.4094",
+          "4094"
+        ],
+        "bridge_domains": [
+          "BD-4094"
+        ],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "bridge",
+          "evpn",
+          "virtual-switch"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:MUX1 receivers POP1:IPVPN",
+      "kind": "service",
+      "key": {
+        "description": "MUX1 receivers POP1",
+        "service_type": "IPVPN",
+        "service_subtype": "mvpn-igmp"
+      },
+      "selectors": {
+        "interfaces": [
+          "irb.2"
+        ],
+        "physical_interfaces": [
+          "irb"
+        ],
+        "routing_instances": [
+          "MULTICAST-STREAM-B-MUX1-RECEIVER"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "10.12.11.2/30"
+        ],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "12"
+        ],
+        "bridge_domains": [
+          "BD-MUX1-B"
+        ],
+        "lag_members": [],
+        "l2_interfaces": [
+          "ge-0/0/2.12"
+        ],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "igmp",
+          "mvpn",
+          "pim",
+          "vrf"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:irb.4094:IPVPN",
+      "kind": "service",
+      "key": {
+        "description": null,
+        "service_type": "IPVPN",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "irb.4094"
+        ],
+        "physical_interfaces": [
+          "irb"
+        ],
+        "routing_instances": [
+          "MGMT"
+        ],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "10.40.95.253/24",
+          "10.40.94.253/24"
+        ],
+        "local_ipv6": [],
+        "virtual_gw_v4": [
+          "10.40.95.1",
+          "10.40.94.1"
+        ],
+        "virtual_gw_v6": [],
+        "vlans": [
+          "4094"
+        ],
+        "bridge_domains": [
+          "BD-4094"
+        ],
+        "lag_members": [],
+        "l2_interfaces": [
+          "ge-0/0/6.4094",
+          "ge-0/0/2.4094"
+        ],
+        "static_routes": [
+          {
+            "rib": "MGMT.inet.0",
+            "prefix": "10.40.96.0/24",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "10.40.94.10",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          },
+          {
+            "rib": "MGMT.inet.0",
+            "prefix": "10.40.94.0/23",
+            "route_type": "aggregate",
+            "next_hops": [],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "vrf"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "svc:lo0.0:Core",
+      "kind": "service",
+      "key": {
+        "description": null,
+        "service_type": "Core",
+        "service_subtype": "loopback"
+      },
+      "selectors": {
+        "interfaces": [
+          "lo0.0"
+        ],
+        "physical_interfaces": [
+          "lo0"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [
+          "150.0.0.1",
+          "150.0.0.2",
+          "2001:db8::1"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "150.0.0.11/32"
+        ],
+        "local_ipv6": [
+          "2001:db8::11/128"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [
+          {
+            "rib": "inet.0",
+            "prefix": "10.1.0.0/23",
+            "route_type": "aggregate",
+            "next_hops": [],
+            "active": true
+          },
+          {
+            "rib": "inet.0",
+            "prefix": "150.0.0.0/24",
+            "route_type": "aggregate",
+            "next_hops": [],
+            "active": true
+          },
+          {
+            "rib": "inet.2",
+            "prefix": "10.11.11.1/32",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "10.1.2.0",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          },
+          {
+            "rib": "inet6.0",
+            "prefix": "2001:abcd::/32",
+            "route_type": "aggregate",
+            "next_hops": [],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "iso",
+          "inet6",
+          "bgp"
+        ]
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/0",
+      "kind": "layer1",
+      "key": {
+        "description": "clab-pop-migration-P1;et-0/0/0",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/0"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/1",
+      "kind": "layer1",
+      "key": {
+        "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/1"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/2",
+      "kind": "layer1",
+      "key": {
+        "description": "NNI1-TO-CPE1",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/2"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/3",
+      "kind": "layer1",
+      "key": {
+        "description": "EVPN-VPWS-CPE24-UNI",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/3"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/4",
+      "kind": "layer1",
+      "key": {
+        "description": "L3VPN-CPE14-UNI",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/4"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/5",
+      "kind": "layer1",
+      "key": {
+        "description": "EVPN-VLAN-AWARE-INTERNET",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/5"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/6",
+      "kind": "layer1",
+      "key": {
+        "description": "MGMT-SWITCH;ge-0/0/0",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/6"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    }
+  ],
+  "facts": {
+    "arp": [
+      {
+        "ip": "10.0.0.2",
+        "mac": "52:55:0a:00:00:02",
+        "interface": "fxp0.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.1.0.5",
+        "mac": "c4:2f:cd:2a:00:09",
+        "interface": "ge-0/0/1.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.1.2.0",
+        "mac": "84:c2:e3:1a:00:00",
+        "interface": "ge-0/0/0.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.2",
+        "mac": "0c:00:9a:94:71:02",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.3",
+        "mac": "0c:00:82:92:17:03",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.4",
+        "mac": "0c:00:d2:bb:0c:01",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/2.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.10",
+        "mac": "2c:6b:f5:79:8a:f0",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.252",
+        "mac": "2c:6b:f5:77:7e:f0",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.95.3",
+        "mac": "0c:00:11:00:88:04",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "128.0.0.16",
+        "mac": "02:00:00:00:00:10",
+        "interface": "em1.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "152.11.13.2",
+        "mac": "0c:00:d2:bb:0c:01",
+        "interface": "ge-0/0/2.13",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "152.11.14.4",
+        "mac": "0c:00:b6:ea:3b:03",
+        "interface": "ge-0/0/5.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "198.11.13.2",
+        "mac": "0c:00:d2:bb:0c:01",
+        "interface": "ge-0/0/2.113",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "198.11.14.4",
+        "mac": "0c:00:da:57:71:02",
+        "interface": "ge-0/0/4.0",
+        "learned_via": null,
+        "routing_instance": null
+      }
+    ],
+    "bfd": {
+      "10.1.0.5": {
+        "state": "Up",
+        "interface": "ge-0/0/1.0",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": [
+          "ISIS L2"
+        ],
+        "detection_time": "30.000",
+        "transmission_interval": "10.000",
+        "multiplier": 3
+      },
+      "10.1.2.0": {
+        "state": "Up",
+        "interface": "ge-0/0/0.0",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": [
+          "ISIS L2"
+        ],
+        "detection_time": "30.000",
+        "transmission_interval": "10.000",
+        "multiplier": 3
+      }
+    },
+    "bgp": {
+      "150.0.0.1": {
+        "state": "Established",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {
+          "bgp.rtarget.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 12,
+            "active": 1,
+            "suppressed": 0
+          },
+          "inet.0": {
+            "received": 4,
+            "accepted": 4,
+            "advertised": 8,
+            "active": 4,
+            "suppressed": 0
+          },
+          "bgp.l3vpn.0": {
+            "received": 4,
+            "accepted": 4,
+            "advertised": 0,
+            "active": 4,
+            "suppressed": 0
+          },
+          "bgp.evpn.0": {
+            "received": 8,
+            "accepted": 8,
+            "advertised": 27,
+            "active": 8,
+            "suppressed": 0
+          },
+          "bgp.mvpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 2,
+            "active": 1,
+            "suppressed": 0
+          },
+          "MULTICAST-STREAM-B-MUX1-RECEIVER.inet.0": {
+            "received": 2,
+            "accepted": 2,
+            "advertised": 1,
+            "active": 2,
+            "suppressed": 0
+          },
+          "MULTICAST-STREAM-B-MUX1-RECEIVER.mvpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 0,
+            "active": 1,
+            "suppressed": 0
+          },
+          "L3VPN-CPE13-NNI.inet.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 2,
+            "active": 1,
+            "suppressed": 0
+          },
+          "L3VPN-CPE14-UNI.inet.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 1,
+            "active": 1,
+            "suppressed": 0
+          },
+          "MGMT.inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 10,
+            "active": 0,
+            "suppressed": 0
+          },
+          "EVPN-VPWS-CPE13-NNI.evpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 0,
+            "active": 1,
+            "suppressed": 0
+          },
+          "EVPN-VPWS-CPE24-UNI.evpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 0,
+            "active": 1,
+            "suppressed": 0
+          },
+          "EVPN-VLAN-AWARE-CPE13-NNI.evpn.0": {
+            "received": 3,
+            "accepted": 3,
+            "advertised": 0,
+            "active": 3,
+            "suppressed": 0
+          },
+          "EVPN-VLAN-AWARE-POP1.evpn.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          },
+          "EVPN-VLAN-BASED-CPE13-NNI.evpn.0": {
+            "received": 3,
+            "accepted": 3,
+            "advertised": 0,
+            "active": 3,
+            "suppressed": 0
+          },
+          "__default_evpn__.evpn.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "150.0.0.2": {
+        "state": "Active",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {}
+      },
+      "152.11.13.2": {
+        "state": "Established",
+        "peer_as": 100,
+        "routing_instance": null,
+        "ribs": {
+          "inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 8,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "152.11.14.4": {
+        "state": "Established",
+        "peer_as": 100,
+        "routing_instance": null,
+        "ribs": {
+          "inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 8,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "198.11.13.2": {
+        "state": "Established",
+        "peer_as": 113,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ribs": {
+          "L3VPN-CPE13-NNI.inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 1,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "198.11.14.4": {
+        "state": "Established",
+        "peer_as": 114,
+        "routing_instance": "L3VPN-CPE14-UNI",
+        "ribs": {
+          "L3VPN-CPE14-UNI.inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 1,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:db8::1": {
+        "state": "Established",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {
+          "inet6.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 6,
+            "active": 1,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:db8:11:13::b": {
+        "state": "Established",
+        "peer_as": 113,
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "ribs": {
+          "L3VPN-CPE13-NNI.inet6.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:db8:11:14::4": {
+        "state": "Established",
+        "peer_as": 114,
+        "routing_instance": "L3VPN-CPE14-UNI",
+        "ribs": {
+          "L3VPN-CPE14-UNI.inet6.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:abcd:11:14::4": {
+        "state": "Established",
+        "peer_as": 100,
+        "routing_instance": null,
+        "ribs": {
+          "inet6.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 4,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      }
+    },
+    "evpn_esi": {},
+    "evpn_instance": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "local_interfaces": {
+          "total": 2,
+          "up": 2,
+          "entries": [
+            {
+              "name": ".local..12",
+              "status": "Up"
+            },
+            {
+              "name": "ge-0/0/2.313",
+              "status": "Up"
+            }
+          ]
+        },
+        "irb_interfaces": {
+          "total": 0,
+          "up": 0,
+          "entries": []
+        },
+        "neighbors": {
+          "total": 1,
+          "addresses": [
+            "150.0.0.13"
+          ]
+        },
+        "esis": {}
+      },
+      "EVPN-VLAN-AWARE-POP1": {
+        "local_interfaces": {
+          "total": 3,
+          "up": 3,
+          "entries": [
+            {
+              "name": ".local..13",
+              "status": "Up"
+            },
+            {
+              "name": "ge-0/0/2.4094",
+              "status": "Up"
+            },
+            {
+              "name": "ge-0/0/6.4094",
+              "status": "Up"
+            }
+          ]
+        },
+        "irb_interfaces": {
+          "total": 1,
+          "up": 1,
+          "entries": [
+            {
+              "name": "irb.4094",
+              "status": "Up",
+              "l3_context": "MGMT"
+            }
+          ]
+        },
+        "neighbors": {
+          "total": 0,
+          "addresses": []
+        },
+        "esis": {}
+      },
+      "EVPN-VLAN-BASED-CPE13-NNI": {
+        "local_interfaces": {
+          "total": 2,
+          "up": 2,
+          "entries": [
+            {
+              "name": ".local..14",
+              "status": "Up"
+            },
+            {
+              "name": "ge-0/0/2.413",
+              "status": "Up"
+            }
+          ]
+        },
+        "irb_interfaces": {
+          "total": 0,
+          "up": 0,
+          "entries": []
+        },
+        "neighbors": {
+          "total": 1,
+          "addresses": [
+            "150.0.0.13"
+          ]
+        },
+        "esis": {}
+      }
+    },
+    "evpn_mac": {
+      "EVPN-VLAN-AWARE-CPE13-NNI": {
+        "vlans": {
+          "313": {
+            "count": 2,
+            "domain": "BD-313"
+          }
+        },
+        "interfaces": {
+          "ge-0/0/2.313": {
+            "count": 1,
+            "name": "ge-0/0/2.313:313",
+            "domain": "BD-313"
+          }
+        }
+      },
+      "EVPN-VLAN-AWARE-POP1": {
+        "vlans": {
+          "4094": {
+            "count": 7,
+            "domain": "BD-4094"
+          }
+        },
+        "interfaces": {
+          "ge-0/0/2.4094": {
+            "count": 1,
+            "name": "ge-0/0/2.4094:4094",
+            "domain": "BD-4094"
+          },
+          "ge-0/0/6.4094": {
+            "count": 6,
+            "name": "ge-0/0/6.4094:4094",
+            "domain": "BD-4094"
+          }
+        }
+      },
+      "EVPN-VLAN-BASED-CPE13-NNI": {
+        "vlans": {
+          "413": {
+            "count": 2,
+            "domain": null
+          }
+        },
+        "interfaces": {
+          "ge-0/0/2.413": {
+            "count": 1,
+            "name": "ge-0/0/2.413:413",
+            "domain": null
+          }
+        }
+      }
+    },
+    "evpn_vpws": {
+      "EVPN-VPWS-CPE13-NNI": {
+        "interfaces": [
+          {
+            "name": "ge-0/0/2.213",
+            "status": "Up",
+            "mode": "single-homed",
+            "local_sid": {
+              "value": 1000,
+              "peers": []
+            },
+            "remote_sid": {
+              "value": 2000,
+              "peers": [
+                {
+                  "esi": "00:00:00:00:00:00:00:00:00:00",
+                  "ipaddr": "150.0.0.13",
+                  "mode": "single-homed",
+                  "role": "Primary",
+                  "status": "Resolved"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "EVPN-VPWS-CPE24-UNI": {
+        "interfaces": [
+          {
+            "name": "ge-0/0/3.0",
+            "status": "Up",
+            "mode": "single-homed",
+            "local_sid": {
+              "value": 1000,
+              "peers": []
+            },
+            "remote_sid": {
+              "value": 2000,
+              "peers": [
+                {
+                  "esi": "00:00:00:00:00:00:00:00:00:00",
+                  "ipaddr": "150.0.0.14",
+                  "mode": "single-homed",
+                  "role": "Primary",
+                  "status": "Resolved"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "igmp_group": {
+      "irb.2": [
+        {
+          "source": "10.12.12.1",
+          "group": "239.1.1.1"
+        }
+      ],
+      "ge-0/0/2.11": [
+        {
+          "source": "10.11.11.1",
+          "group": "232.1.1.1"
+        }
+      ]
+    },
+    "interfaces": {
+      "ge-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 15,
+        "output_pps": 4
+      },
+      "ge-0/0/0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 15,
+        "output_pps": 2,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lc-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lc-0/0/0.32769": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfe-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pfe-0/0/0.16383": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfh-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pfh-0/0/0.16383": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfh-0/0/0.16384": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 1
+      },
+      "ge-0/0/1.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 11
+      },
+      "ge-0/0/2.11": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 5,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.12": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 5,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.13": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.113": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.213": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.313": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.413": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.4094": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2.32767": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/3": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 1
+      },
+      "ge-0/0/3.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 1,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/4": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/4.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/5": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/5.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/6": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 3,
+        "output_pps": 3
+      },
+      "ge-0/0/6.4094": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 3,
+        "output_pps": 3,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/6.32767": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/7": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/7.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/8": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/8.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/9": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/9.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      "ge-0/0/10": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/10.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      "ge-0/0/11": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/11.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      ".local.": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..1": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..2": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..3": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..4": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..5": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..6": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..7": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..8": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..9": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..10": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..11": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..12": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..13": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..14": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36735": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36736": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36737": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36738": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "cbp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "demux0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "dsc": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "em1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "em1.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "esi": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti2": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti3": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti4": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti5": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti6": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti7": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fxp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fxp0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "gre": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ipip": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "irb": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "irb.2": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 5,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "irb.4094": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 4,
+        "output_pps": 4,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "jsrv": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "jsrv.1": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lo0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0.16384": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0.16385": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lsi.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi.4": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi.5": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi.6": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "mif": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "mtun": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pimd": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pime": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pip0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "rbeb": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "tap": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "vtep": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      }
+    },
+    "isis_adjacency": {
+      "ge-0/0/0.0": {
+        "system_name": "clab-pop-migration-P1",
+        "state": "Up",
+        "ip_address": "10.1.2.0",
+        "ipv6_address": "2001:db8:2::1"
+      },
+      "ge-0/0/1.0": {
+        "system_name": "clab-pop-migration-PTX1-POP1",
+        "state": "Up",
+        "ip_address": "10.1.0.5",
+        "ipv6_address": "2001:db8:6::2"
+      }
+    },
+    "isis_interface": {
+      "ge-0/0/0.0": {
+        "levels": {
+          "1": {
+            "passive": false
+          },
+          "2": {
+            "passive": false
+          }
+        }
+      },
+      "ge-0/0/1.0": {
+        "levels": {
+          "1": {
+            "passive": false
+          },
+          "2": {
+            "passive": false
+          }
+        }
+      },
+      "lo0.0": {
+        "levels": {
+          "1": {
+            "passive": false
+          },
+          "2": {
+            "passive": true
+          }
+        }
+      }
+    },
+    "isis_overview": {
+      "overload_enabled": false
+    },
+    "ldp_neighbor": {
+      "ge-0/0/0.0": {
+        "neighbor_address": "10.1.2.0",
+        "uptime_seconds": 1842
+      },
+      "ge-0/0/1.0": {
+        "neighbor_address": "10.1.0.5",
+        "uptime_seconds": 1851
+      }
+    },
+    "mpls_interface": {
+      "ge-0/0/0.0": {
+        "state": "Up"
+      },
+      "ge-0/0/1.0": {
+        "state": "Up"
+      }
+    },
+    "multicast_route": {
+      "master": {
+        "10.11.11.1,232.1.1.1": {
+          "upstream_interface": "ge-0/0/0.0",
+          "downstream_interfaces": [
+            "ge-0/0/2.11"
+          ],
+          "forwarding_rate_pps": 6,
+          "uptime_seconds": 94,
+          "state": "Active",
+          "forwarding_state": "Forwarding"
+        }
+      },
+      "MULTICAST-STREAM-B-MUX1-RECEIVER": {
+        "10.12.12.1,239.1.1.1": {
+          "upstream_interface": "lsi.0",
+          "downstream_interfaces": [
+            "irb.2"
+          ],
+          "forwarding_rate_pps": 6,
+          "uptime_seconds": 97,
+          "state": "Active",
+          "forwarding_state": "Forwarding"
+        }
+      }
+    },
+    "mvpn_instance": {
+      "MULTICAST-STREAM-B-MUX1-RECEIVER": {
+        "c_multicast": [
+          {
+            "source_prefix": "10.12.12.1/32",
+            "group_prefix": "239.1.1.1/32",
+            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 8381,150.0.0.13",
+            "sender_pe": "150.0.0.13"
+          }
+        ]
+      }
+    },
+    "nd": [
+      {
+        "ip": "2001:db8::1",
+        "mac": "none",
+        "interface": "fxp0.0",
+        "state": "unreachable",
+        "learned_via": null
+      },
+      {
+        "ip": "2001:db8:11:13::b",
+        "mac": "0c:00:d2:bb:0c:01",
+        "interface": "ge-0/0/2.113",
+        "state": "reachable",
+        "learned_via": null
+      },
+      {
+        "ip": "2001:db8:11:14::4",
+        "mac": "0c:00:da:57:71:02",
+        "interface": "ge-0/0/4.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "2001:abcd:11:14::4",
+        "mac": "0c:00:b6:ea:3b:03",
+        "interface": "ge-0/0/5.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::2",
+        "mac": "52:56:00:00:00:02",
+        "interface": "fxp0.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::2",
+        "mac": "0c:00:d2:bb:0c:01",
+        "interface": "ge-0/0/2.13",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::75:26ff:fe04:14ea",
+        "mac": "02:75:26:04:14:ea",
+        "interface": "ge-0/0/1.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::86c2:e3ff:fe1a:0",
+        "mac": "84:c2:e3:1a:00:00",
+        "interface": "ge-0/0/0.0",
+        "state": "reachable",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::9cf8:a8ff:fe40:b4bc",
+        "mac": "9e:f8:a8:40:b4:bc",
+        "interface": "ge-0/0/0.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::c62f:cdff:fe2a:9",
+        "mac": "c4:2f:cd:2a:00:09",
+        "interface": "ge-0/0/1.0",
+        "state": "stale",
+        "learned_via": null
+      }
+    ],
+    "optics": {},
+    "pim_neighbor": {
+      "ge-0/0/0.0": {
+        "neighbor_address": "10.1.2.0",
+        "uptime_seconds": 1829
+      },
+      "ge-0/0/1.0": {
+        "neighbor_address": "10.1.0.5",
+        "uptime_seconds": 1852
+      }
+    },
+    "routes": {
+      "inet.0": {
+        "198.62.1.0/29": {
+          "next_hop": [
+            "152.11.13.2"
+          ],
+          "via": [
+            "ge-0/0/2.13"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "198.62.2.0/24": {
+          "next_hop": [
+            "152.11.13.2"
+          ],
+          "via": [
+            "ge-0/0/2.13"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "10.1.0.0/23": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        },
+        "150.0.0.0/24": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      },
+      "inet.2": {
+        "10.11.11.1/32": {
+          "next_hop": [
+            "10.1.2.0"
+          ],
+          "via": [
+            "ge-0/0/0.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "mgmt_junos.inet.0": {
+        "0.0.0.0/0": {
+          "next_hop": [
+            "10.0.0.2"
+          ],
+          "via": [
+            "fxp0.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "L3VPN-CPE13-NNI.inet.0": {
+        "172.26.1.0/29": {
+          "next_hop": [
+            "198.11.13.2"
+          ],
+          "via": [
+            "ge-0/0/2.113"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "MGMT.inet.0": {
+        "10.40.96.0/24": {
+          "next_hop": [
+            "10.40.94.10"
+          ],
+          "via": [
+            "irb.4094"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "10.40.94.0/23": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      },
+      "inet6.0": {
+        "2001:aaaa::/64": {
+          "next_hop": [
+            "2001:abcd:11:14::4"
+          ],
+          "via": [
+            "ge-0/0/5.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "2001:abcd:11:13::/64": {
+          "next_hop": [
+            "fe80::2"
+          ],
+          "via": [
+            "ge-0/0/2.13"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "2001:abcd::/32": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      },
+      "mgmt_junos.inet6.0": {
+        "::/0": {
+          "next_hop": [
+            "2001:db8::1"
+          ],
+          "via": [
+            "fxp0.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "L3VPN-CPE13-NNI.inet6.0": {
+        "2001:eeee::/64": {
+          "next_hop": [
+            "2001:db8:11:13::b"
+          ],
+          "via": [
+            "ge-0/0/2.113"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      }
+    }
+  },
+  "probes": {
+    "ping": [
+      {
+        "scope_id": "svc:MULTICAST-STREAM-A-MUX1-RECEIVER-1:Internet",
+        "target": "10.111.11.2",
+        "routing_instance": null,
+        "resolved_from": "subnet-fallback",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.03
+      },
+      {
+        "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
+        "target": "152.11.13.2",
+        "routing_instance": null,
+        "resolved_from": "bgp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.07
+      },
+      {
+        "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
+        "target": "fe80::2",
+        "routing_instance": null,
+        "resolved_from": "nd",
+        "family": 6,
+        "interface": "ge-0/0/2.13",
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.251
+      },
+      {
+        "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
+        "target": "198.11.13.2",
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "resolved_from": "bgp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.182
+      },
+      {
+        "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
+        "target": "2001:db8:11:13::b",
+        "routing_instance": "L3VPN-CPE13-NNI",
+        "resolved_from": "bgp",
+        "family": 6,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.082
+      },
+      {
+        "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
+        "target": "198.11.14.4",
+        "routing_instance": "L3VPN-CPE14-UNI",
+        "resolved_from": "bgp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.216
+      },
+      {
+        "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
+        "target": "2001:db8:11:14::4",
+        "routing_instance": "L3VPN-CPE14-UNI",
+        "resolved_from": "bgp",
+        "family": 6,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.097
+      },
+      {
+        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+        "target": "152.11.14.4",
+        "routing_instance": null,
+        "resolved_from": "bgp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.097
+      },
+      {
+        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+        "target": "2001:abcd:11:14::4",
+        "routing_instance": null,
+        "resolved_from": "bgp",
+        "family": 6,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 6.494
+      },
+      {
+        "scope_id": "svc:MUX1 receivers POP1:IPVPN",
+        "target": "10.12.11.1",
+        "routing_instance": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+        "resolved_from": "subnet-fallback",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.053
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.94.2",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.8
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.94.3",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.746
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.94.4",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 5.847
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.94.10",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.138
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.94.252",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 5.699
+      },
+      {
+        "scope_id": "svc:irb.4094:IPVPN",
+        "target": "10.40.95.3",
+        "routing_instance": "MGMT",
+        "resolved_from": "arp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.768
+      }
+    ],
+    "ping_skipped": []
+  }
+}
