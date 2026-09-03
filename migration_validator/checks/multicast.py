@@ -216,14 +216,17 @@ class MulticastForwardingStatusCheck(Check):
                 ))
                 failed += 1
                 continue
+            pair_failed = False
             for key, route in matches:
                 # Skupina nese realny zdroj z tabulky - u ASM zaznamu (*, G)
                 # je to jediny zpusob, jak streamy rozlisit.
                 sg = sg_label(key.split(",", 1)[0], group)
                 stream = self._stream(sg, iface, ctx.scope.service_subtype, route)
                 if any(f.outcome is Outcome.BROKEN for f in stream):
-                    failed += 1
+                    pair_failed = True
                 rows.extend(stream)
+            if pair_failed:
+                failed += 1
         return [_summary(self.label, len(pairs), failed), *rows]
 
     @staticmethod
@@ -314,6 +317,9 @@ class CoreMulticastForwardingCheck(Check):
         if not prefixes:
             # Bez inet.2 zameru ticho, ne SKIP (rozhodnuti 2026-09-02).
             return []
+        # Baseline i subject tabulka se rozdeluji podle prefixu ze subject
+        # scope zamerne - prefixy jsou stabilni identifikator napric migraci,
+        # na rozdil od nazvu rozhrani (proto IGMP checky pouzivaji baseline_scope).
         assigned = assign_sources(multicast_table(ctx.subject), prefixes)
         baseline_assigned = (
             assign_sources(multicast_table(ctx.baseline), prefixes)
@@ -331,7 +337,7 @@ class CoreMulticastForwardingCheck(Check):
                     label=self.label, value=f"Neexistuje S,G pro {prefix}", baseline_value=was_value,
                 ))
                 findings.extend(
-                    Finding(Outcome.SKIP, f"{prefix}: bez streamu", label=label, value="")
+                    Finding(Outcome.SKIP, f"{prefix}: bez streamu", label=label, group=prefix, value="")
                     for label in CORE_SKIP_LABELS
                 )
                 continue

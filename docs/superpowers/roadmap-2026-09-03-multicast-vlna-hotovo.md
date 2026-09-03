@@ -73,10 +73,10 @@ běhu (2026-09-03), žádné převzato z paměti.
 | 1 | `Outcome.DEGRADED` → `Outcome.OK` ve větvi „množina se liší" | `checks/multicast.py::IgmpMembershipReportCheck.run` | `test_igmp_report_changed_set_is_warn` |
 | 2 | `_upstream_ok`: vrať `True` vždy | `checks/multicast.py::_upstream_ok` | `test_forwarding_internet_upstream_must_be_transit`, `test_forwarding_mvpn_upstream_must_be_lsi_or_vt` (bonus: `test_forwarding_missing_upstream_renders_dash`) |
 | 3 | `iface in downstream` → `bool(downstream)` | `checks/multicast.py::MulticastForwardingStatusCheck._stream` | `test_forwarding_downstream_without_service_interface_fails_stream_row` |
-| 4 | `upstream in vias` → `upstream.startswith(("ge-","xe-","et-","ae"))` | `checks/multicast.py::CoreMulticastForwardingCheck._sg_rows` | `test_core_upstream_must_be_one_of_via` |
+| 4 | `upstream in vias` → `upstream.startswith(("ge-","xe-","et-","ae"))` | `checks/multicast.py::CoreMulticastForwardingCheck._stream` | `test_core_upstream_must_be_one_of_via` |
 | 5 | `assign_sources`: sort podle `prefixlen` vzestupně (místo sestupně) | `checks/multicast.py::assign_sources` | `test_assign_sources_longest_prefix_wins_and_each_route_once` |
 | 6 | `_tunnel_row`: `was_tunnel != tunnel` místo `was_pe != pe` | `checks/multicast.py::MvpnCmulticastStatusCheck._tunnel_row` | `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not` |
-| 7 | smazání `if route.rib == "inet.2"` větve | `parsers/core.py::ServiceInstance._matches_route` | `test_globalni_inet2_statika_patri_lo0_ne_tranzitu` (obě platformy) |
+| 7 | smazání `if route.rib == "inet.2"` větve | `parsers/core.py::JunosServiceParserCore._route_matches_service` | `test_globalni_inet2_statika_patri_lo0_ne_tranzitu` (obě platformy) |
 | 8 | smazání `measures_multicast` gate | `models/scope.py::Scope.select` | `test_core_loopback_gets_master_table_but_transit_does_not` |
 | 9 | `interface == "local"` filtr pryč | `collectors/multicast.py::IgmpGroupCollector.parse` | `test_igmp_group_drops_local_pseudo_interface` (obě platformy) |
 | 10 | `stream_rows`: `raw_pps is None` → `raw_pps == 0` | `checks/multicast.py::stream_rows` | `test_stream_rows_skip_when_rate_missing` (TypeError v `int(None)`) |
@@ -288,8 +288,6 @@ laborku, mimo rozsah tohoto úkolu.
 
 ### Drobnosti odložené z Úkolů 1–10 (ledger)
 
-- `--record-raw` (Úkol 2) v době psaní pořád mohl mít hrany mimo `record_calls` — ověřit
-  při dalším dotyku `capture.py`.
 - `_fixture_paths` glob (`name.xml` + `name.N.xml`) oslabuje mutační sílu na počty
   v `rpc_names` — zvážit cílený invariantní test, pokud finální review bude chtít.
 - Žádná `detection_reason` věta pro čistý IPVPN+igmp bez `mvpn` (Úkol 3) — subtyp zůstává

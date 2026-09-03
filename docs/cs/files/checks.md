@@ -783,7 +783,8 @@ pokrývajících prefixech vyhrává nejdelší, každá routa se počítá jen 
   status : Existuje S,G pro {prefix}` (`DEGRADED`, liší-li se množina S,G proti
   baseline); jinak `BROKEN | ... : Neexistuje S,G pro {prefix}` a čtyři `SKIP` řádky
   (`S,G`, `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`,
-  hodnota `""`).
+  hodnota `""`), všechny se `group={prefix}` — při víc inet.2 statikách bez streamu
+  jsou tak jejich čtveřice SKIP řádků v reportu rozlišitelné.
 - Per přiřazené (S,G): **Upstream interface** — `OK`, je-li upstream jedním z `via`
   změřených route collectorem pro ten inet.2 prefix (`routes["inet.2"][prefix]["via"]`,
   ECMP/qualified-next-hop dávají víc `via`); není-li inet.2 routa v tabulce vůbec →

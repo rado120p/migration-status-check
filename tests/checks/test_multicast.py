@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.multicast import (
+    CORE_SKIP_LABELS,
     NO_REPORT,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
@@ -271,6 +272,18 @@ def test_forwarding_two_streams_one_broken():
     assert findings[0].value == "1/2 S,G nefunguje"
 
 
+def test_forwarding_asm_failed_pair_counts_once():
+    """Bug fix 2026-09-03 (finding 1): ASM (*, G) IGMP zaznam odpovidajici
+    dvema rozbitym routam ma souhrn 1/1, ne 2/1 - par se pocita jednou."""
+    routes = {
+        "10.0.0.1,239.5.5.5": _route(downstream=[]),
+        "10.0.0.2,239.5.5.5": _route(downstream=[]),
+    }
+    findings = MulticastForwardingStatusCheck().run(
+        _ctx(_facts(pairs=((None, "239.5.5.5"),), routes=routes)))
+    assert findings[0].value == "1/1 S,G nefunguje"
+
+
 def test_forwarding_missing_rate_is_skip_not_failure():
     """Radici rozhodnuti Tasku 1: chybejici rate (EVO bez statistik) je SKIP,
     ne selhani streamu - stream ma jinak vsechno v poradku."""
@@ -334,12 +347,32 @@ def test_core_no_stream_for_prefix_fails_with_four_skips():
     findings = CoreMulticastForwardingCheck().run(_ctx(_core_facts(routes={}), scope=_core_scope()))
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == f"Neexistuje S,G pro {PREFIX}"
-    assert [(f.outcome, f.label, f.value) for f in findings[1:]] == [
-        (Outcome.SKIP, "S,G", ""),
-        (Outcome.SKIP, "Forwarding rate packets", ""),
-        (Outcome.SKIP, "Upstream interface", ""),
-        (Outcome.SKIP, "Downstream interfaces", ""),
+    assert [(f.outcome, f.label, f.value, f.group) for f in findings[1:]] == [
+        (Outcome.SKIP, "S,G", "", PREFIX),
+        (Outcome.SKIP, "Forwarding rate packets", "", PREFIX),
+        (Outcome.SKIP, "Upstream interface", "", PREFIX),
+        (Outcome.SKIP, "Downstream interfaces", "", PREFIX),
     ]
+
+
+def test_core_no_stream_for_two_prefixes_skips_carry_own_prefix():
+    """Bug fix 2026-09-03 (finding 2): s vice inet.2 statikami a zadnymi
+    streamy musi mit kazda ctverice SKIP radku group rovny svemu prefixu,
+    jinak jsou v reportu nerozlisitelne."""
+    prefix2 = "10.11.11.2/32"
+    static_routes = INET2 + ({
+        "rib": "inet.2", "prefix": prefix2, "route_type": "static",
+        "next_hops": [{"to": "10.1.1.3", "interface": None, "qualified": False, "active": True}],
+        "active": True,
+    },)
+    findings = CoreMulticastForwardingCheck().run(
+        _ctx(_core_facts(routes={}), scope=_core_scope(static_routes=static_routes)))
+    groups_by_prefix = {}
+    for f in findings:
+        if f.outcome is Outcome.SKIP:
+            groups_by_prefix.setdefault(f.group, set()).add(f.label)
+    assert groups_by_prefix[PREFIX] == set(CORE_SKIP_LABELS)
+    assert groups_by_prefix[prefix2] == set(CORE_SKIP_LABELS)
 
 
 def test_core_upstream_must_be_one_of_via():

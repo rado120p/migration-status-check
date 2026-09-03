@@ -78,8 +78,9 @@ def test_full_migration_run_has_no_unexplained_fail_or_warn(synthetic_snapshot):
     vypnuta a na .5 aktivni, MGMT-VLAN naopak). Regenerace 2026-09-02 uz
     tenhle stav v laborce nenajde - obe sluzby jsou na obou zarizenich
     aktivni (multicast lab setup je mezitim sjednotil) - takze AR-22/AR-23
-    smer se overuje na scenari vyrobenem `_deactivate_shared_service`, ne
-    na realnych datech.
+    smer se overuje na scenari vyrobenem `_deactivate_only_in_subject`, ne
+    na realnych datech - test tim overuje mechanismus checku, ne stav
+    laborky, ktera uz tuhle asymetrii nenese.
 
     Co porad musi platit: zadny JINY check nesmi na teto dvojici vratit
     FAIL nebo WARN. Kdyby to udelal, byl by to check, ktery je vzdy

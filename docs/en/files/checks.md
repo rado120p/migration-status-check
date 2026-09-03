@@ -793,7 +793,9 @@ with several covering prefixes, the longest wins, and each route is counted only
 - At least one route with a source inside the prefix → `OK | Multicast forwarding status
   : Existuje S,G pro {prefix}` (`DEGRADED` if the S,G set differs against baseline);
   otherwise `BROKEN | ... : Neexistuje S,G pro {prefix}` and four `SKIP` rows (`S,G`,
-  `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`, value `""`).
+  `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`, value `""`),
+  all with `group={prefix}` — with several inet.2 statics and no streams, their four-row
+  SKIP sets stay distinguishable in the report.
 - Per assigned (S,G): **Upstream interface** — `OK` if the upstream is one of the `via`
   values measured by the route collector for that inet.2 prefix
   (`routes["inet.2"][prefix]["via"]`, ECMP/qualified-next-hop give several `via`); if the
