@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loopback wave):
+Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -15,6 +15,8 @@ Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loop
 | `interface_errors` | state | advisory | all | zero `input/output/framing` errors — **transit interfaces only** |
 | `interface_traffic` | both | advisory | all | `input_pps`/`output_pps` > 0; with a baseline, also the drop against tolerance — **transit interfaces only**, one finding per direction |
 | `traffic_ceased` | compare | advisory | all | traffic on the old interface went quiet after the migration — **disabled by default** |
+| `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, no dark side, shift vs baseline within `tolerance_db` |
+| `interface_optics_alarms` | state | critical | layer1 | no raised alarm (FAIL) or warning (WARN) on any lane |
 | `arp_present` | state | advisory | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
 | `nd_present` | state | advisory | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
 | `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
@@ -25,6 +27,7 @@ Matches the output of `mig-validate checks` (as of 2026-08-26, Core transit/loop
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration) |
 | `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
+| `aggregate_route_status` | both | critical | all | a configured aggregate route is in the table and active |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established`; **does not run on any Core scope at all** — transit is measured by `bfd_transit_state`, and iBGP BFD on the loopback is a deliberately deferred decision (2026-08-26) |
 | `deactivation_state` | both | critical | all | the service's deactivation (`RI`/`interface`) has not worsened against the baseline; a healthy service (both sides active) gets no finding at all |
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency is `Up`, neighbor and addresses match the baseline; interface missing from output = FAIL |
@@ -544,6 +547,14 @@ Properties:
 - Status list: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (rank order between PASS and
   SKIP, worst-wins). `RECV` — measurement is healthy now and was not in the baseline
   (recovered); does not affect exit code.
+- **Improvements** (`Outcome.RECOVERED` → `Status.RECV`, always RECV regardless of severity)
+  are reported instead of silently folded into `PASS`, so an operator can see what got fixed
+  rather than just that nothing is broken. It is used in: `isis_adjacency_state` (adjacency
+  `Up` now, baseline not `Up`), `deactivation_state` (service active now, baseline
+  deactivated), `bgp_session_state` (`Established` now, baseline a different state),
+  `static_route_status`/`aggregate_route_status` (route active now, baseline inactive),
+  `mpls_interface_state` (`Up` now, baseline not `Up`) and `bfd_transit_state` (`Up` now,
+  baseline not `Up`).
 - A scope's `status` is the worst status of its checks (`SKIP` only when there is nothing
   better to report); `summary` aggregates across **checks**. The terminal derives the service
   counts from `scopes` itself — the same computation holds for the whole run and for a

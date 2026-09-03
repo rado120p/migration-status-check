@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/loopback):
+Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
@@ -15,6 +15,8 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/lo
 | `interface_errors` | state | advisory | všechny | nulové `input/output/framing` chyby — **jen tranzitní rozhraní** |
 | `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní**, jeden nález na směr |
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |
+| `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, žádná tmavá strana, posun proti baseline v mezích `tolerance_db` |
+| `interface_optics_alarms` | state | critical | layer1 | žádný zvednutý alarm (FAIL) ani warning (WARN) na žádné lane |
 | `arp_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu |
 | `nd_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
 | `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture` |
@@ -25,6 +27,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-08-26, vlna Core transit/lo
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline: pokles EVPN neighbors = WARN, počty local/IRB interfaců se na rovnost neporovnávají (rozdíl ukazuje sloupec ZMENA — konsolidace do jedné mac-vrf instance je při migraci mění) |
 | `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci |
 | `static_route_status` | both | critical | všechny | nakonfigurovaná statická routa je v routovací tabulce a next-hop se nezměnil |
+| `aggregate_route_status` | both | critical | všechny | nakonfigurovaná agregátní routa je v tabulce a aktivní |
 | `bfd_session_state` | both | critical | všechny | BFD session nakonfigurovaného peeru je `Up`; `SKIP`, dokud není BGP `Established`; **na žádném Core scope neběží vůbec** — transit měří `bfd_transit_state`, iBGP BFD na loopbacku je vědomě odložené rozhodnutí (2026-08-26) |
 | `deactivation_state` | both | critical | všechny | deaktivace služby (`RI`/`interface`) se proti baseline nezhoršila; zdravá služba (obě strany aktivní) nález nedostane vůbec |
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency je `Up`, soused a adresy sedí proti baseline; chybějící rozhraní v outputu = FAIL |
@@ -533,6 +536,13 @@ Vlastnosti:
 - Seznam statusů: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (pořadí mezi PASS a SKIP,
   počítá se nejhorší). `RECV` — měření je teď zdravé a v baseline zdravé nebylo (zlepšení
   proti baseline); na exit code nemá vliv.
+- **Zlepšení** (`Outcome.RECOVERED` → `Status.RECV`, vždy RECV bez ohledu na severity) se
+  hlásí místo tichého sloučení do `PASS`, aby operátor viděl, co se opravilo, ne jen že nic
+  není rozbité. Používá se v: `isis_adjacency_state` (adjacency teď `Up`, baseline ne-`Up`),
+  `deactivation_state` (služba teď aktivní, baseline deaktivovaná), `bgp_session_state`
+  (teď `Established`, baseline jiný stav), `static_route_status`/`aggregate_route_status`
+  (routa teď aktivní, baseline neaktivní), `mpls_interface_state` (teď `Up`, baseline ne-`Up`)
+  a `bfd_transit_state` (teď `Up`, baseline ne-`Up`).
 - `status` scope = nejhorší stav jeho checků (`SKIP` jen když není co lepšího hlásit);
   `summary` = agregát přes **checky**. Počty služeb si terminál dopočítá ze `scopes` — je to
   týž výpočet za celý běh i za filtrovaný výběr, takže v `summary` být nemusí.

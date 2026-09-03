@@ -152,16 +152,25 @@ column carries the state capitalised (`Up`, `Down`).
 The sum of `input_errors`, `output_errors` and `framing_errors` must be 0. Transit interfaces
 only. One `Finding` per interface (label `Interface errors (<name>)`) — the counters are folded
 into a single message (`input_errors=3`), unlike `interface_state`/`interface_traffic` this one
-does not split into separate rows.
+does not split into separate rows. A physical transit interface whose data carries **none** of
+the three counter keys at all is `degraded` (not a silent `ok`) — the interface simply does not
+report error counters, which is not the same claim as "measured, zero errors": message
+`<name>: chybove countery nebyly zmereny (rozhrani nevraci error countery)`, `value` =
+`nezmereno`.
 
 ### `interface_traffic` (both, advisory)
 
 - **without a baseline** (or when the interface is absent from the baseline): with
   `require_nonzero`, both `input_pps` and `output_pps` must be > 0, otherwise `broken` → WARN
-  with the message `<name>: <input_pps|output_pps> <value> pps` (e.g. `et-0/0/8: input_pps 0
-  pps`);
-- **with a baseline**: the percentage drop against `tolerance_percent` (default −60 %). The
-  per-direction change goes into `details`, the raw numbers into `baseline`/`subject`.
+  with the message naming the reason, `<name>: <input_pps|output_pps> 0 pps, ocekavan
+  nenulovy provoz`;
+- **with a baseline, baseline pps == 0 and subject pps == 0**: `ok`, message `<name>: <key>
+  stejne jako baseline (0 pps)` — `require_nonzero` is deliberately not re-applied when a
+  baseline exists, since a service that had no traffic before the migration should not FAIL
+  just for still having none;
+- **with a baseline otherwise**: the percentage drop against `tolerance_percent` (default
+  −60 %). The per-direction change goes into `details`, the raw numbers into
+  `baseline`/`subject`.
 
 **One `Finding` per direction, not per interface**: `input_pps` (label `Interface traffic in
 (<name>)`) and `output_pps` (label `Interface traffic out (<name>)`) are two separate rows, so
@@ -187,6 +196,43 @@ baseline carried no traffic at all — in which case ceasing cannot be verified.
 
 ---
 
+## `optics.py` — optical levels and alarms
+
+Both checks run **only on layer1/device scope** (`service_types = frozenset()`, which never
+matches any service). Ports iterated: the interface itself plus its sorted LAG members. A port
+absent from `optics` entirely gets a single `SKIP` (`<name>: rozhrani nevraci opticka data`,
+`value` = `bez optiky`); otherwise one row per lane.
+
+### `interface_optics_levels` (both, critical, layer1 only)
+
+Per lane: RX/TX power in dBm. A "dark side" (RX and/or TX non-finite, i.e. no light) is
+`broken` regardless of baseline. With a baseline and no dark side, a shift beyond
+`tolerance_db` (default 2.0 dB) on either side is `degraded` (always WARN); within tolerance
+is `ok`.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| port not reporting optics at all | `SKIP` | SKIP | `bez optiky` |
+| RX and/or TX non-finite (no baseline, or with baseline) | `broken` | FAIL | `RX <x> / TX <y>` |
+| baseline present, not dark, shift beyond `tolerance_db` | `degraded` | WARN | `RX <x> / TX <y>` |
+| baseline present, not dark, within tolerance (or no baseline at all) | `ok` | PASS | `RX <x> / TX <y>` |
+
+### `interface_optics_alarms` (state, critical, layer1 only)
+
+Per port: a quiet port (no lane has any raised `alarms`/`warnings` entry) gets one summary row.
+An alarm and a warning both use the same wording, only the Outcome/status differ — `<name>:
+<tag> je aktivni` (previously `je zvednuty`, which read like a question rather than a
+statement of what is wrong).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| port not reporting optics at all | `SKIP` | SKIP | `bez optiky` |
+| no raised alarm/warning on any lane | `ok` | PASS | `bez alarmu` |
+| per raised `alarms[tag]` | `broken` | FAIL | the tag |
+| per raised `warnings[tag]` | `degraded` | WARN | the tag |
+
+---
+
 ## `bgp.py`
 
 Both checks have `service_types={"Internet", "IPVPN"}`, but **since the 2026-08-26 wave they
@@ -203,17 +249,30 @@ returns `SKIP`.
 
 ### `bgp_session_state` (both, critical)
 
-- state ≠ `Established` → `broken` → **FAIL**. It carries `baseline_value`, so the `ZMENA`
-  column shows `bylo Established` — the regression is visible exactly where it matters,
-- state `Established` but **different in the baseline** → **PASS** with the message
-  `stav se zmenil X -> Established`. This branch is only reachable with state `Established`
-  (worse states leave earlier), so it covers precisely and only the case where the session
-  **improved** during the migration — and an improvement is not a warning (decision R-2). The
-  change does not vanish: the message names it and the `ZMENA` column shows the previous state,
+- state ≠ `Established` → `broken` → **FAIL**, message `<peer>: stav <state>, ocekavano
+  Established`. It carries `baseline_value`, so the `ZMENA` column shows `bylo Established` —
+  the regression is visible exactly where it matters,
+- state `Established` but **different in the baseline** → **`recovered`** → **RECV** with the
+  message `stav se zmenil X -> Established`. This branch is only reachable with state
+  `Established` (worse states leave earlier), so it covers precisely and only the case where
+  the session **improved** during the migration — and an improvement is not a silent PASS, the
+  operator should see it recovered (decision R-2/point 20). The change does not vanish: the
+  message names it and the `ZMENA` column shows the previous state,
 - state `Established` and unchanged (or no baseline) → PASS.
 
 Every `Finding` carries `label=f"BGP status ({peer})"` and a `family` derived by `peer_family()` from
 the peer's address — the report uses it to place the row in the `IPv4`/`IPv6` section.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| peer measured, state ≠ `Established` | `broken` | FAIL | measured state |
+| peer measured, state `Established`, baseline had a different state | `recovered` | RECV | `Established` |
+| peer measured, state `Established`, unchanged or no baseline | `ok` | PASS | `Established` |
+| peer deactivated in config, baseline had it running | `broken` (`deactivation_outcome`) | FAIL | `deaktivovan` |
+| peer deactivated in config, baseline also deactivated/unknown | `degraded` (`deactivation_outcome`) | WARN | `deaktivovan` |
+| peer configured, no session, not deactivated | `broken` | FAIL | `bez session` |
+| peer only in baseline (no longer claimed by this service) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
+| no configured/inactive/measured/baseline peer at all | `SKIP` | SKIP | `zadny peer` |
 
 ### `bgp_prefix_counts` (compare, advisory)
 
@@ -236,7 +295,22 @@ gathered under a named peer/RIB heading, not one summary row.
 
 Comparison uses **a tolerance, not 1:1 equality**. Experience from JSNAPy is that exact
 matching generates a flood of FAILs over a difference of a few routes, which is not
-significant. Prefix growth is not a problem.
+significant. **Growth is not ignored either** — it is symmetric: a drop past
+`tolerance_percent` is `broken` (WARN at the group's default advisory severity), a rise past
+the same threshold in the other direction (`change > abs(tolerance)`) is `degraded` (always
+WARN) — a surprising jump upward is exactly as worth a look as a drop, even though nothing is
+"down". A RIB the baseline had but the subject never measured at all (a family disconnected
+during the migration) is its own `broken` finding, not silence.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| peer absent from the subject entirely | `SKIP` | SKIP | `zadna session` |
+| peer absent from the baseline | `SKIP` | SKIP | `bez baseline` |
+| RIB absent from the baseline for a peer present in both | `SKIP` | SKIP | `bez baseline` |
+| per counter, drop past `tolerance_percent` (message `pokles <key> <b> -> <s>, prah je <tol> %`) | `broken` | WARN (advisory) | measured count |
+| per counter, rise past `abs(tolerance_percent)` (message `narust <key> <b> -> <s>, prah je +<tol> %`) | `degraded` | WARN | measured count |
+| per counter, within tolerance | `ok` | PASS | measured count |
+| RIB the baseline had, the subject does not measure at all (message `RIB v baseline byla, v subjektu chybi`) | `broken` | WARN (advisory) | `chybi` |
 
 ---
 
@@ -256,10 +330,57 @@ vs EVO (`mac-vrf` / VLAN) difference was absorbed by the collector.
   each side advertises its own service ID (`local 1000; remote 2000`), so equality is not an
   invariant. It FAILs only when no remote SID arrives at all.
 
+Per peer (local or remote side), the "peer status" row's message names the reason instead of
+repeating the OK sentence: `<instance>: <side> peer <ip> neni Resolved (<status or 'chybi'>)`.
+The `mode`/`esi`/`role` INFO rows use the same display name (`ESI`, capitalized) in both the
+message and the label — the message no longer echoes the raw dict key (`esi`, lowercase),
+which used to disagree with the label of the very same row.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| local interface status `Up` | `ok` | PASS | measured status |
+| local interface status not `Up` | `broken` | FAIL | measured status |
+| remote side, no peers at all | `broken` (PE row) + `broken` (status row) | FAIL | `Neznamy peer` / `Unresolved / Chybi` |
+| local side, no peers (single-homed, expected) | `INFO` | INFO | mode, annotated "multi-homing peer not found" |
+| per peer, status `Resolved` | `ok` | PASS | peer address |
+| per peer, status not `Resolved` (message names the status) | `broken` | FAIL | peer address |
+
 ### `evpn_esi_status` (both, critical, E-LAN only)
 
 The local interface status in the segment must be `Up`; the message includes the DF (the IP
 address of the elected designated forwarder).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| local interface status `Up` | `ok` | PASS | `<interface> <status>` |
+| local interface status not `Up` | `broken` | FAIL | `<interface> <status>` |
+| `df_role` contains "not elected" | `broken` | FAIL | the raw `df_role` text (message is `<esi>: <df_role>`, no duplicated `DF` prefix when `df_role` already starts with it) |
+| `df_role` is `None` or `""` (no DF on record) | `INFO` | INFO | `-` (message `DF bez zaznamu`) |
+| `df_role` otherwise (elected DF address) | `ok` | PASS | the raw `df_role` text |
+
+### `evpn_instance_status` (both, critical, E-LAN only)
+
+Per instance: EVPN neighbor count (`> 0`, WARN below baseline), one `INFO` row per neighbor
+address, ESI status/local-interface/IRB blocks (only when the scope has no interface
+selectors — a service with selectors gets its own ESI detail from `evpn_esi_status`
+instead), one row per local EVPN interface and per IRB interface. **`baseline_value` is
+filled for EVPN interface, IRB interface, EVPN neighbor and ESI rows whenever the baseline
+carries the matching item** — earlier these rows never compared against baseline at all.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| EVPN neighbors total > 0, not below baseline | `ok` | PASS | measured total |
+| EVPN neighbors total > 0 but below baseline | `degraded` | WARN | measured total |
+| EVPN neighbors total is 0/missing | `broken` | FAIL | `0` |
+| local EVPN interface status `Up` | `ok` | PASS | `<name> <status>` |
+| local EVPN interface status not `Up` | `broken` | FAIL | `<name> <status>` |
+| unit expected by selectors but missing from the instance | `broken` | FAIL | `<unit> chybi v instanci` |
+| IRB interface status `Up` | `ok` | PASS | `<name> <status>` (+ `(<l3_context>)`) |
+| IRB interface status not `Up` | `broken` | FAIL | same, `ocekavano Up` |
+| ESI in baseline, missing from subject | `broken` | FAIL | `chybi` |
+| ESI status starts with "resolved" | `ok` | PASS | measured status |
+| ESI status present, not resolved | `broken` | FAIL | measured status |
+| ESI status is `""` | `broken` | FAIL | `bez statusu` |
 
 ### `evpn_mac_count` (both, advisory, E-LAN only)
 
@@ -269,6 +390,14 @@ label is `instance/vlan`, or just `instance` for vlan-based.
 - **without a baseline**: 0 learned MACs → `broken` → WARN,
 - **with a baseline**: a drop beyond `tolerance_percent` (default −60 %) → WARN. Zero MACs is a
   WARN even when the drop would fit inside the tolerance.
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| no baseline, count > 0 | `ok` | PASS | measured count |
+| no baseline, count == 0 | `broken` | WARN (advisory) | `0` |
+| both records, drop beyond tolerance | `broken` | WARN (advisory) | measured count |
+| both records, within tolerance | `ok` | PASS | measured count |
+| interface in baseline, missing from the subject (message `v baseline <b> MAC, v subjektu chybi`) | `broken` | WARN (advisory) | `chybi` |
 
 ---
 
@@ -309,6 +438,8 @@ Shared helpers:
   exactly what forced a section for a family the renderer is supposed to omit (decision R-1);
 - no ARP entry on the service's interfaces → `broken` → FAIL/WARN, message `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
+- a MAC of `00:00:00:00:00:00` (an unresolved ARP entry) → `broken`, message `ARP zaznam
+  <ip> neni resolved (incomplete)`, `value` = `incomplete -> <ip>`;
 - otherwise **one `Finding` per ARP entry**: message `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` when the MAC is missing).
 
@@ -322,6 +453,8 @@ Mirrors `arp_present` for IPv6:
 - no **usable** ND entry remains → `broken`, message `na rozhranich sluzby neni zadny
   pouzitelny ND zaznam` (note the extra word "pouzitelny" compared to ARP — precisely
   because of the filtered-out link-local neighbours), `value` = `zadny zaznam`;
+- entry state `incomplete` or `unreachable` (an unresolved ND entry) → `broken`, message `ND
+  zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
 - otherwise **one `Finding` per ND entry**: message `ND zaznam <ip>`, `label="ND"`,
   `family=6`, `value` = `<mac> -> <ip>`; `subject` additionally carries `state` (ND, unlike
   ARP, has an entry state).
@@ -336,14 +469,19 @@ Reads finished results from the snapshot — the targets were resolved back duri
   fallback by cil jen hadal`, `value` `<net>  bez cile (subnet > /30)`) — the resolver
   deliberately keeps the fallback out of it (see `IPV4_FALLBACK_MIN_PREFIX` in
   `probes/ping.py`), and silence would read as "checked, OK";
+- `ping_skipped` set (the profile excluded this scope from `capture`) → `SKIP`, message
+  `ping neproveden - mimo profil (<profile>)`, `value` = `mimo profil (<profile>)` — naming
+  the profile so the operator does not have to go dig it out of `run.yml`;
 - the snapshot has no targets for this scope and no such subnet explains it → `SKIP`
   (`pro tento scope nejsou ve snapshotu zadne cile pingu`);
 - a probe with no recognised family (`family` outside `4`/`6`) → its own `SKIP` naming the
   targets (`probe bez rodiny nelze vyhodnotit: ...`) — otherwise the probe would silently
   vanish from the result instead of saying it was never evaluated;
 - otherwise **one `Finding` per target**, grouped by `family`:
+  - `sent == 0` → `SKIP`, message `<target>: ping neodeslan`, `value` = `<target> neodeslan`
+    — nothing sent is not the same claim as "sent and no answer";
   - at least one packet answered → `ok`, message `<target>: odpovedelo N z M`,
-  - none answered → `broken`, message `<target>: neodpovedel (M paketu)`.
+  - `sent > 0` and none answered → `broken`, message `<target>: neodpovedel (M paketu)`.
 
 `value` is `<received>/<sent>` plus `  <rtt> ms` on a successful reply (omitted when the RTT
 could not be measured), then always `  <target>` — e.g. `5/5  2.1 ms  10.1.1.1`. On failure
@@ -405,11 +543,13 @@ that is not an inconsistency but two different roles.
 |---|---|---|---|
 | in the table, next hop unchanged or no baseline | `ok` | PASS | next hops sorted and joined by commas (`-` when none) |
 | in the table, next hop changed vs. baseline | `degraded` | WARN | new next hop; `ZMENA` carries the old one |
+| in the table, baseline had it inactive (route reactivated) | `recovered` | RECV | new next hop (message adds `(v baseline nebyla aktivni)`) |
 | in the table but unstarred (`active: false`), baseline also inactive | `ok` | PASS | `neni aktivni` |
 | in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
-| in the table but unstarred, no baseline | `degraded` | WARN | `neni aktivni` |
-| configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
-| present in baseline, absent from subject | `broken` | FAIL | `chybi` |
+| in the table but unstarred, baseline record present but silent on activity (message adds `; baseline aktivitu neuvadi`, `baseline_value` stays `None`, not fabricated) | `degraded` | WARN | `neni aktivni` |
+| in the table but unstarred, no baseline record at all | `degraded` | WARN | `neni aktivni` |
+| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) — applies in device scope too | `broken` | FAIL | `neni v tabulce` |
+| absent from the table, present in baseline measurement | `broken` | FAIL | `chybi` |
 
 A route that is **in the table but unstarred** is not forwarding — Junos does not drop it
 from the listing, another source has just outranked it. That is a different situation from
@@ -418,13 +558,12 @@ from the listing, another source has just outranked it. That is a different situ
 to tell whether it was already inactive before, so per R‑2 the ambiguity is not escalated to
 FAIL — it stays at WARN.
 
-What separates the last two rows is `configured` — "is the route among the scope's selectors":
-a device scope has no inventory, its selectors are always empty, so it reports `chybi` rather
-than `neni v tabulce`, the intent being unknown (AR‑17). The condition in the code reads
-`configured and not is_device`; **the `not is_device` conjunct is inert**, because `configured`
-already implies not-device. It stays as a written record of the AR‑17 intent, not as work. In
-`bfd.py` the same-looking condition **does real work** — there the corresponding branch is
-reached precisely with `configured=False`. The two must not be harmonised.
+What separates the last two rows is **whether the baseline measured the route**, not the
+scope kind: a baseline record present means "it was there, now it is gone" (`chybi`); no
+baseline record at all means only the configuration claims the route belongs in the table,
+and the table itself says it does not (`neni v tabulce`) — this holds in device scope too,
+since it is a statement about what the table shows, not about intent the device scope cannot
+see (AR‑17).
 
 The label is `<RIB> <prefix>` and the identity goes into `group="Staticke routy"` — routes
 from different RIBs end up in one named row group instead of separate sub-rows distinguished
@@ -486,12 +625,14 @@ report, even though both are still "a route in the table".
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
-| in the table and active | `ok` | PASS | `v tabulce` |
+| in the table and active, baseline unchanged or absent | `ok` | PASS | `v tabulce` |
+| in the table and active, baseline had it inactive (route reactivated) | `recovered` | RECV | `v tabulce` (message adds `(v baseline nebyla aktivni)`) |
 | in the table but unstarred (`active: false`), baseline also inactive | `ok` | PASS | `neni aktivni` |
 | in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
-| in the table but unstarred, no baseline | `degraded` | WARN | `neni aktivni` |
-| configured, absent from the table (service scope) | `broken` | FAIL | `neni v tabulce` |
-| present in baseline, absent from subject | `broken` | FAIL | `chybi` |
+| in the table but unstarred, baseline record present but silent on activity (message adds `; baseline aktivitu neuvadi`, `baseline_value` stays `None`, not fabricated) | `degraded` | WARN | `neni aktivni` |
+| in the table but unstarred, no baseline record at all | `degraded` | WARN | `neni aktivni` |
+| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) — applies in device scope too | `broken` | FAIL | `neni v tabulce` |
+| absent from the table, present in baseline measurement | `broken` | FAIL | `chybi` |
 | configured, deactivated in the configuration, and absent from the table | `deactivation_outcome(...)` | depends on baseline | `deaktivovana` |
 
 ---
@@ -512,13 +653,13 @@ returns `False` for `scope.service_type == "Core"` before ever calling
 `super().applies_to()`, regardless of `service_subtype`. Transit BFD is measured by the new
 `core_protocols.bfd_transit_state` (2026-08-26 wave), which matches sessions by **interface**,
 not by peer address from intent configuration — transit has no such intent. Without this gate
-`bfd_session_state` would keep running and print `WARN | bez konfigurace` for every transit
+`bfd_session_state` would keep running and print `WARN | parser nenasel konfiguraci` for every transit
 session, since it would never find a matching `Selectors.bfd_peers` entry.
 
 The loopback scope (`service_subtype == "loopback"`) was added to the gate **during the
 branch's final review** (2026-08-26): as of this wave `Scope.select` also assigns internal
 (iBGP) peers on lo0.0 into that scope's `bgp_neighbors`, so without the gate that session
-would get the same false `WARN | bez konfigurace` — the intent exists in the configuration,
+would get the same false `WARN | parser nenasel konfiguraci` — the intent exists in the configuration,
 but `Selectors.bfd_peers` never parses it. Testing iBGP BFD on the loopback is a deliberately
 deferred decision, not a gap; such a session stays visible in NEZAŘAZENO
 (`engine.py:_unassigned_bfd_sessions` deliberately leaves it there) until it gets its own
@@ -527,9 +668,9 @@ check.
 | situation | Outcome | status | `value` |
 |---|---|---|---|
 | session exists, state `Up` | `ok` | PASS | `Up` |
-| session exists, any other state | `broken` | FAIL | measured state (`Down`, …) |
-| session exists but is not in the service configuration (service scope) | `degraded` | WARN | `bez konfigurace` |
-| no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `neni ve sluzbe` |
+| session exists, any other state (message states the expectation: `<state>, ocekavano Up`) | `broken` | FAIL | measured state (`Down`, …) |
+| session exists but is not in the service configuration (service scope) | `degraded` | WARN | `parser nenasel konfiguraci` |
+| no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
 | no session, but the baseline had one (device scope) — **currently unreachable, see below** | `broken` | FAIL | `session zmizela` |
 | intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
@@ -558,7 +699,7 @@ pattern as `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` in `routes.py`.
 service, not existence on the device.** A peer this service no longer claims can still have a
 live BFD session on the device under a different service — `engine.py:_unassigned_bfd_sessions`
 would surface it in NEZAŘAZENO. The message "is not configured in the subject" would lie there;
-`bez konfigurace` is a distinct value from this branch, so there is no risk of confusing the
+`parser nenasel konfiguraci` is a distinct value from this branch, so there is no risk of confusing the
 two. The wording `v baseline patril k teto sluzbe, v subjektu uz ne` is true in both cases that
 reach this branch (BFD vanished from the device, or BFD moved under a different service) — the
 same fix the analogous branch in `checks/bgp.py` received earlier.
@@ -574,7 +715,7 @@ decisions:
 - **A missing interface in an output is a measurement, not a hole.** The collector never
   synthesizes a "Down" row — if the interface is missing from the output, its key is simply
   absent from the facts. What that means is decided by the check, and it is almost always
-  `FAIL | ... : chybí v outputu` (the same "missing from the table" vs. "missing
+  `FAIL | ... : chybi v outputu` (the same "missing from the table" vs. "missing
   entirely" distinction `static_route_status` makes in `routes.py` via
   `MISSING_FROM_TABLE`/`MISSING_ENTIRELY`).
 - **The measured units come from the selector (intent), not from the facts** —
@@ -587,7 +728,7 @@ decisions:
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `isis_adjacency`.
 
 Interface missing from the adjacency output → a single row `FAIL | IS-IS adjacency state :
-chybí v outputu` (`baseline_value` is the state from that same baseline row, if any — it
+chybi v outputu` (`baseline_value` is the state from that same baseline row, if any — it
 speaks in the language of that row's presence, not the next-hop's).
 
 Otherwise four rows:
@@ -595,23 +736,26 @@ Otherwise four rows:
 | field | without baseline | against baseline |
 |---|---|---|
 | `system-name` (neighbor) | INFO | PASS on match; WARN on mismatch |
-| `adjacency-state` | PASS if `Up`, else FAIL | PASS when it matches a baseline state of `Up`; **WARN** when it is `Up` now but was not `Up` in the baseline (an improvement is still a change); else FAIL |
+| `adjacency-state` | PASS if `Up`, else FAIL | PASS when it matches a baseline state of `Up`; **RECV** (`recovered`) when it is `Up` now but was not `Up` in the baseline (message adds `(v baseline <state>)`); else FAIL |
 | `ip-address` (IPv4 neighbor) | PASS if present, else FAIL | PASS on match; WARN on mismatch |
 | `global-ipv6-address` (IPv6 neighbor) | PASS if present, else FAIL | PASS on match; WARN on mismatch |
 
-Mutant kill (2026-08-26, verified by running it): flipping `Outcome.DEGRADED` →
-`Outcome.OK` in the "Up now / Down in baseline" branch makes
-`test_baseline_state_down_before_up_now_is_warn` fail.
+Mutant kill (2026-09-03, verified by running it): flipping `Outcome.RECOVERED` →
+`Outcome.OK` in the "Up now / not Up in baseline" branch makes
+`test_baseline_state_down_before_up_now_is_recovered` fail.
 
 ### `isis_interface_info` (transit + loopback, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **one check for both
 roles**, behavior branches on `ctx.scope.service_subtype`. Requires `isis_interface`.
 
-- Interface missing from the ISIS interface output → `FAIL | IS-IS interface : chybí
+- Interface missing from the ISIS interface output → `FAIL | IS-IS interface : chybi
   v outputu`.
-- Level 2 present in `levels` → PASS; missing → FAIL. Level 1 present → **its own FAIL row**
-  (level 1 has no business on a Core interface).
+- Level 2 present in `levels` → PASS `nakonfigurovan`; missing → FAIL `chybi v outputu`, and
+  **the passive row is not emitted at all** in that case (for either role) — without an
+  adjacency the passive flag measures nothing, so one FAIL replaces what used to be two rows
+  for the same cause on loopback. Level 1 present → **its own FAIL row** (level 1 has no
+  business on a Core interface), value `nakonfigurovan`.
 - The passive flag on level 2 is **role-aware**: loopback requires it (`ok = passive`),
   transit requires its absence (`ok = not passive`) — a passive transit port would never
   form the adjacency that `isis_adjacency_state` measures.
@@ -631,8 +775,9 @@ missing neighbor is a straight FAIL, never quiet nothing.
 | neighbor missing from output | FAIL | `Down` |
 | `uptime_seconds > 0` | PASS | `Up for <uptime>` |
 | `uptime_seconds` missing or `0` | FAIL | `Down` |
-| neighbor address (no baseline) | INFO | address, or `chybí v outputu` |
-| neighbor address (against baseline, mismatch) | WARN | address |
+| neighbor address is `None`, unchanged vs. baseline (or no baseline) | FAIL | `chybi v outputu` (message `adresa souseda chybi`) |
+| neighbor address present, unchanged vs. baseline (or no baseline) | INFO | address |
+| neighbor address changed vs. baseline (present or `None`) | WARN | address |
 
 The collector drops `lo0.*` records for LDP already at parse time (LDP on the loopback has
 no meaning for this check) — see `collectors.md`.
@@ -659,9 +804,10 @@ regression).
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Requires `mpls_interface`.
 
-PASS if state is `Up`, FAIL if `Dn` or anything else, FAIL `chybí v outputu` on absence —
-same rule with or without baseline (`baseline_value` rides alongside but does not change the
-outcome).
+PASS if state is `Up`, FAIL if `Dn` or anything else, FAIL `chybi v outputu` on absence.
+**With a baseline, `Up` now and the baseline state was something else (not `Up`) is `RECV`**
+(`recovered`), not a silent PASS — message adds `(v baseline <state>)`; `Up` now matching a
+baseline of `Up`, or no baseline at all, stays `ok`.
 
 ### `bfd_transit_state` (transit, critical) — always expected
 
@@ -676,7 +822,8 @@ Sessions are matched by **interface**, not by peer address — `by_interface` is
 | situation | Outcome | value |
 |---|---|---|
 | no session on the interface | FAIL | `Down` |
-| session exists, state `Up` | PASS | `Up` (raw state, same vocabulary as `bfd.py:113`) |
+| session exists, state `Up`, baseline for that peer was also `Up` or absent | PASS | `Up` (raw state, same vocabulary as `bfd.py:113`) |
+| session exists, state `Up`, baseline for that peer was something else | **RECV** (`recovered`; message adds `(v baseline <state>)`) | `Up` |
 | session exists, other state | FAIL | the measured state |
 
 Multiple sessions on the same interface get multiple rows (sorted by peer).
@@ -698,9 +845,11 @@ overload bit reading as never set, because the area is empty) — if only the ch
 binding failed, the subtype gate in `Scope.select()` would still keep the area off
 transit.
 
-A single row: `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (the router avoids
-transit traffic), else `PASS | IS-IS overload bit : nenastaven`. The baseline adds nothing
-(`mode = STATE`).
+A single row: the `isis_overview` area empty entirely (collector reported nothing, distinct
+from a measured "not set") → `WARN | IS-IS overload bit : bez dat` (message `chybi data z
+collectoru isis_overview`); `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (the
+router avoids transit traffic), else `PASS | IS-IS overload bit : nenastaven`. The baseline
+adds nothing (`mode = STATE`).
 
 Mutant kill (2026-08-26, verified by running it): deleting the `if self.service_subtype ==
 "loopback"` condition in `Scope.select()` (for `isis_overview`) makes
@@ -761,7 +910,11 @@ Stream/Upstream row fails) and for each pair:
   otherwise `BROKEN`.
 - **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
   IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Match → `OK` with the name; otherwise
-  `BROKEN`, value the found name or `-`.
+  `BROKEN`, value the found name or `-`. **The message distinguishes the two failure
+  reasons**: an empty upstream is `<sg>: upstream - S,G je v tabulce ale nema upstream
+  interface`, an upstream present but with the wrong prefix is `<sg>: upstream <up> neni z
+  ocekavane role (ocekavano <prefixes>)` — the earlier wording claimed "no upstream
+  interface" even when one existed with the wrong role.
 - **Forwarding-rate**, **Route uptime** — `stream_rows()`, see above.
 
 If the S,G is missing from the table entirely, only `BROKEN | Stream : S,G neni v
@@ -786,16 +939,18 @@ Mutant kill (2026-09-03, verified by running each):
 the IGMP set — Core lo0.0 has no IGMP intent at all.
 
 A scope with no inet.2 statics → **no rows at all** (silence, not SKIP — an intent gate
-just like `pim_neighbor_state`). Otherwise, for each inet.2 prefix, `assign_sources()`
-assigns routes from the multicast table by whether the source lies inside the prefix —
-with several covering prefixes, the longest wins, and each route is counted only once.
+just like `pim_neighbor_state`). Otherwise a summary row is inserted first: `OK | Multicast
+forwarding status : {m} inet.2 prefixu se streamem` when every inet.2 prefix has at least one
+stream, or `BROKEN | ... : {k} z {m} inet.2 prefixu bez streamu` otherwise — a servicing-level
+count instead of the four empty per-prefix `SKIP` rows a prefix without a stream used to get.
+Then, for each inet.2 prefix, `assign_sources()` assigns routes from the multicast table by
+whether the source lies inside the prefix — with several covering prefixes, the longest wins,
+and each route is counted only once.
 
 - At least one route with a source inside the prefix → `OK | Multicast forwarding status
   : Existuje S,G pro {prefix}` (`DEGRADED` if the S,G set differs against baseline);
-  otherwise `BROKEN | ... : Neexistuje S,G pro {prefix}` and four `SKIP` rows (`S,G`,
-  `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`, value `""`),
-  all with `group={prefix}` — with several inet.2 statics and no streams, their four-row
-  SKIP sets stay distinguishable in the report.
+  otherwise `BROKEN | ... : Neexistuje S,G pro {prefix}` — no further per-prefix rows for a
+  prefix without a stream, the summary row already carries that count.
 - Per assigned (S,G): **Upstream interface** — `OK` if the upstream is one of the `via`
   values measured by the route collector for that inet.2 prefix
   (`routes["inet.2"][prefix]["via"]`, ECMP/qualified-next-hop give several `via`); if the
@@ -860,7 +1015,7 @@ block, and a "service is active" row would be added to every healthy block and s
 |---|---|---|---|
 | subject and baseline both deactivated | `ok` | PASS | the subject's deactivation reason |
 | subject deactivated, baseline was running | `broken` | FAIL | the subject's deactivation reason |
-| subject running, baseline was deactivated | `degraded` | WARN | `aktivni` |
+| subject running, baseline was deactivated | `recovered` | RECV | `aktivni` |
 | subject deactivated, no baseline to compare | `SKIP` | SKIP | the subject's deactivation reason |
 | subject and baseline both running | — | — (no finding) | — |
 
@@ -868,7 +1023,7 @@ The deactivation reason (`Scope.deactivation_reason`) is one of three values:
 `RI deactivated`, `interface deactivated`, `RI + interface deactivated` — depending on
 whether the deactivated part is the routing instance, the interface, or both.
 
-**Branch order matters:** `neni ve sluzbe` is tested **before** `BGP neni Established`. The
+**Branch order matters:** `v baseline patril k teto sluzbe, v subjektu uz ne` is tested **before** `BGP neni Established`. The
 reverse order would silently lose the case where the migration dropped protection that used
 to be there *and* BGP had not come up — which is exactly the combination worth seeing.
 

@@ -154,13 +154,21 @@ Když scope obsahuje jen tranzitní unity, žádné fyzické rozhraní ne, dosta
 zprávou, že countery nese jen fyzické rozhraní — ne zavádějící `SKIP` ze sdílené větve
 „není tranzitní rozhraní", protože tranzitní rozhraní tu jsou, jen bez counterů.
 
+Fyzické tranzitní rozhraní, jehož fakta neobsahují **žádný** ze tří klíčů counterů, dostane
+`degraded` (ne tiché `ok`) — rozhraní error countery prostě nevrací, což není totéž tvrzení
+jako „změřeno, nula chyb": zpráva `<jméno>: chybove countery nebyly zmereny (rozhrani
+nevraci error countery)`, `value` = `nezmereno`.
+
 ### `interface_traffic` (both, advisory)
 
 - **bez baseline** (nebo když rozhraní v baseline není): `require_nonzero` → `input_pps`
-  i `output_pps` musí být > 0, jinak `broken` → WARN se zprávou `<jméno>: <input_pps|
-  output_pps> <hodnota> pps` (např. `et-0/0/8: input_pps 0 pps`);
-- **s baseline**: pokles v procentech proti `tolerance_percent` (default −60 %). Do `details`
-  se zapíše změna per směr, do `baseline`/`subject` surová čísla.
+  i `output_pps` musí být > 0, jinak `broken` → WARN se zprávou uvádějící důvod, `<jméno>:
+  <input_pps|output_pps> 0 pps, ocekavan nenulovy provoz`;
+- **s baseline, baseline pps == 0 i subjekt pps == 0**: `ok`, zpráva `<jméno>: <key> stejne
+  jako baseline (0 pps)` — `require_nonzero` se u baseline záměrně znovu neuplatňuje, protože
+  služba, která provoz neměla už před migrací, nemá dostat FAIL jen za to, že ho pořád nemá;
+- **s baseline jinak**: pokles v procentech proti `tolerance_percent` (default −60 %). Do
+  `details` se zapíše změna per směr, do `baseline`/`subject` surová čísla.
 
 **Jeden Finding na směr, ne na rozhraní**: `input_pps` (label `Interface traffic in (<jméno>)`)
 a `output_pps` (label `Interface traffic out (<jméno>)`) jsou dva samostatné řádky, takže report
@@ -183,6 +191,42 @@ provoz — utichnutí se pak nedá ověřit.
 
 ---
 
+## `optics.py` — optické úrovně a alarmy
+
+Oba checky běží **jen na layer1/device scope** (`service_types = frozenset()`, což nesedí na
+žádný service scope). Porty se iterují: rozhraní samo plus jeho seřazení LAG členové. Port,
+který v `optics` úplně chybí, dostane jediný `SKIP` (`<name>: rozhrani nevraci opticka data`,
+`value` = `bez optiky`); jinak jeden řádek na lane.
+
+### `interface_optics_levels` (both, critical, jen layer1)
+
+Za lane: RX/TX výkon v dBm. „Tmavá strana" (RX a/nebo TX nekonečné, tedy bez světla) je
+`broken` bez ohledu na baseline. S baseline a bez tmavé strany je posun nad `tolerance_db`
+(default 2.0 dB) na kterékoli straně `degraded` (vždy WARN); v toleranci je `ok`.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| port nevrací optická data vůbec | `SKIP` | SKIP | `bez optiky` |
+| RX a/nebo TX nekonečné (bez baseline i s baseline) | `broken` | FAIL | `RX <x> / TX <y>` |
+| baseline je, bez tmavé strany, posun nad `tolerance_db` | `degraded` | WARN | `RX <x> / TX <y>` |
+| baseline je, bez tmavé strany, v toleranci (nebo bez baseline vůbec) | `ok` | PASS | `RX <x> / TX <y>` |
+
+### `interface_optics_alarms` (state, critical, jen layer1)
+
+Za port: tichý port (žádná lane nemá zvednutý žádný záznam v `alarms`/`warnings`) dostane
+jeden souhrnný řádek. Alarm i warning mají stejnou formulaci, liší se jen Outcome/status —
+`<name>: <tag> je aktivni` (dřív `je zvednuty`, což znělo jako otázka, ne jako tvrzení o tom,
+co je špatně).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| port nevrací optická data vůbec | `SKIP` | SKIP | `bez optiky` |
+| žádná lane nemá zvednutý alarm/warning | `ok` | PASS | `bez alarmu` |
+| per zvednutý `alarms[tag]` | `broken` | FAIL | daný tag |
+| per zvednutý `warnings[tag]` | `degraded` | WARN | daný tag |
+
+---
+
 ## `bgp.py`
 
 Oba checky mají `service_types={"Internet", "IPVPN"}`, ale **od vlny 2026-08-26 běží i na
@@ -198,17 +242,30 @@ scope vrací `SKIP`.
 
 ### `bgp_session_state` (both, critical)
 
-- stav ≠ `Established` → `broken` → **FAIL**. Nese `baseline_value`, takže sloupec `ZMENA`
-  ukáže `bylo Established` — regrese je vidět přesně tam, kde na ní záleží,
-- stav `Established`, ale **v baseline byl jiný** → **PASS** se zprávou
+- stav ≠ `Established` → `broken` → **FAIL**, zpráva `<peer>: stav <state>, ocekavano
+  Established`. Nese `baseline_value`, takže sloupec `ZMENA` ukáže `bylo Established` —
+  regrese je vidět přesně tam, kde na ní záleží,
+- stav `Established`, ale **v baseline byl jiný** → **`recovered`** → **RECV** se zprávou
   `stav se zmenil X -> Established`. Tahle větev je dosažitelná jen se stavem `Established`
   (horší stavy odejdou výš), takže pokrývá právě a jen případ, kdy se relace během migrace
-  **zlepšila** — a zlepšení není varování (rozhodnutí R-2). Změna nezmizí: pojmenuje ji
-  zpráva a sloupec `ZMENA` píše předchozí stav,
+  **zlepšila** — a zlepšení není tiché PASS, operátor má vidět, že se relace zotavila
+  (rozhodnutí R-2/bod 20). Změna nezmizí: pojmenuje ji zpráva a sloupec `ZMENA` píše předchozí
+  stav,
 - stav `Established` a shodný (nebo bez baseline) → PASS.
 
 Každý Finding nese `label=f"BGP status ({peer})"` a `family` odvozenou `peer_family()` z adresy peeru —
 report tak řádek zařadí do sekce `IPv4`/`IPv6`.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| peer změřen, stav ≠ `Established` | `broken` | FAIL | naměřený stav |
+| peer změřen, stav `Established`, baseline měla jiný stav | `recovered` | RECV | `Established` |
+| peer změřen, stav `Established`, beze změny nebo bez baseline | `ok` | PASS | `Established` |
+| peer deaktivovaný v konfiguraci, v baseline běžel | `broken` (`deactivation_outcome`) | FAIL | `deaktivovan` |
+| peer deaktivovaný v konfiguraci, baseline taky deaktivovaná/neznámá | `degraded` (`deactivation_outcome`) | WARN | `deaktivovan` |
+| peer nakonfigurovaný, session není, není deaktivovaný | `broken` | FAIL | `bez session` |
+| peer jen v baseline (tato služba ho už nenárokuje) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
+| žádný nakonfigurovaný/neaktivní/naměřený/baseline peer | `SKIP` | SKIP | `zadny peer` |
 
 ### `bgp_prefix_counts` (compare, advisory)
 
@@ -229,8 +286,22 @@ Label řádku je `<klíč>-prefix-count` (např. `active-prefix-count`) a identi
 pod jmenovaný nadpis peeru a RIB, ne jeden souhrnný.
 
 Porovnává se **s tolerancí, ne 1:1**. Zkušenost z JSNAPy je, že přesná shoda generuje
-množství FAILů kvůli rozdílu několika rout, což není signifikantní. Růst počtu prefixů
-problém není.
+množství FAILů kvůli rozdílu několika rout, což není signifikantní. **Ani růst se
+neignoruje** — tolerance je symetrická: pokles pod `tolerance_percent` je `broken` (WARN při
+výchozí advisory severitě téhle skupiny), nárůst nad stejnou hranici v opačném směru
+(`change > abs(tolerance)`) je `degraded` (vždy WARN) — překvapivý skok počtu prefixů nahoru
+je stejně tak hodný pozornosti jako pokles, i když nic „nefunguje". RIB, kterou baseline měla
+a subjekt ji vůbec nezměřil (rodina odpojená při migraci), je vlastní `broken` nález, ne ticho.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| peer v subjektu vůbec chybí | `SKIP` | SKIP | `zadna session` |
+| peer chybí v baseline | `SKIP` | SKIP | `bez baseline` |
+| RIB chybí v baseline u peera, který v baseline jinak je | `SKIP` | SKIP | `bez baseline` |
+| per counter, pokles pod `tolerance_percent` (zpráva `pokles <key> <b> -> <s>, prah je <tol> %`) | `broken` | WARN (advisory) | naměřený počet |
+| per counter, nárůst nad `abs(tolerance_percent)` (zpráva `narust <key> <b> -> <s>, prah je +<tol> %`) | `degraded` | WARN | naměřený počet |
+| per counter, v toleranci | `ok` | PASS | naměřený počet |
+| RIB, kterou baseline měla, subjekt ji vůbec neměří (zpráva `RIB v baseline byla, v subjektu chybi`) | `broken` | WARN (advisory) | `chybi` |
 
 ---
 
@@ -263,10 +334,57 @@ Na jedno rozhraní vzniká postupně:
   nenakonfigurovaný nebo spadlý remote PE. `status == "resolved"` (case-insensitive) je OK,
   cokoliv jiného BROKEN.
 
+Řádek „peer status" u neresolvnutého peera nese důvod přímo v hlášce, ne stejný text jako
+OK: `<instance>: <side> peer <ip> neni Resolved (<status or 'chybi'>)`. INFO řádky
+`mode`/`esi`/`role` mají v hlášce i v labelu stejný zobrazovaný název (`ESI`, velkým) —
+zpráva už neopakuje syrový klíč slovníku (`esi`, malým), který se dřív lišil od labelu
+téhož řádku.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| stav lokálního rozhraní `Up` | `ok` | PASS | naměřený stav |
+| stav lokálního rozhraní jiný | `broken` | FAIL | naměřený stav |
+| remote strana, žádný peer | `broken` (řádek PE) + `broken` (řádek status) | FAIL | `Neznamy peer` / `Unresolved / Chybi` |
+| local strana, bez peerů (single-homed, očekávané) | `INFO` | INFO | mode, s poznámkou „multi-homing peer ve vypisu nenalezen" |
+| per peer, status `Resolved` | `ok` | PASS | adresa peera |
+| per peer, status jiný (hláška uvádí konkrétní status) | `broken` | FAIL | adresa peera |
+
 ### `evpn_esi_status` (both, critical, jen E-LAN)
 
 Stav lokálního rozhraní v segmentu musí být `Up`; do zprávy se přidá DF (IP adresa
 zvoleného designated forwardera).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| stav lokálního rozhraní `Up` | `ok` | PASS | `<interface> <status>` |
+| stav lokálního rozhraní jiný | `broken` | FAIL | `<interface> <status>` |
+| `df_role` obsahuje „not elected" | `broken` | FAIL | surový text `df_role` (hláška `<esi>: <df_role>`, bez zdvojeného `DF`, pokud `df_role` už jím začíná) |
+| `df_role` je `None` nebo `""` (bez záznamu o DF) | `INFO` | INFO | `-` (hláška `DF bez zaznamu`) |
+| `df_role` jinak (adresa zvoleného DF) | `ok` | PASS | surový text `df_role` |
+
+### `evpn_instance_status` (both, critical, jen E-LAN)
+
+Za instanci: počet EVPN neighbors (`> 0`, WARN pod baseline), jeden `INFO` řádek na adresu
+souseda, blok ESI status/local interface/IRB (jen když scope nemá selektory rozhraní —
+službě se selektory dává vlastní detail ESI `evpn_esi_status`), jeden řádek na lokální EVPN
+interface a na IRB interface. **`baseline_value` je teď vyplněný u řádků EVPN interface, IRB
+interface, EVPN neighbor a ESI, kdykoli baseline odpovídající položku nese** — dřív tyhle
+řádky s baseline vůbec neporovnávaly.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| EVPN neighbors total > 0, ne pod baseline | `ok` | PASS | naměřený total |
+| EVPN neighbors total > 0, ale pod baseline | `degraded` | WARN | naměřený total |
+| EVPN neighbors total je 0/chybí | `broken` | FAIL | `0` |
+| lokální EVPN interface stav `Up` | `ok` | PASS | `<name> <status>` |
+| lokální EVPN interface stav jiný | `broken` | FAIL | `<name> <status>` |
+| unit očekávaný selektory, v instanci chybí | `broken` | FAIL | `<unit> chybi v instanci` |
+| IRB interface stav `Up` | `ok` | PASS | `<name> <status>` (+ `(<l3_context>)`) |
+| IRB interface stav jiný | `broken` | FAIL | totéž, `ocekavano Up` |
+| ESI v baseline, v subjektu chybí | `broken` | FAIL | `chybi` |
+| ESI status začíná „resolved" | `ok` | PASS | naměřený status |
+| ESI status je, ale nezačíná „resolved" | `broken` | FAIL | naměřený status |
+| ESI status je `""` | `broken` | FAIL | `bez statusu` |
 
 ### `evpn_mac_count` (both, advisory, jen E-LAN)
 
@@ -276,6 +394,14 @@ Iteruje instance a v nich domény (klíčované VLAN id, u vlan-based `"-"`). La
 - **bez baseline**: 0 naučených MAC → `broken` → WARN,
 - **s baseline**: pokles proti `tolerance_percent` (default −60 %) → WARN. Nula MAC je WARN
   i tehdy, když by pokles do tolerance vešel.
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| bez baseline, počet > 0 | `ok` | PASS | naměřený počet |
+| bez baseline, počet == 0 | `broken` | WARN (advisory) | `0` |
+| oba záznamy, pokles nad toleranci | `broken` | WARN (advisory) | naměřený počet |
+| oba záznamy, v toleranci | `ok` | PASS | naměřený počet |
+| interface v baseline, v subjektu chybí (hláška `v baseline <b> MAC, v subjektu chybi`) | `broken` | WARN (advisory) | `chybi` |
 
 ---
 
@@ -314,6 +440,8 @@ Sdílené pomocné funkce:
   v bloku vynutila sekci rodiny, kterou má renderer vynechat (rozhodnutí R-1);
 - žádný ARP záznam na rozhraních služby → `broken` → FAIL/WARN, zpráva `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
+- MAC `00:00:00:00:00:00` (nerozresolvovaný ARP záznam) → `broken`, zpráva `ARP zaznam
+  <ip> neni resolved (incomplete)`, `value` = `incomplete -> <ip>`;
 - jinak **jeden `Finding` na ARP záznam**: zpráva `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` když MAC chybí).
 
@@ -327,6 +455,8 @@ Zrcadlí `arp_present` pro IPv6:
 - žádný **použitelný** ND záznam nezbyde → `broken`, zpráva `na rozhranich sluzby neni zadny
   pouzitelny ND zaznam` (všimni si slova „pouzitelny" navíc oproti ARP — právě kvůli
   odfiltrovaným link-local sousedům), `value` = `zadny zaznam`;
+- stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný ND záznam) → `broken`,
+  zpráva `ND zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
 - jinak **jeden `Finding` na ND záznam**: zpráva `ND zaznam <ip>`, `label="ND"`, `family=6`,
   `value` = `<mac> -> <ip>`, `subject` navíc nese `state` (ND má na rozdíl od ARP stav
   záznamu).
@@ -341,14 +471,19 @@ Zrcadlí `arp_present` pro IPv6:
   cil jen hadal`, `value` `<sit>  bez cile (subnet > /30)`) — resolver tam fallback vědomě
   nepouští (viz `IPV4_FALLBACK_MIN_PREFIX` v `probes/ping.py`) a mlčení by se četlo jako
   „zkontrolováno OK";
+- `ping_skipped` nastaveno (profil scope při `capture` vynechal) → `SKIP`, zpráva `ping
+  neproveden - mimo profil (<profile>)`, `value` = `mimo profil (<profile>)` — jmenuje
+  profil, aby ho operátor nemusel dohledávat v `run.yml`;
 - ve snapshotu nejsou pro tenhle scope žádné cíle a žádný takový subnet to nevysvětluje →
   `SKIP` (`pro tento scope nejsou ve snapshotu zadne cile pingu`);
 - probe bez rozpoznané rodiny (`family` mimo `4`/`6`) → vlastní `SKIP` jmenující cíle
   (`probe bez rodiny nelze vyhodnotit: ...`) — jinak by probe z výsledku tiše zmizel, místo
   aby řekl, že se nevyhodnotil;
 - jinak **jeden `Finding` na cíl**, seskupené podle `family`:
+  - `sent == 0` → `SKIP`, zpráva `<cil>: ping neodeslan`, `value` = `<cil> neodeslan` —
+    nic neodeslat není totéž jako „odesláno a bez odpovědi";
   - odpověděl aspoň jeden paket → `ok`, zpráva `<cil>: odpovedelo N z M`,
-  - neodpověděl žádný → `broken`, zpráva `<cil>: neodpovedel (M paketu)`.
+  - `sent > 0` a neodpověděl žádný → `broken`, zpráva `<cil>: neodpovedel (M paketu)`.
 
 `value` je `<received>/<sent>` a u úspěšné odpovědi ještě `  <rtt> ms` (chybí, pokud se
 nepodařilo změřit RTT), pak vždy `  <cil>` — např. `5/5  2.1 ms  10.1.1.1`. U neúspěchu
@@ -409,9 +544,11 @@ nekonzistence, ale dvě různé role.
 | v tabulce, next-hop se proti baseline změnil | `degraded` | WARN | nový next-hop, `ZMENA` nese starý |
 | v tabulce, ale bez hvězdičky (`active: false`), baseline taky neaktivní | `ok` | PASS | `neni aktivni` |
 | v tabulce, ale bez hvězdičky, v baseline byla aktivní | `broken` | FAIL | `neni aktivni` |
-| v tabulce, ale bez hvězdičky, bez baseline | `degraded` | WARN | `neni aktivni` |
-| nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
-| v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
+| v tabulce, baseline měla neaktivní (routa se znovu aktivovala) | `recovered` | RECV | `v tabulce` (zpráva přidává `(v baseline nebyla aktivni)`) |
+| v tabulce, ale bez hvězdičky, baseline záznam je, ale mlčí o aktivitě (zpráva přidává `; baseline aktivitu neuvadi`, `baseline_value` zůstává `None`, ne fabulované) | `degraded` | WARN | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, žádný baseline záznam | `degraded` | WARN | `neni aktivni` |
+| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) — platí i v device scope | `broken` | FAIL | `neni v tabulce` |
+| chybí v tabulce, v baseline měření je | `broken` | FAIL | `chybi` |
 
 Routa **v tabulce, ale bez hvězdičky** neforwarduje — Junos ji nevyhodí z výpisu, jen ji
 přebije jiný zdroj. Je to jiná situace než `neni v tabulce` (ta routu z výpisu úplně vyhodí):
@@ -419,13 +556,11 @@ proto samostatná hodnota `neni aktivni`, ne stejná jako u chybějící routy. 
 z čeho poznat, že neaktivní byla i předtím, takže se nejednoznačnost podle R‑2 neeskaluje na
 FAIL, ale zůstává na WARN.
 
-Poslední dva řádky rozlišuje `configured`, tedy „je routa v selektorech scopu": device scope
-inventory nemá, jeho selektory jsou vždy prázdné, takže se tam hlásí `chybi`, ne
-`neni v tabulce` — záměr není znám (AR‑17). Podmínka v kódu je
-`configured and not is_device`; **konjunkt `not is_device` je nečinný**, protože `configured`
-už ne‑device implikuje. Zůstává jako zapsaný záměr AR‑17, ne jako práce. V `bfd.py` vypadá
-stejná podmínka stejně, ale **je živá** — tam se do odpovídající větve chodí právě
-s `configured=False`. Nemají se harmonizovat.
+Poslední dva řádky rozlišuje **to, jestli baseline routu vůbec změřila**, ne druh scope: baseline
+záznam přítomen znamená „byla tam, teď chybí" (`chybi`); žádný baseline záznam znamená, že
+jen konfigurace tvrdí, že routa do tabulky patří, a tabulka sama říká, že tam není
+(`neni v tabulce`) — platí to i v device scope, protože je to tvrzení o tom, co ukazuje
+tabulka, ne o záměru, který device scope nevidí (AR‑17).
 
 Label je `<RIB> <prefix>` a identita jde do `group="Staticke routy"` — routy z různých RIB
 tak skončí v jedné pojmenované skupině řádků, ne v samostatných podřádcích rozlišených jen
@@ -486,12 +621,14 @@ ačkoliv obojí je pořád „routa v tabulce".
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| v tabulce a aktivní | `ok` | PASS | `v tabulce` |
+| v tabulce a aktivní, baseline beze změny nebo bez záznamu | `ok` | PASS | `v tabulce` |
+| v tabulce a aktivní, baseline měla neaktivní (routa se znovu aktivovala) | `recovered` | RECV | `v tabulce` (zpráva přidává `(v baseline nebyla aktivni)`) |
 | v tabulce, ale bez hvězdičky (`active: false`), baseline taky neaktivní | `ok` | PASS | `neni aktivni` |
 | v tabulce, ale bez hvězdičky, v baseline byla aktivní | `broken` | FAIL | `neni aktivni` |
-| v tabulce, ale bez hvězdičky, bez baseline | `degraded` | WARN | `neni aktivni` |
-| nakonfigurovaná, v tabulce není (service scope) | `broken` | FAIL | `neni v tabulce` |
-| v baseline byla, v subjektu není | `broken` | FAIL | `chybi` |
+| v tabulce, ale bez hvězdičky, baseline záznam je, ale mlčí o aktivitě | `degraded` | WARN | `neni aktivni` |
+| v tabulce, ale bez hvězdičky, žádný baseline záznam | `degraded` | WARN | `neni aktivni` |
+| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) — platí i v device scope | `broken` | FAIL | `neni v tabulce` |
+| chybí v tabulce, v baseline měření je | `broken` | FAIL | `chybi` |
 | nakonfigurovaná, v konfiguraci deaktivovaná a není v tabulce | `deactivation_outcome(...)` | podle baseline | `deaktivovana` |
 
 ---
@@ -510,12 +647,12 @@ v reportu nemá o BFD ani zmínku.
 ohledu na `service_subtype`. Tranzitní BFD měří nový `core_protocols.bfd_transit_state` (vlna
 2026-08-26), který session páruje podle **rozhraní**, ne podle peer adresy ze záměrové
 konfigurace — na tranzitu žádný takový záměr není. Bez téhle brány by `bfd_session_state`
-běžel dál a za každou tranzitní session vypsal `WARN | bez konfigurace`, protože žádný
+běžel dál a za každou tranzitní session vypsal `WARN | parser nenasel konfiguraci`, protože žádný
 `Selectors.bfd_peers` záznam by nenašel.
 
 Loopback scope (`service_subtype == "loopback"`) je v bráně **od finálního review branch**
 (2026-08-26): `Scope.select` od téhle vlny zařazuje interní (iBGP) peery na lo0.0 i do jejich
-`bgp_neighbors`, takže by bez brány dostala i tahle session falešný `WARN | bez konfigurace` —
+`bgp_neighbors`, takže by bez brány dostala i tahle session falešný `WARN | parser nenasel konfiguraci` —
 záměr v konfiguraci existuje, ale `Selectors.bfd_peers` ho neparsuje. Testovat iBGP BFD na
 loopbacku je vědomě odložené rozhodnutí, ne mezera; taková session zůstává viditelná
 v NEZAŘAZENO (`engine.py:_unassigned_bfd_sessions` ji tam schválně nechává), dokud pro ni
@@ -526,9 +663,9 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 | situace | Outcome | status | `value` |
 |---|---|---|---|
 | session existuje, stav `Up` | `ok` | PASS | `Up` |
-| session existuje, jiný stav | `broken` | FAIL | naměřený stav (`Down`, …) |
-| session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `bez konfigurace` |
-| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `neni ve sluzbe` |
+| session existuje, jiný stav (hláška uvádí očekávání: `<stav>, ocekavano Up`) | `broken` | FAIL | naměřený stav (`Down`, …) |
+| session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `parser nenasel konfiguraci` |
+| session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
 | session není, v baseline byla (device scope) — **dnes nedosažitelné, viz níž** | `broken` | FAIL | `session zmizela` |
 | záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
@@ -554,7 +691,7 @@ týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
 **Větev „session není a není ani záměr" (service scope) tvrdí jen o CLENSTVI ve službě, ne
 o existenci na zařízení.** Peer, kterého tato služba už nenárokuje, může mít na zařízení dál
 živou BFD session pod jinou službou — `engine.py:_unassigned_bfd_sessions` ji ukáže
-v NEZAŘAZENO. Hláška „v subjektu není nakonfigurované" by tam lhala; `bez konfigurace` je navíc
+v NEZAŘAZENO. Hláška „v subjektu není nakonfigurované" by tam lhala; `parser nenasel konfiguraci` je navíc
 odlišná hodnota od téhle větve, takže záměna nehrozí. Formulace `v baseline patril k teto
 sluzbe, v subjektu uz ne` je pravdivá v obou případech, které do větve spadají (BFD ze zařízení
 zmizelo i BFD přešlo pod jinou službu) — stejná oprava, jakou dřív dostala analogická větev
@@ -570,12 +707,12 @@ rozhodnutí:
 
 - **Absence rozhraní ve výpisu je měření, ne díra.** Collector nikdy nesyntetizuje
   „Down" řádek — pokud rozhraní ve výpisu chybí, je to prostě chybějící klíč ve faktech.
-  Co to znamená, vykládá až check, a skoro vždy je to `FAIL | ... : chybí v outputu`
+  Co to znamená, vykládá až check, a skoro vždy je to `FAIL | ... : chybi v outputu`
   (stejné rozlišení „chybí v tabulce" vs. „chybí úplně", jaké `static_route_status`
   dělá v `routes.py` přes `MISSING_FROM_TABLE`/`MISSING_ENTIRELY`).
 - **Měřené jednotky se berou ze selektoru (záměr), ne z faktů** — `_scope_transit_interfaces`
   vrací tranzitní rozhraní ze `Scope.selectors.interfaces`, ne klíče ze subjektu. Rozhraní,
-  které z výpisu úplně zmizelo, tak pořád dostane řádek (FAIL „chybí v outputu"), místo aby
+  které z výpisu úplně zmizelo, tak pořád dostane řádek (FAIL „chybi v outputu"), místo aby
   ztichlo.
 
 ### `isis_adjacency_state` (transit, critical)
@@ -591,22 +728,25 @@ Jinak čtyři řádky:
 | pole | bez baseline | proti baseline |
 |---|---|---|
 | `system-name` (soused) | INFO | PASS při shodě; WARN při rozdílu |
-| `adjacency-state` | PASS pokud `Up`, jinak FAIL | PASS při shodě s baseline stavem `Up`; **WARN** pokud teď `Up`, ale v baseline nebyl `Up` (zlepšení je pořád změna); jinak FAIL |
+| `adjacency-state` | PASS pokud `Up`, jinak FAIL | PASS při shodě s baseline stavem `Up`; **RECV** (`recovered`) pokud teď `Up`, ale v baseline nebyl `Up` (zpráva přidává `(v baseline <state>)`); jinak FAIL |
 | `ip-address` (IPv4 souseda) | PASS pokud přítomna, jinak FAIL | PASS při shodě; WARN při rozdílu |
 | `global-ipv6-address` (IPv6 souseda) | PASS pokud přítomna, jinak FAIL | PASS při shodě; WARN při rozdílu |
 
-Mutant kill (2026-08-26, ověřeno spuštěním): prohození `Outcome.DEGRADED` → `Outcome.OK`
-ve větvi „Up teď / Down v baseline" nechá padnout
-`test_baseline_state_down_before_up_now_is_warn`.
+Mutant kill (2026-09-03, ověřeno spuštěním): prohození `Outcome.RECOVERED` → `Outcome.OK`
+ve větvi „Up teď / v baseline ne-Up" nechá padnout
+`test_baseline_state_down_before_up_now_is_recovered`.
 
 ### `isis_interface_info` (transit + loopback, critical)
 
 `service_types={"Core"}`, `service_subtypes={"transit", "loopback"}` — **jeden check pro
 obě role**, chování se větví podle `ctx.scope.service_subtype`. Vyžaduje `isis_interface`.
 
-- Rozhraní chybí v ISIS interface výpisu → `FAIL | IS-IS interface : chybí v outputu`.
-- Level 2 přítomen v `levels` → PASS; chybí → FAIL. Level 1 přítomen → **vlastní FAIL řádek**
-  (level 1 nemá na Core rozhraní co dělat).
+- Rozhraní chybí v ISIS interface výpisu → `FAIL | IS-IS interface : chybi v outputu`.
+- Level 2 přítomen v `levels` → PASS `nakonfigurovan`; chybí → FAIL `chybi v outputu`, a
+  **passive řádek se v tom případě vůbec neemituje** (pro žádnou roli) — bez adjacency
+  passive flag neměří nic, takže jeden FAIL nahrazuje to, co dřív na loopbacku bylo dvakrát
+  FAIL za jednu příčinu. Level 1 přítomen → **vlastní FAIL řádek** (level 1 nemá na Core
+  rozhraní co dělat), value `nakonfigurovan`.
 - Passive flag na level 2 je **role-aware**: loopback ho vyžaduje (`ok = passive`), transit
   vyžaduje jeho absenci (`ok = not passive`) — pasivní tranzitní port by nesestavil
   adjacency, kterou měří `isis_adjacency_state`.
@@ -626,8 +766,9 @@ takže chybějící soused je rovnou FAIL, ne tiché nic.
 | soused ve výpisu není | FAIL | `Down` |
 | `uptime_seconds > 0` | PASS | `Up for <uptime>` |
 | `uptime_seconds` chybí nebo `0` | FAIL | `Down` |
-| adresa souseda (bez baseline) | INFO | adresa nebo `chybí v outputu` |
-| adresa souseda (proti baseline, rozdíl) | WARN | adresa |
+| adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | FAIL | `chybi v outputu` (zpráva `adresa souseda chybi`) |
+| adresa souseda je, beze změny proti baseline (nebo bez baseline) | INFO | adresa |
+| adresa souseda se změnila proti baseline (je nebo `None`) | WARN | adresa |
 
 Collector u LDP zahazuje záznamy pro `lo0.*` už při parsování (LDP na loopbacku nemá
 smysl měřit tímhle checkem) — viz `collectors.md`.
@@ -652,9 +793,10 @@ Mutant kill (2026-08-26, ověřeno spuštěním): smazání gate `if "pim" not i
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `mpls_interface`.
 
-PASS pokud stav `Up`, FAIL pokud `Dn` nebo jiný, FAIL `chybí v outputu` při absenci —
-stejné pravidlo bez baseline i proti ní (`baseline_value` se nese vedle, ale nemění výsledný
-outcome).
+PASS pokud stav `Up`, FAIL pokud `Dn` nebo jiný, FAIL `chybi v outputu` při absenci.
+**S baseline: `Up` teď a baseline stav byl jiný (ne `Up`) je `RECV`** (`recovered`), ne tiché
+PASS — zpráva přidává `(v baseline <state>)`; `Up` teď proti baseline `Up`, nebo bez baseline
+vůbec, zůstává `ok`.
 
 ### `bfd_transit_state` (transit, critical) — očekávaná vždy
 
@@ -668,7 +810,8 @@ z `data.get("interface")` každé BFD session v subjektu.
 | situace | Outcome | value |
 |---|---|---|
 | na rozhraní není žádná session | FAIL | `Down` |
-| session existuje, stav `Up` | PASS | `Up` (syrový stav, stejný slovník jako `bfd.py:113`) |
+| session existuje, stav `Up`, baseline daného peera byl taky `Up` nebo bez baseline | PASS | `Up` (syrový stav, stejný slovník jako `bfd.py:113`) |
+| session existuje, stav `Up`, baseline daného peera byl jiný | **RECV** (`recovered`; zpráva přidává `(v baseline <state>)`) | `Up` |
 | session existuje, jiný stav | FAIL | naměřený stav |
 
 Víc session na stejném rozhraní dostane víc řádků (setříděných podle peera).
@@ -689,9 +832,11 @@ tam vždy tvrdil falešné `PASS | nenastaven` (overload bit nikdy nenastavený,
 je prázdná) — kdyby selhala jen vazba checku, subtype gate ve `Scope.select()` pořád drží
 area mimo transit.
 
-Jediný řádek: `overload_enabled` → `WARN | IS-IS overload bit : nastaven` (router se vyhýbá
-tranzitnímu provozu), jinak `PASS | IS-IS overload bit : nenastaven`. Baseline nic nepřidává
-(`mode = STATE`).
+Jediný řádek: oblast `isis_overview` úplně prázdná (collector nic nevrátil, jiná situace než
+naměřené „nenastaven") → `WARN | IS-IS overload bit : bez dat` (zpráva `chybi data z
+collectoru isis_overview`); `overload_enabled` → `WARN | IS-IS overload bit : nastaven`
+(router se vyhýbá tranzitnímu provozu), jinak `PASS | IS-IS overload bit : nenastaven`.
+Baseline nic nepřidává (`mode = STATE`).
 
 Mutant kill (2026-08-26, ověřeno spuštěním): smazání podmínky `if self.service_subtype ==
 "loopback"` v `Scope.select()` (u `isis_overview`) nechá padnout
@@ -750,7 +895,11 @@ Stream/Upstream řádek) a pro každý pár:
   `BROKEN`.
 - **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
   IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Splněno → `OK` se jménem; jinak
-  `BROKEN`, hodnota nalezené jméno nebo `-`.
+  `BROKEN`, hodnota nalezené jméno nebo `-`. **Zpráva rozlišuje dva důvody selhání**:
+  prázdný upstream je `<sg>: upstream - S,G je v tabulce ale nema upstream interface`,
+  upstream, který je, ale se špatným prefixem, je `<sg>: upstream <up> neni z ocekavane
+  role (ocekavano <prefixes>)` — dřívější formulace tvrdila „nemá upstream interface" i
+  když nějaký existoval, jen se špatnou rolí.
 - **Forwarding-rate**, **Route uptime** — `stream_rows()`, viz výš.
 
 Chybí-li S,G v tabulce vůbec, vydá se jen `BROKEN | Stream : S,G neni v multicast
@@ -775,16 +924,17 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
 IGMP množinou — Core lo0.0 žádný IGMP záměr nemá.
 
 Scope bez inet.2 statik → **žádné řádky** (ticho, ne SKIP — gate na záměr jako
-u `pim_neighbor_state`). Jinak pro každý inet.2 prefix `assign_sources()` přiřadí
-routy z multicast tabulky podle toho, jestli zdroj leží uvnitř prefixu — při víc
-pokrývajících prefixech vyhrává nejdelší, každá routa se počítá jen jednou.
+u `pim_neighbor_state`). Jinak se první vloží souhrnný řádek: `OK | Multicast forwarding
+status : {m} inet.2 prefixu se streamem`, mají-li všechny inet.2 prefixy aspoň jeden stream,
+jinak `BROKEN | ... : {k} z {m} inet.2 prefixu bez streamu` — souhrnný počet místo čtyř
+prázdných SKIP řádků, které dřív dostal prefix bez streamu. Pak pro každý inet.2 prefix
+`assign_sources()` přiřadí routy z multicast tabulky podle toho, jestli zdroj leží uvnitř
+prefixu — při víc pokrývajících prefixech vyhrává nejdelší, každá routa se počítá jen jednou.
 
 - Existuje aspoň jedna routa se zdrojem v prefixu → `OK | Multicast forwarding
   status : Existuje S,G pro {prefix}` (`DEGRADED`, liší-li se množina S,G proti
-  baseline); jinak `BROKEN | ... : Neexistuje S,G pro {prefix}` a čtyři `SKIP` řádky
-  (`S,G`, `Forwarding rate packets`, `Upstream interface`, `Downstream interfaces`,
-  hodnota `""`), všechny se `group={prefix}` — při víc inet.2 statikách bez streamu
-  jsou tak jejich čtveřice SKIP řádků v reportu rozlišitelné.
+  baseline); jinak `BROKEN | ... : Neexistuje S,G pro {prefix}` — žádné další řádky pro
+  prefix bez streamu, jeho počet už nese souhrnný řádek.
 - Per přiřazené (S,G): **Upstream interface** — `OK`, je-li upstream jedním z `via`
   změřených route collectorem pro ten inet.2 prefix (`routes["inet.2"][prefix]["via"]`,
   ECMP/qualified-next-hop dávají víc `via`); není-li inet.2 routa v tabulce vůbec →
@@ -846,7 +996,7 @@ Je to stejné rozhodnutí R‑1 jako jinde: co se nekontroluje, se v bloku neobj
 |---|---|---|---|
 | subjekt i baseline deaktivované | `ok` | PASS | důvod deaktivace subjektu |
 | subjekt deaktivovaný, baseline běžela | `broken` | FAIL | důvod deaktivace subjektu |
-| subjekt běží, baseline byla deaktivovaná | `degraded` | WARN | `aktivni` |
+| subjekt běží, baseline byla deaktivovaná | `recovered` | RECV | `aktivni` |
 | subjekt deaktivovaný, bez baseline k porovnání | `SKIP` | SKIP | důvod deaktivace subjektu |
 | subjekt i baseline běží | — | — (žádný nález) | — |
 
@@ -854,7 +1004,7 @@ Důvod deaktivace (`Scope.deactivation_reason`) je jedna ze tří hodnot: `RI de
 `interface deactivated`, `RI + interface deactivated` — podle toho, jestli je deaktivovaná
 routing instance, rozhraní, nebo obojí.
 
-**Na pořadí větví záleží:** `neni ve sluzbe` se testuje **před** `BGP neni Established`.
+**Na pořadí větví záleží:** `v baseline patril k teto sluzbe, v subjektu uz ne` se testuje **před** `BGP neni Established`.
 Opačné pořadí by tiše ztratilo případ, kdy migrace shodila ze stolu ochranu, která tam byla,
 a zároveň nedojelo BGP — což je přesně kombinace, kterou je potřeba vidět.
 
