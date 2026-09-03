@@ -326,13 +326,13 @@ Poznámky ke komentářům:
 
 ### arp_present
 
-`ArpPresentCheck` – title `Existence ARP zaznamu`, label `ARP`, mode **state**, default severity **advisory**, service_types `{Internet, IPVPN}`, service_subtypes None, requires `("arp",)`, requires_inventory **True** (device scope → framework SKIP `bez inventory`), order 0. Config options: žádné.
+`ArpPresentCheck` – title `Existence ARP zaznamu`, label `ARP`, mode **state**, default severity **critical** (od 2026-09-03, dřív advisory), service_types `{Internet, IPVPN}`, service_subtypes None, requires `("arp",)`, requires_inventory **True** (device scope → framework SKIP `bez inventory`), order 0. Config options: žádné.
 
 | situation | Outcome | message | value | baseline_value/delta/details notes |
 |---|---|---|---|---|
 | `scope.selectors.local_ipv4` prázdné | – | no finding emitted (`_family_not_configured()` = `[]`) | – | ve výstupu není žádná stopa |
 | IPv4 nakonfigurováno, `subject["arp"]` po filtru `entry.get("ip")` prázdný | BROKEN (→ WARN při advisory) | `na rozhranich sluzby neni zadny ARP zaznam` | `zadny zaznam` | label `ARP`, family 4, subject `{"count":0,"addresses":[]}` |
-| **per entry** s `ip` | OK | `ARP zaznam <ip>` | `<mac or '?'> -> <ip>` nebo `<mac or '?'> -> <ip>  [via <learned_via>]` (dvě mezery) | label `ARP`, family 4, subject `{"ip","mac","learned_via"}`, details `{"address": owning_prefix(ip, prefixes)}` (prefix nebo None). **NOVĚ (bod 23)**: MAC `00:00:00:00:00:00` (nerozresolvovaný) je teď BROKEN `ARP zaznam <ip> neni resolved (incomplete)`, value `incomplete -> <ip>`, ne OK; řádek nese `severity=critical`, takže FAIL (2026-09-03 dodatek) |
+| **per entry** s `ip` | OK | `ARP zaznam <ip>` | `<mac or '?'> -> <ip>` nebo `<mac or '?'> -> <ip>  [via <learned_via>]` (dvě mezery) | label `ARP`, family 4, subject `{"ip","mac","learned_via"}`, details `{"address": owning_prefix(ip, prefixes)}` (prefix nebo None). **NOVĚ (bod 23)**: MAC `00:00:00:00:00:00` (nerozresolvovaný) je teď BROKEN `ARP zaznam <ip> neni resolved (incomplete)`, value `incomplete -> <ip>`, ne OK |
 
 Poznámky: modulový docstring „jeden Finding na zaznam“ souhlasí. Komentář u `_family_not_configured` přesně popisuje cenu (žádná stopa). Žádný ARP záznam se nikdy nehodnotí jako špatný (stav `incomplete` apod. se nečte).
 
@@ -340,13 +340,13 @@ Poznámky: modulový docstring „jeden Finding na zaznam“ souhlasí. Komentá
 
 ### nd_present
 
-`NdPresentCheck` – title `Existence ND zaznamu`, label `ND`, mode **state**, default severity **advisory**, service_types `{Internet, IPVPN}`, requires `("nd",)`, requires_inventory **True**, order 0. Config options: žádné. Filtr: `keep_link_local = link_local_is_configured(scope)` (má služba mezi `local_ipv6` link-local adresu); záznamy s link-local IP se zahodí, pokud není.
+`NdPresentCheck` – title `Existence ND zaznamu`, label `ND`, mode **state**, default severity **critical** (od 2026-09-03, dřív advisory), service_types `{Internet, IPVPN}`, requires `("nd",)`, requires_inventory **True**, order 0. Config options: žádné. Filtr: `keep_link_local = link_local_is_configured(scope)` (má služba mezi `local_ipv6` link-local adresu); záznamy s link-local IP se zahodí, pokud není.
 
 | situation | Outcome | message | value | baseline_value/delta/details notes |
 |---|---|---|---|---|
 | `scope.selectors.local_ipv6` prázdné | – | no finding emitted (`[]`) | – | |
 | IPv6 nakonfigurováno, po filtru (má `ip`, a není link-local nebo link-local povoleno) žádný záznam | BROKEN (→ WARN) | `na rozhranich sluzby neni zadny pouzitelny ND zaznam` | `zadny zaznam` | label `ND`, family 6, subject `{"count":0,"addresses":[]}` |
-| **per entry** po filtru | OK | `ND zaznam <ip>` | `<mac or '?'> -> <ip>` (+ `  [via <learned_via>]`) | label `ND`, family 6, subject `{"ip","mac","state","learned_via"}`, details `{"address": owning_prefix(...)}`. **NOVĚ (bod 23)**: stav `incomplete`/`unreachable` je teď BROKEN `ND zaznam <ip> neni resolved (<state>)`, value `<state> -> <ip>`, ne OK; řádek nese `severity=critical`, takže FAIL (2026-09-03 dodatek) |
+| **per entry** po filtru | OK | `ND zaznam <ip>` | `<mac or '?'> -> <ip>` (+ `  [via <learned_via>]`) | label `ND`, family 6, subject `{"ip","mac","state","learned_via"}`, details `{"address": owning_prefix(...)}`. **NOVĚ (bod 23)**: stav `incomplete`/`unreachable` je teď BROKEN `ND zaznam <ip> neni resolved (<state>)`, value `<state> -> <ip>`, ne OK |
 
 Poznámky: `state` ND záznamu (např. `stale`, `incomplete`) se ukládá do subject, ale nehodnotí – vždy OK. Docstringy to netvrdí jinak.
 

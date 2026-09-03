@@ -53,7 +53,7 @@ def test_arp_value_without_learned_via_unchanged():
 
 def test_arp_empty_warns():
     result = run_check(ArpPresentCheck(), _ctx({"arp": []}))[0]
-    assert result.status is Status.WARN
+    assert result.status is Status.FAIL
 
 
 def test_arp_not_run_on_core_scope():
@@ -670,9 +670,8 @@ def test_owning_prefix_picks_the_containing_range():
     assert owning_prefix("2001:db8::1", prefixes) is None
 
 
-def test_arp_unresolved_row_is_fail_despite_advisory_check():
-    """Prazdna ARP tabulka je advisory (WARN), ale nerozreseny zaznam je
-    konkretni porucha - radek si vynuti critical a v reportu je FAIL."""
+def test_arp_unresolved_row_is_fail():
+    """Nerozreseny zaznam je konkretni porucha; check je critical, takze FAIL."""
     ctx = _service_ctx(
         {"arp": [{"ip": "152.11.13.2", "mac": "00:00:00:00:00:00", "interface": "et-0/0/8.13"}]}
     )
@@ -683,7 +682,7 @@ def test_arp_unresolved_row_is_fail_despite_advisory_check():
     assert result.severity is Severity.CRITICAL
 
 
-def test_nd_unresolved_row_is_fail_despite_advisory_check():
+def test_nd_unresolved_row_is_fail():
     ctx = _service_ctx(
         {"nd": [{"ip": "2001:abcd:11:13::b", "mac": None, "state": "incomplete", "interface": "et-0/0/8.13"}]}
     )
@@ -694,7 +693,9 @@ def test_nd_unresolved_row_is_fail_despite_advisory_check():
     assert result.severity is Severity.CRITICAL
 
 
-def test_arp_empty_table_stays_warn():
+def test_arp_empty_table_is_fail():
+    """Sluzba s IPv4 bez jedineho ARP zaznamu nefunguje - FAIL, ne WARN (2026-09-03)."""
     result = run_check(ArpPresentCheck(), _service_ctx({"arp": []}))[0]
 
-    assert result.status is Status.WARN
+    assert result.status is Status.FAIL
+    assert result.severity is Severity.CRITICAL

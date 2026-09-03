@@ -121,10 +121,6 @@ class Finding:
     baseline: dict[str, Any] | None = None
     subject: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)
-    # Vynucena severity jednoho radku. None = severity checku z configu.
-    # Pouziti: advisory check (arp_present) hlasi prazdnou tabulku jako WARN,
-    # ale nerozreseny zaznam je konkretni porucha a ma byt FAIL.
-    severity: Severity | None = None
 
 
 @dataclass

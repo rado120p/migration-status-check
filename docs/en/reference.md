@@ -17,8 +17,8 @@ Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
 | `traffic_ceased` | compare | advisory | all | traffic on the old interface went quiet after the migration — **disabled by default** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, no dark side, shift vs baseline within `tolerance_db` |
 | `interface_optics_alarms` | state | critical | layer1 | no raised alarm (FAIL) or warning (WARN) on any lane |
-| `arp_present` | state | advisory | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
-| `nd_present` | state | advisory | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
+| `arp_present` | state | critical | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
+| `nd_present` | state | critical | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
 | `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | state is `Established`; with a baseline it also reports a state change — on Core it runs only on the loopback scope (iBGP on lo0.0), transit has no peers |
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active against tolerance — **per RIB**; on Core it runs only on the loopback scope |

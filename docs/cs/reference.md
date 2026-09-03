@@ -17,8 +17,8 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, žádná tmavá strana, posun proti baseline v mezích `tolerance_db` |
 | `interface_optics_alarms` | state | critical | layer1 | žádný zvednutý alarm (FAIL) ani warning (WARN) na žádné lane |
-| `arp_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu |
-| `nd_present` | state | advisory | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
+| `arp_present` | state | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu |
+| `nd_present` | state | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu |
 | `ping_reachability` | state | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture` |
 | `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | stav je `Established`; s baseline navíc hlásí změnu stavu — na Core běží jen na loopback scope (iBGP na lo0.0), transit žádné peery nemá |
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť**; na Core běží jen na loopback scope |

@@ -71,10 +71,6 @@ not the renderer, which would have nothing better to reach for.
 
 ### `run_check()` — the only path to a status
 
-Status is derived from `Finding.outcome` and the check's severity from `config`. A `Finding`
-may carry its own `severity`, which overrides the check's one for that single row — used by
-`arp_present`/`nd_present`, where an empty table stays WARN but an unresolved entry is FAIL.
-
 The gates a check passes through, in order:
 
 1. `config.enabled(id)` is `False` → **empty list** (the check does not appear in the report
@@ -472,16 +468,15 @@ Shared helpers:
   those neighbours are exactly what the service talks to, and the filter must let them
   through. Configuration decides, not a heuristic.
 
-### `arp_present` (state, advisory)
+### `arp_present` (state, critical)
 
 - **no IPv4 address configured** (`scope.selectors.local_ipv4` empty) → **no `Finding` at all**
   — a service without IPv4 should not get an ARP finding, let alone a WARN for a neighbour that
   could never have existed. It used to return a `SKIP` stamped `family=4`, but that stamp was
   exactly what forced a section for a family the renderer is supposed to omit (decision R-1);
-- no ARP entry on the service's interfaces → `broken` → FAIL/WARN, message `na rozhranich
+- no ARP entry on the service's interfaces → `broken` → FAIL, message `na rozhranich
   sluzby neni zadny ARP zaznam`, `value` = `zadny zaznam`;
-- a MAC of `00:00:00:00:00:00` (an unresolved ARP entry) → `broken` with `Finding.severity=critical`,
-  so FAIL even though the check is advisory; message `ARP zaznam
+- a MAC of `00:00:00:00:00:00` (an unresolved ARP entry) → `broken` → FAIL, message `ARP zaznam
   <ip> neni resolved (incomplete)`, `value` = `incomplete -> <ip>`;
 - otherwise **one `Finding` per ARP entry**: message `ARP zaznam <ip>`, `label="ARP"`,
   `family=4`, `value` = `<mac> -> <ip>` (`?` when the MAC is missing).
@@ -489,11 +484,11 @@ Shared helpers:
 | situation | Outcome | status | `value` |
 |---|---|---|---|
 | no IPv4 address configured | *(no finding)* | — | — |
-| IPv4 configured, no ARP entry with an `ip` at all | `broken` | WARN (advisory) | `zadny zaznam` |
-| entry MAC is `00:00:00:00:00:00` (unresolved) | `broken` | **FAIL** (row forces `critical`) | `incomplete -> <ip>` |
+| IPv4 configured, no ARP entry with an `ip` at all | `broken` | FAIL | `zadny zaznam` |
+| entry MAC is `00:00:00:00:00:00` (unresolved) | `broken` | FAIL | `incomplete -> <ip>` |
 | entry resolved (any other MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
-### `nd_present` (state, advisory)
+### `nd_present` (state, critical)
 
 Mirrors `arp_present` for IPv6:
 
@@ -503,8 +498,7 @@ Mirrors `arp_present` for IPv6:
 - no **usable** ND entry remains → `broken`, message `na rozhranich sluzby neni zadny
   pouzitelny ND zaznam` (note the extra word "pouzitelny" compared to ARP — precisely
   because of the filtered-out link-local neighbours), `value` = `zadny zaznam`;
-- entry state `incomplete` or `unreachable` (an unresolved ND entry) → `broken` with
-  `Finding.severity=critical` (FAIL), message `ND
+- entry state `incomplete` or `unreachable` (an unresolved ND entry) → `broken` → FAIL, message `ND
   zaznam <ip> neni resolved (<state>)`, `value` = `<state> -> <ip>`;
 - otherwise **one `Finding` per ND entry**: message `ND zaznam <ip>`, `label="ND"`,
   `family=6`, `value` = `<mac> -> <ip>`; `subject` additionally carries `state` (ND, unlike
@@ -513,8 +507,8 @@ Mirrors `arp_present` for IPv6:
 | situation | Outcome | status | `value` |
 |---|---|---|---|
 | no IPv6 address configured | *(no finding)* | — | — |
-| IPv6 configured, no usable entry (all filtered or empty) | `broken` | WARN (advisory) | `zadny zaznam` |
-| entry state `incomplete` or `unreachable` (unresolved) | `broken` | **FAIL** (row forces `critical`) | `<state> -> <ip>` |
+| IPv6 configured, no usable entry (all filtered or empty) | `broken` | FAIL | `zadny zaznam` |
+| entry state `incomplete` or `unreachable` (unresolved) | `broken` | FAIL | `<state> -> <ip>` |
 | entry resolved (any other state) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
 ### `ping_reachability` (state, advisory)

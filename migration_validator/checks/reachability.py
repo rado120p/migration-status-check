@@ -86,7 +86,7 @@ class ArpPresentCheck(Check):
     requires = ("arp",)
     requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
-    default_severity = Severity.ADVISORY
+    default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         prefixes = ctx.scope.selectors.local_ipv4
@@ -114,15 +114,12 @@ class ArpPresentCheck(Check):
             if entry.get("mac") == ZERO_MAC:
                 # Incomplete ARP zaznam neni "zadny zaznam" - je to konkretni,
                 # ohlaseny stav, ktery report musi ukazat jako FAIL, ne mlcet.
-                # Check je advisory (prazdna tabulka = WARN), proto si radek
-                # vynucuje critical sam.
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
                         f"ARP zaznam {ip} neni resolved (incomplete)",
                         label="ARP",
                         family=4,
-                        severity=Severity.CRITICAL,
                         value=f"incomplete -> {ip}",
                         subject={
                             "ip": ip,
@@ -160,7 +157,7 @@ class NdPresentCheck(Check):
     requires = ("nd",)
     requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
-    default_severity = Severity.ADVISORY
+    default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         prefixes = ctx.scope.selectors.local_ipv6
@@ -194,15 +191,12 @@ class NdPresentCheck(Check):
             if state in UNRESOLVED_ND_STATES:
                 # Stejne jako u ARP: incomplete/unreachable je konkretni,
                 # ohlaseny stav, ktery report musi ukazat jako FAIL, ne mlcet.
-                # Check je advisory (prazdna tabulka = WARN), proto si radek
-                # vynucuje critical sam.
                 findings.append(
                     Finding(
                         Outcome.BROKEN,
                         f"ND zaznam {ip} neni resolved ({state})",
                         label="ND",
                         family=6,
-                        severity=Severity.CRITICAL,
                         value=f"{state} -> {ip}",
                         subject={
                             "ip": ip,
