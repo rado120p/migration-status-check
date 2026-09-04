@@ -201,8 +201,6 @@ a:hover { color: #0e3fa9; }
   align-items: center;
 }
 
-.sidebar-section-header-gap { padding-top: 16px; }
-
 .snap-row {
   border-radius: 6px;
   padding: 8px 10px;
@@ -706,12 +704,6 @@ a:hover { color: #0e3fa9; }
   padding: 64px 24px;
   color: #6b7280;
   font-size: 13px;
-}
-
-.sidebar-empty {
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #9ca3af;
 }
 
 /* Capturing pill + live step note (run overview) */

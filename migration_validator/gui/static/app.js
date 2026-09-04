@@ -92,6 +92,7 @@ class App {
     };
     this.cache = {
       runs: [],
+      runsError: null,
       detail: null,
       detailError: null,
       evaluation: null,
@@ -149,12 +150,23 @@ class App {
   }
 
   async boot() {
-    const { runs } = await (await fetch("/api/runs")).json();
-    this.cache.runs = runs;
-    if (runs.length === 0) {
+    try {
+      const res = await fetch("/api/runs");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `runs se nepodarilo nacist (${res.status})`);
+      }
+      const { runs } = await res.json();
+      this.cache.runs = Array.isArray(runs) ? runs : [];
+      this.cache.runsError = null;
+    } catch (err) {
+      this.cache.runs = [];
+      this.cache.runsError = String(err.message || err);
+    }
+    if (this.cache.runs.length === 0) {
       this.state.view = "empty";
     } else {
-      this.state.run = runs[0].name;
+      this.state.run = this.cache.runs[0].name;
       await this.loadRun();
     }
     this.loadMeta().then(() => this.updateProfileBadge());
@@ -213,7 +225,7 @@ class App {
 
   renderRunCombo() {
     const combo = this.state.combo;
-    this.comboCurrentEl.textContent = this.state.run || "—";
+    this.comboCurrentEl.textContent = this.state.run || (this.cache.runsError ? "(nelze nacist runy)" : "—");
     this.comboToggleEl.setAttribute("aria-expanded", combo.open ? "true" : "false");
     this.comboPanelEl.hidden = !combo.open;
     if (!combo.open) return;
@@ -221,7 +233,11 @@ class App {
     clear(this.comboListEl);
     const matches = this.comboMatches();
     if (matches.length === 0) {
-      const text = this.cache.runs.length === 0 ? "no runs yet" : "no run matches";
+      const text = this.cache.runsError
+        ? this.cache.runsError
+        : this.cache.runs.length === 0
+        ? "no runs yet"
+        : "no run matches";
       this.comboListEl.appendChild(el("div", { className: "run-combo-empty", text }));
       return;
     }
@@ -1162,25 +1178,31 @@ class App {
 
   renderEmptyState() {
     clear(this.mainEl);
-    this.mainEl.appendChild(
-      el("div", {
-        className: "empty-state",
-        children: [
-          el("h1", { className: "empty-state-title", text: "Zatím žádný run" }),
-          el("p", {
-            className: "empty-state-hint",
-            text:
-              "Run je vstupní bod nástroje — bez něj nejde sbírat snapshoty ani vyhodnocovat. " +
-              "Založ první run: pojmenuj ho a vyplň zařízení.",
-          }),
-          el("button", {
-            className: "btn btn-primary",
-            text: "+ New run",
-            onClick: () => this.openNewRunForm(),
-          }),
-        ],
+    const children = [];
+    if (this.cache.runsError) {
+      children.push(
+        el("div", {
+          className: "notice notice-warn",
+          text: `Nepodařilo se načíst runy: ${this.cache.runsError}`,
+        })
+      );
+    } else {
+      children.push(el("h1", { className: "empty-state-title", text: "Zatím žádný run" }));
+    }
+    children.push(
+      el("p", {
+        className: "empty-state-hint",
+        text:
+          "Run je vstupní bod nástroje — bez něj nejde sbírat snapshoty ani vyhodnocovat. " +
+          "Založ první run: pojmenuj ho a vyplň zařízení.",
+      }),
+      el("button", {
+        className: "btn btn-primary",
+        text: "+ New run",
+        onClick: () => this.openNewRunForm(),
       })
     );
+    this.mainEl.appendChild(el("div", { className: "empty-state", children }));
   }
 
   renderSidebar() {
