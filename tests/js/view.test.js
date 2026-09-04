@@ -205,3 +205,33 @@ test("unassignedRow: bfd session -> interface + state detail", () => {
       { peer: "10.1.2.2", interface: "et-0/0/8.13", state: "Up" }),
     { identity: "10.1.2.2", detail: "et-0/0/8.13   Up" });
 });
+
+const RUNS = [
+  { name: "mig01", devices: { "MX1-POP1": {}, "PTX1-POP1": {} }, snapshots: 2 },
+  { name: "upgrade-ptx-2026", devices: { "PTX3-POP2": {} }, snapshots: 1 },
+  { name: "mig02-pop3", devices: { "MX9-POP3": {}, "PTX9-POP3": {} }, snapshots: 6 },
+];
+
+test("filterRuns: empty or blank query returns all runs in order", () => {
+  assert.deepStrictEqual(MigView.filterRuns(RUNS, ""), RUNS);
+  assert.deepStrictEqual(MigView.filterRuns(RUNS, "   "), RUNS);
+});
+
+test("filterRuns: matches run name case-insensitively", () => {
+  const out = MigView.filterRuns(RUNS, "MIG0");
+  assert.deepStrictEqual(out.map((r) => r.name), ["mig01", "mig02-pop3"]);
+});
+
+test("filterRuns: matches device node names", () => {
+  const out = MigView.filterRuns(RUNS, "ptx3");
+  assert.deepStrictEqual(out.map((r) => r.name), ["upgrade-ptx-2026"]);
+});
+
+test("filterRuns: no match returns empty list", () => {
+  assert.deepStrictEqual(MigView.filterRuns(RUNS, "nope"), []);
+});
+
+test("filterRuns: tolerates runs without devices", () => {
+  const out = MigView.filterRuns([{ name: "bare" }], "bare");
+  assert.strictEqual(out.length, 1);
+});

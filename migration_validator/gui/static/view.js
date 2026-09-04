@@ -169,6 +169,18 @@ function unassignedRow(kind, item) {
   };
 }
 
+/* Run combobox filter: case-insensitive substring on run name and device
+   node names. Empty query returns the input array unchanged. */
+function filterRuns(runs, query) {
+  const needle = (query || "").trim().toLowerCase();
+  if (!needle) return runs;
+  return runs.filter((run) => {
+    if ((run.name || "").toLowerCase().includes(needle)) return true;
+    const nodes = Object.keys(run.devices || {});
+    return nodes.some((node) => node.toLowerCase().includes(needle));
+  });
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -179,6 +191,7 @@ const MigView = {
   countStatuses,
   UNASSIGNED_TITLES,
   unassignedRow,
+  filterRuns,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;
