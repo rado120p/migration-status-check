@@ -13,6 +13,21 @@
     <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
     <interface-protection-type>Node Link</interface-protection-type>
     <interface-level-data>
+      <level>1</level>
+      <adjacency-count>0</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>10</metric>
+      <passive>Disabled</passive>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>10</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>10</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+    <interface-level-data>
       <level>2</level>
       <adjacency-count>1</adjacency-count>
       <interface-priority>64</interface-priority>
@@ -44,6 +59,21 @@
     <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
     <interface-protection-type>Node Link</interface-protection-type>
     <interface-level-data>
+      <level>1</level>
+      <adjacency-count>0</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>10</metric>
+      <passive>Disabled</passive>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>10</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>10</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+    <interface-level-data>
       <level>2</level>
       <adjacency-count>1</adjacency-count>
       <interface-priority>64</interface-priority>
@@ -73,6 +103,21 @@
     <adjacency-advertisement>advertise</adjacency-advertisement>
     <isis-layer2-map-enabled>Disabled</isis-layer2-map-enabled>
     <interface-level-data>
+      <level>1</level>
+      <adjacency-count>0</adjacency-count>
+      <interface-priority>64</interface-priority>
+      <metric>0</metric>
+      <passive>Disabled</passive>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV4 Multicast</isis-topology-id>
+        <isis-topology-metric>0</isis-topology-metric>
+      </isis-interface-level-topology>
+      <isis-interface-level-topology>
+        <isis-topology-id>IPV6 Unicast</isis-topology-id>
+        <isis-topology-metric>0</isis-topology-metric>
+      </isis-interface-level-topology>
+    </interface-level-data>
+    <interface-level-data>
       <level>2</level>
       <adjacency-count>0</adjacency-count>
       <interface-priority>64</interface-priority>
@@ -89,3 +134,4 @@
     </interface-level-data>
   </isis-interface>
 </isis-interface-information>
+

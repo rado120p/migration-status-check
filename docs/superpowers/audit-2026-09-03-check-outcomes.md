@@ -605,7 +605,7 @@ Role-aware: `loopback = ctx.scope.service_subtype == "loopback"`. Pro loopback b
 | `"2" in entry["levels"]` | OK | `<iface>: IS-IS level 2 nakonfigurovan` | `nakonfigurován` | label `IS-IS level 2 (<iface>)` |
 | `"2" not in levels` | BROKEN | `<iface>: IS-IS level 2 chybi` | `chybí v outputu` | label `IS-IS level 2 (<iface>)` |
 | `"1" in levels` | BROKEN | `<iface>: IS-IS level 1 nema na Core rozhrani co delat` | `nakonfigurován` | label `IS-IS level 1 (<iface>)`; platí pro transit i loopback |
-| `"1" not in levels` | – | no finding emitted (řádek level 1 vůbec není) | | |
+| `"1" not in levels` | – | no finding emitted (řádek level 1 vůbec není) | | Sem spadá i `level 1 disable` na rozhraní: detail RPC vypnutý level pořád vypíše jako `<interface-level-data>` s `<passive>Disabled</passive>`, collector ho do `levels` nedává (fix 2026-09-04). |
 | passive = `bool(levels.get("2",{}).get("passive"))`; loopback AND passive, nebo transit AND not passive | OK | `<iface>: level 2 passive=ano` (loopback) / `<iface>: level 2 passive=ne` (transit) | `Passive` / `bez Passive` | label `IS-IS level 2 passive (<iface>)` |
 | loopback AND not passive, nebo transit AND passive | BROKEN | `<iface>: level 2 passive=ne` (loopback) / `<iface>: level 2 passive=ano` (transit) | `bez Passive` / `Passive` | Pozn.: když level 2 chybí, passive=False → loopback dostane druhý BROKEN (passive=ne) za stejnou příčinu; transit dostane OK „bez Passive" i když level 2 chybí. |
 

@@ -86,9 +86,15 @@ class IsisInterfaceCollector(Collector):
                 level = _localname_text(level_node, "level")
                 if not level:
                     continue
-                levels[level] = {
-                    "passive": _localname_text(level_node, "passive") == "Passive",
-                }
+                passive = _localname_text(level_node, "passive")
+                if passive == "Disabled":
+                    # 'level N disable' na rozhrani: detail vypis blok levelu
+                    # porad vypise, jen s <passive>Disabled</passive> (brief
+                    # vypis: <isis-interface-state-one>Disabled</...>).
+                    # Vypnuty level neni nakonfigurovany level - jinak by
+                    # isis_interface_info hlasil falesny FAIL za level 1.
+                    continue
+                levels[level] = {"passive": passive == "Passive"}
             interfaces[interface] = {"levels": levels}
         return interfaces
 

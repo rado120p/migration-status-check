@@ -54,6 +54,38 @@ def test_isis_interface_levels(rpc_fixture, platform):
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
+@pytest.mark.parametrize("iface", ("lo0.0", None))
+def test_isis_interface_disabled_level1_is_not_a_level(rpc_fixture, platform, iface):
+    """'level 1 disable' na rozhrani = level 1 v levels neni.
+
+    Detail vypis vypnuty level porad vypise jako <interface-level-data> s
+    <level>1</level>, jen s <passive>Disabled</passive> (brief vypis to same
+    nese jako <isis-interface-state-one>Disabled</isis-interface-state-one>).
+    Nahravka z laborky 2026-09-04 ma 'level 1 disable' na kazdem rozhrani;
+    kdyby collector vypnuty level bral jako nakonfigurovany, isis_interface_info
+    by na kazdem Core rozhrani hlasil falesny FAIL 'IS-IS level 1 nema na Core
+    rozhrani co delat'.
+    """
+    data = IsisInterfaceCollector().parse(rpc_fixture(platform, "isis_interface"), platform)
+    entry = data[iface or FIRST_IFACE[platform]]
+    assert "1" not in entry["levels"]
+    assert "2" in entry["levels"]
+
+
+def test_isis_interface_disabled_level2_is_not_a_level():
+    """Symetrie: vypnuty level 2 se nesmi tvarit jako nakonfigurovany (synteticke XML)."""
+    xml = etree.fromstring(
+        "<isis-interface-information><isis-interface>"
+        "<interface-name>ge-0/0/0.0</interface-name>"
+        "<interface-level-data><level>1</level><passive>Passive</passive></interface-level-data>"
+        "<interface-level-data><level>2</level><passive>Disabled</passive></interface-level-data>"
+        "</isis-interface></isis-interface-information>"
+    )
+    data = IsisInterfaceCollector().parse(xml, "junos")
+    assert data["ge-0/0/0.0"]["levels"] == {"1": {"passive": True}}
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
 def test_isis_interface_physical_is_not_passive(rpc_fixture, platform):
     """Fyzicke rozhrani do meshe passive neni - jinak by adjacency nevznikla."""
     data = IsisInterfaceCollector().parse(rpc_fixture(platform, "isis_interface"), platform)
