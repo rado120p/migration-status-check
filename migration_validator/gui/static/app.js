@@ -43,6 +43,7 @@ const GUIDE_TEXT = {
       "Kliknutím na řádek v Results rozbalíš detail checků včetně změn proti baseline.",
       "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
       "Nezařazeno = objekt (BGP peer, routa, BFD session), který si nenárokovala žádná služba — typicky mezera v parsování.",
+      "Archive run přesune adresář runu do runs/.archive/ — ze seznamu zmizí, snímky zůstanou. Archiv se čistí přes mig-validate run purge.",
     ],
   },
   snapshot: {
@@ -87,6 +88,7 @@ class App {
       newRunForm: null,
       editMappingForm: null,
       combo: { open: false, query: "", index: 0 },
+      archiveModal: null,
     };
     this.cache = {
       runs: [],
@@ -245,6 +247,108 @@ class App {
         })
       );
     });
+  }
+
+  // -- archive run modal ------------------------------------------------------
+
+  openArchiveModal() {
+    this.state.archiveModal = { submitting: false, error: null };
+    this.render();
+  }
+
+  closeArchiveModal() {
+    this.state.archiveModal = null;
+    this.render();
+  }
+
+  async confirmArchive() {
+    const modal = this.state.archiveModal;
+    const run = this.state.run;
+    if (!modal || !run || modal.submitting) return;
+    modal.submitting = true;
+    modal.error = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/runs/${run}/archive`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        modal.error = body.detail || `archivace selhala (${res.status})`;
+        modal.submitting = false;
+        this.render();
+        return;
+      }
+      this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
+      this.state.archiveModal = null;
+      this.state.run = null;
+      this.cache.detail = null;
+      this.cache.evaluation = null;
+      this.state.selectedSnapshot = null;
+      this.state.openResults = {};
+      if (this.cache.runs.length === 0) {
+        this.state.view = "empty";
+        this.render();
+      } else {
+        await this.selectRun(this.cache.runs[0].name);
+      }
+    } catch (err) {
+      modal.error = String(err);
+      modal.submitting = false;
+      this.render();
+    }
+  }
+
+  renderModal() {
+    let root = document.getElementById("modal-root");
+    if (!root) {
+      root = el("div", { attrs: { id: "modal-root" } });
+      document.body.appendChild(root);
+    }
+    clear(root);
+    const modal = this.state.archiveModal;
+    if (!modal) return;
+    const detail = this.cache.detail || {};
+    const count = (detail.snapshots || []).length;
+    const children = [
+      el("h3", { text: "Archive run" }),
+      el("p", {
+        children: [
+          document.createTextNode("Run "),
+          el("span", { className: "mono", text: this.state.run || "" }),
+          document.createTextNode(
+            ` (${count} snapshot${count === 1 ? "" : "s"}) se přesune do runs/.archive/ a zmizí ze seznamu. Data zůstanou na disku.`
+          ),
+        ],
+      }),
+    ];
+    if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
+    children.push(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Cancel",
+            onClick: modal.submitting ? null : () => this.closeArchiveModal(),
+          }),
+          el("button", {
+            className: "btn btn-danger",
+            text: modal.submitting ? "Archiving…" : "Archive",
+            onClick: modal.submitting ? null : () => this.confirmArchive(),
+          }),
+        ],
+      })
+    );
+    root.appendChild(
+      el("div", {
+        className: "modal-backdrop",
+        onClick: (e) => {
+          if (e.target.classList.contains("modal-backdrop") && !modal.submitting) {
+            this.closeArchiveModal();
+          }
+        },
+        children: [el("div", { className: "modal", children })],
+      })
+    );
   }
 
   async loadRun() {
@@ -1016,6 +1120,7 @@ class App {
     this.renderGuide();
     this.renderSidebar();
     this.renderRunCombo();
+    this.renderModal();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
     const noRuns = this.cache.runs.length === 0;
     this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
@@ -1212,6 +1317,13 @@ class App {
       );
     }
     this.mainEl.appendChild(header);
+    header.appendChild(
+      el("button", {
+        className: "btn btn-danger-secondary run-header-archive",
+        text: "Archive run",
+        onClick: () => this.openArchiveModal(),
+      })
+    );
 
     if (this.cache.evaluationError) {
       this.mainEl.appendChild(

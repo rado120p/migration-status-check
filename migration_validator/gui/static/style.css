@@ -866,3 +866,32 @@ a:hover { color: #0e3fa9; }
   50% { box-shadow: 0 0 0 6px rgba(26, 86, 219, 0); }
 }
 .btn-pulse { animation: btn-pulse 1.6s ease-out infinite; }
+
+.run-header-archive { margin-left: auto; align-self: center; }
+
+.btn-danger {
+  border: none;
+  background: #b91c1c;
+  color: #fff;
+}
+.btn-danger-secondary:hover { background: #fef2f2; }
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.modal {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 22px;
+  box-shadow: 0 20px 48px rgba(17, 24, 39, 0.25);
+}
+.modal h3 { margin: 0 0 10px; font-size: 16px; color: #111827; }
+.modal p { margin: 0 0 14px; font-size: 13px; line-height: 1.5; color: #374151; }
