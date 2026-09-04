@@ -29,6 +29,13 @@ function statusClass(status) {
 
 /* Per-screen copy for the guide rail, keyed by this.state.view values. */
 const GUIDE_TEXT = {
+  empty: {
+    title: "Zatím žádný run",
+    body: [
+      "Run je vstupní bod nástroje: adresář runs/<název>/ s run.yml, do kterého se ukládají snímky zařízení a párování portů.",
+      "Založ první run tlačítkem + New run — pak můžeš sbírat snapshoty (New capture) a vyhodnocovat.",
+    ],
+  },
   run: {
     title: "Run overview",
     body: [
@@ -1010,6 +1017,9 @@ class App {
     this.renderSidebar();
     this.renderRunCombo();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
+    const noRuns = this.cache.runs.length === 0;
+    this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
+    document.getElementById("btn-new-capture").disabled = noRuns;
     switch (this.state.view) {
       case "empty":
         this.renderEmptyState();
@@ -1051,10 +1061,16 @@ class App {
       el("div", {
         className: "empty-state",
         children: [
-          el("span", { text: "No runs yet — create one to get started." }),
+          el("h1", { className: "empty-state-title", text: "Zatím žádný run" }),
+          el("p", {
+            className: "empty-state-hint",
+            text:
+              "Run je vstupní bod nástroje — bez něj nejde sbírat snapshoty ani vyhodnocovat. " +
+              "Založ první run: pojmenuj ho a vyplň zařízení.",
+          }),
           el("button", {
             className: "btn btn-primary",
-            text: "Create your first run",
+            text: "+ New run",
             onClick: () => this.openNewRunForm(),
           }),
         ],

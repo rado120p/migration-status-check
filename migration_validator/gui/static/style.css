@@ -855,3 +855,14 @@ a:hover { color: #0e3fa9; }
 .safety-row .identity { font-family: 'IBM Plex Mono', monospace; color: #111827; }
 .safety-row .detail { color: #4b5563; }
 .safety-row .nothing { color: #9ca3af; }
+
+.empty-state-title { font-size: 20px; font-weight: 600; color: #111827; margin: 0; }
+.empty-state-hint { max-width: 460px; text-align: center; line-height: 1.5; margin: 0; }
+
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+@keyframes btn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(26, 86, 219, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(26, 86, 219, 0); }
+}
+.btn-pulse { animation: btn-pulse 1.6s ease-out infinite; }
