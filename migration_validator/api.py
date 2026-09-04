@@ -207,6 +207,13 @@ def list_archive(run_root: str | Path = Path("runs")) -> list[ArchiveEntry]:
     return sorted(entries, key=lambda e: (e.archived, e.name))
 
 
+def archive_threshold(older_than_days: int, now: datetime | None = None) -> datetime:
+    """Hranicni cas: polozky archivovane v tomto case nebo drive se povazuji
+    za starsi nez older_than_days. Sdileno mezi purge_archive a CLI, aby
+    vypis a mazani pouzivaly stejne pravidlo."""
+    return (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+
+
 def purge_archive(
     run_root: str | Path = Path("runs"),
     *,
@@ -214,7 +221,7 @@ def purge_archive(
     now: datetime | None = None,
 ) -> list[ArchiveEntry]:
     """Smaze archivovane runy starsi nez older_than_days. Vraci smazane."""
-    threshold = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+    threshold = archive_threshold(older_than_days, now)
     removed: list[ArchiveEntry] = []
     for entry in list_archive(run_root):
         if entry.archived <= threshold:

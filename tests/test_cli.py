@@ -1498,3 +1498,57 @@ def test_run_purge_yes_smaze(tmp_path, capsys):
     assert code == 0
     assert "smazano 1" in out
     assert not (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_run_purge_bez_yes_eof_je_zruseno(tmp_path, capsys, monkeypatch):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+
+    def _raise_eof(*_args, **_kwargs):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", _raise_eof)
+    code = main(["run", "purge", "--run-root", str(tmp_path), "--older-than", "0"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "zruseno" in out
+    assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_run_purge_bez_yes_interaktivni_ano_smaze(tmp_path, capsys, monkeypatch):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: "y")
+    code = main(["run", "purge", "--run-root", str(tmp_path), "--older-than", "0"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "smazano 1" in out
+    assert not (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_run_purge_bez_yes_interaktivni_ne_zachova(tmp_path, capsys, monkeypatch):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+
+    monkeypatch.setattr("builtins.input", lambda *_a, **_k: "n")
+    code = main(["run", "purge", "--run-root", str(tmp_path), "--older-than", "0"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "zruseno" in out
+    assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()

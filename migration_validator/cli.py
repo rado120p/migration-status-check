@@ -508,9 +508,10 @@ def _cmd_run_purge(args: argparse.Namespace) -> int:
     if args.older_than is None:
         return EXIT_OK
 
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
 
-    threshold = datetime.now(timezone.utc) - timedelta(days=args.older_than)
+    now = datetime.now(timezone.utc)
+    threshold = api.archive_threshold(args.older_than, now)
     candidates = [e for e in entries if e.archived <= threshold]
     if not candidates:
         print(f"nic starsiho nez {args.older_than} dni")
@@ -520,11 +521,15 @@ def _cmd_run_purge(args: argparse.Namespace) -> int:
         print(f"smazal by {len(candidates)}: {names}")
         return EXIT_OK
     if not args.yes:
-        answer = input(f"smazat {len(candidates)} ({names})? [y/N] ")
+        try:
+            answer = input(f"smazat {len(candidates)} ({names})? [y/N] ")
+        except EOFError:
+            print("zruseno (bez interaktivniho vstupu pouzij --yes)")
+            return EXIT_OK
         if answer.strip().lower() != "y":
             print("zruseno")
             return EXIT_OK
-    removed = api.purge_archive(args.run_root, older_than_days=args.older_than)
+    removed = api.purge_archive(args.run_root, older_than_days=args.older_than, now=now)
     print(f"smazano {len(removed)}")
     return EXIT_OK
 
