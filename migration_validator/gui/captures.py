@@ -47,6 +47,14 @@ class CaptureManager:
     def get(self, task_id: str) -> CaptureTask | None:
         return self._tasks.get(task_id)
 
+    def busy_run(self, run: str) -> bool:
+        """True, dokud na runu bezi aspon jeden capture - archivace ceka."""
+        with self._lock:
+            return any(
+                task.run == run and task.state == "running"
+                for task in self._tasks.values()
+            )
+
     def start(
         self,
         fn: Callable[[Callable], Any],

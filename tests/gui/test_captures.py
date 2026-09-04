@@ -1,3 +1,4 @@
+import threading
 import time
 
 import pytest
@@ -158,3 +159,19 @@ def test_route_capture_nevalidni_settings_je_503(client, tmp_path, monkeypatch):
     )
     assert response.status_code == 503
     assert "MIG_TEST_NENASTAVENA" in response.json()["detail"]
+
+
+def test_busy_run_vidi_jen_bezici_task_daneho_runu():
+    manager = CaptureManager()
+    gate = threading.Event()
+
+    def blocking(on_progress):
+        gate.wait(5)
+        return object()
+
+    task = manager.start(blocking, run="mig01", device="MX1", port=None, phase="pre")
+    assert manager.busy_run("mig01") is True
+    assert manager.busy_run("mig02") is False
+    gate.set()
+    _wait_done(manager, task.id)
+    assert manager.busy_run("mig01") is False

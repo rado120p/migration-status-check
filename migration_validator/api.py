@@ -6,6 +6,7 @@ CLI je tenky obal nad timto modulem, ne alternativni implementace.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -141,6 +142,34 @@ def create_run(
 
     store.save(manifest)
     return manifest
+
+
+ARCHIVE_DIR = ".archive"
+
+
+def archive_run(
+    name: str,
+    *,
+    run_root: str | Path = Path("runs"),
+    now: datetime | None = None,
+) -> Path:
+    """Presune runs/<name>/ do runs/.archive/<name>-<UTC stamp>/.
+
+    Rename na stejnem filesystemu je atomicky - run bud zmizi cely, nebo
+    vubec. Teckovany adresar list_runs preskakuje."""
+    if not _RUN_NAME_RE.match(name):
+        raise ValueError(
+            f"nevalidni jmeno runu '{name}' - povolene znaky: a-z 0-9 _ -"
+        )
+    store = RunStore(Path(run_root), name)
+    if not store.manifest_path.exists():
+        raise FileNotFoundError(f"run '{name}' neexistuje ({store.dir})")
+    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    archive = Path(run_root) / ARCHIVE_DIR
+    archive.mkdir(exist_ok=True)
+    target = archive / f"{name}-{stamp}"
+    store.dir.rename(target)
+    return target
 
 
 def _mapping_locked(manifest: RunManifest, mapping) -> bool:

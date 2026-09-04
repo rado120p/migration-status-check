@@ -109,6 +109,8 @@ def create_app(
         runs = []
         if run_root.exists():
             for entry in sorted(run_root.iterdir()):
+                if entry.name.startswith("."):
+                    continue
                 store = RunStore(run_root, entry.name)
                 if store.manifest_path.exists():
                     runs.append(_run_summary(store))

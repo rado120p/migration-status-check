@@ -170,3 +170,28 @@ def test_update_mapping_all_snimek_zamyka_pairingy_zarizeni(tmp_path):
     # Pairing zamceny - nelze ho odebrat
     with pytest.raises(ValueError, match="ma snimky"):
         api.update_mapping("alldev", [], run_root=tmp_path)
+
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def test_archive_run_presune_adresar_do_archive(tmp_path):
+    api.create_run("mig02", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    (tmp_path / "mig02" / "snapshot_pre_MX1_all.json").write_text("{}")
+    when = datetime(2026, 9, 4, 10, 30, 0, tzinfo=timezone.utc)
+    target = api.archive_run("mig02", run_root=tmp_path, now=when)
+    assert target == tmp_path / ".archive" / "mig02-20260904T103000Z"
+    assert (target / "run.yml").exists()
+    assert (target / "snapshot_pre_MX1_all.json").exists()
+    assert not (tmp_path / "mig02").exists()
+
+
+def test_archive_run_neexistujici_run(tmp_path):
+    with pytest.raises(FileNotFoundError, match="run 'nope' neexistuje"):
+        api.archive_run("nope", run_root=tmp_path)
+
+
+def test_archive_run_nevalidni_jmeno(tmp_path):
+    with pytest.raises(ValueError, match="nevalidni jmeno runu"):
+        api.archive_run("../etc", run_root=tmp_path)
