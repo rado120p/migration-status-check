@@ -1161,7 +1161,7 @@ Delete the now-unused rules `.new-run-link`, `.new-run-link:hover`, and every `.
 
 - [ ] **Step 6: Manual check in the browser**
 
-Run: `mig-validate gui --run-root runs` and open `http://127.0.0.1:8000/` (the port the `gui` subcommand prints).
+Run: `mig-validate gui --run-root runs` and open `http://127.0.0.1:8321/` (default `--port` of the `gui` subcommand).
 Expected: no sidebar run cards; the topbar shows `Run: mig01`; clicking opens the panel with the filter focused; typing `ptx` narrows the list; Enter selects; Escape closes; clicking outside closes; `+ New run` in the panel footer and in the topbar both open the form. Run `node --test tests/js/` and `pytest tests/gui -q` again (unchanged, must stay green).
 
 - [ ] **Step 7: Commit**
