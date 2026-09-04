@@ -493,6 +493,42 @@ def _cmd_gui(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_run_purge(args: argparse.Namespace) -> int:
+    entries = api.list_archive(args.run_root)
+    if not entries:
+        print("archiv je prazdny")
+        return EXIT_OK
+    print(f"{'RUN':<24} {'ARCHIVOVANO':<20} SNIMKU")
+    for entry in entries:
+        print(
+            f"{entry.name:<24} "
+            f"{entry.archived.strftime('%Y-%m-%d %H:%M:%SZ'):<20} "
+            f"{entry.snapshots}"
+        )
+    if args.older_than is None:
+        return EXIT_OK
+
+    from datetime import datetime, timedelta, timezone
+
+    threshold = datetime.now(timezone.utc) - timedelta(days=args.older_than)
+    candidates = [e for e in entries if e.archived <= threshold]
+    if not candidates:
+        print(f"nic starsiho nez {args.older_than} dni")
+        return EXIT_OK
+    names = ", ".join(e.path.name for e in candidates)
+    if args.dry_run:
+        print(f"smazal by {len(candidates)}: {names}")
+        return EXIT_OK
+    if not args.yes:
+        answer = input(f"smazat {len(candidates)} ({names})? [y/N] ")
+        if answer.strip().lower() != "y":
+            print("zruseno")
+            return EXIT_OK
+    removed = api.purge_archive(args.run_root, older_than_days=args.older_than)
+    print(f"smazano {len(removed)}")
+    return EXIT_OK
+
+
 def _cmd_record(args: argparse.Namespace) -> int:
     from lxml import etree
 
@@ -654,6 +690,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
     )
     gui.set_defaults(func=_cmd_gui)
+
+    run = sub.add_parser("run", help="sprava run adresaru")
+    run_sub = run.add_subparsers(dest="run_command", required=True)
+    purge = run_sub.add_parser(
+        "purge", help="vypise archivovane runy, s --older-than je smaze"
+    )
+    purge.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    purge.add_argument(
+        "--older-than", type=int, default=None, metavar="DNI",
+        help="smaze archivovane runy starsi nez DNI (bez flagu jen vypis)",
+    )
+    purge.add_argument("--dry-run", action="store_true", help="jen vypise, co by smazal")
+    purge.add_argument("--yes", action="store_true", help="bez potvrzeni")
+    purge.set_defaults(func=_cmd_run_purge)
 
     return parser
 

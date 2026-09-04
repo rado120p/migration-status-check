@@ -1451,3 +1451,50 @@ def test_gui_subcommand_parsuje():
     args = build_parser().parse_args(["gui", "--port", "9999"])
     assert args.gui_port == 9999
     assert args.host == "127.0.0.1"
+
+
+def test_run_purge_bez_older_than_jen_vypise(tmp_path, capsys):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    code = main(["run", "purge", "--run-root", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "mig01" in out and "2026-08-01" in out
+    assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_run_purge_dry_run_nemaze(tmp_path, capsys):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    code = main(["run", "purge", "--run-root", str(tmp_path),
+                 "--older-than", "0", "--dry-run"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "smazal by" in out
+    assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_run_purge_yes_smaze(tmp_path, capsys):
+    from datetime import datetime, timezone
+    from migration_validator import api
+    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
+                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+                   run_root=tmp_path)
+    api.archive_run("mig01", run_root=tmp_path,
+                    now=datetime(2026, 8, 1, tzinfo=timezone.utc))
+    code = main(["run", "purge", "--run-root", str(tmp_path),
+                 "--older-than", "0", "--yes"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "smazano 1" in out
+    assert not (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()

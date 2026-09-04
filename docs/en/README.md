@@ -237,6 +237,20 @@ full translation (e.g. it omits `run.yml`'s device-discovery and inventory-sourc
 Closing that residual EN/CS gap is tracked as follow-up debt, not part of the
 LAG-migration-steps feature.
 
+### Archiving and purging runs
+
+The GUI can archive a run (*Archive run* on the run overview): the directory
+moves to `runs/.archive/<name>-<UTC time>/`, disappears from the list and keeps
+its data. The archive is cleaned from the shell:
+
+```bash
+mig-validate run purge                       # list the archive only
+mig-validate run purge --older-than 30       # delete entries older than 30 days, asks first
+mig-validate run purge --older-than 30 --yes # no prompt
+```
+
+Restore = move the directory back into `runs/` and rename it to the original name.
+
 ---
 
 ## 4. Reading the output

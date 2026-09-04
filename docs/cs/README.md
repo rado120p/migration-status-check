@@ -370,6 +370,20 @@ dvojici a fázi existuje záznam v `captures`. Slouží jako rychlá kontrola p�
 | `--run` | název run adresáře (povinné) |
 | `--run-root` | kořen run adresářů, výchozí `runs` |
 
+### Archivace a úklid runů
+
+GUI umí run archivovat (tlačítko *Archive run* v přehledu runu): adresář se
+přesune do `runs/.archive/<nazev>-<UTC čas>/`, ze seznamu zmizí, data zůstanou.
+Archiv se čistí z příkazové řádky:
+
+```bash
+mig-validate run purge                       # jen výpis archivu
+mig-validate run purge --older-than 30       # smaže starší než 30 dní, ptá se
+mig-validate run purge --older-than 30 --yes # bez dotazu
+```
+
+Obnova = ruční přesun adresáře zpět do `runs/` a přejmenování na původní název.
+
 ---
 
 ## 4. Jak číst výstup

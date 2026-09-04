@@ -195,3 +195,35 @@ def test_archive_run_neexistujici_run(tmp_path):
 def test_archive_run_nevalidni_jmeno(tmp_path):
     with pytest.raises(ValueError, match="nevalidni jmeno runu"):
         api.archive_run("../etc", run_root=tmp_path)
+
+
+def _archived(tmp_path, name, when):
+    api.create_run(name, old_device=OLD, new_device=NEW, run_root=tmp_path)
+    (tmp_path / name / "snapshot_pre_MX1_all.json").write_text("{}")
+    return api.archive_run(name, run_root=tmp_path, now=when)
+
+
+def test_list_archive_cte_jmeno_cas_a_pocet_snimku(tmp_path):
+    _archived(tmp_path, "mig02", datetime(2026, 9, 1, tzinfo=timezone.utc))
+    _archived(tmp_path, "mig01", datetime(2026, 8, 1, tzinfo=timezone.utc))
+    entries = api.list_archive(tmp_path)
+    assert [e.name for e in entries] == ["mig01", "mig02"]
+    assert entries[0].archived == datetime(2026, 8, 1, tzinfo=timezone.utc)
+    assert entries[0].snapshots == 1
+    assert entries[0].path == tmp_path / ".archive" / "mig01-20260801T000000Z"
+
+
+def test_list_archive_bez_archivu_je_prazdny(tmp_path):
+    assert api.list_archive(tmp_path) == []
+
+
+def test_purge_archive_maze_jen_starsi(tmp_path):
+    _archived(tmp_path, "mig01", datetime(2026, 8, 1, tzinfo=timezone.utc))
+    keep = _archived(tmp_path, "mig02", datetime(2026, 9, 3, tzinfo=timezone.utc))
+    removed = api.purge_archive(
+        tmp_path, older_than_days=7,
+        now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+    )
+    assert [e.name for e in removed] == ["mig01"]
+    assert not (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+    assert keep.exists()

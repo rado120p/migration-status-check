@@ -6,7 +6,9 @@ CLI je tenky obal nad timto modulem, ne alternativni implementace.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+import shutil
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -170,6 +172,55 @@ def archive_run(
     target = archive / f"{name}-{stamp}"
     store.dir.rename(target)
     return target
+
+
+_ARCHIVE_STAMP_RE = re.compile(r"^(?P<name>[a-z0-9_-]+)-(?P<stamp>\d{8}T\d{6}Z)$")
+
+
+@dataclass(frozen=True)
+class ArchiveEntry:
+    name: str
+    archived: datetime
+    snapshots: int
+    path: Path
+
+
+def list_archive(run_root: str | Path = Path("runs")) -> list[ArchiveEntry]:
+    """Polozky runs/.archive/ serazene od nejstarsi. Adresare, ktere
+    nevypadaji jako <name>-<stamp>, se preskakuji - nikdy se nemazou."""
+    archive = Path(run_root) / ARCHIVE_DIR
+    if not archive.is_dir():
+        return []
+    entries: list[ArchiveEntry] = []
+    for entry in archive.iterdir():
+        match = _ARCHIVE_STAMP_RE.match(entry.name)
+        if not entry.is_dir() or match is None:
+            continue
+        archived = datetime.strptime(
+            match.group("stamp"), "%Y%m%dT%H%M%SZ"
+        ).replace(tzinfo=timezone.utc)
+        snapshots = len(list(entry.glob("snapshot_*.json")))
+        entries.append(ArchiveEntry(
+            name=match.group("name"), archived=archived,
+            snapshots=snapshots, path=entry,
+        ))
+    return sorted(entries, key=lambda e: (e.archived, e.name))
+
+
+def purge_archive(
+    run_root: str | Path = Path("runs"),
+    *,
+    older_than_days: int,
+    now: datetime | None = None,
+) -> list[ArchiveEntry]:
+    """Smaze archivovane runy starsi nez older_than_days. Vraci smazane."""
+    threshold = (now or datetime.now(timezone.utc)) - timedelta(days=older_than_days)
+    removed: list[ArchiveEntry] = []
+    for entry in list_archive(run_root):
+        if entry.archived <= threshold:
+            shutil.rmtree(entry.path)
+            removed.append(entry)
+    return removed
 
 
 def _mapping_locked(manifest: RunManifest, mapping) -> bool:
