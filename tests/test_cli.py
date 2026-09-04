@@ -1468,6 +1468,13 @@ def test_run_purge_bez_older_than_jen_vypise(tmp_path, capsys):
     assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
 
 
+def test_run_purge_older_than_zaporny_je_chyba(tmp_path, capsys):
+    code = main(["run", "purge", "--run-root", str(tmp_path), "--older-than", "-1", "--yes"])
+    err = capsys.readouterr().err
+    assert code == EXIT_TOOL_ERROR
+    assert "musi byt >= 0" in err
+
+
 def test_run_purge_dry_run_nemaze(tmp_path, capsys):
     from datetime import datetime, timezone
     from migration_validator import api

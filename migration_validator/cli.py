@@ -494,6 +494,8 @@ def _cmd_gui(args: argparse.Namespace) -> int:
 
 
 def _cmd_run_purge(args: argparse.Namespace) -> int:
+    if args.older_than is not None and args.older_than < 0:
+        raise ToolError("--older-than musi byt >= 0")
     entries = api.list_archive(args.run_root)
     if not entries:
         print("archiv je prazdny")

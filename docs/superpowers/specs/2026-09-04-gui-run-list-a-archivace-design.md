@@ -80,6 +80,13 @@ runs behind a permission seam that a future role model can plug into.
 - After archiving the GUI reloads the run list and selects the first
   remaining run or shows the empty state.
 
+**Známé omezení:** kontrola `busy_run()` a následný `rename` nejsou atomické.
+Souběžný zápis mezi nimi (start capture, nebo `PUT /api/runs/{run}/mapping`,
+který nemá žádnou obdobnou ochranu) může znovu vytvořit `runs/<name>/run.yml`
+a po přesunu tak zůstane "duch" runu. Riziko je v této vlně akceptované, GUI
+má dnes jednoho operátora — pořádný zámek na úrovni runu patří do vlny s
+rolovým modelem.
+
 ## 4. Purge (CLI only)
 
 - New subcommand `mig-validate run purge [--older-than DAYS] [--dry-run]

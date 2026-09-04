@@ -49,3 +49,36 @@ def test_operator_zaklada_run(tmp_path):
 def test_neznama_role_nema_nic(tmp_path):
     client = _client(tmp_path, role="guest")
     assert client.get("/api/runs").status_code == 403
+
+
+def _dependant_uses_authz(dependant) -> bool:
+    """Projde strom dependant.dependencies a hleda authz.require() seam."""
+    call = getattr(dependant, "call", None)
+    if (
+        call is not None
+        and getattr(call, "__name__", None) == "dependency"
+        and getattr(call, "__module__", None) == "migration_validator.gui.authz"
+    ):
+        return True
+    for sub in getattr(dependant, "dependencies", []):
+        if _dependant_uses_authz(sub):
+            return True
+    return False
+
+
+def test_kazda_api_routa_ma_authz_zavislost(tmp_path):
+    """Kazda /api routa musi deklarovat require(Permission.*) - jinak je
+    nechtene dostupna bez ohledu na roli volajiciho."""
+    app = create_app(run_root=tmp_path)
+    unguarded = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api"):
+            continue
+        dependant = getattr(route, "dependant", None)
+        if dependant is None:
+            continue
+        if not _dependant_uses_authz(dependant):
+            methods = sorted(getattr(route, "methods", []) or [])
+            unguarded.append(f"{','.join(methods)} {path}")
+    assert not unguarded, f"routy bez authz zavislosti: {unguarded}"

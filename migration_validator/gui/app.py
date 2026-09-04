@@ -160,6 +160,16 @@ def create_app(
 
     @app.post("/api/runs/{run}/archive")
     def archive_run(run: str, actor: Actor = require(Permission.ADMIN)) -> dict:
+        """Archivuje run - presune runs/<run>/ do runs/.archive/.
+
+        Kontrola busy_run() a nasledny rename nejsou atomicke. Mezi nimi muze
+        soubezny zapis (start capture, nebo PUT /api/runs/{run}/mapping, ktery
+        nema zadnou obdobnou ochranu) znovu vytvorit runs/<run>/run.yml a po
+        rename tak zustane "duch" runu (soubory existuji, ale run zmizel ze
+        seznamu/API). V teto vlne je toto okno akceptovano - GUI ma dnes
+        jednoho operatora. Radne reseni (napr. zamek na urovni runu) patri do
+        vlny s rolovym modelem.
+        """
         if manager.busy_run(run):
             raise HTTPException(status_code=409, detail="run ma bezici capture")
         try:
