@@ -55,7 +55,7 @@ interfaces:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
   - 'BGP neighbor odpovídá subnetu rozhraní: 2001:db8::1'
 - interface: ge-0/0/0
-  description: clab-pop-migration-P1;et-0/0/0
+  description: P1;et-0/0/0
   service_type: Layer1
   service_subtype: physical-port
   ipv4_address: []
@@ -78,7 +78,7 @@ interfaces:
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: ge-0/0/0.0
-  description: clab-pop-migration-P1;et-0/0/0
+  description: P1;et-0/0/0.0
   service_type: Core
   service_subtype: transit
   ipv4_address:
@@ -108,7 +108,7 @@ interfaces:
   detection_reason:
   - Rozhraní používá family iso nebo family mpls.
 - interface: ge-0/0/1
-  description: clab-pop-migration-PTX1-POP1;et-0/0/1
+  description: PTX1-POP1;et-0/0/1
   service_type: Layer1
   service_subtype: physical-port
   ipv4_address: []
@@ -131,7 +131,7 @@ interfaces:
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: ge-0/0/1.0
-  description: clab-pop-migration-PTX1-POP1;et-0/0/1
+  description: PTX1-POP1;et-0/0/1.0
   service_type: Core
   service_subtype: transit
   ipv4_address:
@@ -184,7 +184,7 @@ interfaces:
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: ge-0/0/2.11
-  description: MULTICAST-STREAM-A-MUX1-RECEIVER-1
+  description: INET2-MULTICAST-RECEIVER
   service_type: Internet
   service_subtype: multicast
   ipv4_address:
@@ -212,7 +212,7 @@ interfaces:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
   - Rozhraní je pod protocols igmp — multicast receiver.
 - interface: ge-0/0/2.12
-  description: MULTICAST-STREAM-B-MUX1-RECEIVER
+  description: NGMVPN-RECEIVER
   service_type: Unknown
   service_subtype: layer2
   ipv4_address: []
@@ -459,7 +459,7 @@ interfaces:
   detection_reason:
   - Routing instance má instance-type virtual-switch a obsahuje bridge domain.
 - interface: ge-0/0/3
-  description: EVPN-VPWS-CPE24-UNI
+  description: EVPN-VPWS-CPE23-UNI
   service_type: Layer1
   service_subtype: physical-port
   ipv4_address: []
@@ -482,14 +482,14 @@ interfaces:
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: ge-0/0/3.0
-  description: EVPN-VPWS-CPE24-UNI
+  description: EVPN-VPWS-CPE23-UNI
   service_type: E-Line
   service_subtype: vpws
   ipv4_address: []
   ipv6_address: []
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
-  routing_instance: EVPN-VPWS-CPE24-UNI
+  routing_instance: EVPN-VPWS-CPE23-UNI
   routing_instance_active: true
   interface_active: true
   protocol:
@@ -702,7 +702,7 @@ interfaces:
   detection_reason:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: irb.2
-  description: MUX1 receivers POP1
+  description: NGMVPN receivers POP1
   service_type: IPVPN
   service_subtype: mvpn-igmp
   ipv4_address:
@@ -710,7 +710,7 @@ interfaces:
   ipv6_address: []
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
-  routing_instance: MULTICAST-STREAM-B-MUX1-RECEIVER
+  routing_instance: NGMVPN-RECEIVER
   routing_instance_active: true
   interface_active: true
   protocol:
@@ -722,7 +722,7 @@ interfaces:
   bgp_neighbor: []
   bgp_neighbor_inactive: []
   bridge_domain:
-  - BD-MUX1-B
+  - BD-NGMVPN-RECEIVER
   customer_vlan:
   - '12'
   l2_interface:

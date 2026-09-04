@@ -14,9 +14,9 @@ captures:
   device: MX1-POP1
   port: all
   snapshot: snapshot_pre_MX1-POP1_all.json
-  taken: '2026-09-03T10:32:48Z'
+  taken: '2026-09-04T09:23:02Z'
 - phase: post
   device: PTX1-POP1
   port: all
   snapshot: snapshot_post_PTX1-POP1_all.json
-  taken: '2026-09-03T10:30:37Z'
+  taken: '2026-09-04T09:25:22Z'

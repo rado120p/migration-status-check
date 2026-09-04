@@ -9,8 +9,8 @@
     "uptime_seconds": null
   },
   "capture": {
-    "started_at": "2026-09-03T10:32:48Z",
-    "finished_at": "2026-09-03T10:33:01Z",
+    "started_at": "2026-09-04T09:23:02Z",
+    "finished_at": "2026-09-04T09:23:15Z",
     "phase": "pre",
     "collectors": {
       "arp": {
@@ -132,7 +132,7 @@
     },
     {
       "interface": "ge-0/0/0",
-      "description": "clab-pop-migration-P1;et-0/0/0",
+      "description": "P1;et-0/0/0",
       "service_type": "Layer1",
       "service_subtype": "physical-port",
       "ipv4_address": [],
@@ -154,7 +154,7 @@
     },
     {
       "interface": "ge-0/0/0.0",
-      "description": "clab-pop-migration-P1;et-0/0/0",
+      "description": "P1;et-0/0/0.0",
       "service_type": "Core",
       "service_subtype": "transit",
       "ipv4_address": [
@@ -186,7 +186,7 @@
     },
     {
       "interface": "ge-0/0/1",
-      "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+      "description": "PTX1-POP1;et-0/0/1",
       "service_type": "Layer1",
       "service_subtype": "physical-port",
       "ipv4_address": [],
@@ -208,7 +208,7 @@
     },
     {
       "interface": "ge-0/0/1.0",
-      "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+      "description": "PTX1-POP1;et-0/0/1.0",
       "service_type": "Core",
       "service_subtype": "transit",
       "ipv4_address": [
@@ -262,7 +262,7 @@
     },
     {
       "interface": "ge-0/0/2.11",
-      "description": "MULTICAST-STREAM-A-MUX1-RECEIVER-1",
+      "description": "INET2-MULTICAST-RECEIVER",
       "service_type": "Internet",
       "service_subtype": "multicast",
       "ipv4_address": [
@@ -291,7 +291,7 @@
     },
     {
       "interface": "ge-0/0/2.12",
-      "description": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+      "description": "NGMVPN-RECEIVER",
       "service_type": "Unknown",
       "service_subtype": "layer2",
       "ipv4_address": [],
@@ -576,7 +576,7 @@
     },
     {
       "interface": "ge-0/0/3",
-      "description": "EVPN-VPWS-CPE24-UNI",
+      "description": "EVPN-VPWS-CPE23-UNI",
       "service_type": "Layer1",
       "service_subtype": "physical-port",
       "ipv4_address": [],
@@ -598,14 +598,14 @@
     },
     {
       "interface": "ge-0/0/3.0",
-      "description": "EVPN-VPWS-CPE24-UNI",
+      "description": "EVPN-VPWS-CPE23-UNI",
       "service_type": "E-Line",
       "service_subtype": "vpws",
       "ipv4_address": [],
       "ipv6_address": [],
       "virtual_gw_ipv4_address": [],
       "virtual_gw_ipv6_address": [],
-      "routing_instance": "EVPN-VPWS-CPE24-UNI",
+      "routing_instance": "EVPN-VPWS-CPE23-UNI",
       "routing_instance_active": true,
       "interface_active": true,
       "protocol": [
@@ -825,7 +825,7 @@
     },
     {
       "interface": "irb.2",
-      "description": "MUX1 receivers POP1",
+      "description": "NGMVPN receivers POP1",
       "service_type": "IPVPN",
       "service_subtype": "mvpn-igmp",
       "ipv4_address": [
@@ -834,7 +834,7 @@
       "ipv6_address": [],
       "virtual_gw_ipv4_address": [],
       "virtual_gw_ipv6_address": [],
-      "routing_instance": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+      "routing_instance": "NGMVPN-RECEIVER",
       "routing_instance_active": true,
       "interface_active": true,
       "protocol": [
@@ -847,7 +847,7 @@
       "bgp_neighbor": [],
       "bgp_neighbor_inactive": [],
       "bridge_domain": [
-        "BD-MUX1-B"
+        "BD-NGMVPN-RECEIVER"
       ],
       "customer_vlan": [
         "12"
@@ -1015,10 +1015,10 @@
   ],
   "scopes": [
     {
-      "id": "svc:clab-pop-migration-P1;et-0/0/0:Core",
+      "id": "svc:P1;et-0/0/0.0:Core",
       "kind": "service",
       "key": {
-        "description": "clab-pop-migration-P1;et-0/0/0",
+        "description": "P1;et-0/0/0.0",
         "service_type": "Core",
         "service_subtype": "transit"
       },
@@ -1058,10 +1058,10 @@
       "interface_active": true
     },
     {
-      "id": "svc:clab-pop-migration-PTX1-POP1;et-0/0/1:Core",
+      "id": "svc:PTX1-POP1;et-0/0/1.0:Core",
       "kind": "service",
       "key": {
-        "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+        "description": "PTX1-POP1;et-0/0/1.0",
         "service_type": "Core",
         "service_subtype": "transit"
       },
@@ -1101,10 +1101,10 @@
       "interface_active": true
     },
     {
-      "id": "svc:MULTICAST-STREAM-A-MUX1-RECEIVER-1:Internet",
+      "id": "svc:INET2-MULTICAST-RECEIVER:Internet",
       "kind": "service",
       "key": {
-        "description": "MULTICAST-STREAM-A-MUX1-RECEIVER-1",
+        "description": "INET2-MULTICAST-RECEIVER",
         "service_type": "Internet",
         "service_subtype": "multicast"
       },
@@ -1476,10 +1476,10 @@
       "interface_active": true
     },
     {
-      "id": "svc:EVPN-VPWS-CPE24-UNI:E-Line",
+      "id": "svc:EVPN-VPWS-CPE23-UNI:E-Line",
       "kind": "service",
       "key": {
-        "description": "EVPN-VPWS-CPE24-UNI",
+        "description": "EVPN-VPWS-CPE23-UNI",
         "service_type": "E-Line",
         "service_subtype": "vpws"
       },
@@ -1491,7 +1491,7 @@
           "ge-0/0/3"
         ],
         "routing_instances": [
-          "EVPN-VPWS-CPE24-UNI"
+          "EVPN-VPWS-CPE23-UNI"
         ],
         "bgp_neighbors": [],
         "bgp_neighbors_inactive": [],
@@ -1665,10 +1665,10 @@
       "interface_active": true
     },
     {
-      "id": "svc:MUX1 receivers POP1:IPVPN",
+      "id": "svc:NGMVPN receivers POP1:IPVPN",
       "kind": "service",
       "key": {
-        "description": "MUX1 receivers POP1",
+        "description": "NGMVPN receivers POP1",
         "service_type": "IPVPN",
         "service_subtype": "mvpn-igmp"
       },
@@ -1680,7 +1680,7 @@
           "irb"
         ],
         "routing_instances": [
-          "MULTICAST-STREAM-B-MUX1-RECEIVER"
+          "NGMVPN-RECEIVER"
         ],
         "bgp_neighbors": [],
         "bgp_neighbors_inactive": [],
@@ -1694,7 +1694,7 @@
           "12"
         ],
         "bridge_domains": [
-          "BD-MUX1-B"
+          "BD-NGMVPN-RECEIVER"
         ],
         "lag_members": [],
         "l2_interfaces": [
@@ -1872,7 +1872,7 @@
       "id": "l1:ge-0/0/0",
       "kind": "layer1",
       "key": {
-        "description": "clab-pop-migration-P1;et-0/0/0",
+        "description": "P1;et-0/0/0",
         "service_type": "Layer1",
         "service_subtype": "physical-port"
       },
@@ -1903,7 +1903,7 @@
       "id": "l1:ge-0/0/1",
       "kind": "layer1",
       "key": {
-        "description": "clab-pop-migration-PTX1-POP1;et-0/0/1",
+        "description": "PTX1-POP1;et-0/0/1",
         "service_type": "Layer1",
         "service_subtype": "physical-port"
       },
@@ -1965,7 +1965,7 @@
       "id": "l1:ge-0/0/3",
       "kind": "layer1",
       "key": {
-        "description": "EVPN-VPWS-CPE24-UNI",
+        "description": "EVPN-VPWS-CPE23-UNI",
         "service_type": "Layer1",
         "service_subtype": "physical-port"
       },
@@ -2097,56 +2097,56 @@
       },
       {
         "ip": "10.1.0.5",
-        "mac": "c4:2f:cd:2a:00:09",
+        "mac": "98:0f:4d:78:00:09",
         "interface": "ge-0/0/1.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "10.1.2.0",
-        "mac": "84:c2:e3:1a:00:00",
+        "mac": "1c:e8:ef:7c:00:00",
         "interface": "ge-0/0/0.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "10.40.94.2",
-        "mac": "0c:00:9a:94:71:02",
+        "mac": "0c:00:c0:79:3f:02",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.3",
-        "mac": "0c:00:82:92:17:03",
+        "mac": "0c:00:60:e7:e0:03",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.4",
-        "mac": "0c:00:d2:bb:0c:01",
+        "mac": "0c:00:d2:a4:0f:01",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/2.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.10",
-        "mac": "2c:6b:f5:79:8a:f0",
+        "mac": "2c:6b:f5:fa:00:f0",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.252",
-        "mac": "2c:6b:f5:77:7e:f0",
+        "mac": "2c:6b:f5:57:da:f0",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.95.3",
-        "mac": "0c:00:11:00:88:04",
+        "mac": "0c:00:27:99:aa:04",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
@@ -2160,28 +2160,28 @@
       },
       {
         "ip": "152.11.13.2",
-        "mac": "0c:00:d2:bb:0c:01",
+        "mac": "0c:00:d2:a4:0f:01",
         "interface": "ge-0/0/2.13",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "152.11.14.4",
-        "mac": "0c:00:b6:ea:3b:03",
+        "mac": "0c:00:85:cf:f5:03",
         "interface": "ge-0/0/5.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "198.11.13.2",
-        "mac": "0c:00:d2:bb:0c:01",
+        "mac": "0c:00:d2:a4:0f:01",
         "interface": "ge-0/0/2.113",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "198.11.14.4",
-        "mac": "0c:00:da:57:71:02",
+        "mac": "0c:00:49:96:60:02",
         "interface": "ge-0/0/4.0",
         "learned_via": null,
         "routing_instance": null
@@ -2254,20 +2254,6 @@
             "active": 1,
             "suppressed": 0
           },
-          "MULTICAST-STREAM-B-MUX1-RECEIVER.inet.0": {
-            "received": 2,
-            "accepted": 2,
-            "advertised": 1,
-            "active": 2,
-            "suppressed": 0
-          },
-          "MULTICAST-STREAM-B-MUX1-RECEIVER.mvpn.0": {
-            "received": 1,
-            "accepted": 1,
-            "advertised": 0,
-            "active": 1,
-            "suppressed": 0
-          },
           "L3VPN-CPE13-NNI.inet.0": {
             "received": 1,
             "accepted": 1,
@@ -2289,6 +2275,20 @@
             "active": 0,
             "suppressed": 0
           },
+          "NGMVPN-RECEIVER.inet.0": {
+            "received": 2,
+            "accepted": 2,
+            "advertised": 1,
+            "active": 2,
+            "suppressed": 0
+          },
+          "NGMVPN-RECEIVER.mvpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 0,
+            "active": 1,
+            "suppressed": 0
+          },
           "EVPN-VPWS-CPE13-NNI.evpn.0": {
             "received": 1,
             "accepted": 1,
@@ -2296,7 +2296,7 @@
             "active": 1,
             "suppressed": 0
           },
-          "EVPN-VPWS-CPE24-UNI.evpn.0": {
+          "EVPN-VPWS-CPE23-UNI.evpn.0": {
             "received": 1,
             "accepted": 1,
             "advertised": 0,
@@ -2460,7 +2460,7 @@
           "up": 2,
           "entries": [
             {
-              "name": ".local..12",
+              "name": ".local..18",
               "status": "Up"
             },
             {
@@ -2488,7 +2488,7 @@
           "up": 3,
           "entries": [
             {
-              "name": ".local..13",
+              "name": ".local..19",
               "status": "Up"
             },
             {
@@ -2524,7 +2524,7 @@
           "up": 2,
           "entries": [
             {
-              "name": ".local..14",
+              "name": ".local..20",
               "status": "Up"
             },
             {
@@ -2585,7 +2585,7 @@
       },
       "EVPN-VLAN-BASED-CPE13-NNI": {
         "vlans": {
-          "413": {
+          "0": {
             "count": 2,
             "domain": null
           }
@@ -2593,7 +2593,7 @@
         "interfaces": {
           "ge-0/0/2.413": {
             "count": 1,
-            "name": "ge-0/0/2.413:413",
+            "name": "ge-0/0/2.413:none",
             "domain": null
           }
         }
@@ -2625,7 +2625,7 @@
           }
         ]
       },
-      "EVPN-VPWS-CPE24-UNI": {
+      "EVPN-VPWS-CPE23-UNI": {
         "interfaces": [
           {
             "name": "ge-0/0/3.0",
@@ -2672,14 +2672,14 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 15,
-        "output_pps": 4
+        "input_pps": 14,
+        "output_pps": 3
       },
       "ge-0/0/0.0": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 15,
+        "input_pps": 14,
         "output_pps": 2,
         "admin_status": "up",
         "oper_status": "up"
@@ -2753,14 +2753,14 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 1,
+        "input_pps": 0,
         "output_pps": 1
       },
       "ge-0/0/1.0": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 1,
+        "input_pps": 0,
         "output_pps": 0,
         "admin_status": "up",
         "oper_status": "up"
@@ -2772,7 +2772,7 @@
         "output_errors": 0,
         "framing_errors": 0,
         "input_pps": 0,
-        "output_pps": 11
+        "output_pps": 10
       },
       "ge-0/0/2.11": {
         "input_errors": 0,
@@ -2915,15 +2915,15 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 3,
-        "output_pps": 3
+        "input_pps": 4,
+        "output_pps": 4
       },
       "ge-0/0/6.4094": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 3,
-        "output_pps": 3,
+        "input_pps": 4,
+        "output_pps": 4,
         "admin_status": "up",
         "oper_status": "up"
       },
@@ -3077,49 +3077,7 @@
         "input_pps": 0,
         "output_pps": 0
       },
-      ".local..6": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
-      ".local..7": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
-      ".local..8": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
       ".local..9": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
-      ".local..10": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
-      ".local..11": {
-        "input_errors": 0,
-        "output_errors": 0,
-        "framing_errors": 0,
-        "input_pps": 0,
-        "output_pps": 0
-      },
-      ".local..12": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3134,6 +3092,48 @@
         "output_pps": 0
       },
       ".local..14": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..15": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..16": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..17": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..18": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..19": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..20": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3352,8 +3352,8 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 4,
-        "output_pps": 4,
+        "input_pps": 3,
+        "output_pps": 3,
         "admin_status": "up",
         "oper_status": "up"
       },
@@ -3420,7 +3420,7 @@
         "input_pps": 0,
         "output_pps": 0
       },
-      "lsi.0": {
+      "lsi.3": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3555,9 +3555,6 @@
     "isis_interface": {
       "ge-0/0/0.0": {
         "levels": {
-          "1": {
-            "passive": false
-          },
           "2": {
             "passive": false
           }
@@ -3565,9 +3562,6 @@
       },
       "ge-0/0/1.0": {
         "levels": {
-          "1": {
-            "passive": false
-          },
           "2": {
             "passive": false
           }
@@ -3575,9 +3569,6 @@
       },
       "lo0.0": {
         "levels": {
-          "1": {
-            "passive": false
-          },
           "2": {
             "passive": true
           }
@@ -3590,11 +3581,11 @@
     "ldp_neighbor": {
       "ge-0/0/0.0": {
         "neighbor_address": "10.1.2.0",
-        "uptime_seconds": 1842
+        "uptime_seconds": 1039
       },
       "ge-0/0/1.0": {
         "neighbor_address": "10.1.0.5",
-        "uptime_seconds": 1851
+        "uptime_seconds": 1057
       }
     },
     "mpls_interface": {
@@ -3613,31 +3604,31 @@
             "ge-0/0/2.11"
           ],
           "forwarding_rate_pps": 6,
-          "uptime_seconds": 94,
+          "uptime_seconds": 114,
           "state": "Active",
           "forwarding_state": "Forwarding"
         }
       },
-      "MULTICAST-STREAM-B-MUX1-RECEIVER": {
+      "NGMVPN-RECEIVER": {
         "10.12.12.1,239.1.1.1": {
-          "upstream_interface": "lsi.0",
+          "upstream_interface": "lsi.3",
           "downstream_interfaces": [
             "irb.2"
           ],
           "forwarding_rate_pps": 6,
-          "uptime_seconds": 97,
+          "uptime_seconds": 120,
           "state": "Active",
           "forwarding_state": "Forwarding"
         }
       }
     },
     "mvpn_instance": {
-      "MULTICAST-STREAM-B-MUX1-RECEIVER": {
+      "NGMVPN-RECEIVER": {
         "c_multicast": [
           {
             "source_prefix": "10.12.12.1/32",
             "group_prefix": "239.1.1.1/32",
-            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 8381,150.0.0.13",
+            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 43148,150.0.0.13",
             "sender_pe": "150.0.0.13"
           }
         ]
@@ -3653,22 +3644,29 @@
       },
       {
         "ip": "2001:db8:11:13::b",
-        "mac": "0c:00:d2:bb:0c:01",
+        "mac": "0c:00:d2:a4:0f:01",
         "interface": "ge-0/0/2.113",
         "state": "reachable",
         "learned_via": null
       },
       {
         "ip": "2001:db8:11:14::4",
-        "mac": "0c:00:da:57:71:02",
+        "mac": "0c:00:49:96:60:02",
         "interface": "ge-0/0/4.0",
-        "state": "stale",
+        "state": "reachable",
         "learned_via": null
       },
       {
         "ip": "2001:abcd:11:14::4",
-        "mac": "0c:00:b6:ea:3b:03",
+        "mac": "0c:00:85:cf:f5:03",
         "interface": "ge-0/0/5.0",
+        "state": "reachable",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::2",
+        "mac": "0c:00:d2:a4:0f:01",
+        "interface": "ge-0/0/2.13",
         "state": "stale",
         "learned_via": null
       },
@@ -3680,36 +3678,29 @@
         "learned_via": null
       },
       {
-        "ip": "fe80::2",
-        "mac": "0c:00:d2:bb:0c:01",
-        "interface": "ge-0/0/2.13",
+        "ip": "fe80::4f9:6ff:fe85:da1a",
+        "mac": "06:f9:06:85:da:1a",
+        "interface": "ge-0/0/0.0",
         "state": "stale",
         "learned_via": null
       },
       {
-        "ip": "fe80::75:26ff:fe04:14ea",
-        "mac": "02:75:26:04:14:ea",
-        "interface": "ge-0/0/1.0",
-        "state": "stale",
-        "learned_via": null
-      },
-      {
-        "ip": "fe80::86c2:e3ff:fe1a:0",
-        "mac": "84:c2:e3:1a:00:00",
+        "ip": "fe80::1ee8:efff:fe7c:0",
+        "mac": "1c:e8:ef:7c:00:00",
         "interface": "ge-0/0/0.0",
         "state": "reachable",
         "learned_via": null
       },
       {
-        "ip": "fe80::9cf8:a8ff:fe40:b4bc",
-        "mac": "9e:f8:a8:40:b4:bc",
-        "interface": "ge-0/0/0.0",
+        "ip": "fe80::6c90:3eff:fe98:b075",
+        "mac": "6e:90:3e:98:b0:75",
+        "interface": "ge-0/0/1.0",
         "state": "stale",
         "learned_via": null
       },
       {
-        "ip": "fe80::c62f:cdff:fe2a:9",
-        "mac": "c4:2f:cd:2a:00:09",
+        "ip": "fe80::9a0f:4dff:fe78:9",
+        "mac": "98:0f:4d:78:00:09",
         "interface": "ge-0/0/1.0",
         "state": "stale",
         "learned_via": null
@@ -3719,11 +3710,11 @@
     "pim_neighbor": {
       "ge-0/0/0.0": {
         "neighbor_address": "10.1.2.0",
-        "uptime_seconds": 1829
+        "uptime_seconds": 1031
       },
       "ge-0/0/1.0": {
         "neighbor_address": "10.1.0.5",
-        "uptime_seconds": 1852
+        "uptime_seconds": 1058
       }
     },
     "routes": {
@@ -3872,7 +3863,7 @@
   "probes": {
     "ping": [
       {
-        "scope_id": "svc:MULTICAST-STREAM-A-MUX1-RECEIVER-1:Internet",
+        "scope_id": "svc:INET2-MULTICAST-RECEIVER:Internet",
         "target": "10.111.11.2",
         "routing_instance": null,
         "resolved_from": "subnet-fallback",
@@ -3881,7 +3872,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.03
+        "rtt_avg_ms": 8.774
       },
       {
         "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
@@ -3893,7 +3884,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.07
+        "rtt_avg_ms": 1.117
       },
       {
         "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
@@ -3905,7 +3896,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.251
+        "rtt_avg_ms": 1.153
       },
       {
         "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -3917,7 +3908,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.182
+        "rtt_avg_ms": 1.122
       },
       {
         "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -3929,7 +3920,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.082
+        "rtt_avg_ms": 1.156
       },
       {
         "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
@@ -3941,7 +3932,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.216
+        "rtt_avg_ms": 0.98
       },
       {
         "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
@@ -3953,7 +3944,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.097
+        "rtt_avg_ms": 1.6
       },
       {
         "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
@@ -3965,7 +3956,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.097
+        "rtt_avg_ms": 1.257
       },
       {
         "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
@@ -3977,19 +3968,19 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 6.494
+        "rtt_avg_ms": 1.108
       },
       {
-        "scope_id": "svc:MUX1 receivers POP1:IPVPN",
+        "scope_id": "svc:NGMVPN receivers POP1:IPVPN",
         "target": "10.12.11.1",
-        "routing_instance": "MULTICAST-STREAM-B-MUX1-RECEIVER",
+        "routing_instance": "NGMVPN-RECEIVER",
         "resolved_from": "subnet-fallback",
         "family": 4,
         "interface": null,
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.053
+        "rtt_avg_ms": 1.35
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4001,7 +3992,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.8
+        "rtt_avg_ms": 1.879
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4013,7 +4004,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.746
+        "rtt_avg_ms": 2.191
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4025,7 +4016,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 5.847
+        "rtt_avg_ms": 5.954
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4037,7 +4028,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.138
+        "rtt_avg_ms": 1.154
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4049,7 +4040,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 5.699
+        "rtt_avg_ms": 1.345
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4061,7 +4052,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.768
+        "rtt_avg_ms": 1.896
       }
     ],
     "ping_skipped": []
