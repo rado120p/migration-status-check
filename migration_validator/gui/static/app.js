@@ -79,6 +79,7 @@ class App {
       captureSubmitting: false,
       newRunForm: null,
       editMappingForm: null,
+      combo: { open: false, query: "", index: 0 },
     };
     this.cache = {
       runs: [],
@@ -99,7 +100,13 @@ class App {
     this.capturePollTimer = null;
 
     this.profileNameEl = document.getElementById("profile-name");
-    this.sidebarRunsEl = document.getElementById("sidebar-runs");
+    this.comboEl = document.getElementById("run-combo");
+    this.comboToggleEl = document.getElementById("run-combo-toggle");
+    this.comboCurrentEl = document.getElementById("run-combo-current");
+    this.comboPanelEl = document.getElementById("run-combo-panel");
+    this.comboFilterEl = document.getElementById("run-combo-filter");
+    this.comboListEl = document.getElementById("run-combo-list");
+    this.btnNewRunEl = document.getElementById("btn-new-run");
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
@@ -110,13 +117,25 @@ class App {
     document.getElementById("btn-new-capture").addEventListener("click", () => {
       this.openCaptureForm();
     });
-    const newRunLink = document.getElementById("btn-new-run");
-    if (newRunLink) {
-      newRunLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        this.openNewRunForm();
-      });
-    }
+    this.btnNewRunEl.addEventListener("click", () => this.openNewRunForm());
+    document.getElementById("run-combo-new").addEventListener("click", (e) => {
+      e.preventDefault();
+      this.closeRunCombo();
+      this.openNewRunForm();
+    });
+    this.comboToggleEl.addEventListener("click", () => {
+      if (this.state.combo.open) this.closeRunCombo();
+      else this.openRunCombo();
+    });
+    this.comboFilterEl.addEventListener("input", (e) => {
+      this.state.combo.query = e.target.value;
+      this.state.combo.index = 0;
+      this.renderRunCombo();
+    });
+    this.comboFilterEl.addEventListener("keydown", (e) => this.onComboKey(e));
+    document.addEventListener("mousedown", (e) => {
+      if (this.state.combo.open && !this.comboEl.contains(e.target)) this.closeRunCombo();
+    });
     window.addEventListener("beforeunload", () => this.stopCapturePolling());
   }
 
@@ -137,6 +156,88 @@ class App {
     if (!this.profileNameEl) return;
     const meta = this.cache.meta;
     this.profileNameEl.textContent = (meta && meta.profile) || "(default)";
+  }
+
+  // -- run combobox (topbar) ----------------------------------------------
+
+  openRunCombo() {
+    this.state.combo = { open: true, query: "", index: 0 };
+    this.comboFilterEl.value = "";
+    this.renderRunCombo();
+    this.comboFilterEl.focus();
+  }
+
+  closeRunCombo() {
+    if (!this.state.combo.open) return;
+    this.state.combo.open = false;
+    this.renderRunCombo();
+  }
+
+  comboMatches() {
+    return MigView.filterRuns(this.cache.runs, this.state.combo.query);
+  }
+
+  onComboKey(e) {
+    const matches = this.comboMatches();
+    const combo = this.state.combo;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.closeRunCombo();
+      this.comboToggleEl.focus();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      combo.index = Math.min(combo.index + 1, Math.max(matches.length - 1, 0));
+      this.renderRunCombo();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      combo.index = Math.max(combo.index - 1, 0);
+      this.renderRunCombo();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = matches[combo.index];
+      if (pick) {
+        this.closeRunCombo();
+        this.selectRun(pick.name);
+      }
+    }
+  }
+
+  renderRunCombo() {
+    const combo = this.state.combo;
+    this.comboCurrentEl.textContent = this.state.run || "—";
+    this.comboToggleEl.setAttribute("aria-expanded", combo.open ? "true" : "false");
+    this.comboPanelEl.hidden = !combo.open;
+    if (!combo.open) return;
+
+    clear(this.comboListEl);
+    const matches = this.comboMatches();
+    if (matches.length === 0) {
+      const text = this.cache.runs.length === 0 ? "no runs yet" : "no run matches";
+      this.comboListEl.appendChild(el("div", { className: "run-combo-empty", text }));
+      return;
+    }
+    matches.forEach((run, i) => {
+      const active = run.name === this.state.run;
+      const focused = i === combo.index;
+      this.comboListEl.appendChild(
+        el("div", {
+          className:
+            "run-combo-row" + (active ? " active" : "") + (focused ? " focused" : ""),
+          attrs: { role: "option", "aria-selected": active ? "true" : "false" },
+          onClick: () => {
+            this.closeRunCombo();
+            this.selectRun(run.name);
+          },
+          children: [
+            el("span", { className: "mono run-combo-name", text: run.name }),
+            el("span", {
+              className: "run-combo-sub",
+              text: `${run.snapshots} snapshot${run.snapshots === 1 ? "" : "s"}`,
+            }),
+          ],
+        })
+      );
+    });
   }
 
   async loadRun() {
@@ -907,6 +1008,7 @@ class App {
   render() {
     this.renderGuide();
     this.renderSidebar();
+    this.renderRunCombo();
     this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
     switch (this.state.view) {
       case "empty":
@@ -961,35 +1063,6 @@ class App {
   }
 
   renderSidebar() {
-    clear(this.sidebarRunsEl);
-    if (this.cache.runs.length === 0) {
-      this.sidebarRunsEl.appendChild(el("div", { className: "sidebar-empty", text: "no runs yet" }));
-    }
-    for (const run of this.cache.runs) {
-      const active = run.name === this.state.run;
-      this.sidebarRunsEl.appendChild(
-        el("div", {
-          className: "run-card" + (active ? " active" : ""),
-          onClick: () => this.selectRun(run.name),
-          children: [
-            el("div", {
-              className: "run-card-top",
-              children: [
-                el("span", {
-                  className: "run-card-name" + (active ? "" : " inactive"),
-                  text: run.name,
-                }),
-              ],
-            }),
-            el("span", {
-              className: "run-card-sub" + (active ? "" : " inactive"),
-              text: `${run.snapshots} snapshots · ${run.mapped_ports} mapped ports`,
-            }),
-          ],
-        })
-      );
-    }
-
     clear(this.sidebarSnapshotsEl);
     const snapshots = this.cache.detail ? this.cache.detail.snapshots : [];
     for (const snap of snapshots) {
