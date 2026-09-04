@@ -61,3 +61,63 @@ def test_put_mapping_zamek_je_409(tmp_path):
     resp = client.put("/api/runs/mig02/mapping", json={"mappings": []})
     assert resp.status_code == 409
     assert "ma snimky" in resp.json()["detail"]
+
+
+def test_post_archive_presune_run_a_zmizi_ze_seznamu(tmp_path):
+    client = _client(tmp_path)
+    client.post("/api/runs", json={
+        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+    })
+    resp = client.post("/api/runs/mig02/archive")
+    assert resp.status_code == 200
+    archived = resp.json()["archived_to"]
+    assert archived.startswith("mig02-")
+    assert (tmp_path / ".archive" / archived / "run.yml").exists()
+    assert not (tmp_path / "mig02").exists()
+    assert client.get("/api/runs").json()["runs"] == []
+
+
+def test_post_archive_podruhe_je_404(tmp_path):
+    client = _client(tmp_path)
+    client.post("/api/runs", json={
+        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+    })
+    assert client.post("/api/runs/mig02/archive").status_code == 200
+    resp = client.post("/api/runs/mig02/archive")
+    assert resp.status_code == 404
+    assert "neexistuje" in resp.json()["detail"]
+
+
+def test_post_archive_nevalidni_jmeno_je_404(tmp_path):
+    client = _client(tmp_path)
+    assert client.post("/api/runs/Mig.02/archive").status_code == 404
+
+
+def test_post_archive_s_bezicim_capture_je_409(tmp_path):
+    from migration_validator.gui.captures import CaptureTask
+    app = create_app(run_root=tmp_path)
+    client = TestClient(app)
+    client.post("/api/runs", json={
+        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+    })
+    manager = app.state.captures
+    manager._tasks["fake"] = CaptureTask(
+        id="fake", run="mig02", device="MX1", port=None, phase="pre",
+    )
+    resp = client.post("/api/runs/mig02/archive")
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "run ma bezici capture"
+    assert (tmp_path / "mig02" / "run.yml").exists()
+
+
+def test_post_archive_vyzaduje_admina(tmp_path):
+    from migration_validator.gui.authz import Actor
+    app = create_app(run_root=tmp_path)
+    client = TestClient(app)
+    client.post("/api/runs", json={
+        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+    })
+    app.state.actor_provider = lambda request: Actor(role="operator")
+    resp = client.post("/api/runs/mig02/archive")
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje admin"

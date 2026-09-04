@@ -158,6 +158,16 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(error)) from error
         return _detail(run)
 
+    @app.post("/api/runs/{run}/archive")
+    def archive_run(run: str, actor: Actor = require(Permission.ADMIN)) -> dict:
+        if manager.busy_run(run):
+            raise HTTPException(status_code=409, detail="run ma bezici capture")
+        try:
+            target = api.archive_run(run, run_root=run_root)
+        except (ValueError, FileNotFoundError) as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        return {"archived_to": target.name}
+
     @app.get("/api/runs/{run}/evaluation")
     def run_evaluation(run: str, ports: str | None = None, actor: Actor = require(Permission.VIEW)) -> dict:
         store = _require_store(run)
