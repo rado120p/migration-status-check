@@ -9,7 +9,9 @@ from typing import Any
 import yaml
 
 RUN_SCHEMA_VERSION = 1
-VALID_ROLES = frozenset({"old", "new", "l2-switch"})
+RUN_KINDS = frozenset({"single", "migration"})
+DEFAULT_KIND = "migration"
+VALID_ROLES = frozenset({"old", "new", "l2-switch", "single"})
 
 
 def normalize_port(port: str) -> str:
@@ -56,6 +58,13 @@ class RunManifest:
     devices: dict[str, RunDevice] = field(default_factory=dict)
     interface_mapping: list[InterfaceMapping] = field(default_factory=list)
     captures: list[CaptureRecord] = field(default_factory=list)
+    # Druh runu: "migration" (old -> new s mappingem) nebo "single" (jeden box,
+    # pre/post kolem upgradu). Chybi-li v run.yml, je to migration.
+    kind: str = DEFAULT_KIND
+    # Jmeno profilu z profile store (spec 3); None = serverovy default.
+    profile: str | None = None
+    # Rezervovano pro bulk: N single runu se stejnou skupinou. Nikdo to zatim nepise.
+    group: str | None = None
 
     def node_for_host(self, host: str) -> str | None:
         for node, device in self.devices.items():
@@ -141,6 +150,30 @@ class RunManifest:
         return None
 
 
+def check_kind_devices(kind: str, devices: dict[str, RunDevice]) -> None:
+    """Strukturalni pravidla kind vs. role. Volane pri nacteni run.yml a pri
+    zakladani runu; jednostranna migrace (zatim jen old) projde - CLI ji
+    dopisuje postupne."""
+    if kind not in RUN_KINDS:
+        raise ValueError(f"neznamy kind '{kind}', ocekavano single nebo migration")
+    roles = [device.role for device in devices.values()]
+    if kind == "single":
+        if len(devices) != 1 or roles != ["single"]:
+            raise ValueError(
+                "run typu single ma prave jedno zarizeni role 'single', "
+                f"nalezeno {len(devices)} zarizeni s rolemi {sorted(roles)}"
+            )
+        return
+    if "single" in roles:
+        raise ValueError("run typu migration nesmi obsahovat zarizeni role 'single'")
+    for role in ("old", "new"):
+        count = roles.count(role)
+        if count > 1:
+            raise ValueError(
+                f"run typu migration podporuje jeden box role '{role}', nalezeno {count}"
+            )
+
+
 def _load_device(data: dict[str, Any]) -> RunDevice:
     return RunDevice(host=data["host"], platform=data["platform"], role=data["role"])
 
@@ -182,6 +215,13 @@ def load_manifest(path: Path) -> RunManifest:
             devices[node] = _load_device(data)
         except ValueError as exc:
             raise ValueError(f"{path}: zarizeni '{node}': {exc}") from exc
+
+    kind = raw.get("kind") or DEFAULT_KIND
+    try:
+        check_kind_devices(kind, devices)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from exc
+
     interface_mapping = [
         InterfaceMapping(
             old=_load_endpoint(entry["old"]), new=_load_endpoint(entry["new"])
@@ -191,7 +231,12 @@ def load_manifest(path: Path) -> RunManifest:
     captures = [_load_capture(entry) for entry in raw.get("captures") or []]
 
     return RunManifest(
-        devices=devices, interface_mapping=interface_mapping, captures=captures
+        devices=devices,
+        interface_mapping=interface_mapping,
+        captures=captures,
+        kind=kind,
+        profile=raw.get("profile"),
+        group=raw.get("group"),
     )
 
 
@@ -205,31 +250,36 @@ def _dump_endpoint(endpoint: MappingEndpoint) -> dict[str, Any]:
 def save_manifest(manifest: RunManifest, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {
+    data: dict[str, Any] = {
         "schema_version": RUN_SCHEMA_VERSION,
-        "devices": {
-            node: {
-                "host": device.host,
-                "platform": device.platform,
-                "role": device.role,
-            }
-            for node, device in manifest.devices.items()
-        },
-        "interface_mapping": [
-            {"old": _dump_endpoint(mapping.old), "new": _dump_endpoint(mapping.new)}
-            for mapping in manifest.interface_mapping
-        ],
-        "captures": [
-            {
-                "phase": record.phase,
-                "device": record.device,
-                "port": record.port if record.port is not None else "all",
-                "snapshot": record.snapshot,
-                "taken": record.taken,
-            }
-            for record in manifest.captures
-        ],
+        "kind": manifest.kind,
     }
+    if manifest.profile is not None:
+        data["profile"] = manifest.profile
+    if manifest.group is not None:
+        data["group"] = manifest.group
+    data["devices"] = {
+        node: {
+            "host": device.host,
+            "platform": device.platform,
+            "role": device.role,
+        }
+        for node, device in manifest.devices.items()
+    }
+    data["interface_mapping"] = [
+        {"old": _dump_endpoint(mapping.old), "new": _dump_endpoint(mapping.new)}
+        for mapping in manifest.interface_mapping
+    ]
+    data["captures"] = [
+        {
+            "phase": record.phase,
+            "device": record.device,
+            "port": record.port if record.port is not None else "all",
+            "snapshot": record.snapshot,
+            "taken": record.taken,
+        }
+        for record in manifest.captures
+    ]
 
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),

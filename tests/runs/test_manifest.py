@@ -4,10 +4,14 @@ import pytest
 
 from migration_validator.runs.manifest import (
     CaptureRecord,
+    DEFAULT_KIND,
     InterfaceMapping,
     MappingEndpoint,
+    RUN_KINDS,
     RunDevice,
     RunManifest,
+    VALID_ROLES,
+    check_kind_devices,
     load_manifest,
     normalize_port,
     save_manifest,
@@ -217,3 +221,157 @@ def test_record_capture_replaces_same_key():
     assert manifest.find_capture("pre", "MX1-POP1", "ge-0/0/0").snapshot == "b.json"
     assert manifest.find_capture("pre", "MX1-POP1", None).snapshot == "c.json"
     assert manifest.find_capture("post", "MX1-POP1", None) is None
+
+
+# -- kind / profile / group (GUI vlna 2026-09, spec 2) ----------------------
+
+
+def _single_manifest():
+    return RunManifest(
+        devices={
+            "PTX1-POP1": RunDevice(
+                host="172.20.20.5", platform="junos-evo", role="single"
+            )
+        },
+        kind="single",
+    )
+
+
+def test_run_kinds_and_roles_constants():
+    assert RUN_KINDS == {"single", "migration"}
+    assert DEFAULT_KIND == "migration"
+    assert "single" in VALID_ROLES
+
+
+def test_manifest_defaults_to_migration_without_profile_or_group():
+    manifest = _manifest()
+    assert manifest.kind == "migration"
+    assert manifest.profile is None
+    assert manifest.group is None
+
+
+def test_load_without_kind_is_migration(tmp_path):
+    path = tmp_path / "run.yml"
+    save_manifest(_manifest(), path)
+    text = path.read_text(encoding="utf-8").replace("kind: migration\n", "")
+    assert "kind" not in text
+    path.write_text(text, encoding="utf-8")
+    loaded = load_manifest(path)
+    assert loaded.kind == "migration"
+    assert loaded == _manifest()
+
+
+def test_roundtrip_single_with_profile_and_group(tmp_path):
+    manifest = _single_manifest()
+    manifest.profile = "core-only"
+    manifest.group = "batch-2026-09"
+    manifest.captures.append(CaptureRecord("pre", "PTX1-POP1", None, "a.json", "T1"))
+    path = tmp_path / "run.yml"
+    save_manifest(manifest, path)
+    text = path.read_text(encoding="utf-8")
+    assert "kind: single" in text
+    assert "profile: core-only" in text
+    assert "group: batch-2026-09" in text
+    loaded = load_manifest(path)
+    assert loaded == manifest
+    assert loaded.kind == "single"
+    assert loaded.devices["PTX1-POP1"].role == "single"
+
+
+def test_save_omits_profile_and_group_when_none(tmp_path):
+    path = tmp_path / "run.yml"
+    save_manifest(_manifest(), path)
+    text = path.read_text(encoding="utf-8")
+    assert "profile" not in text
+    assert "group" not in text
+    assert text.splitlines()[0] == "schema_version: 1"
+    assert text.splitlines()[1] == "kind: migration"
+
+
+def test_load_rejects_unknown_kind(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "kind: bulk\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: single}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="neznamy kind 'bulk', ocekavano single nebo migration") as excinfo:
+        load_manifest(path)
+    assert str(path) in str(excinfo.value)
+
+
+def test_load_rejects_single_with_two_devices(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "kind: single\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: single}\n"
+        "  Y: {host: 1.2.3.5, platform: junos, role: single}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="run typu single") as excinfo:
+        load_manifest(path)
+    assert str(path) in str(excinfo.value)
+
+
+def test_load_rejects_single_with_old_role(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "kind: single\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: old}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="run typu single"):
+        load_manifest(path)
+
+
+def test_load_rejects_migration_with_single_role(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: single}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="run typu migration"):
+        load_manifest(path)
+
+
+def test_load_rejects_migration_with_two_old(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: old}\n"
+        "  Y: {host: 1.2.3.5, platform: junos, role: old}\n"
+        "  Z: {host: 1.2.3.6, platform: junos-evo, role: new}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="jeden box role 'old', nalezeno 2"):
+        load_manifest(path)
+
+
+def test_load_accepts_one_sided_migration(tmp_path):
+    # CLI flow: run.yml sepsany rucne zatim jen se starym boxem musi jit nacist
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "devices:\n"
+        "  MX1-POP1: {host: 172.20.20.4, platform: junos, role: old}\n",
+        encoding="utf-8",
+    )
+    assert load_manifest(path).kind == "migration"
+
+
+def test_check_kind_devices_direct():
+    check_kind_devices("migration", _manifest().devices)
+    check_kind_devices("single", _single_manifest().devices)
+    with pytest.raises(ValueError, match="neznamy kind"):
+        check_kind_devices("bulk", {})
+    with pytest.raises(ValueError, match="run typu single"):
+        check_kind_devices("single", {})
