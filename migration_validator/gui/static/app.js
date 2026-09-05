@@ -27,6 +27,27 @@ function statusClass(status) {
   return (status || "").toLowerCase();
 }
 
+/* New run type cards. Bulk is a placeholder: rendered, never selectable. */
+const RUN_TYPES = [
+  {
+    kind: "single",
+    title: "Single device",
+    desc: "pre/post snapshots of one box: upgrade, reconfiguration, maintenance",
+  },
+  {
+    kind: "migration",
+    title: "Two devices",
+    desc: "old → new migration with port pairing",
+  },
+  {
+    kind: "bulk",
+    title: "Bulk",
+    desc: "many single-device runs from a device list",
+    disabled: true,
+    note: "bulk · pripravuje se",
+  },
+];
+
 /* Per-screen copy for the guide rail, keyed by this.state.view values. */
 const GUIDE_TEXT = {
   empty: {
@@ -66,7 +87,11 @@ const GUIDE_TEXT = {
   },
   newrun: {
     title: "New run",
-    body: ["Založí run adresář: pojmenuj run a vyplň obě zařízení. Mapování portů můžeš doplnit i později přes Edit mapping."],
+    body: [
+      "Vyber typ runu: Single device = pre/post snímky jednoho boxu (upgrade, rekonfigurace), Two devices = migrace old → new s párováním portů. Bulk se připravuje.",
+      "Pojmenuj run a vyplň zařízení. U Two devices můžeš mapování portů doplnit i později přes Edit mapping.",
+      "Profil zatím zůstává serverový default; výběr profilu přinese další vlna.",
+    ],
   },
   editmapping: {
     title: "Edit mapping",
@@ -2188,13 +2213,26 @@ class App {
     this.state.selectedSnapshot = null;
     this.state.newRunForm = {
       name: "",
+      kind: MigView.defaultRunKind(this.cache.runs),
       touched: false,
+      // The single-device sub-form edits `old` too, so switching kind in
+      // either direction keeps what was typed (spec §4).
       old: { node: "", host: "", platform: "junos" },
       new: { node: "", host: "", platform: "junos-evo" },
       mappings: [],
       submitting: false,
       submitError: null,
     };
+    this.render();
+  }
+
+  setNewRunKind(kind) {
+    const form = this.state.newRunForm;
+    if (!form || form.submitting) return;
+    const type = RUN_TYPES.find((t) => t.kind === kind);
+    if (!type || type.disabled) return;
+    form.kind = kind;
+    form.submitError = null;
     this.render();
   }
 
@@ -2214,18 +2252,26 @@ class App {
   async submitNewRun() {
     const form = this.state.newRunForm;
     form.touched = true;
+    const single = form.kind === "single";
     const nameErr = this.newRunNameError();
-    const dup = this.mappingDupErrors(form.mappings);
-    const devicesOk =
-      form.old.node.trim() &&
-      form.old.host.trim() &&
-      form.new.node.trim() &&
-      form.new.host.trim();
-    const mappingsOk = form.mappings.every((r) => r.old.trim() && r.new.trim());
+    const dup = single ? new Set() : this.mappingDupErrors(form.mappings);
+    const deviceOk = (d) => d.node.trim() && d.host.trim();
+    const devicesOk = single ? deviceOk(form.old) : deviceOk(form.old) && deviceOk(form.new);
+    const mappingsOk = single || form.mappings.every((r) => r.old.trim() && r.new.trim());
     if (nameErr || !devicesOk || dup.size || !mappingsOk) {
       this.render();
       return;
     }
+    const trimDevice = (d, role) => ({
+      node: d.node.trim(),
+      host: d.host.trim(),
+      platform: d.platform,
+      role,
+    });
+    const devices = single
+      ? [trimDevice(form.old, "single")]
+      : [trimDevice(form.old, "old"), trimDevice(form.new, "new")];
+    const mappings = single ? [] : form.mappings.map((r) => [r.old.trim(), r.new.trim()]);
     form.submitting = true;
     form.submitError = null;
     this.render();
@@ -2235,17 +2281,10 @@ class App {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim(),
-          old_device: {
-            node: form.old.node.trim(),
-            host: form.old.host.trim(),
-            platform: form.old.platform,
-          },
-          new_device: {
-            node: form.new.node.trim(),
-            host: form.new.host.trim(),
-            platform: form.new.platform,
-          },
-          mappings: form.mappings.map((r) => [r.old.trim(), r.new.trim()]),
+          kind: form.kind,
+          profile: null,
+          devices,
+          mappings,
         }),
       });
       if (res.status === 201) {
@@ -2271,10 +2310,45 @@ class App {
     this.render();
   }
 
+  buildRunTypeCards(form) {
+    const cards = el("div", { className: "type-cards", attrs: { role: "radiogroup" } });
+    for (const type of RUN_TYPES) {
+      const on = form.kind === type.kind;
+      const children = [
+        el("span", { className: "type-card-title", text: type.title }),
+        el("span", { className: "type-card-desc", text: type.desc }),
+      ];
+      if (type.note) children.push(el("span", { className: "type-card-note", text: type.note }));
+      const attrs = { type: "button", role: "radio", "aria-checked": on ? "true" : "false" };
+      if (type.disabled) attrs.disabled = "disabled";
+      cards.appendChild(
+        el("button", {
+          className: "type-card" + (on ? " on" : "") + (type.disabled ? " disabled" : ""),
+          attrs,
+          children,
+          onClick: type.disabled ? null : () => this.setNewRunKind(type.kind),
+        })
+      );
+    }
+    return cards;
+  }
+
+  buildProfilePicker() {
+    // Spec 3 fills this from the profile store; until then only the
+    // server default is offered and the control stays disabled.
+    const select = el("select", {
+      className: "form-select",
+      attrs: { disabled: "disabled" },
+      children: [el("option", { text: "(default)", attrs: { value: "" } })],
+    });
+    return this.buildCaptureField("Profile", select);
+  }
+
   renderNewRunForm() {
     clear(this.mainEl);
     const form = this.state.newRunForm;
     if (!form) return;
+    const single = form.kind === "single";
 
     this.mainEl.appendChild(
       el("div", {
@@ -2284,9 +2358,19 @@ class App {
     );
     this.mainEl.appendChild(el("h1", { className: "capture-h1", text: "New run" }));
 
+    this.mainEl.appendChild(
+      el("div", {
+        className: "form-card",
+        children: [
+          el("div", { className: "form-section-label", text: "Run type" }),
+          this.buildRunTypeCards(form),
+        ],
+      })
+    );
+
     const nameInput = el("input", {
       className: "form-input mono",
-      attrs: { type: "text", placeholder: "e.g. mig01" },
+      attrs: { type: "text", placeholder: single ? "e.g. upgrade-ptx1" : "e.g. mig01" },
     });
     nameInput.value = form.name;
     nameInput.addEventListener("input", (e) => {
@@ -2306,51 +2390,67 @@ class App {
       el("div", {
         className: "form-card",
         children: [
-          el("div", { className: "form-section-label", text: "Run name" }),
-          el("div", { className: "form-field", children: nameFieldChildren }),
+          el("div", { className: "form-section-label", text: "Run" }),
+          el("div", {
+            className: "name-profile-grid",
+            children: [
+              el("div", { className: "form-field", children: nameFieldChildren }),
+              this.buildProfilePicker(),
+            ],
+          }),
         ],
       })
     );
 
-    const devicesGrid = el("div", {
-      className: "devices-grid",
-      children: [
-        this.buildDeviceSubform("Old device", form.old, form.touched),
-        this.buildDeviceSubform("New device", form.new, form.touched),
-      ],
-    });
+    const devicesGrid = single
+      ? el("div", {
+          className: "devices-grid single",
+          children: [this.buildDeviceSubform("Device", form.old, form.touched)],
+        })
+      : el("div", {
+          className: "devices-grid",
+          children: [
+            this.buildDeviceSubform("Old device", form.old, form.touched),
+            this.buildDeviceSubform("New device", form.new, form.touched),
+          ],
+        });
     this.mainEl.appendChild(
       el("div", {
         className: "form-card",
-        children: [el("div", { className: "form-section-label", text: "Devices" }), devicesGrid],
+        children: [
+          el("div", { className: "form-section-label", text: single ? "Device" : "Devices" }),
+          devicesGrid,
+        ],
       })
     );
 
-    this.mainEl.appendChild(
-      this.buildMappingCard(form.mappings, {
-        editable: true,
-        touched: form.touched,
-        dupOld: this.mappingDupErrors(form.mappings),
-        onAdd: () => {
-          form.mappings.push({ old: "", new: "" });
-          this.render();
-        },
-        onRemove: (i) => {
-          form.mappings.splice(i, 1);
-          this.render();
-        },
-        onChangeOld: (i, v) => {
-          form.mappings[i].old = v;
-        },
-        onChangeNew: (i, v) => {
-          form.mappings[i].new = v;
-        },
-        onBlur: () => {
-          form.touched = true;
-          this.render();
-        },
-      })
-    );
+    if (!single) {
+      this.mainEl.appendChild(
+        this.buildMappingCard(form.mappings, {
+          editable: true,
+          touched: form.touched,
+          dupOld: this.mappingDupErrors(form.mappings),
+          onAdd: () => {
+            form.mappings.push({ old: "", new: "" });
+            this.render();
+          },
+          onRemove: (i) => {
+            form.mappings.splice(i, 1);
+            this.render();
+          },
+          onChangeOld: (i, v) => {
+            form.mappings[i].old = v;
+          },
+          onChangeNew: (i, v) => {
+            form.mappings[i].new = v;
+          },
+          onBlur: () => {
+            form.touched = true;
+            this.render();
+          },
+        })
+      );
+    }
 
     this.mainEl.appendChild(
       el("div", {
