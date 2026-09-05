@@ -1014,6 +1014,7 @@ class App {
     if (!editor || editor.name === null || editor.saving) return;
     editor.saving = true;
     editor.error = null;
+    editor.errorTarget = null;
     this.render();
     try {
       const res = await fetch(`/api/profiles/${encodeURIComponent(editor.name)}`, {
@@ -1031,9 +1032,13 @@ class App {
       } else {
         const body = await res.json().catch(() => ({}));
         editor.error = body.detail || `profil se nepodarilo ulozit (${res.status})`;
+        editor.errorTarget = res.status === 422
+          ? MigDiff.errorTarget(editor.error, this.cache.catalogue || { checks: [] })
+          : null;
       }
     } catch (err) {
       editor.error = String(err);
+      editor.errorTarget = null;
     }
     editor.saving = false;
     this.render();
