@@ -1090,8 +1090,11 @@ class App {
     if (!form.run || !form.device) return;
     if (this.activeCaptureGuardTask()) return;
     const isMapped = this.captureMappedRows().length > 0;
+    const isSingle = this.cache.captureDetail && this.cache.captureDetail.kind === "single";
     let port;
-    if (isMapped) {
+    if (isSingle) {
+      port = null;
+    } else if (isMapped) {
       port = form.port;
     } else {
       const raw = (form.portText || "").trim();
@@ -1937,6 +1940,9 @@ class App {
           )
         );
       }
+    } else if (detail.kind === "single") {
+      // run typu single je vzdy whole-box (bez port pole, port je null)
+      alreadyCaptured = device ? this.captureAlreadyCaptured(device, null, form.phase) : false;
     } else {
       const portInput = el("input", {
         className: "form-input mono",
