@@ -182,6 +182,7 @@ the same `new` port** — N:1 (LAG) mapping, several old ports migrating onto on
 
 ```yaml
 schema_version: 1
+kind: migration
 
 devices:
   MX1-POP1:  {host: 172.20.20.4, platform: junos,     role: old}
@@ -201,6 +202,13 @@ captures:                          # the application maintains this section
     snapshot: snapshot_pre_MX1-POP1_ge_0_0_0.json
     taken: "2026-08-06T09:12:03Z"
 ```
+
+`kind` is `migration` (the default when missing) or `single`. A migration run has one box of
+role `old` and one of role `new`. A `single` run has exactly one device of role `single` and no
+`interface_mapping`; its post (and rollback) snapshot is compared against the box's own pre
+snapshot (upgrade, in-place reconfiguration). Optional `profile: <name>` records which profile
+from `profiles/` the run uses (missing = server default); `group: <string>` is reserved for bulk
+creation of single runs and is not written by anything yet.
 
 Full flag tables, pairing rules and the `status` subcommand are in
 [reference.md, section 8](reference.md#8-run-management---run). Highlights of the

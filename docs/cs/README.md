@@ -204,6 +204,7 @@ migračního plánu a `captures` pak plní samotné běhy `capture`.
 
 ```yaml
 schema_version: 1
+kind: migration
 
 devices:
   MX1-POP1:  {host: 172.20.20.4, platform: junos,     role: old}
@@ -229,10 +230,14 @@ captures:                          # tuhle sekci si vede aplikace sama
     taken: "2026-08-06T09:12:03Z"
 ```
 
-`role` je `old` / `new` / `l2-switch`. Fáze 4 podporuje jeden box role `old` a jeden role
-`new` — víc boxů a `l2_switch` (EX mezi EVO a CPE) formát manifestu už nese, ale zapojí je až
-fáze 5. `interface_mapping` páruje **logické jednotky** (`ge-0/0/0`), stejně jako
-`mapping.yml` výš.
+`kind` je `migration` (výchozí, když chybí) nebo `single`. Migrační run má jeden box role
+`old` a jeden role `new`; `l2_switch` (EX mezi EVO a CPE) formát manifestu už nese, ale zapojí
+ho až fáze 5. Run typu `single` má právě jedno zařízení role `single` a žádný
+`interface_mapping` — post (i rollback) snímek se porovnává s vlastním pre snímkem boxu
+(upgrade, rekonfigurace na místě). Volitelné `profile: <jméno>` říká, který profil z
+`profiles/` run používá (chybí = serverový default); `group: <řetězec>` je rezervované pro
+hromadné zakládání single runů, zatím ho nic nezapisuje. `interface_mapping` páruje
+**logické jednotky** (`ge-0/0/0`), stejně jako `mapping.yml` výš.
 
 ### Sběr do runu (`capture --run`)
 
