@@ -868,6 +868,43 @@ class App {
     const catalogue = this.cache.catalogue || { checks: [] };
     editor.doc.checks = MigDiff.checksDocument(catalogue, editor.form);
     editor.errorTarget = null;
+    this.schedulePreview();
+    this.render();
+  }
+
+  // Preview is the exact text Save writes (spec §3): always from the
+  // server, never rendered client-side. Debounced so typing a tolerance
+  // does not fire a request per keystroke.
+  schedulePreview() {
+    const editor = this.state.profileEditor;
+    if (!editor || !editor.doc) return;
+    if (!editor.preview) editor.preview = { yaml: null, error: null, pending: false };
+    editor.preview.pending = true;
+    if (this.previewTimer) clearTimeout(this.previewTimer);
+    this.previewTimer = setTimeout(() => this.loadPreview(), 300);
+  }
+
+  async loadPreview() {
+    const editor = this.state.profileEditor;
+    if (!editor || !editor.doc || this.state.view !== "profiles") return;
+    const snapshot = JSON.stringify(editor.doc);
+    try {
+      const res = await fetch("/api/profiles/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: editor.doc }),
+      });
+      // A later edit may have replaced the document meanwhile - drop stale answers.
+      if (this.state.profileEditor !== editor || JSON.stringify(editor.doc) !== snapshot) return;
+      if (res.ok) {
+        editor.preview = { yaml: (await res.json()).yaml, error: null, pending: false };
+      } else {
+        const body = await res.json().catch(() => ({}));
+        editor.preview = { yaml: null, error: body.detail || `náhled se nepodařilo načíst (${res.status})`, pending: false };
+      }
+    } catch (err) {
+      editor.preview = { yaml: null, error: String(err), pending: false };
+    }
     this.render();
   }
 
@@ -875,11 +912,12 @@ class App {
     if (this.state.view === "profiles" && !this.leaveGuard()) return;
     this.state.view = "profiles";
     this.state.selectedSnapshot = null;
-    this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, errorTarget: null, loadError: null, form: null };
+    this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, errorTarget: null, loadError: null, form: null, preview: { yaml: null, error: null, pending: false } };
     this.render();
     await Promise.all([this.loadProfiles(), this.loadCatalogue()]);
     await this.loadEditorDocument();
     this.resetChecksForm(this.state.profileEditor);
+    this.schedulePreview();
     this.render();
   }
 
@@ -988,6 +1026,7 @@ class App {
         editor.doc = document;
         editor.saved = JSON.parse(JSON.stringify(document));
         this.resetChecksForm(editor);
+        this.schedulePreview();
         await this.loadProfiles();
       } else {
         const body = await res.json().catch(() => ({}));
@@ -1007,6 +1046,7 @@ class App {
     editor.error = null;
     editor.errorTarget = null;
     this.resetChecksForm(editor);
+    this.schedulePreview();
     this.render();
   }
 
@@ -2975,6 +3015,7 @@ class App {
     const section = editor.doc.profile || (editor.doc.profile = { collectors: null, service_types: null, ping_count: null });
     const set = (key, value) => {
       section[key] = value;
+      this.schedulePreview();
       this.render();
     };
 
@@ -3206,11 +3247,24 @@ class App {
   }
 
   buildChecksSection(editor, readonly) {
+    const catalogue = this.cache.catalogue || { checks: [] };
+    const count = editor.form ? MigDiff.overrideCount(catalogue, editor.form) : 0;
+    const preview = editor.preview || { yaml: null, error: null, pending: false };
+    const panelChildren = [
+      el("div", { className: "form-section-label", text: "YAML preview" }),
+      el("pre", { className: "yaml-preview mono" + (preview.pending ? " pending" : ""),
+        text: preview.yaml === null ? "" : (preview.yaml || "# prázdný profil - všechno default") }),
+    ];
+    if (preview.error) panelChildren.push(el("div", { className: "field-error", text: preview.error }));
+    panelChildren.push(el("div", { className: "override-count", text: `${count} overrides` }));
     return el("div", {
-      className: "form-card",
+      className: "checks-layout",
       children: [
-        el("div", { className: "form-section-label", text: "Checks" }),
-        this.buildChecksTable(editor, readonly),
+        el("div", { className: "form-card", children: [
+          el("div", { className: "form-section-label", text: "Checks" }),
+          this.buildChecksTable(editor, readonly),
+        ] }),
+        el("div", { className: "form-card yaml-panel", children: panelChildren }),
       ],
     });
   }
