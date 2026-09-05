@@ -3262,14 +3262,22 @@ class App {
     ];
     if (preview.error) panelChildren.push(el("div", { className: "field-error", text: preview.error }));
     panelChildren.push(el("div", { className: "override-count", text: `${count} overrides` }));
+    // Wrapper is the CSS container the @container rule measures: the
+    // layout stacks the YAML panel when the main column is narrow, not
+    // when the viewport is (sidebar + guide rail eat ~510px of it).
     return el("div", {
-      className: "checks-layout",
+      className: "checks-layout-container",
       children: [
-        el("div", { className: "form-card", children: [
-          el("div", { className: "form-section-label", text: "Checks" }),
-          this.buildChecksTable(editor, readonly),
-        ] }),
-        el("div", { className: "form-card yaml-panel", children: panelChildren }),
+        el("div", {
+          className: "checks-layout",
+          children: [
+            el("div", { className: "form-card", children: [
+              el("div", { className: "form-section-label", text: "Checks" }),
+              this.buildChecksTable(editor, readonly),
+            ] }),
+            el("div", { className: "form-card yaml-panel", children: panelChildren }),
+          ],
+        }),
       ],
     });
   }
