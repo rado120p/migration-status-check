@@ -1456,8 +1456,9 @@ def test_gui_subcommand_parsuje():
 def test_run_purge_bez_older_than_jen_vypise(tmp_path, capsys):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))
@@ -1478,8 +1479,9 @@ def test_run_purge_older_than_zaporny_je_chyba(tmp_path, capsys):
 def test_run_purge_dry_run_nemaze(tmp_path, capsys):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))
@@ -1494,8 +1496,9 @@ def test_run_purge_dry_run_nemaze(tmp_path, capsys):
 def test_run_purge_yes_smaze(tmp_path, capsys):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))
@@ -1510,8 +1513,9 @@ def test_run_purge_yes_smaze(tmp_path, capsys):
 def test_run_purge_bez_yes_eof_je_zruseno(tmp_path, capsys, monkeypatch):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))
@@ -1530,8 +1534,9 @@ def test_run_purge_bez_yes_eof_je_zruseno(tmp_path, capsys, monkeypatch):
 def test_run_purge_bez_yes_interaktivni_ano_smaze(tmp_path, capsys, monkeypatch):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))
@@ -1547,8 +1552,9 @@ def test_run_purge_bez_yes_interaktivni_ano_smaze(tmp_path, capsys, monkeypatch)
 def test_run_purge_bez_yes_interaktivni_ne_zachova(tmp_path, capsys, monkeypatch):
     from datetime import datetime, timezone
     from migration_validator import api
-    api.create_run("mig01", old_device={"node": "MX1", "host": "10.0.0.1", "platform": "junos"},
-                   new_device={"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"},
+    api.create_run("mig01", kind="migration",
+                   devices=[{"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"},
+                            {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}],
                    run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path,
                     now=datetime(2026, 8, 1, tzinfo=timezone.utc))

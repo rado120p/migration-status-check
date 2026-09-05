@@ -52,11 +52,11 @@ def test_list_runs_preskoci_teckovane_adresare(tmp_path):
     from migration_validator import api
     from migration_validator.gui.app import create_app
     from fastapi.testclient import TestClient
-    OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos"}
-    NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"}
-    api.create_run("mig01", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
+    NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
+    api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     api.archive_run("mig01", run_root=tmp_path)
-    api.create_run("mig02", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    api.create_run("mig02", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     client = TestClient(create_app(run_root=tmp_path))
     names = [r["name"] for r in client.get("/api/runs").json()["runs"]]
     assert names == ["mig02"]

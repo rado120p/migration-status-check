@@ -22,9 +22,11 @@ from migration_validator.models.inventory import Inventory, load_inventory
 from migration_validator.models.result import RunResult
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.runs.manifest import (
+    RUN_KINDS,
     MappingEndpoint,
     RunDevice,
     RunManifest,
+    check_kind_devices,
 )
 from migration_validator.runs.store import RunStore
 from migration_validator.scoping.mapping import Mapping
@@ -101,29 +103,38 @@ def list_checks() -> list[dict[str, Any]]:
 
 
 _RUN_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
-_DEVICE_KEYS = ("node", "host", "platform")
+_DEVICE_KEYS = ("node", "host", "platform", "role")
 
 
-def _run_device(data: dict[str, str], role: str) -> tuple[str, RunDevice]:
+def _run_device(data: dict[str, str]) -> tuple[str, RunDevice]:
+    label = data.get("node") or data.get("role") or "?"
     for key in _DEVICE_KEYS:
         if not data.get(key):
-            raise ValueError(f"zarizeni role '{role}': chybi '{key}'")
-    return data["node"], RunDevice(
-        host=data["host"], platform=data["platform"], role=role
-    )
+            raise ValueError(f"zarizeni '{label}': chybi '{key}'")
+    try:
+        device = RunDevice(host=data["host"], platform=data["platform"], role=data["role"])
+    except ValueError as exc:
+        raise ValueError(f"zarizeni '{data['node']}': {exc}") from exc
+    return data["node"], device
 
 
 def create_run(
     name: str,
     *,
-    old_device: dict[str, str],
-    new_device: dict[str, str],
+    kind: str,
+    devices: list[dict[str, str]],
     mappings: list[tuple[str, str]] | None = None,
+    profile: str | None = None,
     run_root: str | Path = Path("runs"),
 ) -> RunManifest:
     """Zalozi runs/<name>/run.yml - schopnost, kterou CLI nema (run.yml
-    se dosud psal rucne). Mapping je volitelny: bez nej vznika
-    sekvencni run s volnym capture formularem."""
+    se dosud psal rucne).
+
+    kind "single": prave jedno zarizeni role single, zadny mapping.
+    kind "migration": prave jeden old a jeden new; mapping je volitelny,
+    bez nej vznika sekvencni run s volnym capture formularem.
+    `profile` se overi proti profile store (spec 3); do te doby je kazda
+    nenulova hodnota chyba."""
     if not _RUN_NAME_RE.match(name):
         raise ValueError(
             f"nevalidni jmeno runu '{name}' - povolene znaky: a-z 0-9 _ -"
@@ -131,15 +142,38 @@ def create_run(
     store = RunStore(Path(run_root), name)
     if store.dir.exists():
         raise ValueError(f"run '{name}' uz existuje ({store.dir})")
+    if kind not in RUN_KINDS:
+        raise ValueError(f"neznamy kind '{kind}', ocekavano single nebo migration")
 
-    old_node, old = _run_device(old_device, "old")
-    new_node, new = _run_device(new_device, "new")
+    loaded: dict[str, RunDevice] = {}
+    for data in devices:
+        node, device = _run_device(data)
+        if node in loaded:
+            raise ValueError(f"zarizeni '{node}' je uvedeno dvakrat")
+        loaded[node] = device
+    check_kind_devices(kind, loaded)
 
-    manifest = RunManifest(devices={old_node: old, new_node: new})
-    for old_port, new_port in mappings or []:
-        manifest.add_mapping(
-            old=MappingEndpoint(node=old_node, port=old_port.strip()),
-            new=MappingEndpoint(node=new_node, port=new_port.strip()),
+    manifest = RunManifest(devices=loaded, kind=kind, profile=profile)
+    if kind == "single":
+        if mappings:
+            raise ValueError("run typu single nema interface mapping")
+    else:
+        roles = [device.role for device in loaded.values()]
+        if roles.count("old") != 1 or roles.count("new") != 1:
+            raise ValueError(
+                "run typu migration ma prave jedno zarizeni role 'old' a jedno role 'new'"
+            )
+        old_node = manifest.device_with_role("old")[0]
+        new_node = manifest.device_with_role("new")[0]
+        for old_port, new_port in mappings or []:
+            manifest.add_mapping(
+                old=MappingEndpoint(node=old_node, port=old_port.strip()),
+                new=MappingEndpoint(node=new_node, port=new_port.strip()),
+            )
+
+    if profile is not None:
+        raise ValueError(
+            f"profil '{profile}' neexistuje - profile store zatim neni k dispozici"
         )
 
     store.save(manifest)
@@ -262,6 +296,9 @@ def update_mapping(
         raise ValueError(f"run '{run}' neexistuje ({store.manifest_path})")
     manifest = store.load()
 
+    if manifest.kind == "single":
+        raise ValueError("run typu single nema interface mapping")
+
     old_role = manifest.device_with_role("old")
     new_role = manifest.device_with_role("new")
     if old_role is None or new_role is None:
@@ -277,7 +314,13 @@ def update_mapping(
                 f"{mapping.new.node}:{mapping.new.port} ma snimky, nelze odebrat"
             )
 
-    rebuilt = RunManifest(devices=manifest.devices, captures=manifest.captures)
+    rebuilt = RunManifest(
+        devices=manifest.devices,
+        captures=manifest.captures,
+        kind=manifest.kind,
+        profile=manifest.profile,
+        group=manifest.group,
+    )
     for old_port, new_port in mappings:
         rebuilt.add_mapping(
             old=MappingEndpoint(node=old_node, port=old_port.strip()),

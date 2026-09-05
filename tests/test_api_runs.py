@@ -5,15 +5,16 @@ import yaml
 
 from migration_validator import api
 
-OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos"}
-NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"}
+OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
+NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
+SINGLE = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "single"}
 
 
 def test_create_run_zapise_run_yml(tmp_path):
     manifest = api.create_run(
         "mig02",
-        old_device=OLD,
-        new_device=NEW,
+        kind="migration",
+        devices=[OLD, NEW],
         mappings=[("ge-0/0/1", "et-0/0/1")],
         run_root=tmp_path,
     )
@@ -29,7 +30,7 @@ def test_create_run_zapise_run_yml(tmp_path):
 
 
 def test_create_run_bez_mappingu_je_validni(tmp_path):
-    api.create_run("seq", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    api.create_run("seq", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     raw = yaml.safe_load((tmp_path / "seq" / "run.yml").read_text())
     assert raw["interface_mapping"] == []
 
@@ -37,7 +38,7 @@ def test_create_run_bez_mappingu_je_validni(tmp_path):
 def test_create_run_porty_zustavaji_syrove(tmp_path):
     # normalize_port je jen pro nazvy souboru, run.yml nese ge-0/0/2
     api.create_run(
-        "raw", old_device=OLD, new_device=NEW,
+        "raw", kind="migration", devices=[OLD, NEW],
         mappings=[("ge-0/0/2", "ae0")], run_root=tmp_path,
     )
     raw = yaml.safe_load((tmp_path / "raw" / "run.yml").read_text())
@@ -46,19 +47,19 @@ def test_create_run_porty_zustavaji_syrove(tmp_path):
 
 def test_create_run_nevalidni_jmeno(tmp_path):
     with pytest.raises(ValueError, match="jmeno"):
-        api.create_run("Mig 02!", old_device=OLD, new_device=NEW, run_root=tmp_path)
+        api.create_run("Mig 02!", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
 
 
 def test_create_run_existujici_adresar(tmp_path):
     (tmp_path / "mig02").mkdir()
     with pytest.raises(ValueError, match="existuje"):
-        api.create_run("mig02", old_device=OLD, new_device=NEW, run_root=tmp_path)
+        api.create_run("mig02", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
 
 
 def test_create_run_duplicitni_old_port(tmp_path):
     with pytest.raises(ValueError, match="sparovan"):
         api.create_run(
-            "dup", old_device=OLD, new_device=NEW,
+            "dup", kind="migration", devices=[OLD, NEW],
             mappings=[("ge-0/0/1", "et-0/0/1"), ("ge-0/0/1", "et-0/0/2")],
             run_root=tmp_path,
         )
@@ -66,7 +67,7 @@ def test_create_run_duplicitni_old_port(tmp_path):
 
 def test_create_run_n_na_1_lag_je_povoleny(tmp_path):
     api.create_run(
-        "lag", old_device=OLD, new_device=NEW,
+        "lag", kind="migration", devices=[OLD, NEW],
         mappings=[("ge-0/0/1", "ae0"), ("ge-0/0/2", "ae0")],
         run_root=tmp_path,
     )
@@ -75,10 +76,11 @@ def test_create_run_n_na_1_lag_je_povoleny(tmp_path):
 
 
 def test_create_run_chybejici_klic_zarizeni(tmp_path):
-    with pytest.raises(ValueError, match="host"):
+    with pytest.raises(ValueError, match="chybi 'host'"):
         api.create_run(
-            "bad", old_device={"node": "MX1", "platform": "junos"},
-            new_device=NEW, run_root=tmp_path,
+            "bad", kind="migration",
+            devices=[{"node": "MX1", "platform": "junos", "role": "old"}, NEW],
+            run_root=tmp_path,
         )
 
 
@@ -88,7 +90,7 @@ from migration_validator.runs.manifest import CaptureRecord, load_manifest
 def _run_se_snimkem(tmp_path):
     """Run se dvema pairingy, prvni ma pre snimek -> je zamceny."""
     api.create_run(
-        "edit", old_device=OLD, new_device=NEW,
+        "edit", kind="migration", devices=[OLD, NEW],
         mappings=[("ge-0/0/1", "et-0/0/1"), ("ge-0/0/2", "et-0/0/2")],
         run_root=tmp_path,
     )
@@ -154,7 +156,7 @@ def test_update_mapping_zachova_captures(tmp_path):
 def test_update_mapping_all_snimek_zamyka_pairingy_zarizeni(tmp_path):
     """Celozarizeni snimek (port=None) zamyka vsechny pairingy sveho boxu."""
     api.create_run(
-        "alldev", old_device=OLD, new_device=NEW,
+        "alldev", kind="migration", devices=[OLD, NEW],
         mappings=[("ge-0/0/1", "et-0/0/1")],
         run_root=tmp_path,
     )
@@ -177,7 +179,7 @@ from pathlib import Path
 
 
 def test_archive_run_presune_adresar_do_archive(tmp_path):
-    api.create_run("mig02", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    api.create_run("mig02", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     (tmp_path / "mig02" / "snapshot_pre_MX1_all.json").write_text("{}")
     when = datetime(2026, 9, 4, 10, 30, 0, tzinfo=timezone.utc)
     target = api.archive_run("mig02", run_root=tmp_path, now=when)
@@ -198,7 +200,7 @@ def test_archive_run_nevalidni_jmeno(tmp_path):
 
 
 def _archived(tmp_path, name, when):
-    api.create_run(name, old_device=OLD, new_device=NEW, run_root=tmp_path)
+    api.create_run(name, kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     (tmp_path / name / "snapshot_pre_MX1_all.json").write_text("{}")
     return api.archive_run(name, run_root=tmp_path, now=when)
 
@@ -227,3 +229,98 @@ def test_purge_archive_maze_jen_starsi(tmp_path):
     assert [e.name for e in removed] == ["mig01"]
     assert not (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
     assert keep.exists()
+
+
+# -- kind single / migration ---------------------------------------------------
+
+
+def test_create_run_zapise_kind_migration(tmp_path):
+    api.create_run("mig02", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
+    raw = yaml.safe_load((tmp_path / "mig02" / "run.yml").read_text())
+    assert raw["kind"] == "migration"
+    assert "profile" not in raw
+
+
+def test_create_run_single(tmp_path):
+    manifest = api.create_run("upg01", kind="single", devices=[SINGLE], run_root=tmp_path)
+    assert manifest.kind == "single"
+    assert manifest.devices["PTX1"].role == "single"
+    raw = yaml.safe_load((tmp_path / "upg01" / "run.yml").read_text())
+    assert raw["kind"] == "single"
+    assert raw["interface_mapping"] == []
+
+
+def test_create_run_neznamy_kind(tmp_path):
+    with pytest.raises(ValueError, match="neznamy kind 'bulk'"):
+        api.create_run("b", kind="bulk", devices=[SINGLE], run_root=tmp_path)
+    assert not (tmp_path / "b").exists()
+
+
+def test_create_run_single_se_dvema_zarizenimi(tmp_path):
+    with pytest.raises(ValueError, match="run typu single"):
+        api.create_run(
+            "s", kind="single",
+            devices=[SINGLE, {**OLD, "role": "single"}], run_root=tmp_path,
+        )
+    assert not (tmp_path / "s").exists()
+
+
+def test_create_run_single_se_spatnou_roli(tmp_path):
+    with pytest.raises(ValueError, match="run typu single"):
+        api.create_run("s", kind="single", devices=[OLD], run_root=tmp_path)
+
+
+def test_create_run_single_s_mappingem(tmp_path):
+    with pytest.raises(ValueError, match="run typu single nema interface mapping"):
+        api.create_run(
+            "s", kind="single", devices=[SINGLE],
+            mappings=[("ge-0/0/1", "et-0/0/1")], run_root=tmp_path,
+        )
+
+
+def test_create_run_migration_bez_new(tmp_path):
+    with pytest.raises(ValueError, match="jedno zarizeni role 'old' a jedno role 'new'"):
+        api.create_run("m", kind="migration", devices=[OLD], run_root=tmp_path)
+
+
+def test_create_run_migration_se_single_roli(tmp_path):
+    with pytest.raises(ValueError, match="role 'single'"):
+        api.create_run("m", kind="migration", devices=[OLD, SINGLE], run_root=tmp_path)
+
+
+def test_create_run_duplicitni_node(tmp_path):
+    with pytest.raises(ValueError, match="uvedeno dvakrat"):
+        api.create_run(
+            "d", kind="migration",
+            devices=[OLD, {**NEW, "node": "MX1"}], run_root=tmp_path,
+        )
+
+
+def test_create_run_profil_zatim_nelze(tmp_path):
+    # do spec 3 (profile store) je kazdy nenulovy profil chyba
+    with pytest.raises(ValueError, match="profil 'core-only' neexistuje"):
+        api.create_run(
+            "p", kind="single", devices=[SINGLE], profile="core-only", run_root=tmp_path,
+        )
+    assert not (tmp_path / "p").exists()
+
+
+def test_update_mapping_odmitne_single(tmp_path):
+    api.create_run("upg01", kind="single", devices=[SINGLE], run_root=tmp_path)
+    with pytest.raises(ValueError, match="run typu single nema interface mapping"):
+        api.update_mapping("upg01", [("ge-0/0/1", "et-0/0/1")], run_root=tmp_path)
+
+
+def test_update_mapping_zachova_kind_profile_group(tmp_path):
+    from migration_validator.runs.manifest import load_manifest, save_manifest
+    api.create_run("mig02", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
+    path = tmp_path / "mig02" / "run.yml"
+    manifest = load_manifest(path)
+    manifest.profile = "core-only"
+    manifest.group = "g1"
+    save_manifest(manifest, path)
+    api.update_mapping("mig02", [("ge-0/0/1", "et-0/0/1")], run_root=tmp_path)
+    reloaded = load_manifest(path)
+    assert reloaded.kind == "migration"
+    assert reloaded.profile == "core-only"
+    assert reloaded.group == "g1"

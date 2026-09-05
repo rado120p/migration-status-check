@@ -7,12 +7,12 @@ from migration_validator import api
 from migration_validator.gui.app import create_app
 from migration_validator.gui.authz import Actor
 
-OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos"}
-NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo"}
+OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
+NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
 
 
 def _client(tmp_path, role=None):
-    api.create_run("mig01", old_device=OLD, new_device=NEW, run_root=tmp_path)
+    api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
     app = create_app(run_root=tmp_path)
     if role is not None:
         app.state.actor_provider = lambda request: Actor(role=role)
