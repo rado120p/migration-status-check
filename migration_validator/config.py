@@ -24,6 +24,69 @@ DEFAULTS: dict[str, dict[str, Any]] = {
 PING_COUNT_DEFAULT = 5
 
 
+def option_type(value: Any) -> str:
+    """Typ volby checku odvozeny z Python typu defaultu - sdileny katalogem
+    (GUI formular) a validaci profilu."""
+    # bool je podtrida int - musi byt prvni.
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, (int, float)):
+        return "number"
+    return "string"
+
+
+def option_matches_type(value: Any, expected: str) -> bool:
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, str)
+
+
+_SEVERITY_VALUES = sorted(severity.value for severity in Severity)
+
+
+def _validate_checks(raw: Any, path: str | Path) -> dict[str, dict[str, Any]]:
+    """Sekce checks: volby z DEFAULTS musi mit typ defaultu, severity je
+    z enumu, enabled je bool. Neznamy check ani neznama volba chybou
+    nejsou - GUI je ukaze jako 'neznamy check' / read-only k odebrani a
+    soubor tak jde vycistit; loader ho nesmi odmitnout."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{path}: sekce checks: ocekavan mapping, nalezeno {type(raw).__name__}"
+        )
+    checks: dict[str, dict[str, Any]] = {}
+    for check_id, overrides in raw.items():
+        if overrides is None:
+            overrides = {}
+        if not isinstance(overrides, dict):
+            raise ValueError(
+                f"{path}: check '{check_id}': ocekavan mapping, "
+                f"nalezeno {type(overrides).__name__}"
+            )
+        defaults = DEFAULTS.get(check_id, {})
+        for key, value in overrides.items():
+            if key == "severity":
+                if not isinstance(value, str) or value not in _SEVERITY_VALUES:
+                    raise ValueError(
+                        f"{path}: check '{check_id}': severity '{value}' neni platna "
+                        f"(zname: {', '.join(_SEVERITY_VALUES)})"
+                    )
+                continue
+            expected = "boolean" if key == "enabled" else (
+                option_type(defaults[key]) if key in defaults else None
+            )
+            if expected is not None and not option_matches_type(value, expected):
+                raise ValueError(
+                    f"{path}: check '{check_id}': volba '{key}' ocekava {expected}, "
+                    f"nalezeno {type(value).__name__}"
+                )
+        checks[check_id] = dict(overrides)
+    return checks
+
+
 @dataclass
 class CheckConfig:
     raw: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -125,7 +188,7 @@ def load_profile(path: str | Path) -> Profile:
     ping_count = section.get("ping_count")
 
     return Profile(
-        checks=CheckConfig(raw.get("checks") or {}),
+        checks=CheckConfig(_validate_checks(raw.get("checks"), path)),
         collectors=collectors,
         service_types=service_types,
         ping_count=int(ping_count) if ping_count is not None else None,

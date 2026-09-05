@@ -10,20 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator import api
-from migration_validator.config import DEFAULTS, PING_COUNT_DEFAULT
+from migration_validator.config import DEFAULTS, PING_COUNT_DEFAULT, option_type
 from migration_validator.scoping.builder import MIGRATED_SERVICE_TYPES
 
 _PLATFORMS = ("junos", "junos-evo")
 _NOT_OPTIONS = frozenset({"severity", "enabled"})
-
-
-def option_type(value: Any) -> str:
-    # bool je podtrida int - musi byt prvni.
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, (int, float)):
-        return "number"
-    return "string"
 
 
 def _check_entry(described: dict[str, Any]) -> dict[str, Any]:
