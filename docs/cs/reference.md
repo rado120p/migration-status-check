@@ -781,9 +781,10 @@ to znamená jednu `post` evaluaci na každý mapping, ne jednu na celou `post` c
 | `post` (na krok) | 1. `pre` starého portu daného kroku, spárovaného přes `interface_mapping` 2. `pre` celého starého boxu (capture bez portu) | vyhodnotí se bez baseline, stderr: `chybi pre snimek stareho boxu` |
 | `rollback` | `pre` **téhož** zařízení a **téhož** portu | vyhodnotí se bez baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
 
-V runu typu `single` je baseline `post`/`rollback` snímku vždy vlastní `pre` snímek **téhož**
-zařízení (nejdřív přesný port, pak celý box) — fallback na celoboxový `pre` starého zařízení
-se tu neuplatní, protože `single` run nemá `interface_mapping` ani zařízení role `old`.
+V runu typu `single` je baseline `post` snímku vždy vlastní `pre` snímek **téhož** zařízení
+(nejdřív přesný port, pak celý box); `rollback` se řídí obecným pravidlem z řádku výše
+(stejné zařízení a stejný port) — fallback na celoboxový `pre` starého zařízení se tu
+neuplatní.
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
 baseline">{krok} ===`, kde `{krok}` je `[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]`,

@@ -792,9 +792,9 @@ migration step, not one for the whole `post` capture.
 | `post` (per step) | 1. `pre` of the step's old port, paired via `interface_mapping` 2. `pre` of the whole old box (portless capture) | evaluated without a baseline, stderr: `chybi pre snimek stareho boxu` |
 | `rollback` | `pre` of the **same** device and **same** port | evaluated without a baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
 
-In a `single`-kind run, the baseline for a `post`/`rollback` snapshot is always the **same**
-device's own `pre` snapshot (exact port first, then whole-box) — the whole-box-old fallback
-does not apply here, since a `single` run has no `interface_mapping` and no `old`-role device.
+In a `single`-kind run, the baseline for a `post` snapshot is always the **same** device's own
+`pre` snapshot (exact port first, then whole-box); `rollback` follows the general rule in the
+row above (same device and same port) — the whole-box-old fallback does not apply here.
 
 Each evaluation prints the header `=== <subject snapshot> vs <baseline snapshot|"bez
 baseline">{step} ===`, where `{step}` is `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]`
