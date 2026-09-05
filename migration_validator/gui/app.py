@@ -366,6 +366,15 @@ def create_app(
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    @app.middleware("http")
+    async def static_no_cache(request, call_next):
+        # Bez build stepu se app.js/style.css meni na miste; prohlizec musi
+        # pri kazdem reloadu revalidovat (ETag drzi prenos levny).
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
