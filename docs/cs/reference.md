@@ -794,6 +794,20 @@ Soubor nese jen nastavené klíče (`null`, prázdné seznamy v sekci `profile` 
 `checks` se vynechají); `POST /preview` vrací byte-shodný text. Profil, na který ukazuje
 aspoň jeden run, nejde smazat (`409 profil pouziva <n> runu`).
 
+Sekce `checks:` se při načtení validuje: volba známého checku musí mít typ svého defaultu
+(`tolerance_percent: "-40"` → `422 profiles/<jméno>.yml: check 'interface_traffic': volba
+'tolerance_percent' ocekava number, nalezeno str`), `severity` je jen `critical` nebo
+`advisory`, `enabled` je bool. Neznámý check ani neznámá volba chybou **nejsou** — editor je
+ukáže ve skupině `neznamy check` / read-only s odkazem `remove`, aby šel soubor vyčistit bez
+textového editoru. Soubor je kanonický: hodnota rovná defaultu (včetně `enabled: true`,
+u `traffic_ceased` `enabled: false`) se nikdy nezapíše, check bez odchylky v souboru není.
+
+Editor profilu v GUI ukazuje tabulku všech registrovaných checků (skupiny podle prvního
+collectoru z `requires`, `general` pro checky bez collectoru) s defaulty šedě kurzívou; řádek
+s odchylkou je žlutý s `●` a odkazem `reset`. Vpravo je živý náhled YAML z `POST /preview`
+(300 ms po poslední změně) a počet `<n> overrides`. Uložený profil se projeví při dalším
+načtení přehledu runu — už zachycené snapshoty se nemění.
+
 ### Pravidla párování `evaluate --run`
 
 Jedna evaluace na **každý migrační krok** (`pre` capture je jen zdroj baseline a evaluaci sama

@@ -805,6 +805,21 @@ empty lists in the `profile` section and an empty `checks` section are omitted);
 /preview` returns the byte-identical text. A profile referenced by at least one run cannot be
 deleted (`409 profil pouziva <n> runu`).
 
+The `checks:` section is validated on load: an option of a known check must have the type of
+its default (`tolerance_percent: "-40"` → `422 profiles/<name>.yml: check 'interface_traffic':
+volba 'tolerance_percent' ocekava number, nalezeno str`), `severity` is only `critical` or
+`advisory`, `enabled` is a bool. An unknown check or an unknown option is **not** an error —
+the editor lists it under `neznamy check` / read-only with a `remove` link so the file can be
+cleaned without a text editor. The file is canonical: a value equal to its default (including
+`enabled: true`, or `enabled: false` for `traffic_ceased`) is never written, and a check with
+no deviation is absent.
+
+The GUI profile editor shows a table of every registered check (grouped by the first
+collector in `requires`, `general` for checks without one) with defaults in grey italics; a
+row that deviates is yellow with `●` and a `reset` link. To the right a live YAML preview
+comes from `POST /preview` (300 ms after the last edit) with `<n> overrides` below. A saved
+profile takes effect on the next load of a run overview — captured snapshots never change.
+
 ### Pairing rules
 
 One evaluation per **migration step** (a `pre` capture is only a baseline source and forms no
