@@ -59,6 +59,8 @@ def _devices_dict(manifest: RunManifest) -> dict:
     }
 
 
+# "created" je mtime souboru run.yml (posune se pri kazdem capture nebo
+# uprave mappingu) - GUI ho pouziva jen k predvyberu typu noveho runu.
 def _created_iso(path: Path) -> str:
     stamp = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     return stamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
