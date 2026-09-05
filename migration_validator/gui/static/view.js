@@ -193,6 +193,44 @@ function defaultRunKind(runs) {
   return newest.kind === "single" ? "single" : "migration";
 }
 
+/* Profile document helpers (spec 3). The normalisation mirrors
+   profiles/store.py document_to_yaml: null = "not set" and is dropped, an
+   override dict with nothing left is dropped, an empty section is dropped. */
+function emptyProfileDocument() {
+  return { profile: { collectors: null, service_types: null, ping_count: null }, checks: {} };
+}
+
+function normalizeProfileDocument(doc) {
+  const out = {};
+  const section = {};
+  for (const [key, value] of Object.entries((doc && doc.profile) || {})) {
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    section[key] = value;
+  }
+  if (Object.keys(section).length) out.profile = section;
+  const checks = {};
+  for (const [id, overrides] of Object.entries((doc && doc.checks) || {})) {
+    const kept = {};
+    for (const [key, value] of Object.entries(overrides || {})) {
+      if (value !== null && value !== undefined) kept[key] = value;
+    }
+    if (Object.keys(kept).length) checks[id] = kept;
+  }
+  if (Object.keys(checks).length) out.checks = checks;
+  return out;
+}
+
+function profileDirty(doc, savedDoc) {
+  return JSON.stringify(normalizeProfileDocument(doc)) !== JSON.stringify(normalizeProfileDocument(savedDoc));
+}
+
+function toggleListValue(list, value) {
+  const current = Array.isArray(list) ? list : [];
+  const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+  return next.length ? next : null;
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -205,6 +243,10 @@ const MigView = {
   unassignedRow,
   filterRuns,
   defaultRunKind,
+  emptyProfileDocument,
+  normalizeProfileDocument,
+  profileDirty,
+  toggleListValue,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;

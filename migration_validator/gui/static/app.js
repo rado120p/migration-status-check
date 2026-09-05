@@ -75,9 +75,13 @@ const GUIDE_TEXT = {
       "Nezařazeno = objekt bez služby — zkontroluj, jestli nechybí v inventáři.",
     ],
   },
-  checks: {
-    title: "Checks",
-    body: ["Registr všech checků aktivního profilu: mód, severita a typy služeb, na které se check vztahuje."],
+  profiles: {
+    title: "Profiles",
+    body: [
+      "Profil říká, co run měří: které collectory se sbírají, které typy služeb se hodnotí, kolik pingů se posílá a jak jsou nastavené checky. Ukládá se do profiles/<název>.yml, run si ho vybírá při založení.",
+      "(default) je serverový profil z --profile (nebo vestavěný prázdný) a v GUI se needituje — Duplicate z něj udělá pojmenovanou kopii.",
+      "Prázdný výběr collectorů nebo typů služeb znamená všechny. Profil, který používá nějaký run, nejde smazat.",
+    ],
   },
   capture: {
     title: "New capture",
@@ -91,7 +95,7 @@ const GUIDE_TEXT = {
     body: [
       "Vyber typ runu: Single device = pre/post snímky jednoho boxu (upgrade, rekonfigurace), Two devices = migrace old → new s párováním portů. Bulk se připravuje.",
       "Pojmenuj run a vyplň zařízení. U Two devices můžeš mapování portů doplnit i později přes Edit mapping.",
-      "Profil zatím zůstává serverový default; výběr profilu přinese další vlna.",
+      "Profil vyber ze seznamu profiles/ — (default) je serverový profil. Profily spravuješ tlačítkem Profiles v horní liště.",
     ],
   },
   editmapping: {
@@ -132,6 +136,8 @@ class App {
       meta: null,
       metaError: null,
       captureProgress: null,
+      profiles: null,
+      profilesError: null,
     };
     this.capturePollTimer = null;
 
@@ -147,9 +153,9 @@ class App {
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
     this.guideEl = document.getElementById("guide");
-    this.btnChecksEl = document.getElementById("btn-checks");
+    this.btnProfilesEl = document.getElementById("btn-profiles");
 
-    this.btnChecksEl.addEventListener("click", () => this.goToChecks());
+    this.btnProfilesEl.addEventListener("click", () => this.goToProfiles(null));
     document.getElementById("btn-new-capture").addEventListener("click", () => {
       this.openCaptureForm();
     });
@@ -798,10 +804,10 @@ class App {
     }
   }
 
-  async goToChecks() {
-    this.state.view = "checks";
+  async goToProfiles(name) {
+    this.state.view = "profiles";
     this.state.selectedSnapshot = null;
-    await this.loadChecks();
+    await Promise.all([this.loadProfiles(), this.loadChecks()]);
     this.render();
   }
 
@@ -889,6 +895,25 @@ class App {
       }
     } catch (err) {
       this.cache.metaError = { status: 0, detail: String(err) };
+    }
+  }
+
+  async loadProfiles() {
+    this.cache.profiles = null;
+    this.cache.profilesError = null;
+    try {
+      const res = await fetch("/api/profiles");
+      if (res.ok) {
+        this.cache.profiles = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.profilesError = {
+          status: res.status,
+          detail: body.detail || `profily se nepodarilo nacist (${res.status})`,
+        };
+      }
+    } catch (err) {
+      this.cache.profilesError = { status: 0, detail: String(err) };
     }
   }
 
@@ -1171,7 +1196,7 @@ class App {
     this.renderSidebar();
     this.renderRunCombo();
     this.renderModal();
-    this.btnChecksEl.classList.toggle("btn-toggle-active", this.state.view === "checks");
+    this.btnProfilesEl.classList.toggle("btn-toggle-active", this.state.view === "profiles");
     const noRuns = this.cache.runs.length === 0;
     this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
     document.getElementById("btn-new-capture").disabled = noRuns;
@@ -1182,8 +1207,8 @@ class App {
       case "snapshot":
         this.renderSnapshotView();
         break;
-      case "checks":
-        this.renderChecksView();
+      case "profiles":
+        this.renderProfilesView();
         break;
       case "capture":
         this.renderCaptureForm();
@@ -1365,6 +1390,15 @@ class App {
         }),
       ],
     });
+    const profileName = detail.profile || null;
+    header.appendChild(
+      el("button", {
+        className: "profile-link mono",
+        text: profileName ? `profile: ${profileName}` : "profile: (default)",
+        attrs: { type: "button", title: "otevřít profil" },
+        onClick: () => this.goToProfiles(profileName),
+      })
+    );
     if (single && singleDevice) {
       const label = PLATFORM_LABEL[singleDevice.platform] || singleDevice.platform;
       header.appendChild(el("span", { className: "kind-tag", text: "single device" }));
@@ -2247,12 +2281,13 @@ class App {
 
   // -- new run (screen 5) --------------------------------------------------
 
-  openNewRunForm() {
+  async openNewRunForm() {
     this.state.view = "newrun";
     this.state.selectedSnapshot = null;
     this.state.newRunForm = {
       name: "",
       kind: MigView.defaultRunKind(this.cache.runs),
+      profile: "",
       touched: false,
       // The single-device sub-form edits `old` too, so switching kind in
       // either direction keeps what was typed (spec §4).
@@ -2262,6 +2297,8 @@ class App {
       submitting: false,
       submitError: null,
     };
+    this.render();
+    await this.loadProfiles();
     this.render();
   }
 
@@ -2321,7 +2358,7 @@ class App {
         body: JSON.stringify({
           name: form.name.trim(),
           kind: form.kind,
-          profile: null,
+          profile: form.profile || null,
           devices,
           mappings,
         }),
@@ -2372,15 +2409,22 @@ class App {
     return cards;
   }
 
-  buildProfilePicker() {
-    // Spec 3 fills this from the profile store; until then only the
-    // server default is offered and the control stays disabled.
-    const select = el("select", {
-      className: "form-select",
-      attrs: { disabled: "disabled" },
-      children: [el("option", { text: "(default)", attrs: { value: "" } })],
+  buildProfilePicker(form) {
+    const store = this.cache.profiles;
+    const select = el("select", { className: "form-select mono" });
+    select.appendChild(el("option", { text: "(default)", attrs: { value: "" } }));
+    for (const entry of (store && store.profiles) || []) {
+      select.appendChild(el("option", { text: entry.name, attrs: { value: entry.name } }));
+    }
+    select.value = form.profile || "";
+    select.addEventListener("change", (e) => {
+      form.profile = e.target.value;
     });
-    return this.buildCaptureField("Profile", select);
+    const children = [select];
+    if (this.cache.profilesError) {
+      children.push(el("div", { className: "field-error", text: this.cache.profilesError.detail }));
+    }
+    return this.buildCaptureField("Profile", el("div", { children }));
   }
 
   renderNewRunForm() {
@@ -2434,7 +2478,7 @@ class App {
             className: "name-profile-grid",
             children: [
               el("div", { className: "form-field", children: nameFieldChildren }),
-              this.buildProfilePicker(),
+              this.buildProfilePicker(form),
             ],
           }),
         ],
@@ -2645,9 +2689,9 @@ class App {
 
   // -- registered checks (screen 3) --------------------------------------
 
-  renderChecksView() {
+  renderProfilesView() {
     clear(this.mainEl);
-    this.mainEl.appendChild(this.buildBreadcrumb("registered checks", false));
+    this.mainEl.appendChild(this.buildBreadcrumb("profiles", false));
 
     if (!this.cache.checks) {
       if (this.cache.checksError) {

@@ -256,3 +256,38 @@ test("defaultRunKind: unknown kind on newest run -> migration", () => {
   const runs = [{ name: "x", kind: "bulk", created: "2026-09-05T08:00:00Z" }];
   assert.strictEqual(MigView.defaultRunKind(runs), "migration");
 });
+
+test("emptyProfileDocument: full shape with nulls", () => {
+  assert.deepStrictEqual(MigView.emptyProfileDocument(), {
+    profile: { collectors: null, service_types: null, ping_count: null },
+    checks: {},
+  });
+});
+
+test("normalizeProfileDocument: drops nulls, empty overrides, empty sections", () => {
+  const doc = {
+    profile: { collectors: ["bgp"], service_types: null, ping_count: null },
+    checks: { a: { x: 1, y: null }, b: { z: null }, c: {} },
+  };
+  assert.deepStrictEqual(MigView.normalizeProfileDocument(doc), {
+    profile: { collectors: ["bgp"] },
+    checks: { a: { x: 1 } },
+  });
+  assert.deepStrictEqual(MigView.normalizeProfileDocument(MigView.emptyProfileDocument()), {});
+  assert.deepStrictEqual(MigView.normalizeProfileDocument({ profile: { collectors: [] } }), {});
+});
+
+test("profileDirty: equal after normalisation is clean", () => {
+  const a = { profile: { collectors: null, ping_count: 5 }, checks: {} };
+  const b = { profile: { ping_count: 5 }, checks: { x: {} } };
+  assert.strictEqual(MigView.profileDirty(a, b), false);
+  assert.strictEqual(MigView.profileDirty(a, { profile: { ping_count: 3 }, checks: {} }), true);
+  assert.strictEqual(MigView.profileDirty({ profile: { collectors: ["a", "b"] } }, { profile: { collectors: ["b", "a"] } }), true);
+});
+
+test("toggleListValue: add, remove, null when empty", () => {
+  assert.deepStrictEqual(MigView.toggleListValue(null, "bgp"), ["bgp"]);
+  assert.deepStrictEqual(MigView.toggleListValue(["bgp"], "arp"), ["bgp", "arp"]);
+  assert.deepStrictEqual(MigView.toggleListValue(["bgp", "arp"], "bgp"), ["arp"]);
+  assert.strictEqual(MigView.toggleListValue(["bgp"], "bgp"), null);
+});
