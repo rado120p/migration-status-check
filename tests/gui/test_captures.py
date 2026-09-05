@@ -161,6 +161,22 @@ def test_route_capture_nevalidni_settings_je_503(client, tmp_path, monkeypatch):
     assert "MIG_TEST_NENASTAVENA" in response.json()["detail"]
 
 
+def test_route_capture_chybejici_profil_je_422(client, tmp_path):
+    from migration_validator.runs.store import RunStore
+
+    store = RunStore(tmp_path, "mig01")
+    manifest = store.load()
+    manifest.profile = "neni"
+    store.save(manifest)
+
+    response = client.post(
+        "/api/captures",
+        json={"run": "mig01", "device": "MX1", "port": None, "phase": "pre"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("profil 'neni' neexistuje")
+
+
 def test_busy_run_vidi_jen_bezici_task_daneho_runu():
     manager = CaptureManager()
     gate = threading.Event()

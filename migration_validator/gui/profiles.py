@@ -51,7 +51,10 @@ def profile_usage(run_root: Path) -> dict[str, int]:
         manifest_path = entry / "run.yml"
         if not manifest_path.is_file():
             continue
-        raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            continue
         name = raw.get("profile") if isinstance(raw, dict) else None
         if name:
             counts[str(name)] = counts.get(str(name), 0) + 1

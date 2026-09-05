@@ -71,5 +71,7 @@ def test_profile_usage_pocita_manifesty(tmp_path):
         "profile: core-only\n", encoding="utf-8"
     )
     (tmp_path / "e").mkdir()  # bez run.yml
+    (tmp_path / "f").mkdir()
+    (tmp_path / "f" / "run.yml").write_text("profile: [unclosed\n", encoding="utf-8")
     assert profile_usage(tmp_path) == {"core-only": 2, "jiny": 1}
     assert profile_usage(tmp_path / "neexistuje") == {}
