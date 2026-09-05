@@ -80,6 +80,8 @@ const GUIDE_TEXT = {
     body: [
       "Profil říká, co run měří: které collectory se sbírají, které typy služeb se hodnotí, kolik pingů se posílá a jak jsou nastavené checky. Ukládá se do profiles/<název>.yml, run si ho vybírá při založení.",
       "(default) je serverový profil z --profile (nebo vestavěný prázdný) a v GUI se needituje — Duplicate z něj udělá pojmenovanou kopii.",
+      "Tabulka checků ukazuje všechny registrované checky s defaulty (šedě kurzívou). Vypnutí, jiná severity nebo změněná tolerance udělá z řádku override (žlutě, ●); reset ho vrátí na default. Do souboru se zapíše jen to, co se od defaultu liší — náhled YAML vpravo je přesně to, co Save uloží.",
+      "Prázdné číselné pole znamená default. Hodnoty se nekontrolují za psaní — chybu vrátí Save a ukáže ji u řádku.",
       "Prázdný výběr collectorů nebo typů služeb znamená všechny. Profil, který používá nějaký run, nejde smazat.",
     ],
   },
@@ -130,8 +132,6 @@ class App {
       evaluationError: null,
       snapshotEval: null,
       snapshotEvalError: null,
-      checks: null,
-      checksError: null,
       captureDetail: null,
       captureDetailError: null,
       meta: null,
@@ -854,14 +854,32 @@ class App {
     return window.confirm("Profil má neuložené změny. Zahodit je?");
   }
 
+  // editor.form is the table's state (effective value of every catalogue
+  // check); editor.doc.checks is what gets saved. Rebuild the form whenever
+  // the document is replaced, and rebuild the document after every edit.
+  resetChecksForm(editor) {
+    const catalogue = this.cache.catalogue || { checks: [] };
+    editor.form = editor.doc ? MigDiff.checksForm(catalogue, editor.doc.checks || {}) : null;
+  }
+
+  applyChecksForm() {
+    const editor = this.state.profileEditor;
+    if (!editor || !editor.doc || !editor.form) return;
+    const catalogue = this.cache.catalogue || { checks: [] };
+    editor.doc.checks = MigDiff.checksDocument(catalogue, editor.form);
+    editor.errorTarget = null;
+    this.render();
+  }
+
   async goToProfiles(name) {
     if (this.state.view === "profiles" && !this.leaveGuard()) return;
     this.state.view = "profiles";
     this.state.selectedSnapshot = null;
-    this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, loadError: null };
+    this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, errorTarget: null, loadError: null, form: null };
     this.render();
-    await Promise.all([this.loadProfiles(), this.loadCatalogue(), this.loadChecks()]);
+    await Promise.all([this.loadProfiles(), this.loadCatalogue()]);
     await this.loadEditorDocument();
+    this.resetChecksForm(this.state.profileEditor);
     this.render();
   }
 
@@ -873,6 +891,7 @@ class App {
       const doc = (store && store.default_document) || MigView.emptyProfileDocument();
       editor.doc = JSON.parse(JSON.stringify(doc));
       editor.saved = JSON.parse(JSON.stringify(doc));
+      this.resetChecksForm(editor);
       return;
     }
     try {
@@ -885,6 +904,7 @@ class App {
       const { document } = await res.json();
       editor.doc = document;
       editor.saved = JSON.parse(JSON.stringify(document));
+      this.resetChecksForm(editor);
     } catch (err) {
       editor.loadError = String(err);
     }
@@ -967,6 +987,7 @@ class App {
         const { document } = await res.json();
         editor.doc = document;
         editor.saved = JSON.parse(JSON.stringify(document));
+        this.resetChecksForm(editor);
         await this.loadProfiles();
       } else {
         const body = await res.json().catch(() => ({}));
@@ -984,26 +1005,9 @@ class App {
     if (!editor || !editor.saved) return;
     editor.doc = JSON.parse(JSON.stringify(editor.saved));
     editor.error = null;
+    editor.errorTarget = null;
+    this.resetChecksForm(editor);
     this.render();
-  }
-
-  async loadChecks() {
-    this.cache.checks = null;
-    this.cache.checksError = null;
-    try {
-      const res = await fetch("/api/checks");
-      if (res.ok) {
-        this.cache.checks = await res.json();
-      } else {
-        const body = await res.json().catch(() => ({}));
-        this.cache.checksError = {
-          status: res.status,
-          detail: body.detail || `checks se nepodarilo nacist (${res.status})`,
-        };
-      }
-    } catch (err) {
-      this.cache.checksError = { status: 0, detail: String(err) };
-    }
   }
 
   backToRun() {
@@ -3060,63 +3064,153 @@ class App {
     });
   }
 
-  // Registered checks, read-only. Spec 4 replaces this block with the
-  // editable checks table; until then it is the old registry listing.
-  buildChecksRegistry() {
-    if (!this.cache.checks) {
-      if (this.cache.checksError) {
-        return el("div", { className: "notice notice-warn", text: this.cache.checksError.detail });
-      }
-      return el("div");
+  // -- checks table (spec 4) ---------------------------------------------
+
+  buildChecksTable(editor, readonly) {
+    const catalogue = this.cache.catalogue;
+    if (!catalogue) {
+      return el("div", { className: "notice notice-warn", text: this.cache.catalogueError || "katalog checků se načítá…" });
     }
-    const checks = this.cache.checks.checks || [];
-    const table = el("div", { className: "checks-registry-table" });
+    const form = editor.form;
+    const target = editor.errorTarget;
+    const table = el("div", { className: "checks-table" });
     table.appendChild(
       el("div", {
-        className: "checks-registry-header-row",
+        className: "checks-table-header",
         children: [
-          el("span", { text: "ID" }),
-          el("span", { text: "Mode" }),
+          el("span", { text: "" }),
+          el("span", { text: "Check" }),
           el("span", { text: "Severity" }),
-          el("span", { text: "Service types" }),
-          el("span", { className: "col-enabled", text: "Enabled" }),
+          el("span", { text: "Options" }),
+          el("span", { text: "" }),
         ],
       })
     );
-    for (const check of checks) {
-      const severity = (check.default_severity || "").toLowerCase();
-      const enabled = check.enabled === undefined ? true : !!check.enabled;
-      const types = check.service_types ? check.service_types.join(", ") : "all";
-      table.appendChild(
-        el("div", {
-          className: "checks-registry-row" + (enabled ? "" : " disabled"),
-          children: [
-            el("span", { className: "reg-id", text: check.id }),
-            el("span", { className: "reg-mode", text: check.mode }),
-            el("span", {
-              className: "reg-severity " + severity,
-              text: (check.default_severity || "").toUpperCase(),
-            }),
-            el("span", { className: "reg-types", text: types }),
-            el("span", {
-              className: "reg-enabled " + (enabled ? "yes" : "off"),
-              text: enabled ? "yes" : "off",
-            }),
-          ],
-        })
-      );
+    for (const group of MigDiff.groupChecks(catalogue)) {
+      table.appendChild(el("div", { className: "checks-group mono", text: group.group }));
+      for (const entry of group.checks) {
+        table.appendChild(this.buildCheckRow(entry, form.checks[entry.id], readonly,
+          target && target.checkId === entry.id ? target : null, editor.error));
+      }
     }
+    const unknownIds = Object.keys(form.unknown);
+    if (unknownIds.length) {
+      table.appendChild(el("div", { className: "checks-group mono unknown", text: "neznamy check" }));
+      for (const id of unknownIds) table.appendChild(this.buildUnknownCheckRow(id, form.unknown[id], readonly));
+    }
+    return table;
+  }
+
+  buildCheckRow(entry, row, readonly, errorTarget, errorText) {
+    const override = MigDiff.isOverride(entry, row);
+    const toggle = el("input", { attrs: { type: "checkbox", title: row.enabled ? "check běží" : "check vypnutý" } });
+    toggle.checked = row.enabled;
+    if (readonly) toggle.setAttribute("disabled", "disabled");
+    toggle.addEventListener("change", (e) => { row.enabled = e.target.checked; this.applyChecksForm(); });
+
+    const severity = el("select", { className: "form-select mono severity-select" });
+    for (const value of MigDiff.SEVERITIES) severity.appendChild(el("option", { text: value, attrs: { value } }));
+    severity.value = row.severity;
+    severity.classList.toggle("is-default", row.severity === entry.default_severity);
+    if (readonly) severity.setAttribute("disabled", "disabled");
+    severity.addEventListener("change", (e) => { row.severity = e.target.value; this.applyChecksForm(); });
+
+    const options = el("div", { className: "check-options" });
+    const optionKeys = Object.keys(entry.options || {});
+    if (!optionKeys.length && !Object.keys(row.extra).length) {
+      options.appendChild(el("span", { className: "check-no-options", text: "bez voleb" }));
+    }
+    for (const key of optionKeys) {
+      options.appendChild(this.buildOptionField(entry, row, key, readonly, errorTarget && errorTarget.key === key));
+    }
+    for (const [key, value] of Object.entries(row.extra)) {
+      const field = el("div", { className: "check-option unknown", children: [
+        el("label", { className: "option-label mono", text: key }),
+        el("span", { className: "option-value mono", text: JSON.stringify(value) }),
+      ] });
+      if (!readonly) {
+        field.appendChild(el("button", { className: "link-btn", text: "remove", attrs: { type: "button" },
+          onClick: () => { delete row.extra[key]; this.applyChecksForm(); } }));
+      }
+      options.appendChild(field);
+    }
+
+    const reset = el("button", { className: "link-btn", text: "reset", attrs: { type: "button", title: "vrátit enable, severity i volby na default" },
+      onClick: () => { Object.assign(row, MigDiff.defaultRow(entry)); this.applyChecksForm(); } });
+    if (readonly || !override) reset.setAttribute("disabled", "disabled");
+
+    const idCell = el("div", { className: "check-id-cell", children: [
+      el("span", { className: "check-id mono", text: entry.id }),
+      override ? el("span", { className: "override-dot", text: " ●", attrs: { title: "liší se od defaultu" } }) : null,
+      el("div", { className: "check-title", text: entry.title }),
+    ] });
+    const rowEl = el("div", {
+      className: "checks-row" + (override ? " override" : "") + (row.enabled ? "" : " disabled"),
+      children: [toggle, idCell, severity, options, reset],
+    });
+    if (errorTarget) {
+      rowEl.classList.add("has-error");
+      rowEl.appendChild(el("div", { className: "field-error row-error", text: errorText }));
+    }
+    return rowEl;
+  }
+
+  buildOptionField(entry, row, key, readonly, hasError) {
+    const spec = entry.options[key];
+    const value = row.options[key];
+    const isDefault = value === "" || value === null || value === undefined
+      || (spec.type === "number" ? Number(value) === Number(spec.default) : value === spec.default);
+    let input;
+    if (spec.type === "boolean") {
+      input = el("input", { attrs: { type: "checkbox" } });
+      input.checked = !!value;
+      input.addEventListener("change", (e) => { row.options[key] = e.target.checked; this.applyChecksForm(); });
+    } else {
+      // No min/max: the loader validates on save (spec §4).
+      input = el("input", { className: "form-input mono option-input", attrs: { type: "number", step: "any", placeholder: String(spec.default) } });
+      input.value = value === "" || value === null || value === undefined ? "" : String(value);
+      input.addEventListener("change", (e) => {
+        const raw = e.target.value.trim();
+        row.options[key] = raw === "" ? "" : Number(raw);
+        this.applyChecksForm();
+      });
+    }
+    input.classList.toggle("is-default", isDefault);
+    if (hasError) input.classList.add("input-error");
+    if (readonly) input.setAttribute("disabled", "disabled");
+    const children = [el("label", { className: "option-label mono", text: key }), input];
+    const hint = MigDiff.OPTION_HINTS[key];
+    if (hint) children.push(el("div", { className: "option-hint", text: `${hint} (default ${spec.default})` }));
+    return el("div", { className: "check-option" + (isDefault ? " is-default" : ""), children });
+  }
+
+  buildUnknownCheckRow(id, overrides, readonly) {
+    const remove = el("button", { className: "link-btn", text: "remove", attrs: { type: "button", title: "odebrat ze souboru" },
+      onClick: () => { delete this.state.profileEditor.form.unknown[id]; this.applyChecksForm(); } });
+    if (readonly) remove.setAttribute("disabled", "disabled");
+    return el("div", {
+      className: "checks-row override unknown",
+      children: [
+        el("span", { text: "" }),
+        el("div", { className: "check-id-cell", children: [
+          el("span", { className: "check-id mono", text: id }),
+          el("div", { className: "check-title", text: "check už není v registru" }),
+        ] }),
+        el("span", { text: "" }),
+        el("div", { className: "check-options", children: [
+          el("span", { className: "option-value mono", text: JSON.stringify(overrides) }),
+        ] }),
+        remove,
+      ],
+    });
+  }
+
+  buildChecksSection(editor, readonly) {
     return el("div", {
       className: "form-card",
       children: [
-        el("div", {
-          className: "run-header",
-          children: [
-            el("h1", { text: "Registered checks" }),
-            el("span", { className: "subtitle", text: `${checks.length} checks` }),
-          ],
-        }),
-        table,
+        el("div", { className: "form-section-label", text: "Checks" }),
+        this.buildChecksTable(editor, readonly),
       ],
     });
   }
@@ -3156,7 +3250,8 @@ class App {
 
     const readonly = editor.name === null;
     this.mainEl.appendChild(this.buildProfileSectionForm(editor, readonly));
-    this.mainEl.appendChild(this.buildChecksRegistry());
+    if (!editor.form) this.resetChecksForm(editor);
+    this.mainEl.appendChild(this.buildChecksSection(editor, readonly));
 
     const footerChildren = [];
     if (editor.error) footerChildren.push(el("div", { className: "field-error", text: editor.error }));

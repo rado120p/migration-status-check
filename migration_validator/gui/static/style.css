@@ -553,19 +553,24 @@ a:hover { color: #0e3fa9; }
 
 .meta-bar .value { font-family: 'IBM Plex Mono', monospace; color: #111827; }
 
-/* Registered checks table (screen 3) */
-.checks-registry-table {
+/* Checks table (profile editor, spec 4) */
+.checks-table {
   background: #fff;
   border: 1px solid #e2e5ea;
   border-radius: 8px;
   overflow: hidden;
 }
 
-.checks-registry-header-row {
+.checks-table-header,
+.checks-row {
   display: grid;
-  grid-template-columns: 220px 110px 110px 1fr 90px;
+  grid-template-columns: 28px 240px 120px 1fr 56px;
   gap: 0 12px;
-  padding: 10px 18px;
+  padding: 10px 16px;
+  align-items: start;
+}
+
+.checks-table-header {
   background: #f9fafb;
   border-bottom: 1px solid #e2e5ea;
   font: 600 11px 'IBM Plex Sans', sans-serif;
@@ -574,36 +579,50 @@ a:hover { color: #0e3fa9; }
   text-transform: uppercase;
 }
 
-.checks-registry-header-row .col-enabled { text-align: right; }
-
-.checks-registry-row {
-  display: grid;
-  grid-template-columns: 220px 110px 110px 1fr 90px;
-  gap: 0 12px;
-  padding: 11px 18px;
-  border-bottom: 1px solid #f1f3f6;
-  align-items: center;
-  font-size: 12.5px;
-}
-
-.checks-registry-row.disabled { opacity: 0.55; }
-
-.checks-registry-row .reg-id { font-family: 'IBM Plex Mono', monospace; color: #111827; }
-.checks-registry-row .reg-mode { font-family: 'IBM Plex Mono', monospace; color: #6b7280; }
-.checks-registry-row .reg-severity {
-  font-weight: 600;
+.checks-group {
+  padding: 6px 16px;
+  background: #f3f4f6;
+  border-top: 1px solid #e2e5ea;
+  border-bottom: 1px solid #e2e5ea;
   font-size: 11.5px;
-  text-transform: uppercase;
+  color: #4b5563;
 }
-.checks-registry-row .reg-severity.critical { color: #b91c1c; }
-.checks-registry-row .reg-severity.advisory { color: #b45309; }
-.checks-registry-row .reg-types { color: #4b5563; }
-.checks-registry-row .reg-enabled {
-  text-align: right;
-  font-weight: 600;
+.checks-group.unknown { color: #b91c1c; }
+
+.checks-row { border-bottom: 1px solid #f1f3f6; font-size: 12.5px; }
+.checks-row.override { background: #fefce8; }
+.checks-row.disabled .check-id-cell,
+.checks-row.disabled .check-options { opacity: 0.55; }
+.checks-row.has-error { background: #fef2f2; }
+.checks-row .row-error { grid-column: 2 / -1; }
+
+.check-id { color: #111827; }
+.override-dot { color: #ca8a04; }
+.check-title { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+
+.severity-select.is-default { color: #9ca3af; font-style: italic; }
+
+.check-options { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.check-option { display: flex; flex-direction: column; gap: 2px; }
+.check-option .option-label { font-size: 11.5px; color: #4b5563; }
+.check-option .option-input { width: 110px; }
+.check-option .option-input.is-default { color: #9ca3af; font-style: italic; }
+.check-option .option-input.input-error { border-color: #b91c1c; }
+.check-option .option-hint { font-size: 11px; color: #9ca3af; max-width: 260px; }
+.check-option.unknown .option-value { color: #6b7280; }
+.check-no-options { color: #9ca3af; font-style: italic; }
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
-.checks-registry-row .reg-enabled.yes { color: #059669; }
-.checks-registry-row .reg-enabled.off { color: #9ca3af; }
+.link-btn:hover { text-decoration: underline; }
+.link-btn:disabled { color: #d1d5db; cursor: default; text-decoration: none; }
 
 /* New capture form (screen 4) */
 .capture-h1 { margin: 0; font-size: 20px; font-weight: 700; color: #111827; }
