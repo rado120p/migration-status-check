@@ -780,6 +780,29 @@ Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
 | `--run-root` | `runs` | root of the run directories |
 | `--ports` | — | comma-separated port filter for `--run` mode; on any mapped step (1:1 included, not just N:1/LAG), filters by the step's **old** port, not the new port; unmapped/whole-box evaluations are filtered by the snapshot's own port |
 
+### Profiles (`profiles/`, GUI)
+
+Next to `runs/` lives `profiles/<name>.yml` — one file per profile, the same format as
+`--profile` (`profile:` and `checks:` sections). Names match `^[a-z0-9_-]+$`. A run picks its
+profile when it is created (`profile:` in `run.yml`); without one the **server default**
+applies — the file given to `mig-validate gui --profile`, or the built-in empty profile,
+shown in the GUI as `(default)`. A run whose profile no longer exists is not evaluated:
+`422 profil '<name>' neexistuje (runs/<run>/run.yml)`, no silent fallback.
+
+| `gui` flag | default | note |
+|---|---|---|
+| `--profiles-root` | `profiles` | directory of named profiles |
+| `--profile` | — | server default profile (runs with `profile: null`), as in the CLI |
+
+API (`/api/profiles`): `GET` list with `used_by` (how many `run.yml` reference the profile)
+and `default_document`, `GET /catalogue` (collectors, service types, `ping_count_default`,
+checks with defaults for the form), `GET/PUT/DELETE /{name}`, `POST` (`{"name","document"}`),
+`POST /preview` (`{"document"}` → `{"yaml"}`). Writes need the `admin` role. Saving validates
+through `load_profile` on a temporary file and only then renames it over the target; the
+loader's error comes back unchanged as `422`. The file carries only the keys that are set
+(`null` and an empty `checks` section are omitted); `POST /preview` returns the byte-identical
+text. A profile referenced by at least one run cannot be deleted (`409 profil pouziva <n> runu`).
+
 ### Pairing rules
 
 One evaluation per **migration step** (a `pre` capture is only a baseline source and forms no

@@ -257,6 +257,11 @@ mig-validate run purge --older-than 30       # delete entries older than 30 days
 mig-validate run purge --older-than 30 --yes # no prompt
 ```
 
+Profiles are managed in the GUI under *Profiles*: named files `profiles/<name>.yml` are
+created, duplicated and deleted in the editor, and the `profile:` section (collectors,
+service types, ping count) has a form that shows the defaults. A run picks its profile in
+*New run*; `(default)` is the server profile from `--profile` and is read-only in the GUI.
+
 Restore = move the directory back into `runs/` and rename it to the original name.
 
 ---

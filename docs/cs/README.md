@@ -387,6 +387,11 @@ mig-validate run purge --older-than 30       # smaže starší než 30 dní, pt�
 mig-validate run purge --older-than 30 --yes # bez dotazu
 ```
 
+Profily spravuje GUI tlačítkem *Profiles*: pojmenované soubory `profiles/<jméno>.yml` se
+zakládají, duplikují a mažou v editoru, sekce `profile:` (collectory, typy služeb, ping
+count) má formulář s viditelnými defaulty. Run si profil vybírá v *New run*; `(default)` je
+serverový profil z `--profile` a v GUI se needituje.
+
 Obnova = ruční přesun adresáře zpět do `runs/` a přejmenování na původní název.
 
 ---
