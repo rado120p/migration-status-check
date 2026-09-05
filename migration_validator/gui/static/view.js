@@ -181,6 +181,18 @@ function filterRuns(runs, query) {
   });
 }
 
+/* Kind preselected on the New run form: the kind of the most recently
+   created run (ISO UTC strings compare lexicographically), else migration. */
+function defaultRunKind(runs) {
+  let newest = null;
+  for (const run of runs || []) {
+    if (!run || typeof run.created !== "string") continue;
+    if (newest === null || run.created > newest.created) newest = run;
+  }
+  if (newest === null) return "migration";
+  return newest.kind === "single" ? "single" : "migration";
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -192,6 +204,7 @@ const MigView = {
   UNASSIGNED_TITLES,
   unassignedRow,
   filterRuns,
+  defaultRunKind,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;

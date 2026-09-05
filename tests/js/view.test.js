@@ -235,3 +235,24 @@ test("filterRuns: tolerates runs without devices", () => {
   const out = MigView.filterRuns([{ name: "bare" }], "bare");
   assert.strictEqual(out.length, 1);
 });
+
+test("defaultRunKind: empty or no created -> migration", () => {
+  assert.strictEqual(MigView.defaultRunKind([]), "migration");
+  assert.strictEqual(MigView.defaultRunKind(null), "migration");
+  assert.strictEqual(MigView.defaultRunKind([{ name: "a", kind: "single" }]), "migration");
+});
+
+test("defaultRunKind: kind of the most recently created run", () => {
+  const runs = [
+    { name: "old", kind: "migration", created: "2026-09-01T10:00:00Z" },
+    { name: "new", kind: "single", created: "2026-09-05T08:00:00Z" },
+    { name: "mid", kind: "migration", created: "2026-09-03T08:00:00Z" },
+  ];
+  assert.strictEqual(MigView.defaultRunKind(runs), "single");
+  assert.strictEqual(MigView.defaultRunKind(runs.slice(0, 1)), "migration");
+});
+
+test("defaultRunKind: unknown kind on newest run -> migration", () => {
+  const runs = [{ name: "x", kind: "bulk", created: "2026-09-05T08:00:00Z" }];
+  assert.strictEqual(MigView.defaultRunKind(runs), "migration");
+});
