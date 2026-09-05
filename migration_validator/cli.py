@@ -488,7 +488,9 @@ def _cmd_gui(args: argparse.Namespace) -> int:
         ) from error
     from migration_validator.gui.app import create_app
 
-    app = create_app(run_root=args.run_root, profile_path=args.profile)
+    app = create_app(
+        run_root=args.run_root, profile_path=args.profile, profiles_root=args.profiles_root
+    )
     uvicorn.run(app, host=args.host, port=args.gui_port)
     return EXIT_OK
 
@@ -692,6 +694,10 @@ def build_parser() -> argparse.ArgumentParser:
     gui.add_argument("--port", dest="gui_port", type=int, default=8321)
     gui.add_argument(
         "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    gui.add_argument(
+        "--profiles-root", type=Path, default=Path("profiles"),
+        help="adresar pojmenovanych profilu (profiles/<name>.yml)",
     )
     gui.add_argument(
         "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"

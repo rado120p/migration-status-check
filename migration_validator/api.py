@@ -21,6 +21,7 @@ from migration_validator.engine import evaluate_snapshots
 from migration_validator.models.inventory import Inventory, load_inventory
 from migration_validator.models.result import RunResult
 from migration_validator.models.snapshot import Snapshot
+from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import (
     RUN_KINDS,
     MappingEndpoint,
@@ -126,6 +127,7 @@ def create_run(
     mappings: list[tuple[str, str]] | None = None,
     profile: str | None = None,
     run_root: str | Path = Path("runs"),
+    profiles_root: str | Path = Path("profiles"),
 ) -> RunManifest:
     """Zalozi runs/<name>/run.yml - schopnost, kterou CLI nema (run.yml
     se dosud psal rucne).
@@ -133,8 +135,8 @@ def create_run(
     kind "single": prave jedno zarizeni role single, zadny mapping.
     kind "migration": prave jeden old a jeden new; mapping je volitelny,
     bez nej vznika sekvencni run s volnym capture formularem.
-    `profile` se overi proti profile store (spec 3); do te doby je kazda
-    nenulova hodnota chyba."""
+    `profile` je jmeno z profile store (profiles/<name>.yml); None =
+    serverovy default. Neexistujici profil je chyba, run se nezalozi."""
     if not _RUN_NAME_RE.match(name):
         raise ValueError(
             f"nevalidni jmeno runu '{name}' - povolene znaky: a-z 0-9 _ -"
@@ -172,9 +174,9 @@ def create_run(
             )
 
     if profile is not None:
-        raise ValueError(
-            f"profil '{profile}' neexistuje - profile store zatim neni k dispozici"
-        )
+        profiles = ProfileStore(Path(profiles_root))
+        if not profiles.exists(profile):  # ValueError pri nevalidnim jmenu
+            raise ValueError(f"profil '{profile}' neexistuje ({profiles.path(profile)})")
 
     store.save(manifest)
     return manifest

@@ -1447,10 +1447,14 @@ def test_capture_sitovy_port_se_nepropise_do_ssh_portu():
 
 
 def test_gui_subcommand_parsuje():
+    from pathlib import Path
     from migration_validator.cli import build_parser
     args = build_parser().parse_args(["gui", "--port", "9999"])
     assert args.gui_port == 9999
     assert args.host == "127.0.0.1"
+    assert args.profiles_root == Path("profiles")
+    args = build_parser().parse_args(["gui", "--profiles-root", "/tmp/p"])
+    assert args.profiles_root == Path("/tmp/p")
 
 
 def test_run_purge_bez_older_than_jen_vypise(tmp_path, capsys):

@@ -192,3 +192,25 @@ def test_post_runs_vyzaduje_operate(tmp_path):
     assert resp.status_code == 403
     assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje operate"
     assert not (tmp_path / "mig02").exists()
+
+
+def test_post_runs_s_profilem_ze_store(tmp_path):
+    from migration_validator.profiles.store import ProfileStore, empty_document
+    ProfileStore(tmp_path / "profiles").save("core-only", empty_document())
+    client = TestClient(create_app(run_root=tmp_path / "runs", profiles_root=tmp_path / "profiles"))
+    resp = client.post("/api/runs", json={
+        "name": "upg01", "kind": "single", "profile": "core-only",
+        "devices": [SINGLE], "mappings": [],
+    })
+    assert resp.status_code == 201
+    assert resp.json()["profile"] == "core-only"
+
+
+def test_post_runs_s_neznamym_profilem_je_409(tmp_path):
+    client = TestClient(create_app(run_root=tmp_path / "runs", profiles_root=tmp_path / "profiles"))
+    resp = client.post("/api/runs", json={
+        "name": "upg01", "kind": "single", "profile": "neni",
+        "devices": [SINGLE], "mappings": [],
+    })
+    assert resp.status_code == 409
+    assert resp.json()["detail"].startswith("profil 'neni' neexistuje")

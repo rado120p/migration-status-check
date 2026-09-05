@@ -19,6 +19,7 @@ from migration_validator.gui.authz import Actor, Permission, anonymous_admin, re
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.models.snapshot import load_snapshot
+from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.orchestrate import capture_into_run
 from migration_validator.runs.pairing import plan_evaluations
@@ -83,11 +84,15 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_app(
-    run_root: Path = Path("runs"), profile_path: str | None = None
+    run_root: Path = Path("runs"),
+    profile_path: str | None = None,
+    profiles_root: Path = Path("profiles"),
 ) -> FastAPI:
     app = FastAPI(title="mig-validate")
     app.state.run_root = run_root
     app.state.profile_path = profile_path
+    profiles = ProfileStore(Path(profiles_root))
+    app.state.profiles = profiles
     manager = CaptureManager()
     app.state.captures = manager
     app.state.actor_provider = anonymous_admin
@@ -161,6 +166,7 @@ def create_app(
                 mappings=body.mappings,
                 profile=body.profile,
                 run_root=run_root,
+                profiles_root=profiles.root,
             )
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error

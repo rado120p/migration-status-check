@@ -296,13 +296,32 @@ def test_create_run_duplicitni_node(tmp_path):
         )
 
 
-def test_create_run_profil_zatim_nelze(tmp_path):
-    # do spec 3 (profile store) je kazdy nenulovy profil chyba
+def test_create_run_s_neexistujicim_profilem_je_chyba(tmp_path):
     with pytest.raises(ValueError, match="profil 'core-only' neexistuje"):
         api.create_run(
-            "p", kind="single", devices=[SINGLE], profile="core-only", run_root=tmp_path,
+            "p", kind="single", devices=[SINGLE], profile="core-only",
+            run_root=tmp_path / "runs", profiles_root=tmp_path / "profiles",
         )
-    assert not (tmp_path / "p").exists()
+    assert not (tmp_path / "runs" / "p").exists()
+
+
+def test_create_run_s_existujicim_profilem(tmp_path):
+    from migration_validator.profiles.store import ProfileStore, empty_document
+    ProfileStore(tmp_path / "profiles").save("core-only", empty_document())
+    manifest = api.create_run(
+        "p", kind="single", devices=[SINGLE], profile="core-only",
+        run_root=tmp_path / "runs", profiles_root=tmp_path / "profiles",
+    )
+    assert manifest.profile == "core-only"
+    assert "profile: core-only" in (tmp_path / "runs" / "p" / "run.yml").read_text()
+
+
+def test_create_run_s_nevalidnim_jmenem_profilu(tmp_path):
+    with pytest.raises(ValueError, match="nevalidni jmeno profilu '../x'"):
+        api.create_run(
+            "p", kind="single", devices=[SINGLE], profile="../x",
+            run_root=tmp_path / "runs", profiles_root=tmp_path / "profiles",
+        )
 
 
 def test_update_mapping_odmitne_single(tmp_path):
