@@ -61,6 +61,7 @@ const GUIDE_TEXT = {
     title: "Run overview",
     body: [
       "Tenhle screen porovnává služby mezi pre a post snímky namapovaných portů.",
+      "Single device run porovnává post (nebo rollback) snímek boxu s jeho vlastním pre snímkem — tabulka má jeden sloupec Device a žádné mapování portů.",
       "Kliknutím na řádek v Results rozbalíš detail checků včetně změn proti baseline.",
       "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
       "Nezařazeno = objekt (BGP peer, routa, BFD session), který si nenárokovala žádná služba — typicky mezera v parsování.",
@@ -958,9 +959,14 @@ class App {
   }
 
   captureFindOldDeviceNode() {
+    // Baseline owner: the old box in a migration run, the box itself in a
+    // single run (its whole-box pre is the baseline for post and rollback).
     const detail = this.cache.captureDetail;
     if (!detail) return null;
-    const entry = Object.entries(detail.devices || {}).find(([, d]) => d.role === "old");
+    const entries = Object.entries(detail.devices || {});
+    const entry =
+      entries.find(([, d]) => d.role === "old") ||
+      entries.find(([, d]) => d.role === "single");
     return entry ? entry[0] : null;
   }
 
@@ -1335,11 +1341,14 @@ class App {
     }
 
     const devices = detail.devices || {};
+    const single = detail.kind === "single";
     let oldDevice = null;
     let newDevice = null;
+    let singleDevice = null;
     for (const [node, d] of Object.entries(devices)) {
       if (d.role === "old") oldDevice = { node, ...d };
       else if (d.role === "new") newDevice = { node, ...d };
+      else if (d.role === "single") singleDevice = { node, ...d };
     }
 
     const header = el("div", {
@@ -1353,7 +1362,16 @@ class App {
         }),
       ],
     });
-    if (oldDevice && newDevice) {
+    if (single && singleDevice) {
+      const label = PLATFORM_LABEL[singleDevice.platform] || singleDevice.platform;
+      header.appendChild(el("span", { className: "kind-tag", text: "single device" }));
+      header.appendChild(
+        el("span", {
+          className: "subtitle",
+          text: `${singleDevice.node} · ${singleDevice.host} (${label})`,
+        })
+      );
+    } else if (oldDevice && newDevice) {
       const oldLabel = PLATFORM_LABEL[oldDevice.platform] || oldDevice.platform;
       const newLabel = PLATFORM_LABEL[newDevice.platform] || newDevice.platform;
       header.appendChild(
@@ -1382,7 +1400,9 @@ class App {
     }
 
     const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
-    const pairEvaluations = evaluations.filter((ev) => !ev.same_device);
+    // Single run: every evaluation (post vs own pre, rollback vs own pre) is
+    // the main result set; there is no separate same-device section.
+    const pairEvaluations = single ? evaluations : evaluations.filter((ev) => !ev.same_device);
     const results = pairEvaluations.map((ev) => ev.result);
     const services = MigView.countStatuses(
       results.flatMap((r) => (r.scopes || []).map((s) => s.status))
@@ -1404,7 +1424,12 @@ class App {
     const allRows = detail.rows || [];
     const mappingRows = allRows.filter((r) => r.old && r.new);
     const wholeRows = allRows.filter((r) => !r.old || !r.new);
-    if (mappingRows.length === 0) {
+    if (single) {
+      if (allRows.length > 0) {
+        this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
+        this.mainEl.appendChild(this.buildPairingTable(allRows, { single: true }));
+      }
+    } else if (mappingRows.length === 0) {
       this.mainEl.appendChild(
         el("div", {
           className: "notice notice-warn",
@@ -1420,7 +1445,7 @@ class App {
       this.mainEl.appendChild(this.buildPairingTable(allRows));
     }
 
-    const sameDevice = this.buildSameDeviceSection();
+    const sameDevice = single ? null : this.buildSameDeviceSection();
     if (sameDevice) this.mainEl.appendChild(sameDevice);
 
     const entries = this.collectServiceEntries(pairEvaluations);
@@ -1428,14 +1453,14 @@ class App {
       this.mainEl.appendChild(
         el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
       );
-      this.mainEl.appendChild(this.buildResultsTable(entries, {}));
+      this.mainEl.appendChild(this.buildResultsTable(entries, { singlePort: single }));
     }
 
     if (this.cache.evaluation) {
       const unmatchedItems = [];
       const unassignedAgg = { bgp_peers: [], static_routes: [], bfd_sessions: [] };
       const multi = pairEvaluations.length > 1;
-      const sameDeviceEvaluations = evaluations.filter((ev) => ev.same_device);
+      const sameDeviceEvaluations = single ? [] : evaluations.filter((ev) => ev.same_device);
       const pairEvalLabel = (evaluation) => {
         if (!multi) return null;
         if (evaluation.step) {
@@ -1516,26 +1541,29 @@ class App {
       }
     }
 
-    const footer = el("div", {
-      className: "footer-actions",
-      children: [
+    const footerButtons = [];
+    if (!single) {
+      footerButtons.push(
         el("button", {
           className: "btn btn-secondary",
           text: "Edit mapping",
           onClick: () => this.openEditMapping(),
-        }),
-        el("button", {
-          className: "btn btn-secondary",
-          text: "Export JSON",
-          onClick: () => this.exportJson(),
-        }),
-        el("button", {
-          className: "btn btn-primary-green",
-          text: "Evaluate run",
-          onClick: () => this.evaluateRun(),
-        }),
-      ],
-    });
+        })
+      );
+    }
+    footerButtons.push(
+      el("button", {
+        className: "btn btn-secondary",
+        text: "Export JSON",
+        onClick: () => this.exportJson(),
+      }),
+      el("button", {
+        className: "btn btn-primary-green",
+        text: "Evaluate run",
+        onClick: () => this.evaluateRun(),
+      })
+    );
+    const footer = el("div", { className: "footer-actions", children: footerButtons });
     this.mainEl.appendChild(footer);
   }
 
@@ -1554,36 +1582,41 @@ class App {
     return el("span", { className: "flag-cell " + (on ? "on" : "off"), text: on ? "✓" : "—" });
   }
 
-  buildPairingTable(rows) {
+  buildPairingTable(rows, opts) {
+    const single = !!(opts && opts.single);
+    const cols = single ? " cols-single" : "";
     const table = el("div", { className: "pairing-table" });
+    const headers = single
+      ? ["Device", "Pre", "Post", "Rollback"]
+      : ["Old port", "New port", "Pre", "Post", "Rollback"];
     table.appendChild(
       el("div", {
-        className: "pairing-header-row",
-        children: [
-          el("span", { text: "Old port" }),
-          el("span", { text: "New port" }),
-          el("span", { text: "Pre" }),
-          el("span", { text: "Post" }),
-          el("span", { text: "Rollback" }),
-        ],
+        className: "pairing-header-row" + cols,
+        children: headers.map((text) => el("span", { text })),
       })
     );
 
     const task = this.cache.captureProgress;
+    const endpointText = (ep) => (ep ? `${ep.node}:${ep.port || "all"}` : "not paired");
     for (const row of rows) {
       const rowMatches = this.rowMatchesCapture(row, task);
+      const portCells = single
+        ? [el("span", { className: "port-cell", text: endpointText(row.old || row.new) })]
+        : [
+            el("span", {
+              className: "port-cell" + (row.old ? "" : " unpaired"),
+              text: endpointText(row.old),
+            }),
+            el("span", {
+              className: "port-cell" + (row.new ? "" : " unpaired"),
+              text: endpointText(row.new),
+            }),
+          ];
 
       const rowEl = el("div", {
-        className: "pairing-row",
+        className: "pairing-row" + cols,
         children: [
-          el("span", {
-            className: "port-cell" + (row.old ? "" : " unpaired"),
-            text: row.old ? `${row.old.node}:${row.old.port || "all"}` : "not paired",
-          }),
-          el("span", {
-            className: "port-cell" + (row.new ? "" : " unpaired"),
-            text: row.new ? `${row.new.node}:${row.new.port || "all"}` : "not paired",
-          }),
+          ...portCells,
           this.buildFlagCell(row, "pre", task),
           this.buildFlagCell(row, "post", task),
           this.buildFlagCell(row, "rollback", task),

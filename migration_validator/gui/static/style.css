@@ -355,6 +355,24 @@ a:hover { color: #0e3fa9; }
 .pairing-row.cols-same {
   grid-template-columns: 24px 1.3fr 1fr 1fr;
 }
+
+.pairing-header-row.cols-single,
+.pairing-row.cols-single {
+  grid-template-columns: 2.6fr 90px 90px 110px;
+}
+
+.kind-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font: 600 11px 'IBM Plex Sans', sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  align-self: center;
+}
 .pairing-row .taken-cell {
   font: 12px 'IBM Plex Mono', monospace;
   color: #6b7280;
