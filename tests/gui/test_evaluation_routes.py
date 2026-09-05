@@ -246,3 +246,51 @@ def test_snapshot_evaluation_baseline_soubor_chybi_na_disku(
         params={"baseline": files["pre"]},
     )
     assert resp.status_code == 404
+
+
+# -- profil per run (spec 3) -------------------------------------------------
+
+def _set_run_profile(tmp_path, name):
+    store = RunStore(tmp_path, "mig01")
+    manifest = store.load()
+    manifest.profile = name
+    store.save(manifest)
+
+
+def _check_ids(payload):
+    return {
+        check["id"]
+        for ev in payload["evaluations"]
+        for scope in ev["result"]["scopes"]
+        for check in scope["checks"]
+    }
+
+
+def test_run_s_chybejicim_profilem_je_422(run_se_snimky_client, tmp_path):
+    _set_run_profile(tmp_path, "neni")
+    resp = run_se_snimky_client.get("/api/runs/mig01/evaluation")
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == f"profil 'neni' neexistuje ({tmp_path / 'mig01' / 'run.yml'})"
+    file = next((tmp_path / "mig01").glob("snapshot_post_*.json")).name
+    resp = run_se_snimky_client.get(f"/api/runs/mig01/snapshots/{file}/evaluation")
+    assert resp.status_code == 422
+    assert resp.json()["detail"].startswith("profil 'neni' neexistuje")
+
+
+def test_run_s_profilem_pouzije_jeho_checky(run_se_snimky_client, tmp_path):
+    from migration_validator.profiles.store import ProfileStore, empty_document
+    assert "interface_state" in _check_ids(
+        run_se_snimky_client.get("/api/runs/mig01/evaluation").json()
+    )
+    doc = empty_document()
+    doc["checks"] = {"interface_state": {"enabled": False}}
+    # create_app(run_root=tmp_path) -> profiles_root je Path("profiles") relativni
+    # k cwd; fixture nema store, proto se app staví znovu s explicitnim rootem.
+    ProfileStore(tmp_path / "profiles").save("bez-state", doc)
+    _set_run_profile(tmp_path, "bez-state")
+    client = TestClient(create_app(run_root=tmp_path, profiles_root=tmp_path / "profiles"))
+    payload = client.get("/api/runs/mig01/evaluation").json()
+    ids = _check_ids(payload)
+    assert "interface_state" not in ids
+    assert "interface_traffic" in ids
+    assert payload["evaluations"][0]["result"]["profile"] == "bez-state.yml"

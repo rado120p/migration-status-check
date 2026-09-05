@@ -13,10 +13,10 @@ from pydantic import BaseModel
 from migration_validator import api
 from migration_validator.auth import load_settings
 from migration_validator.collectors.registry import collectors_for
-from migration_validator.config import default_profile, load_profile
 from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.models.snapshot import load_snapshot
 from migration_validator.profiles.store import ProfileStore
@@ -107,7 +107,7 @@ def create_app(
             settings = load_settings()
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
-        profile = load_profile(profile_path) if profile_path else default_profile()
+        profile = server_default_profile(profile_path)
         parts = [settings.username]
         if settings.ssh_key_paths:
             parts.append(f"ssh keys ({len(settings.ssh_key_paths)})")
@@ -139,6 +139,15 @@ def create_app(
         if not store.manifest_path.exists():
             raise HTTPException(status_code=404, detail=f"run '{run}' neexistuje")
         return store
+
+    def _profile_for(store: RunStore, manifest: RunManifest):
+        try:
+            return profile_for_run(
+                manifest, store.manifest_path,
+                store=profiles, default_path=profile_path,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     def _detail(run: str) -> dict:
         store = _require_store(run)
@@ -213,7 +222,7 @@ def create_app(
         port_filter = (
             [p.strip() for p in ports.split(",") if p.strip()] if ports else None
         )
-        profile = load_profile(profile_path) if profile_path else default_profile()
+        profile = _profile_for(store, manifest)
         evaluations = []
         for evaluation in plan_evaluations(manifest, port_filter):
             subject = load_snapshot(str(store.dir / evaluation.subject.snapshot))
@@ -267,9 +276,9 @@ def create_app(
     def snapshot_evaluation(run: str, file: str, baseline: str | None = None, actor: Actor = require(Permission.VIEW)) -> dict:
         store = _require_store(run)
         path = _require_snapshot_path(store, file)
+        manifest = store.load()
         baseline_snapshot = None
         if baseline is not None:
-            manifest = store.load()
             records = {c.snapshot: c for c in manifest.captures}
             subject_record = records.get(file)
             baseline_record = records.get(baseline)
@@ -286,7 +295,7 @@ def create_app(
             baseline_path = _require_snapshot_path(store, baseline)
             baseline_snapshot = load_snapshot(str(baseline_path))
         snapshot = load_snapshot(str(path))
-        profile = load_profile(profile_path) if profile_path else default_profile()
+        profile = _profile_for(store, manifest)
         result = api.evaluate(
             snapshot,
             baseline=baseline_snapshot,
@@ -312,11 +321,9 @@ def create_app(
             )
         try:
             settings = load_settings()
-            profile = (
-                load_profile(profile_path) if profile_path else default_profile()
-            )
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
+        profile = _profile_for(store, manifest)
         options = ConnectionOptions(
             host=device.host,
             username=settings.username,
