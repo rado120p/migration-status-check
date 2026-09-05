@@ -19,6 +19,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "traffic_ceased": {"enabled": False, "max_residual_pps": 1},
 }
 
+# Vychozi pocet pingu, kdyz ho nezada ani CLI ani profil. Sdileny s
+# runs/orchestrate a s katalogem profilu (GUI formular ukazuje defaulty).
+PING_COUNT_DEFAULT = 5
+
 
 @dataclass
 class CheckConfig:

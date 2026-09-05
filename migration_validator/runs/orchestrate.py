@@ -15,7 +15,7 @@ import yaml
 
 from migration_validator import api
 from migration_validator.capture import ProgressCallback
-from migration_validator.config import Profile
+from migration_validator.config import PING_COUNT_DEFAULT, Profile
 from migration_validator.connection.junos import (
     ConnectionOptions,
     connect,
@@ -180,7 +180,7 @@ def capture_into_run(
             print("pre snimek nenalezen, ping cile z vlastni ARP", file=sys.stderr)
 
     collectors = collectors if collectors is not None else profile.collectors
-    ping_count = ping_count if ping_count is not None else (profile.ping_count or 5)
+    ping_count = ping_count if ping_count is not None else (profile.ping_count or PING_COUNT_DEFAULT)
     service_types = service_types if service_types is not None else profile.service_types
 
     snapshot = api.capture(

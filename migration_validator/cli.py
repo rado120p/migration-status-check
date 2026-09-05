@@ -14,7 +14,7 @@ from pathlib import Path
 from migration_validator import api
 from migration_validator.auth import ConnectionSettings, load_settings
 from migration_validator.collectors.registry import collectors_for
-from migration_validator.config import Profile, default_profile, load_profile
+from migration_validator.config import PING_COUNT_DEFAULT, Profile, default_profile, load_profile
 from migration_validator.connection.junos import (
     ConnectionOptions,
     JunosConnectionError,
@@ -391,7 +391,7 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     collectors = (
         args.collectors.split(",") if args.collectors else profile.collectors
     )
-    ping_count = _pick(args.ping_count, profile.ping_count, 5)
+    ping_count = _pick(args.ping_count, profile.ping_count, PING_COUNT_DEFAULT)
     service_types = _parse_service_types(args, profile)
 
     try:
@@ -428,7 +428,7 @@ def _capture_into_run(args: argparse.Namespace) -> int:
     collectors = (
         args.collectors.split(",") if args.collectors else profile.collectors
     )
-    ping_count = _pick(args.ping_count, profile.ping_count, 5)
+    ping_count = _pick(args.ping_count, profile.ping_count, PING_COUNT_DEFAULT)
     service_types = _parse_service_types(args, profile)
 
     try:
