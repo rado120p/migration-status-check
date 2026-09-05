@@ -16,6 +16,7 @@ from migration_validator.collectors.registry import collectors_for
 from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.models.snapshot import load_snapshot
@@ -96,6 +97,7 @@ def create_app(
     manager = CaptureManager()
     app.state.captures = manager
     app.state.actor_provider = anonymous_admin
+    app.include_router(build_profiles_router(profiles, run_root, profile_path))
 
     @app.get("/api/checks")
     def list_checks(actor: Actor = require(Permission.VIEW)) -> dict:
