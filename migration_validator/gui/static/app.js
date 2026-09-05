@@ -790,6 +790,9 @@ class App {
   }
 
   async selectSnapshot(file) {
+    // Sidebar stays visible while the profile editor is open, so this is a
+    // navigation entry point like the others.
+    if (!this.leaveGuard()) return;
     this.state.view = "snapshot";
     this.state.selectedSnapshot = file;
     await this.loadSnapshotEvaluation(file);
@@ -886,14 +889,20 @@ class App {
   }
 
   async createProfileFromDocument(name, doc) {
-    const res = await fetch("/api/profiles", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, document: doc }),
-    });
-    if (res.status === 201) return null;
-    const body = await res.json().catch(() => ({}));
-    return body.detail || `profil se nepodarilo vytvorit (${res.status})`;
+    // Vraci text chyby, nebo null pri uspechu - vcetne sitove chyby, aby ji
+    // newProfile ukazal stejne jako odpoved serveru.
+    try {
+      const res = await fetch("/api/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, document: doc }),
+      });
+      if (res.status === 201) return null;
+      const body = await res.json().catch(() => ({}));
+      return body.detail || `profil se nepodarilo vytvorit (${res.status})`;
+    } catch (err) {
+      return String(err);
+    }
   }
 
   async newProfile(fromDoc) {
@@ -2966,6 +2975,18 @@ class App {
       deleteBtn.setAttribute("disabled", "disabled");
       deleteBtn.setAttribute("title", isDefault ? "(default) se nemaže" : `pouziva ${usedBy} runu`);
     }
+    // Duplicate kopiruje nacteny dokument - dokud zadny neni (shell render,
+    // nebo profil, ktery se nenacetl), by z nej vznikl prazdny profil.
+    const duplicateBtn = el("button", {
+      className: "btn btn-secondary",
+      text: "Duplicate",
+      attrs: { type: "button" },
+      onClick: () => this.newProfile(editor.doc),
+    });
+    if (!editor.doc) {
+      duplicateBtn.setAttribute("disabled", "disabled");
+      duplicateBtn.setAttribute("title", "profil se nenačetl");
+    }
     return el("div", {
       className: "profile-toolbar",
       children: [
@@ -2974,8 +2995,7 @@ class App {
         isDefault ? el("span", { className: "kind-tag", text: "read-only" }) : null,
         el("button", { className: "btn btn-secondary", text: "+ New profile", attrs: { type: "button" },
           onClick: () => this.newProfile(null) }),
-        el("button", { className: "btn btn-secondary", text: "Duplicate", attrs: { type: "button" },
-          onClick: () => this.newProfile(editor.doc) }),
+        duplicateBtn,
         deleteBtn,
         el("span", { className: "profile-usage", text: isDefault ? "" : `pouziva ${usedBy} runu` }),
       ],
@@ -3066,9 +3086,15 @@ class App {
     this.mainEl.appendChild(this.buildProfileToolbar(editor));
     if (editor.loadError) {
       this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: editor.loadError }));
+    }
+    // Bez formulare se paticka nevykresli - chyba akce z toolbaru (novy
+    // profil, duplikat, delete) se pak ukaze rovnou pod nim, at neni nema.
+    if (editor.loadError || !editor.doc) {
+      if (editor.error) {
+        this.mainEl.appendChild(el("div", { className: "field-error", text: editor.error }));
+      }
       return;
     }
-    if (!editor.doc) return; // still loading
 
     const readonly = editor.name === null;
     this.mainEl.appendChild(this.buildProfileSectionForm(editor, readonly));
