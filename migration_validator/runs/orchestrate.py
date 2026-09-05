@@ -133,6 +133,12 @@ def capture_into_run(
     manifest = store.load()
     node = manifest.node_for_host(host) or host
 
+    if manifest.kind == "single" and node not in manifest.devices:
+        raise ValueError(
+            f"run typu single ma jedine zarizeni {sorted(manifest.devices)}, "
+            f"host '{host}' v nem neni"
+        )
+
     if phase == "pre" and not overwrite:
         existing = manifest.find_capture("pre", node, port)
         if existing is not None:

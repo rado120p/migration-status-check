@@ -216,7 +216,8 @@ def load_manifest(path: Path) -> RunManifest:
         except ValueError as exc:
             raise ValueError(f"{path}: zarizeni '{node}': {exc}") from exc
 
-    kind = raw.get("kind") or DEFAULT_KIND
+    kind = raw.get("kind")
+    kind = DEFAULT_KIND if kind is None else kind
     try:
         check_kind_devices(kind, devices)
     except ValueError as exc:
@@ -248,6 +249,7 @@ def _dump_endpoint(endpoint: MappingEndpoint) -> dict[str, Any]:
 
 
 def save_manifest(manifest: RunManifest, path: Path) -> None:
+    check_kind_devices(manifest.kind, manifest.devices)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     data: dict[str, Any] = {

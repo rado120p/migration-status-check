@@ -6,7 +6,7 @@ from migration_validator.config import default_profile
 from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
-from migration_validator.runs.manifest import load_manifest
+from migration_validator.runs.manifest import RunDevice, RunManifest, load_manifest
 from migration_validator.runs.orchestrate import CaptureOutcome, capture_into_run
 from migration_validator.runs.store import RunStore
 
@@ -82,3 +82,34 @@ def test_capture_do_runu_zapise_snapshot_a_manifest(tmp_path, monkeypatch):
             profile=profile,
             inventory="tests/fixtures/172.20.20.4.yml",
         )
+
+
+def test_capture_single_run_odmitne_neznamy_host_pred_capture(tmp_path, monkeypatch):
+    calls = _fake_capture(monkeypatch)
+
+    store = RunStore(root=tmp_path, name="single01")
+    store.save(
+        RunManifest(
+            devices={
+                "PTX1-POP1": RunDevice(
+                    host="172.20.20.5", platform="junos-evo", role="single"
+                )
+            },
+            kind="single",
+        )
+    )
+    options = ConnectionOptions(host="172.20.20.9")
+    profile = default_profile()
+
+    with pytest.raises(ValueError, match="run typu single"):
+        capture_into_run(
+            store,
+            host="172.20.20.9",
+            phase="pre",
+            port=None,
+            options=options,
+            profile=profile,
+            inventory="tests/fixtures/172.20.20.4.yml",
+        )
+
+    assert calls == {}

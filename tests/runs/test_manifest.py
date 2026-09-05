@@ -375,3 +375,24 @@ def test_check_kind_devices_direct():
         check_kind_devices("bulk", {})
     with pytest.raises(ValueError, match="run typu single"):
         check_kind_devices("single", {})
+
+
+def test_save_manifest_rejects_invalid_kind_devices(tmp_path):
+    path = tmp_path / "run.yml"
+    manifest = RunManifest(kind="single", devices={})
+    with pytest.raises(ValueError, match="run typu single"):
+        save_manifest(manifest, path)
+    assert not path.exists()
+
+
+def test_load_rejects_empty_kind(tmp_path):
+    path = tmp_path / "run.yml"
+    path.write_text(
+        "schema_version: 1\n"
+        "kind: ''\n"
+        "devices:\n"
+        "  X: {host: 1.2.3.4, platform: junos, role: single}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="neznamy kind ''"):
+        load_manifest(path)
