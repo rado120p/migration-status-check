@@ -22,7 +22,7 @@ def _client(tmp_path, role=None):
 def test_anonymni_je_admin_a_muze_zapisovat(tmp_path):
     client = _client(tmp_path)
     resp = client.post("/api/runs", json={
-        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+        "name": "mig02", "kind": "migration", "profile": None, "devices": [OLD, NEW], "mappings": [],
     })
     assert resp.status_code == 201
 
@@ -32,7 +32,7 @@ def test_viewer_cte_ale_nezapisuje(tmp_path):
     assert client.get("/api/runs").status_code == 200
     assert client.get("/api/runs/mig01").status_code == 200
     resp = client.post("/api/runs", json={
-        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+        "name": "mig02", "kind": "migration", "profile": None, "devices": [OLD, NEW], "mappings": [],
     })
     assert resp.status_code == 403
     assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje operate"
@@ -41,7 +41,7 @@ def test_viewer_cte_ale_nezapisuje(tmp_path):
 def test_operator_zaklada_run(tmp_path):
     client = _client(tmp_path, role="operator")
     resp = client.post("/api/runs", json={
-        "name": "mig02", "old_device": OLD, "new_device": NEW, "mappings": [],
+        "name": "mig02", "kind": "migration", "profile": None, "devices": [OLD, NEW], "mappings": [],
     })
     assert resp.status_code == 201
 

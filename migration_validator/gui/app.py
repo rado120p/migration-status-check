@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -28,12 +29,14 @@ class DeviceBody(BaseModel):
     node: str
     host: str
     platform: str
+    role: str
 
 
 class CreateRunBody(BaseModel):
     name: str
-    old_device: DeviceBody
-    new_device: DeviceBody
+    kind: str
+    profile: str | None = None
+    devices: list[DeviceBody]
     mappings: list[tuple[str, str]] = []
 
 
@@ -56,10 +59,18 @@ def _devices_dict(manifest: RunManifest) -> dict:
     }
 
 
+def _created_iso(path: Path) -> str:
+    stamp = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    return stamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _run_summary(store: RunStore) -> dict:
     manifest = store.load()
     return {
         "name": store.name,
+        "kind": manifest.kind,
+        "profile": manifest.profile,
+        "created": _created_iso(store.manifest_path),
         "devices": _devices_dict(manifest),
         "snapshots": len(manifest.captures),
         "mapped_ports": len(manifest.interface_mapping),
@@ -127,6 +138,8 @@ def create_app(
         manifest = store.load()
         return {
             "name": run,
+            "kind": manifest.kind,
+            "profile": manifest.profile,
             "devices": _devices_dict(manifest),
             "rows": status_rows(manifest),
             "snapshots": snapshot_list(manifest),
@@ -141,9 +154,10 @@ def create_app(
         try:
             api.create_run(
                 body.name,
-                old_device=body.old_device.model_dump(),
-                new_device=body.new_device.model_dump(),
+                kind=body.kind,
+                devices=[d.model_dump() for d in body.devices],
                 mappings=body.mappings,
+                profile=body.profile,
                 run_root=run_root,
             )
         except ValueError as error:

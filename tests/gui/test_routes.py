@@ -60,3 +60,29 @@ def test_list_runs_preskoci_teckovane_adresare(tmp_path):
     client = TestClient(create_app(run_root=tmp_path))
     names = [r["name"] for r in client.get("/api/runs").json()["runs"]]
     assert names == ["mig02"]
+
+
+def test_runs_nesou_kind_profile_a_created(client):
+    run = client.get("/api/runs").json()["runs"][0]
+    assert run["kind"] == "migration"
+    assert run["profile"] is None
+    assert run["created"].endswith("Z")
+    assert run["created"].startswith("20")
+
+
+def test_run_detail_nese_kind_a_profile(client):
+    data = client.get("/api/runs/mig01").json()
+    assert data["kind"] == "migration"
+    assert data["profile"] is None
+
+
+def test_runs_single_run_ma_kind_single(client, tmp_path):
+    from migration_validator import api
+    api.create_run(
+        "upg01", kind="single",
+        devices=[{"node": "PTX9", "host": "10.0.0.9", "platform": "junos-evo", "role": "single"}],
+        run_root=tmp_path,
+    )
+    runs = {r["name"]: r for r in client.get("/api/runs").json()["runs"]}
+    assert runs["upg01"]["kind"] == "single"
+    assert runs["mig01"]["kind"] == "migration"

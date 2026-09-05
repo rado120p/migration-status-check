@@ -62,3 +62,22 @@ def test_snapshot_list_mapuje_capture_record():
         "port": "ge-0/0/1",
         "taken": "2026-09-01T00:00:00Z",
     }]
+
+
+def test_single_run_radek_je_pod_old_s_flagy():
+    manifest = RunManifest(
+        devices={"PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="single")},
+        kind="single",
+    )
+    manifest.record_capture(CaptureRecord(
+        phase="pre", device="PTX1", port=None, snapshot="pre.json", taken="t1",
+    ))
+    manifest.record_capture(CaptureRecord(
+        phase="post", device="PTX1", port=None, snapshot="post.json", taken="t2",
+    ))
+    rows = status_rows(manifest)
+    assert rows == [{
+        "old": {"node": "PTX1", "port": None},
+        "new": None,
+        "pre": True, "post": True, "rollback": False,
+    }]
