@@ -34,6 +34,14 @@ def test_document_to_yaml_prazdny_dokument_je_prazdny_text():
     assert document_to_yaml(empty_document()) == ""
 
 
+def test_document_to_yaml_vynecha_prazdne_seznamy():
+    # Prazdny seznam znamena v capture "neber nic" - ulozit se smi jen to,
+    # co uzivatel opravdu vybral, takze se zahodi stejne jako null.
+    text = document_to_yaml(_doc(collectors=[], service_types=[], ping_count=3))
+    assert text == "profile:\n  ping_count: 3\n"
+    assert document_to_yaml(_doc(collectors=[], service_types=[])) == ""
+
+
 def test_document_to_yaml_zachova_checks_a_vynecha_null_option():
     doc = _doc(ping_count=3)
     doc["checks"] = {

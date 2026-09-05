@@ -141,6 +141,8 @@ class App {
       profilesError: null,
       catalogue: null,
       catalogueError: null,
+      captureProfile: null,
+      captureProfileError: null,
     };
     this.capturePollTimer = null;
 
@@ -874,7 +876,7 @@ class App {
       return;
     }
     try {
-      const res = await fetch(`/api/profiles/${editor.name}`);
+      const res = await fetch(`/api/profiles/${encodeURIComponent(editor.name)}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         editor.loadError = body.detail || `profil se nepodarilo nacist (${res.status})`;
@@ -906,7 +908,9 @@ class App {
   }
 
   async newProfile(fromDoc) {
-    if (!this.leaveGuard()) return;
+    // Duplicate (fromDoc) kopiruje prave rozeditovany dokument - ptat se na
+    // zahozeni zmen by bylo spatne. Guard patri jen "+ New profile".
+    if (!fromDoc && !this.leaveGuard()) return;
     const name = window.prompt("Název nového profilu (a-z 0-9 _ -):", "");
     if (name === null) return;
     const trimmed = name.trim();
@@ -931,7 +935,7 @@ class App {
     if (!editor || editor.name === null) return;
     if (!window.confirm(`Smazat profil ${editor.name}? Soubor profiles/${editor.name}.yml zmizí.`)) return;
     try {
-      const res = await fetch(`/api/profiles/${editor.name}`, { method: "DELETE" });
+      const res = await fetch(`/api/profiles/${encodeURIComponent(editor.name)}`, { method: "DELETE" });
       if (res.status !== 204) {
         const body = await res.json().catch(() => ({}));
         editor.error = body.detail || `profil se nepodarilo smazat (${res.status})`;
@@ -954,7 +958,7 @@ class App {
     editor.error = null;
     this.render();
     try {
-      const res = await fetch(`/api/profiles/${editor.name}`, {
+      const res = await fetch(`/api/profiles/${encodeURIComponent(editor.name)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document: editor.doc }),
@@ -1050,6 +1054,45 @@ class App {
       }
     } catch (err) {
       this.cache.captureDetailError = { status: 0, detail: String(err) };
+    }
+    // Profil se resi per run (POST /api/captures -> _profile_for), takze i
+    // prepnuti runu v selectu musi kolekci collectoru nacist znovu.
+    await this.loadCaptureProfile();
+  }
+
+  async loadCaptureProfile() {
+    // Karta "Profile & auth" ukazuje profil runu, ne serverovy default.
+    // Bez profilu (run s profile: null) plati /api/meta jako driv.
+    this.cache.captureProfile = null;
+    this.cache.captureProfileError = null;
+    const name = this.cache.captureDetail && this.cache.captureDetail.profile;
+    if (!name) return;
+    try {
+      const res = await fetch(`/api/profiles/${encodeURIComponent(name)}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        this.cache.captureProfileError =
+          body.detail || `profil '${name}' se nepodarilo nacist (${res.status})`;
+        return;
+      }
+      const { document: doc } = await res.json();
+      const listed = (doc && doc.profile && doc.profile.collectors) || null;
+      const collectors = {};
+      if (listed === null) {
+        // Profil collectory neomezuje - plati cely katalog dane platformy.
+        await this.loadCatalogue();
+        if (!this.cache.catalogue) {
+          this.cache.captureProfileError =
+            this.cache.catalogueError || "katalog collectoru se nepodarilo nacist";
+          return;
+        }
+        for (const [platform, all] of Object.entries(this.cache.catalogue.collectors || {})) {
+          collectors[platform] = all.slice();
+        }
+      }
+      this.cache.captureProfile = { name, listed, collectors };
+    } catch (err) {
+      this.cache.captureProfileError = String(err);
     }
   }
 
@@ -2184,12 +2227,15 @@ class App {
 
     // -- Profile & auth card --
     const meta = this.cache.meta;
+    // Profil se resi per run (POST /api/captures), takze karta ukazuje profil
+    // runu a jeho collectory; serverovy default plati jen pro run bez profilu.
+    const runProfile = this.cache.captureProfile;
     const profileChildren = [el("div", { className: "form-section-label", text: "Profile & auth" })];
     const profileSelect = el("select", {
       className: "form-select mono",
       children: [
         el("option", {
-          text: (meta && meta.profile) || "(default)",
+          text: detail.profile || "(default)",
           attrs: { value: "", selected: "selected" },
         }),
       ],
@@ -2209,10 +2255,17 @@ class App {
       })
     );
     const deviceForCollectors = device ? devices[device] : null;
-    const platformCollectors =
-      meta && meta.collectors && deviceForCollectors
-        ? meta.collectors[deviceForCollectors.platform]
-        : null;
+    const platform = deviceForCollectors ? deviceForCollectors.platform : null;
+    let platformCollectors = null;
+    if (platform) {
+      if (detail.profile) {
+        platformCollectors = runProfile
+          ? runProfile.listed || runProfile.collectors[platform] || null
+          : null;
+      } else if (meta && meta.collectors) {
+        platformCollectors = meta.collectors[platform] || null;
+      }
+    }
     const collectorsValue = el("span", {
       className: "readonly-value mono",
       text: platformCollectors ? `${platformCollectors.length} collectors` : "—",
@@ -2226,6 +2279,11 @@ class App {
         children: [el("span", { className: "readonly-label", text: "Collectors" }), collectorsValue],
       })
     );
+    if (this.cache.captureProfileError) {
+      profileChildren.push(
+        el("div", { className: "notice notice-warn", text: this.cache.captureProfileError })
+      );
+    }
     if (this.cache.metaError) {
       profileChildren.push(
         el("div", { className: "notice notice-warn", text: this.cache.metaError.detail })

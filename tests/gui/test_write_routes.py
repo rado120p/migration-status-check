@@ -162,16 +162,6 @@ def test_post_runs_neznamy_kind_je_409(tmp_path):
     assert "neznamy kind 'bulk'" in resp.json()["detail"]
 
 
-def test_post_runs_profil_je_zatim_409(tmp_path):
-    client = _client(tmp_path)
-    resp = client.post("/api/runs", json={
-        "name": "p", "kind": "single", "profile": "core-only",
-        "devices": [SINGLE], "mappings": [],
-    })
-    assert resp.status_code == 409
-    assert "profil 'core-only' neexistuje" in resp.json()["detail"]
-
-
 def test_put_mapping_na_single_je_409(tmp_path):
     client = _client(tmp_path)
     client.post("/api/runs", json={

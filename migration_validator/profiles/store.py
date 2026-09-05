@@ -53,13 +53,16 @@ def document_from_profile(profile: Profile) -> dict[str, Any]:
 
 
 def document_to_yaml(document: dict[str, Any]) -> str:
-    """Jediny serializer - save i preview. Null klice a prazdna sekce
-    checks se vynechaji, soubor tak nese jen to, co je nastavene.
+    """Jediny serializer - save i preview. Null klice, prazdne seznamy
+    v sekci profile a prazdna sekce checks se vynechaji, soubor tak nese
+    jen to, co je nastavene. Prazdny seznam se zahodi stejne jako null:
+    jinak by se do capture dostal jako "neber nic" (a GUI ho v
+    normalizeProfileDocument take zahazuje).
     Nezname klice zustavaji (save je nechava spadnout v load_profile)."""
     section = {
         key: value
         for key, value in (document.get("profile") or {}).items()
-        if value is not None
+        if value is not None and value != []
     }
     checks: dict[str, dict[str, Any]] = {}
     for check_id, overrides in (document.get("checks") or {}).items():

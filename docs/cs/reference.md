@@ -784,14 +784,15 @@ neexistuje (runs/<run>/run.yml)`, žádný tichý fallback.
 | `--profiles-root` | `profiles` | adresář pojmenovaných profilů |
 | `--profile` | — | serverový default profil (runy s `profile: null`), stejně jako u CLI |
 
-API (`/api/profiles`): `GET` seznam s `used_by` (kolik `run.yml` profil odkazuje) a
-`default_document`, `GET /catalogue` (collectory, typy služeb, `ping_count_default`, checky
-s defaulty pro formulář), `GET/PUT/DELETE /{name}`, `POST` (`{"name","document"}`), `POST
-/preview` (`{"document"}` → `{"yaml"}`). Zápis vyžaduje roli `admin`. Uložení validuje přes
-`load_profile` na dočasném souboru a teprve pak přejmenuje přes cíl; chyba loaderu se vrací
-beze změny jako `422`. Soubor nese jen nastavené klíče (`null` a prázdná sekce `checks` se
-vynechají); `POST /preview` vrací byte-shodný text. Profil, na který ukazuje aspoň jeden run,
-nejde smazat (`409 profil pouziva <n> runu`).
+API (`/api/profiles`): `GET` seznam s `used_by` (kolik `run.yml` profil odkazuje),
+`default_document` a `default` (jméno souboru z `--profile`, jinak `null`), `GET /catalogue`
+(collectory, typy služeb, `ping_count_default`, checky s defaulty pro formulář),
+`GET/PUT/DELETE /{name}`, `POST` (`{"name","document"}`), `POST /preview` (`{"document"}` →
+`{"yaml"}`). Zápis vyžaduje roli `admin`. Uložení validuje přes `load_profile` na dočasném
+souboru a teprve pak přejmenuje přes cíl; chyba loaderu se vrací beze změny jako `422`.
+Soubor nese jen nastavené klíče (`null`, prázdné seznamy v sekci `profile` a prázdná sekce
+`checks` se vynechají); `POST /preview` vrací byte-shodný text. Profil, na který ukazuje
+aspoň jeden run, nejde smazat (`409 profil pouziva <n> runu`).
 
 ### Pravidla párování `evaluate --run`
 

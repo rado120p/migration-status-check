@@ -7,7 +7,7 @@ from migration_validator.config import DEFAULTS, PING_COUNT_DEFAULT
 from migration_validator.gui.app import create_app
 from migration_validator.gui.authz import Actor
 from migration_validator.profiles.catalogue import build_catalogue
-from migration_validator.profiles.store import ProfileStore, empty_document
+from migration_validator.profiles.store import empty_document
 
 SINGLE = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "single"}
 

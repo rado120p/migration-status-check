@@ -794,14 +794,16 @@ shown in the GUI as `(default)`. A run whose profile no longer exists is not eva
 | `--profiles-root` | `profiles` | directory of named profiles |
 | `--profile` | — | server default profile (runs with `profile: null`), as in the CLI |
 
-API (`/api/profiles`): `GET` list with `used_by` (how many `run.yml` reference the profile)
-and `default_document`, `GET /catalogue` (collectors, service types, `ping_count_default`,
-checks with defaults for the form), `GET/PUT/DELETE /{name}`, `POST` (`{"name","document"}`),
-`POST /preview` (`{"document"}` → `{"yaml"}`). Writes need the `admin` role. Saving validates
-through `load_profile` on a temporary file and only then renames it over the target; the
-loader's error comes back unchanged as `422`. The file carries only the keys that are set
-(`null` and an empty `checks` section are omitted); `POST /preview` returns the byte-identical
-text. A profile referenced by at least one run cannot be deleted (`409 profil pouziva <n> runu`).
+API (`/api/profiles`): `GET` list with `used_by` (how many `run.yml` reference the profile),
+`default_document` and `default` (basename of the `--profile` file, otherwise `null`),
+`GET /catalogue` (collectors, service types, `ping_count_default`, checks with defaults for
+the form), `GET/PUT/DELETE /{name}`, `POST` (`{"name","document"}`), `POST /preview`
+(`{"document"}` → `{"yaml"}`). Writes need the `admin` role. Saving validates through
+`load_profile` on a temporary file and only then renames it over the target; the loader's
+error comes back unchanged as `422`. The file carries only the keys that are set (`null`,
+empty lists in the `profile` section and an empty `checks` section are omitted); `POST
+/preview` returns the byte-identical text. A profile referenced by at least one run cannot be
+deleted (`409 profil pouziva <n> runu`).
 
 ### Pairing rules
 
