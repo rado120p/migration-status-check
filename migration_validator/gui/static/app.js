@@ -119,6 +119,7 @@ class App {
       editMappingForm: null,
       combo: { open: false, query: "", index: 0 },
       archiveModal: null,
+      profileEditor: null,
     };
     this.cache = {
       runs: [],
@@ -138,6 +139,8 @@ class App {
       captureProgress: null,
       profiles: null,
       profilesError: null,
+      catalogue: null,
+      catalogueError: null,
     };
     this.capturePollTimer = null;
 
@@ -179,6 +182,12 @@ class App {
       if (this.state.combo.open && !this.comboEl.contains(e.target)) this.closeRunCombo();
     });
     window.addEventListener("beforeunload", () => this.stopCapturePolling());
+    window.addEventListener("beforeunload", (e) => {
+      if (this.editorDirty()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
   }
 
   async boot() {
@@ -300,6 +309,7 @@ class App {
   // -- archive run modal ------------------------------------------------------
 
   openArchiveModal() {
+    if (!this.leaveGuard()) return;
     this.state.archiveModal = { submitting: false, error: null };
     this.render();
   }
@@ -762,7 +772,10 @@ class App {
   }
 
   async selectRun(name) {
-    if (this.state.run === name) return;
+    if (!this.leaveGuard()) return;
+    // Same run only means "nothing to do" when the run view is already up -
+    // from the profile editor the same name still has to navigate back.
+    if (this.state.run === name && this.state.view === "run") return;
     this.state.run = name;
     this.state.view = "run";
     this.state.selectedSnapshot = null;
@@ -804,10 +817,160 @@ class App {
     }
   }
 
+  async loadCatalogue() {
+    if (this.cache.catalogue) return;
+    try {
+      const res = await fetch("/api/profiles/catalogue");
+      if (res.ok) {
+        this.cache.catalogue = await res.json();
+        this.cache.catalogueError = null;
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.catalogueError = body.detail || `katalog se nepodarilo nacist (${res.status})`;
+      }
+    } catch (err) {
+      this.cache.catalogueError = String(err);
+    }
+  }
+
+  editorDirty() {
+    // Only while the editor is on screen: state.profileEditor survives a
+    // navigation away (the guard already asked), and a stale copy must not
+    // keep prompting or arm beforeunload for the rest of the session.
+    const editor = this.state.profileEditor;
+    if (this.state.view !== "profiles") return false;
+    return !!editor && editor.name !== null && MigView.profileDirty(editor.doc, editor.saved);
+  }
+
+  // Every navigation away from the editor goes through here (spec §5:
+  // "navigating away with unsaved changes asks for confirmation").
+  leaveGuard() {
+    if (!this.editorDirty()) return true;
+    return window.confirm("Profil má neuložené změny. Zahodit je?");
+  }
+
   async goToProfiles(name) {
+    if (this.state.view === "profiles" && !this.leaveGuard()) return;
     this.state.view = "profiles";
     this.state.selectedSnapshot = null;
-    await Promise.all([this.loadProfiles(), this.loadChecks()]);
+    this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, loadError: null };
+    this.render();
+    await Promise.all([this.loadProfiles(), this.loadCatalogue(), this.loadChecks()]);
+    await this.loadEditorDocument();
+    this.render();
+  }
+
+  async loadEditorDocument() {
+    const editor = this.state.profileEditor;
+    if (!editor) return;
+    const store = this.cache.profiles;
+    if (editor.name === null) {
+      const doc = (store && store.default_document) || MigView.emptyProfileDocument();
+      editor.doc = JSON.parse(JSON.stringify(doc));
+      editor.saved = JSON.parse(JSON.stringify(doc));
+      return;
+    }
+    try {
+      const res = await fetch(`/api/profiles/${editor.name}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        editor.loadError = body.detail || `profil se nepodarilo nacist (${res.status})`;
+        return;
+      }
+      const { document } = await res.json();
+      editor.doc = document;
+      editor.saved = JSON.parse(JSON.stringify(document));
+    } catch (err) {
+      editor.loadError = String(err);
+    }
+  }
+
+  async createProfileFromDocument(name, doc) {
+    const res = await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, document: doc }),
+    });
+    if (res.status === 201) return null;
+    const body = await res.json().catch(() => ({}));
+    return body.detail || `profil se nepodarilo vytvorit (${res.status})`;
+  }
+
+  async newProfile(fromDoc) {
+    if (!this.leaveGuard()) return;
+    const name = window.prompt("Název nového profilu (a-z 0-9 _ -):", "");
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!/^[a-z0-9_-]+$/.test(trimmed)) {
+      this.state.profileEditor.error = `nevalidni jmeno profilu '${trimmed}' - povolene znaky: a-z 0-9 _ -`;
+      this.render();
+      return;
+    }
+    const doc = fromDoc ? MigView.normalizeProfileDocument(fromDoc) : MigView.emptyProfileDocument();
+    const error = await this.createProfileFromDocument(trimmed, doc);
+    if (error) {
+      this.state.profileEditor.error = error;
+      this.render();
+      return;
+    }
+    this.state.profileEditor = null; // no guard prompt on the way in
+    await this.goToProfiles(trimmed);
+  }
+
+  async deleteProfile() {
+    const editor = this.state.profileEditor;
+    if (!editor || editor.name === null) return;
+    if (!window.confirm(`Smazat profil ${editor.name}? Soubor profiles/${editor.name}.yml zmizí.`)) return;
+    try {
+      const res = await fetch(`/api/profiles/${editor.name}`, { method: "DELETE" });
+      if (res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        editor.error = body.detail || `profil se nepodarilo smazat (${res.status})`;
+        this.render();
+        return;
+      }
+    } catch (err) {
+      editor.error = String(err);
+      this.render();
+      return;
+    }
+    this.state.profileEditor = null;
+    await this.goToProfiles(null);
+  }
+
+  async saveProfile() {
+    const editor = this.state.profileEditor;
+    if (!editor || editor.name === null || editor.saving) return;
+    editor.saving = true;
+    editor.error = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/profiles/${editor.name}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: editor.doc }),
+      });
+      if (res.ok) {
+        const { document } = await res.json();
+        editor.doc = document;
+        editor.saved = JSON.parse(JSON.stringify(document));
+        await this.loadProfiles();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        editor.error = body.detail || `profil se nepodarilo ulozit (${res.status})`;
+      }
+    } catch (err) {
+      editor.error = String(err);
+    }
+    editor.saving = false;
+    this.render();
+  }
+
+  discardProfile() {
+    const editor = this.state.profileEditor;
+    if (!editor || !editor.saved) return;
+    editor.doc = JSON.parse(JSON.stringify(editor.saved));
+    editor.error = null;
     this.render();
   }
 
@@ -831,6 +994,7 @@ class App {
   }
 
   backToRun() {
+    if (!this.leaveGuard()) return;
     this.state.view = "run";
     this.state.selectedSnapshot = null;
     this.render();
@@ -839,6 +1003,7 @@ class App {
   // -- new capture form (screen 4) ---------------------------------------
 
   async openCaptureForm() {
+    if (!this.leaveGuard()) return;
     const run = this.state.run || (this.cache.runs[0] && this.cache.runs[0].name) || null;
     this.state.view = "capture";
     this.state.selectedSnapshot = null;
@@ -2282,6 +2447,7 @@ class App {
   // -- new run (screen 5) --------------------------------------------------
 
   async openNewRunForm() {
+    if (!this.leaveGuard()) return;
     this.state.view = "newrun";
     this.state.selectedSnapshot = null;
     this.state.newRunForm = {
@@ -2687,38 +2853,145 @@ class App {
     );
   }
 
-  // -- registered checks (screen 3) --------------------------------------
+  // -- profile editor (spec 3) -------------------------------------------
 
-  renderProfilesView() {
-    clear(this.mainEl);
-    this.mainEl.appendChild(this.buildBreadcrumb("profiles", false));
-
-    if (!this.cache.checks) {
-      if (this.cache.checksError) {
-        this.mainEl.appendChild(
-          el("div", {
-            className: "notice notice-warn",
-            text: this.cache.checksError.detail,
+  // Chip picker: chosen values as chips with ×, a native <select> as the
+  // "+ add" menu (no positioning code). Empty = all, shown as "(vsechny)".
+  buildChipPicker(label, values, options, onChange, readonly) {
+    const chips = el("div", { className: "chips" });
+    const chosen = Array.isArray(values) ? values : [];
+    if (chosen.length === 0) chips.appendChild(el("span", { className: "chip-empty", text: "(vsechny)" }));
+    for (const value of chosen) {
+      const chip = el("span", { className: "chip mono", text: value });
+      if (!readonly) {
+        chip.appendChild(
+          el("button", {
+            className: "chip-x",
+            text: "×",
+            attrs: { type: "button", title: `odebrat ${value}` },
+            onClick: () => onChange(MigView.toggleListValue(chosen, value)),
           })
         );
       }
-      return;
+      chips.appendChild(chip);
     }
+    if (!readonly) {
+      const add = el("select", { className: "chip-add mono" });
+      add.appendChild(el("option", { text: "+ add", attrs: { value: "" } }));
+      for (const option of options.filter((o) => !chosen.includes(o))) {
+        add.appendChild(el("option", { text: option, attrs: { value: option } }));
+      }
+      add.addEventListener("change", (e) => {
+        if (e.target.value) onChange(MigView.toggleListValue(chosen, e.target.value));
+      });
+      chips.appendChild(add);
+    }
+    return el("div", {
+      className: "form-field",
+      children: [
+        el("label", { className: "field-label", children: [
+          document.createTextNode(label + " "),
+          el("span", { className: "field-hint", text: "(empty = all)" }),
+        ] }),
+        chips,
+      ],
+    });
+  }
 
+  buildProfileSectionForm(editor, readonly) {
+    const catalogue = this.cache.catalogue || { collectors: {}, service_types: [], ping_count_default: 5 };
+    const collectorOptions = [...new Set(Object.values(catalogue.collectors).flat())].sort();
+    const section = editor.doc.profile || (editor.doc.profile = { collectors: null, service_types: null, ping_count: null });
+    const set = (key, value) => {
+      section[key] = value;
+      this.render();
+    };
+
+    const ping = el("input", {
+      className: "form-input mono ping-input",
+      attrs: { type: "number", min: "1", step: "1", placeholder: `${catalogue.ping_count_default} (default)` },
+    });
+    ping.value = section.ping_count === null || section.ping_count === undefined ? "" : String(section.ping_count);
+    if (readonly) ping.setAttribute("disabled", "disabled");
+    ping.addEventListener("change", (e) => {
+      const raw = e.target.value.trim();
+      set("ping_count", raw === "" ? null : Number(raw));
+    });
+
+    return el("div", {
+      className: "form-card",
+      children: [
+        el("div", { className: "form-section-label", text: "Profile" }),
+        el("div", {
+          className: "profile-grid",
+          children: [
+            this.buildChipPicker("Collectors", section.collectors, collectorOptions,
+              (v) => set("collectors", v), readonly),
+            this.buildChipPicker("Service types", section.service_types, catalogue.service_types,
+              (v) => set("service_types", v), readonly),
+          ],
+        }),
+        this.buildCaptureField("Ping count", ping),
+      ],
+    });
+  }
+
+  buildProfileToolbar(editor) {
+    const store = this.cache.profiles || { default: null, profiles: [] };
+    const select = el("select", { className: "form-select mono" });
+    select.appendChild(el("option", { text: "(default)", attrs: { value: "" } }));
+    for (const entry of store.profiles) {
+      select.appendChild(el("option", { text: entry.name, attrs: { value: entry.name } }));
+    }
+    select.value = editor.name || "";
+    select.addEventListener("change", (e) => {
+      const next = e.target.value || null;
+      if (!this.leaveGuard()) {
+        e.target.value = editor.name || "";
+        return;
+      }
+      this.state.profileEditor = null;
+      this.goToProfiles(next);
+    });
+    const current = store.profiles.find((p) => p.name === editor.name);
+    const usedBy = current ? current.used_by : 0;
+    const isDefault = editor.name === null;
+    const deleteBtn = el("button", {
+      className: "btn btn-danger-secondary",
+      text: "Delete",
+      attrs: { type: "button" },
+      onClick: () => this.deleteProfile(),
+    });
+    if (isDefault || usedBy > 0) {
+      deleteBtn.setAttribute("disabled", "disabled");
+      deleteBtn.setAttribute("title", isDefault ? "(default) se nemaže" : `pouziva ${usedBy} runu`);
+    }
+    return el("div", {
+      className: "profile-toolbar",
+      children: [
+        el("span", { className: "field-label", text: "Profile" }),
+        select,
+        isDefault ? el("span", { className: "kind-tag", text: "read-only" }) : null,
+        el("button", { className: "btn btn-secondary", text: "+ New profile", attrs: { type: "button" },
+          onClick: () => this.newProfile(null) }),
+        el("button", { className: "btn btn-secondary", text: "Duplicate", attrs: { type: "button" },
+          onClick: () => this.newProfile(editor.doc) }),
+        deleteBtn,
+        el("span", { className: "profile-usage", text: isDefault ? "" : `pouziva ${usedBy} runu` }),
+      ],
+    });
+  }
+
+  // Registered checks, read-only. Spec 4 replaces this block with the
+  // editable checks table; until then it is the old registry listing.
+  buildChecksRegistry() {
+    if (!this.cache.checks) {
+      if (this.cache.checksError) {
+        return el("div", { className: "notice notice-warn", text: this.cache.checksError.detail });
+      }
+      return el("div");
+    }
     const checks = this.cache.checks.checks || [];
-    this.mainEl.appendChild(
-      el("div", {
-        className: "run-header",
-        children: [
-          el("h1", { text: "Registered checks" }),
-          el("span", {
-            className: "subtitle",
-            text: `${checks.length} checks`,
-          }),
-        ],
-      })
-    );
-
     const table = el("div", { className: "checks-registry-table" });
     table.appendChild(
       el("div", {
@@ -2755,7 +3028,69 @@ class App {
         })
       );
     }
-    this.mainEl.appendChild(table);
+    return el("div", {
+      className: "form-card",
+      children: [
+        el("div", {
+          className: "run-header",
+          children: [
+            el("h1", { text: "Registered checks" }),
+            el("span", { className: "subtitle", text: `${checks.length} checks` }),
+          ],
+        }),
+        table,
+      ],
+    });
+  }
+
+  renderProfilesView() {
+    clear(this.mainEl);
+    this.mainEl.appendChild(this.buildBreadcrumb("profiles", false));
+    const editor = this.state.profileEditor;
+    if (!editor) return;
+    this.mainEl.appendChild(
+      el("div", {
+        className: "run-header",
+        children: [
+          el("h1", { text: "Profiles" }),
+          el("span", { className: "subtitle", text: "profiles/<name>.yml · run picks one" }),
+        ],
+      })
+    );
+    if (this.cache.profilesError) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: this.cache.profilesError.detail }));
+    }
+    if (this.cache.catalogueError) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: this.cache.catalogueError }));
+    }
+    this.mainEl.appendChild(this.buildProfileToolbar(editor));
+    if (editor.loadError) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: editor.loadError }));
+      return;
+    }
+    if (!editor.doc) return; // still loading
+
+    const readonly = editor.name === null;
+    this.mainEl.appendChild(this.buildProfileSectionForm(editor, readonly));
+    this.mainEl.appendChild(this.buildChecksRegistry());
+
+    const footerChildren = [];
+    if (editor.error) footerChildren.push(el("div", { className: "field-error", text: editor.error }));
+    if (!readonly) {
+      const dirty = this.editorDirty();
+      const enabled = dirty && !editor.saving;
+      const discardBtn = el("button", { className: "btn btn-secondary", text: "Discard",
+        attrs: { type: "button" }, onClick: enabled ? () => this.discardProfile() : null });
+      const saveBtn = el("button", { className: "btn btn-primary",
+        text: editor.saving ? "Saving…" : "Save profile",
+        attrs: { type: "button" }, onClick: enabled ? () => this.saveProfile() : null });
+      if (!enabled) {
+        discardBtn.setAttribute("disabled", "disabled");
+        saveBtn.setAttribute("disabled", "disabled");
+      }
+      footerChildren.push(el("div", { className: "footer-actions", children: [discardBtn, saveBtn] }));
+    }
+    this.mainEl.appendChild(el("div", { className: "profile-footer", children: footerChildren }));
   }
 }
 
