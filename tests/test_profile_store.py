@@ -191,6 +191,16 @@ def test_strip_necha_neznamy_check_a_neznamou_volbu():
     assert strip_check_defaults(checks) == checks
 
 
+def test_strip_necha_neznamy_check_i_kdyz_enabled_sedi_na_default():
+    # enabled: True u neznameho checku vypada jako default, ale registr o
+    # nem nic nevi - nesmi se to stripnout (JS zrcadlo checksDocument ho
+    # take drzi).
+    checks = {"old_check": {"enabled": True}}
+    assert strip_check_defaults(checks) == checks
+    checks = {"old_check": {"enabled": True, "severity": "advisory"}}
+    assert strip_check_defaults(checks) == checks
+
+
 def test_strip_necha_hodnotu_spatneho_typu_loaderu():
     # "-60" se rovna defaultu jen na pohled - stripnout ji by loaderu
     # sebralo chybu, kterou ma uzivatel videt.

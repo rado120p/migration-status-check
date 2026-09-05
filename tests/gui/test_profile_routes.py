@@ -154,6 +154,17 @@ def test_put_neexistujici_je_404(tmp_path):
     assert client.delete("/api/profiles/neni").status_code == 404
 
 
+def test_put_checks_neni_mapping_je_422_ne_500(tmp_path):
+    client = _client(tmp_path)
+    client.post("/api/profiles", json={"name": "p", "document": empty_document()})
+    resp = client.put("/api/profiles/p", json={"document": {"profile": {}, "checks": ["interface_state"]}})
+    assert resp.status_code == 422
+    assert "sekce checks: ocekavan mapping, nalezeno list" in resp.json()["detail"]
+    resp = client.put("/api/profiles/p", json={"document": {"profile": {}, "checks": {"interface_state": [1]}}})
+    assert resp.status_code == 422
+    assert "check 'interface_state': ocekavan mapping, nalezeno list" in resp.json()["detail"]
+
+
 def test_used_by_a_delete_odmitnut_dokud_je_pouzity(tmp_path):
     client = _client(tmp_path)
     client.post("/api/profiles", json={"name": "core-only", "document": empty_document()})

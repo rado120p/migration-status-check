@@ -55,17 +55,26 @@ def _default_severities() -> dict[str, str]:
 
 def strip_check_defaults(checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Z overrides vyhodi to, co se rovna defaultu (enabled, severity,
-    volby z DEFAULTS); check bez rozdilu zmizi. Neznamy check, neznama
-    volba a hodnota spatneho typu zustavaji beze zmeny - loader je bud
-    pusti (GUI je ukaze k odebrani) nebo odmitne s hlaskou.
+    volby z DEFAULTS); check bez rozdilu zmizi. Neznamy check (neni v
+    registru) zustava beze zmeny - loader ho pusti (GUI ho ukaze k
+    odebrani). Neni-li checks (nebo jednotlivy check) mapping, vraci se
+    beze zmeny - loader pak odmitne s hlaskou misto AttributeError.
     Zrcadlo checksDocument v gui/static/profile_diff.js."""
+    if not isinstance(checks, dict):
+        return checks
     severities = _default_severities()
     result: dict[str, dict[str, Any]] = {}
-    for check_id, overrides in (checks or {}).items():
+    for check_id, overrides in checks.items():
+        if not isinstance(overrides, dict):
+            result[check_id] = overrides
+            continue
+        if check_id not in severities:
+            result[check_id] = dict(overrides)
+            continue
         defaults = DEFAULTS.get(check_id, {})
         default_enabled = bool(defaults.get("enabled", True))
         kept: dict[str, Any] = {}
-        for key, value in (overrides or {}).items():
+        for key, value in overrides.items():
             if value is None:
                 continue
             if key == "enabled":

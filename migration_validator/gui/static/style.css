@@ -607,6 +607,7 @@ a:hover { color: #0e3fa9; }
 .check-option .option-label { font-size: 11.5px; color: #4b5563; }
 .check-option .option-input { width: 110px; }
 .check-option .option-input.is-default { color: #9ca3af; font-style: italic; }
+.check-option.is-default .option-label { color: #9ca3af; font-style: italic; }
 .check-option .option-input.input-error { border-color: #b91c1c; }
 .check-option .option-hint { font-size: 11px; color: #9ca3af; max-width: 260px; }
 .check-option.unknown .option-value { color: #6b7280; }

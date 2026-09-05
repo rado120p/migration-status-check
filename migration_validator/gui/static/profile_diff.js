@@ -8,11 +8,11 @@ const SEVERITIES = ["critical", "advisory"];
 /* Helper text under option fields. The registry has no description field,
    so the sign convention lives here (see docs/cs/reference.md, config). */
 const OPTION_HINTS = {
-  tolerance_percent: "zaporne = povoleny pokles v % proti baseline",
-  tolerance_db: "povoleny posun RX/TX v dB proti baseline",
-  max_residual_pps: "zbytkovy provoz v pps, ktery jeste znamena 'utichlo'",
-  count: "pocet pingu na jednu adresu",
-  require_nonzero: "nulovy provoz je nalez i bez baseline",
+  tolerance_percent: "záporné = povolený pokles v % proti baseline",
+  tolerance_db: "povolený posun RX/TX v dB proti baseline",
+  max_residual_pps: "zbytkový provoz v pps, který ještě znamená 'utichlo'",
+  count: "počet pingů na jednu adresu",
+  require_nonzero: "nulový provoz je nález i bez baseline",
 };
 
 function defaultRow(entry) {
