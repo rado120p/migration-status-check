@@ -722,7 +722,10 @@ Provozní návod se stromem, hybridním `run.yml` a odvozeným příkladem je v
 
 | sekce | klíče | poznámka |
 |---|---|---|
-| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`; fáze 4 podporuje jednoho `old` a jednoho `new` |
+| `kind` | `single` \| `migration` | chybí-li, výchozí je `migration`; `single` = jedno zařízení, pre/post/rollback kolem upgradu, bez `interface_mapping` |
+| `profile` | jméno profilu | volitelné; chybí-li, použije se serverový default |
+| `group` | jméno skupiny | rezervováno pro bulk (N `single` runů se stejnou skupinou); zatím to nic nezapisuje |
+| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; fáze 4 podporuje jednoho `old` a jednoho `new`; `single` smí mít v runu typu `single` právě jedno zařízení a nesmí mít `interface_mapping` |
 | `interface_mapping` | seznam `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | páruje logické jednotky (`ge-0/0/0`), stejný tvar jako `mapping.yml` selektor `interface` |
 | `captures` | seznam `{phase, device, port, snapshot, taken}` | `port: all` v souboru odpovídá `port: null` v modelu (celoboxová capture); vede ji aplikace, ne operátor |
 
@@ -777,6 +780,10 @@ to znamená jednu `post` evaluaci na každý mapping, ne jednu na celou `post` c
 |---|---|---|
 | `post` (na krok) | 1. `pre` starého portu daného kroku, spárovaného přes `interface_mapping` 2. `pre` celého starého boxu (capture bez portu) | vyhodnotí se bez baseline, stderr: `chybi pre snimek stareho boxu` |
 | `rollback` | `pre` **téhož** zařízení a **téhož** portu | vyhodnotí se bez baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
+
+V runu typu `single` je baseline `post`/`rollback` snímku vždy vlastní `pre` snímek **téhož**
+zařízení (nejdřív přesný port, pak celý box) — fallback na celoboxový `pre` starého zařízení
+se tu neuplatní, protože `single` run nemá `interface_mapping` ani zařízení role `old`.
 
 Pro každou evaluaci se vytiskne záhlaví `=== <subject snapshot> vs <baseline snapshot|"bez
 baseline">{krok} ===`, kde `{krok}` je `[krok STARY_NODE:STARY_PORT -> NOVY_NODE:NOVY_PORT]`,

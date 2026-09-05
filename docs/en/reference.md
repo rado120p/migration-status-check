@@ -749,7 +749,10 @@ section 8 — see the note at the end).
 
 | section | keys | note |
 |---|---|---|
-| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch` |
+| `kind` | `single` \| `migration` | missing defaults to `migration`; `single` = one device, pre/post/rollback around an upgrade, no `interface_mapping` |
+| `profile` | profile name | optional; missing means the server default |
+| `group` | group name | reserved for bulk (N `single` runs sharing a group); nothing writes it yet |
+| `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; a `single`-kind run has exactly one device with role `single` and no `interface_mapping` |
 | `interface_mapping` | list of `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | pairs logical units (`ge-0/0/0`), same shape as the `mapping.yml` `interface` selector. **Several entries may share the same `new`** — N:1 (LAG) mapping: multiple old ports migrating onto one new LAG port |
 | `captures` | list of `{phase, device, port, snapshot, taken}` | `port: all` in the file corresponds to `port: null` in the model (whole-box capture); the application maintains this section, not the operator |
 
@@ -788,6 +791,10 @@ migration step, not one for the whole `post` capture.
 |---|---|---|
 | `post` (per step) | 1. `pre` of the step's old port, paired via `interface_mapping` 2. `pre` of the whole old box (portless capture) | evaluated without a baseline, stderr: `chybi pre snimek stareho boxu` |
 | `rollback` | `pre` of the **same** device and **same** port | evaluated without a baseline, stderr: `chybi puvodni pre snimek stejneho zarizeni a portu` |
+
+In a `single`-kind run, the baseline for a `post`/`rollback` snapshot is always the **same**
+device's own `pre` snapshot (exact port first, then whole-box) — the whole-box-old fallback
+does not apply here, since a `single` run has no `interface_mapping` and no `old`-role device.
 
 Each evaluation prints the header `=== <subject snapshot> vs <baseline snapshot|"bez
 baseline">{step} ===`, where `{step}` is `[krok OLD_NODE:OLD_PORT -> NEW_NODE:NEW_PORT]`
