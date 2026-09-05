@@ -35,16 +35,27 @@ def _passes_port_filter(port: str | None, ports: list[str] | None) -> bool:
     return port in ports
 
 
+def _own_pre(manifest: RunManifest, node: str, port: str | None) -> CaptureRecord | None:
+    """Pre snimek tehoz zarizeni: nejdriv presny port, pak celoboxovy."""
+    return manifest.find_capture("pre", node, port) or manifest.find_capture(
+        "pre", node, None
+    )
+
+
 def find_pre_baseline(
     manifest: RunManifest, node: str, port: str | None
 ) -> CaptureRecord | None:
     """Najde pre snimek stareho boxu pro dany node/port.
 
     Nejdriv zkusi per-port parovani pres interface_mapping, pak spadne na
-    celoboxovy pre snimek stareho boxu (role "old"). Sdileno mezi
-    plan_evaluations (evaluate --run) a cli._capture_into_run (baseline pro
-    ping cile pri post capture).
+    celoboxovy pre snimek stareho boxu (role "old"). Single run zadny stary
+    box nema - baseline je vlastni pre snimek zarizeni. Sdileno mezi
+    plan_evaluations (evaluate --run) a orchestrate.capture_into_run
+    (baseline pro ping cile pri post capture).
     """
+    if manifest.kind == "single":
+        return _own_pre(manifest, node, port)
+
     baseline: CaptureRecord | None = None
 
     if port is not None:
@@ -62,6 +73,23 @@ def find_pre_baseline(
 
 
 def _plan_post(manifest: RunManifest, subject: CaptureRecord) -> list[Evaluation]:
+    if manifest.kind == "single":
+        # Jeden box: post vs vlastni pre, vzdy prave jedna evaluace.
+        # _plan_same_device tuhle dvojici pozna podle snapshotu a nezdvoji ji.
+        baseline = find_pre_baseline(manifest, subject.device, subject.port)
+        if baseline is None:
+            return [
+                Evaluation(
+                    subject=subject,
+                    baseline=None,
+                    reason=(
+                        "chybi pre snimek "
+                        f"{subject.device}:{subject.port or 'all'}"
+                    ),
+                )
+            ]
+        return [Evaluation(subject=subject, baseline=baseline, same_device=True)]
+
     steps = [
         mapping
         for mapping in manifest.interface_mapping

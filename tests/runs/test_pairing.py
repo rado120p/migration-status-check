@@ -314,3 +314,83 @@ def test_find_pre_baseline_none_when_missing():
     manifest.captures = []
 
     assert find_pre_baseline(manifest, "PTX1-POP1", "et-0/0/0") is None
+
+
+# -- single run (jeden box, pre/post kolem upgradu) -------------------------
+
+
+def _single_manifest():
+    return RunManifest(
+        devices={
+            "PTX1-POP1": RunDevice(
+                host="172.20.20.5", platform="junos-evo", role="single"
+            )
+        },
+        kind="single",
+    )
+
+
+def test_single_run_pre_and_post_is_one_same_device_evaluation():
+    manifest = _single_manifest()
+    pre = CaptureRecord("pre", "PTX1-POP1", None, "pre.json", "T1")
+    post = CaptureRecord("post", "PTX1-POP1", None, "post.json", "T2")
+    manifest.captures = [pre, post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    evaluation = evaluations[0]
+    assert evaluation.subject == post
+    assert evaluation.baseline == pre
+    assert evaluation.reason is None
+    assert evaluation.same_device is True
+    assert evaluation.step is None
+
+
+def test_single_run_post_without_pre_names_the_device():
+    manifest = _single_manifest()
+    post = CaptureRecord("post", "PTX1-POP1", None, "post.json", "T2")
+    manifest.captures = [post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    assert evaluations[0].baseline is None
+    assert evaluations[0].reason == "chybi pre snimek PTX1-POP1:all"
+
+
+def test_single_run_per_port_post_falls_back_to_whole_box_pre():
+    manifest = _single_manifest()
+    pre_all = CaptureRecord("pre", "PTX1-POP1", None, "pre_all.json", "T1")
+    post = CaptureRecord("post", "PTX1-POP1", "et-0/0/0", "post.json", "T2")
+    manifest.captures = [pre_all, post]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    assert evaluations[0].baseline == pre_all
+    assert evaluations[0].same_device is True
+
+
+def test_single_run_rollback_pairs_with_own_pre():
+    manifest = _single_manifest()
+    pre = CaptureRecord("pre", "PTX1-POP1", None, "pre.json", "T1")
+    rollback = CaptureRecord("rollback", "PTX1-POP1", None, "rb.json", "T3")
+    manifest.captures = [pre, rollback]
+
+    evaluations = plan_evaluations(manifest)
+
+    assert len(evaluations) == 1
+    assert evaluations[0].subject == rollback
+    assert evaluations[0].baseline == pre
+    assert evaluations[0].same_device is False
+
+
+def test_find_pre_baseline_single_run_returns_own_pre():
+    manifest = _single_manifest()
+    pre_all = CaptureRecord("pre", "PTX1-POP1", None, "pre_all.json", "T1")
+    manifest.captures = [pre_all]
+    assert find_pre_baseline(manifest, "PTX1-POP1", "et-0/0/0") == pre_all
+    assert find_pre_baseline(manifest, "PTX1-POP1", None) == pre_all
+    manifest.captures = []
+    assert find_pre_baseline(manifest, "PTX1-POP1", None) is None
