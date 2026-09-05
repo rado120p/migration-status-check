@@ -17,7 +17,13 @@ from typing import Any
 
 import yaml
 
-from migration_validator.config import Profile, load_profile
+from migration_validator.config import (
+    DEFAULTS,
+    Profile,
+    load_profile,
+    option_matches_type,
+    option_type,
+)
 
 PROFILE_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 
@@ -35,6 +41,47 @@ def empty_document() -> dict[str, Any]:
         "profile": {"collectors": None, "service_types": None, "ping_count": None},
         "checks": {},
     }
+
+
+def _default_severities() -> dict[str, str]:
+    # Pozdni import: registr checku se nacita az pri save/preview, ne pri
+    # importu store (config nesmi tahat checky).
+    from migration_validator.checks.all import load_all
+    from migration_validator.checks.registry import all_checks
+
+    load_all()
+    return {check.id: check.default_severity.value for check in all_checks()}
+
+
+def strip_check_defaults(checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Z overrides vyhodi to, co se rovna defaultu (enabled, severity,
+    volby z DEFAULTS); check bez rozdilu zmizi. Neznamy check, neznama
+    volba a hodnota spatneho typu zustavaji beze zmeny - loader je bud
+    pusti (GUI je ukaze k odebrani) nebo odmitne s hlaskou.
+    Zrcadlo checksDocument v gui/static/profile_diff.js."""
+    severities = _default_severities()
+    result: dict[str, dict[str, Any]] = {}
+    for check_id, overrides in (checks or {}).items():
+        defaults = DEFAULTS.get(check_id, {})
+        default_enabled = bool(defaults.get("enabled", True))
+        kept: dict[str, Any] = {}
+        for key, value in (overrides or {}).items():
+            if value is None:
+                continue
+            if key == "enabled":
+                if isinstance(value, bool) and value == default_enabled:
+                    continue
+            elif key == "severity":
+                if value == severities.get(check_id):
+                    continue
+            elif key in defaults:
+                expected = option_type(defaults[key])
+                if option_matches_type(value, expected) and value == defaults[key]:
+                    continue
+            kept[key] = value
+        if kept:
+            result[check_id] = kept
+    return result
 
 
 def document_from_profile(profile: Profile) -> dict[str, Any]:
@@ -58,17 +105,14 @@ def document_to_yaml(document: dict[str, Any]) -> str:
     jen to, co je nastavene. Prazdny seznam se zahodi stejne jako null:
     jinak by se do capture dostal jako "neber nic" (a GUI ho v
     normalizeProfileDocument take zahazuje).
-    Nezname klice zustavaji (save je nechava spadnout v load_profile)."""
+    Nezname klice zustavaji (save je nechava spadnout v load_profile).
+    Overrides rovne defaultu se vynechaji (strip_check_defaults)."""
     section = {
         key: value
         for key, value in (document.get("profile") or {}).items()
         if value is not None and value != []
     }
-    checks: dict[str, dict[str, Any]] = {}
-    for check_id, overrides in (document.get("checks") or {}).items():
-        kept = {k: v for k, v in (overrides or {}).items() if v is not None}
-        if kept:
-            checks[check_id] = kept
+    checks = strip_check_defaults(document.get("checks") or {})
     data: dict[str, Any] = {}
     if section:
         data["profile"] = section

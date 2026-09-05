@@ -9,6 +9,7 @@ from migration_validator.profiles.store import (
     document_from_profile,
     document_to_yaml,
     empty_document,
+    strip_check_defaults,
 )
 
 
@@ -153,3 +154,54 @@ def test_document_from_profile():
         "checks": {"bgp_prefix_counts": {"tolerance_percent": -5}},
     }
     assert doc["checks"] is not profile.checks.raw
+
+
+# -- strip_check_defaults: soubor nese jen to, co se lisi od defaultu ------
+
+def test_strip_vyhodi_hodnoty_rovne_defaultu_a_prazdny_check():
+    checks = {
+        "interface_traffic": {"tolerance_percent": -60, "require_nonzero": True,
+                              "severity": "advisory", "enabled": True},
+        "bgp_prefix_counts": {"tolerance_percent": -5},
+    }
+    assert strip_check_defaults(checks) == {"bgp_prefix_counts": {"tolerance_percent": -5}}
+
+
+def test_strip_enabled_false_zustava_jen_u_defaultne_zapnutych():
+    assert strip_check_defaults({"interface_state": {"enabled": False}}) == {
+        "interface_state": {"enabled": False},
+    }
+    # traffic_ceased je defaultne vypnuty: enabled: true je override,
+    # enabled: false ne.
+    assert strip_check_defaults({"traffic_ceased": {"enabled": True}}) == {
+        "traffic_ceased": {"enabled": True},
+    }
+    assert strip_check_defaults({"traffic_ceased": {"enabled": False}}) == {}
+
+
+def test_strip_severity_jina_nez_default_zustava():
+    assert strip_check_defaults({"bgp_prefix_counts": {"severity": "critical"}}) == {
+        "bgp_prefix_counts": {"severity": "critical"},
+    }
+    assert strip_check_defaults({"interface_state": {"severity": "critical"}}) == {}
+
+
+def test_strip_necha_neznamy_check_a_neznamou_volbu():
+    checks = {"old_check": {"enabled": False}, "interface_traffic": {"foo": 1}}
+    assert strip_check_defaults(checks) == checks
+
+
+def test_strip_necha_hodnotu_spatneho_typu_loaderu():
+    # "-60" se rovna defaultu jen na pohled - stripnout ji by loaderu
+    # sebralo chybu, kterou ma uzivatel videt.
+    checks = {"interface_traffic": {"tolerance_percent": "-60", "require_nonzero": 1}}
+    assert strip_check_defaults(checks) == checks
+
+
+def test_document_to_yaml_pouziva_strip():
+    doc = _doc()
+    doc["checks"] = {
+        "interface_traffic": {"tolerance_percent": -60, "require_nonzero": True},
+        "interface_optics_levels": {"enabled": False, "tolerance_db": 2.0},
+    }
+    assert document_to_yaml(doc) == "checks:\n  interface_optics_levels:\n    enabled: false\n"

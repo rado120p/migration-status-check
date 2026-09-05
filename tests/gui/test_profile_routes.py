@@ -209,3 +209,68 @@ def test_operator_take_nezapisuje(tmp_path):
     operator = _client(tmp_path, role="operator")
     resp = operator.post("/api/profiles", json={"name": "b", "document": empty_document()})
     assert resp.status_code == 403
+
+
+# -- preview / save: jen odchylky od defaultu (spec 4) -----------------------
+
+def _preview(client, checks):
+    doc = _doc()
+    doc["checks"] = checks
+    return client.post("/api/profiles/preview", json={"document": doc}).json()["yaml"]
+
+
+def test_preview_bez_overrides_nema_sekci_checks(tmp_path):
+    client = _client(tmp_path)
+    assert _preview(client, {}) == ""
+    assert _preview(client, {"interface_traffic": {"tolerance_percent": -60}}) == ""
+
+
+def test_preview_enabled_false_pise_jen_enabled(tmp_path):
+    client = _client(tmp_path)
+    yaml_text = _preview(client, {"interface_optics_levels": {
+        "enabled": False, "severity": "critical", "tolerance_db": 2.0,
+    }})
+    assert yaml_text == "checks:\n  interface_optics_levels:\n    enabled: false\n"
+
+
+def test_preview_severity_rovna_defaultu_se_nepise(tmp_path):
+    client = _client(tmp_path)
+    assert _preview(client, {"bgp_prefix_counts": {"severity": "advisory"}}) == ""
+    assert _preview(client, {"bgp_prefix_counts": {"severity": "critical"}}) == (
+        "checks:\n  bgp_prefix_counts:\n    severity: critical\n"
+    )
+
+
+def test_preview_volba_rovna_defaultu_se_nepise(tmp_path):
+    client = _client(tmp_path)
+    yaml_text = _preview(client, {"interface_traffic": {
+        "tolerance_percent": -40, "require_nonzero": True,
+    }})
+    assert yaml_text == "checks:\n  interface_traffic:\n    tolerance_percent: -40\n"
+
+
+def test_put_string_misto_cisla_je_422_se_jmenem_checku_a_klice(tmp_path):
+    client = _client(tmp_path)
+    client.post("/api/profiles", json={"name": "p", "document": empty_document()})
+    doc = _doc()
+    doc["checks"] = {"interface_traffic": {"tolerance_percent": "-40"}}
+    resp = client.put("/api/profiles/p", json={"document": doc})
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == (
+        f"{tmp_path / 'profiles' / 'p.yml'}: check 'interface_traffic': "
+        "volba 'tolerance_percent' ocekava number, nalezeno str"
+    )
+    # soubor zustal prazdny (validace bezi na temp souboru)
+    assert (tmp_path / "profiles" / "p.yml").read_text(encoding="utf-8") == ""
+
+
+def test_get_po_save_vraci_kanonicke_overrides(tmp_path):
+    client = _client(tmp_path)
+    doc = _doc()
+    doc["checks"] = {
+        "interface_traffic": {"tolerance_percent": -60, "require_nonzero": False},
+        "interface_state": {"enabled": True},
+    }
+    resp = client.post("/api/profiles", json={"name": "p", "document": doc})
+    assert resp.status_code == 201
+    assert resp.json()["document"]["checks"] == {"interface_traffic": {"require_nonzero": False}}
