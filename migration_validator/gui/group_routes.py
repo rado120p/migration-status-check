@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -98,7 +99,7 @@ def build_groups_router(
                     port=None, parse_services=False, profile=profile, settings=settings,
                 )
                 entry["task_id"] = task.id
-            except (ValueError, OSError, StopIteration, DeviceBusy) as error:
+            except (ValueError, OSError, StopIteration, DeviceBusy, yaml.YAMLError) as error:
                 entry["error"] = str(error) or "run bez zarizeni"
             tasks.append(entry)
         return {"batch": uuid.uuid4().hex[:12], "tasks": tasks}

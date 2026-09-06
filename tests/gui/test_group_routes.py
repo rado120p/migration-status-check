@@ -3,6 +3,7 @@
 import threading
 import time
 
+import yaml
 from fastapi.testclient import TestClient
 
 from migration_validator import api
@@ -138,6 +139,36 @@ def test_post_captures_obsazene_zarizeni_je_radkova_chyba(tmp_path, monkeypatch)
     assert tasks["pop1-ptx1"]["task_id"] is None
     assert "uz bezi capture" in tasks["pop1-ptx1"]["error"]
     assert tasks["pop1-mx2"]["task_id"] is not None
+    gate.set()
+
+
+def test_post_captures_rozbity_run_yml_clena_je_radkova_chyba(tmp_path, monkeypatch):
+    """store.load() muze shodit yaml.YAMLError, kdyz se run.yml clena rozbije
+    mezi tim, co api.group_runs() precetl clenstvi, a tim, co _start_batch
+    nacita manifest jednotlivych clenu (zavodni okno pri soubeznem zapisu).
+    api.group_runs() sam malformovany top-level YAML uz filtruje pryc z
+    clenstvi (viz _raw_manifest), takze staticky rozbity soubor tuto vetev
+    nezasahne - simulujeme rozbiti primo v RunStore.load()."""
+    gate = threading.Event()
+    _blocking_capture(monkeypatch, gate)
+    client = _client(tmp_path)
+    client.post("/api/groups", json=_body())
+
+    import migration_validator.runs.store as store_module
+    original_load = store_module.RunStore.load
+
+    def broken_load(self):
+        if self.name == "pop1-mx2":
+            raise yaml.YAMLError("rozbity yaml")
+        return original_load(self)
+
+    monkeypatch.setattr(store_module.RunStore, "load", broken_load)
+    resp = client.post("/api/groups/pop1/captures", json={"phase": "pre"})
+    assert resp.status_code == 202
+    tasks = {t["run"]: t for t in resp.json()["tasks"]}
+    assert tasks["pop1-mx2"]["task_id"] is None
+    assert tasks["pop1-mx2"]["error"]
+    assert tasks["pop1-ptx1"]["task_id"] is not None
     gate.set()
 
 

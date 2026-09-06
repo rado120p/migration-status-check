@@ -1,5 +1,7 @@
 """Souhrn skupiny - verdikt runu, cache, radky."""
 
+import yaml
+
 from migration_validator import api
 from migration_validator.gui.captures import CaptureManager
 from migration_validator.gui.groups import SummaryCache, build_group_summary, run_verdict
@@ -117,6 +119,28 @@ def test_summary_rozbity_manifest_je_error_radek(tmp_path):
     assert rows["g-mx2"]["verdict"] is None
     assert rows["g-ptx1"]["error"] is None
     assert summary["verdicts"] == {"none": 1, "error": 1}
+
+
+def test_summary_rozbity_yaml_je_error_radek(tmp_path, monkeypatch):
+    """store.load() muze shodit yaml.YAMLError (napr. run.yml se rozbije
+    soubezne se čtenim clenstvi skupiny). api.group_runs() sam malformovany
+    top-level YAML uz filtruje pryc z clenstvi, takze staticky rozbity
+    soubor tuto vetev nezasahne - simulujeme rozbiti primo v RunStore.load()."""
+    ptx, mx = _group(tmp_path)
+
+    original_load = RunStore.load
+
+    def broken_load(self):
+        if self.name == "g-mx2":
+            raise yaml.YAMLError("rozbity yaml")
+        return original_load(self)
+
+    monkeypatch.setattr(RunStore, "load", broken_load)
+    summary = _summary(tmp_path)
+    rows = {row["run"]: row for row in summary["runs"]}
+    assert rows["g-mx2"]["error"]
+    assert rows["g-mx2"]["verdict"] is None
+    assert rows["g-ptx1"]["error"] is None
 
 
 def test_summary_chybejici_snimek_je_error_radek(tmp_path):

@@ -8,6 +8,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from migration_validator import api
 from migration_validator.config import Profile
 from migration_validator.gui.captures import CaptureManager
@@ -103,7 +105,7 @@ def _member_row(
         row["active_task"] = {"id": task.id, "phase": task.phase, "state": task.state}
     try:
         manifest = store.load()
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, yaml.YAMLError) as error:
         row["error"] = str(error)
         return row
     node, device = next(iter(manifest.devices.items()), (None, None))
