@@ -104,6 +104,16 @@ const GUIDE_TEXT = {
     title: "Edit mapping",
     body: ["Páruje starý port s novým. Řádek s existujícím capture je zamčený — mapování, podle kterého už se sbíralo, se nemění."],
   },
+  group: {
+    title: "Group",
+    body: [
+      "Skupina = N single-device runů se stejným group v run.yml, jeden na box. Každý řádek je samostatný run — open ho otevře jako každý jiný single run.",
+      "Capture pre/post/rollback on all zařadí capture každého boxu do fronty; naráz jich běží nejvýš capture_pool (settings.yml, výchozí 10). Obsazený box se přeskočí a hlásí chybu v buňce fáze, ostatní pokračují.",
+      "Verdict = nejhorší stav vyhodnocení runu (post nebo rollback proti vlastnímu pre). Řádky jsou seřazené od nejhoršího; kliknutím na hlavičku přeřadíš.",
+      "Capture ▾ u řádku spustí capture jen pro ten box — třeba když post jednoho boxu selhal. Add devices přidá další boxy do skupiny se stejným profilem.",
+      "Archive group archivuje všechny runy skupiny najednou; se spuštěným capture odmítne.",
+    ],
+  },
 };
 
 class App {
@@ -122,6 +132,10 @@ class App {
       combo: { open: false, query: "", index: 0 },
       archiveModal: null,
       profileEditor: null,
+      group: null,
+      groupSort: { key: null, dir: "asc" },
+      archiveGroupModal: null,
+      addDevicesModal: null,
     };
     this.cache = {
       runs: [],
@@ -143,8 +157,12 @@ class App {
       catalogueError: null,
       captureProfile: null,
       captureProfileError: null,
+      groupSummary: null,
+      groupError: null,
+      groupTasks: {},
     };
     this.capturePollTimer = null;
+    this.groupPollTimer = null;
 
     this.profileNameEl = document.getElementById("profile-name");
     this.comboEl = document.getElementById("run-combo");
@@ -238,7 +256,7 @@ class App {
   }
 
   comboMatches() {
-    return MigView.filterRuns(this.cache.runs, this.state.combo.query);
+    return MigView.comboEntries(this.cache.runs, this.state.combo.query);
   }
 
   onComboKey(e) {
@@ -261,21 +279,25 @@ class App {
       const pick = matches[combo.index];
       if (pick) {
         this.closeRunCombo();
-        this.selectRun(pick.name);
+        if (pick.type === "group") this.openGroup(pick.name);
+        else this.selectRun(pick.run.name);
       }
     }
   }
 
   renderRunCombo() {
     const combo = this.state.combo;
-    this.comboCurrentEl.textContent = this.state.run || (this.cache.runsError ? "(nelze nacist runy)" : "—");
+    this.comboCurrentEl.textContent =
+      this.state.view === "group"
+        ? `${this.state.group} (group)`
+        : this.state.run || (this.cache.runsError ? "(nelze nacist runy)" : "—");
     this.comboToggleEl.setAttribute("aria-expanded", combo.open ? "true" : "false");
     this.comboPanelEl.hidden = !combo.open;
     if (!combo.open) return;
 
     clear(this.comboListEl);
-    const matches = this.comboMatches();
-    if (matches.length === 0) {
+    const entries = MigView.comboEntries(this.cache.runs, combo.query);
+    if (entries.length === 0) {
       const text = this.cache.runsError
         ? this.cache.runsError
         : this.cache.runs.length === 0
@@ -284,13 +306,28 @@ class App {
       this.comboListEl.appendChild(el("div", { className: "run-combo-empty", text }));
       return;
     }
-    matches.forEach((run, i) => {
-      const active = run.name === this.state.run;
+    entries.forEach((entry, i) => {
       const focused = i === combo.index;
+      if (entry.type === "group") {
+        const active = this.state.view === "group" && this.state.group === entry.name;
+        this.comboListEl.appendChild(
+          el("div", {
+            className: "run-combo-row run-combo-group" + (active ? " active" : "") + (focused ? " focused" : ""),
+            attrs: { role: "option", "aria-selected": active ? "true" : "false" },
+            onClick: () => { this.closeRunCombo(); this.openGroup(entry.name); },
+            children: [
+              el("span", { className: "mono run-combo-name", text: entry.name }),
+              el("span", { className: "kind-tag", text: `group · ${entry.count}` }),
+            ],
+          })
+        );
+        return;
+      }
+      const run = entry.run;
+      const active = run.name === this.state.run && this.state.view !== "group";
       this.comboListEl.appendChild(
         el("div", {
-          className:
-            "run-combo-row" + (active ? " active" : "") + (focused ? " focused" : ""),
+          className: "run-combo-row" + (entry.grouped ? " grouped" : "") + (active ? " active" : "") + (focused ? " focused" : ""),
           attrs: { role: "option", "aria-selected": active ? "true" : "false" },
           onClick: () => {
             this.closeRunCombo();
@@ -364,6 +401,10 @@ class App {
       document.body.appendChild(root);
     }
     clear(root);
+    if (this.state.archiveGroupModal) {
+      this.renderArchiveGroupModal(root);
+      return;
+    }
     const modal = this.state.archiveModal;
     if (!modal) return;
     const detail = this.cache.detail || {};
@@ -404,6 +445,54 @@ class App {
         onClick: (e) => {
           if (e.target.classList.contains("modal-backdrop") && !modal.submitting) {
             this.closeArchiveModal();
+          }
+        },
+        children: [el("div", { className: "modal", children })],
+      })
+    );
+  }
+
+  renderArchiveGroupModal(root) {
+    const modal = this.state.archiveGroupModal;
+    const summary = this.cache.groupSummary;
+    const name = this.state.group || "";
+    const count = summary ? summary.runs.length : 0;
+    const children = [
+      el("h3", { text: "Archive group" }),
+      el("p", {
+        children: [
+          document.createTextNode("Skupina "),
+          el("span", { className: "mono", text: name }),
+          document.createTextNode(
+            ` (${count} runů) se přesune do runs/.archive/ a zmizí ze seznamu. Data zůstanou na disku.`
+          ),
+        ],
+      }),
+    ];
+    if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
+    children.push(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Cancel",
+            onClick: modal.submitting ? null : () => this.closeArchiveGroupModal(),
+          }),
+          el("button", {
+            className: "btn btn-danger",
+            text: modal.submitting ? "Archiving…" : "Archive",
+            onClick: modal.submitting ? null : () => this.confirmArchiveGroup(),
+          }),
+        ],
+      })
+    );
+    root.appendChild(
+      el("div", {
+        className: "modal-backdrop",
+        onClick: (e) => {
+          if (e.target.classList.contains("modal-backdrop") && !modal.submitting) {
+            this.closeArchiveGroupModal();
           }
         },
         children: [el("div", { className: "modal", children })],
@@ -789,6 +878,308 @@ class App {
     // renders while viewing the run the capture belongs to.
     await this.loadRun();
     this.render();
+  }
+
+  // -- group view ----------------------------------------------------------
+
+  async openGroup(name) {
+    if (!this.leaveGuard()) return;
+    this.state.view = "group";
+    this.state.group = name;
+    this.state.selectedSnapshot = null;
+    this.state.groupSort = { key: null, dir: "asc" };
+    await this.loadGroupSummary();
+    this.render();
+  }
+
+  async loadGroupSummary() {
+    this.cache.groupSummary = null;
+    this.cache.groupError = null;
+    try {
+      const res = await fetch(`/api/groups/${encodeURIComponent(this.state.group)}`);
+      if (res.ok) {
+        this.cache.groupSummary = await res.json();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        this.cache.groupError = body.detail || `skupinu se nepodarilo nacist (${res.status})`;
+      }
+    } catch (err) {
+      this.cache.groupError = String(err);
+    }
+  }
+
+  /* Record batch/task ids to poll. Rows with a server-side error (busy
+     device) get a synthetic failed state so the cell shows the message. */
+  trackBatch(batch, phase) {
+    for (const entry of (batch && batch.tasks) || []) {
+      this.cache.groupTasks[entry.run] = entry.task_id
+        ? { task_id: entry.task_id, phase, state: "queued", error: null }
+        : { task_id: null, phase, state: "failed", error: entry.error || "capture se nespustil" };
+    }
+  }
+
+  async startGroupCapture(phase) {
+    const summary = this.cache.groupSummary;
+    if (!summary || this.groupBatchActive()) return;
+    try {
+      const res = await fetch(`/api/groups/${encodeURIComponent(summary.name)}/captures`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status !== 202) {
+        this.cache.groupError = body.detail || `capture se nepodarilo spustit (${res.status})`;
+      } else {
+        this.trackBatch(body, phase);
+      }
+    } catch (err) {
+      this.cache.groupError = String(err);
+    }
+    this.render();
+  }
+
+  async startRowCapture(run, node, phase) {
+    try {
+      const res = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run, device: node, port: null, phase, parse_services: false }),
+      });
+      const body = await res.json().catch(() => ({}));
+      this.cache.groupTasks[run] = res.status === 202
+        ? { task_id: body.id, phase, state: "queued", error: null }
+        : { task_id: null, phase, state: "failed", error: body.detail || `capture se nespustil (${res.status})` };
+    } catch (err) {
+      this.cache.groupTasks[run] = { task_id: null, phase, state: "failed", error: String(err) };
+    }
+    this.render();
+  }
+
+  groupBatchActive() {
+    return Object.values(this.cache.groupTasks).some((t) => t.task_id && (t.state === "queued" || t.state === "running"));
+  }
+
+  syncGroupPolling() {
+    const shouldPoll = this.state.view === "group" && this.groupBatchActive();
+    if (shouldPoll && !this.groupPollTimer) {
+      this.groupPollTimer = setInterval(() => this.pollGroupTasks(), 2000);
+      this.pollGroupTasks();
+    } else if (!shouldPoll && this.groupPollTimer) {
+      clearInterval(this.groupPollTimer);
+      this.groupPollTimer = null;
+    }
+  }
+
+  async pollGroupTasks() {
+    const pending = Object.entries(this.cache.groupTasks).filter(
+      ([, t]) => t.task_id && (t.state === "queued" || t.state === "running")
+    );
+    if (!pending.length) { this.syncGroupPolling(); return; }
+    let changed = false;
+    for (const [run, tracked] of pending) {
+      try {
+        const res = await fetch(`/api/captures/${tracked.task_id}`);
+        if (!res.ok) { tracked.state = "failed"; tracked.error = `task ${res.status}`; changed = true; continue; }
+        const task = await res.json();
+        if (task.state !== tracked.state) {
+          tracked.state = task.state;
+          tracked.error = task.error || null;
+          changed = true;
+        }
+      } catch (err) {
+        // network hiccup - retry on the next tick
+      }
+    }
+    if (changed && !this.groupBatchActive()) {
+      await this.loadGroupSummary();
+    }
+    if (changed) this.render();
+  }
+
+  renderGroupView() {
+    clear(this.mainEl);
+    const summary = this.cache.groupSummary;
+    if (this.cache.groupError && !summary) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: this.cache.groupError }));
+      return;
+    }
+    if (!summary) return;
+    const tasks = this.cache.groupTasks;
+    const batchActive = this.groupBatchActive();
+
+    const header = el("div", {
+      className: "run-header",
+      children: [
+        el("h1", { children: [document.createTextNode("Group "), el("span", { className: "mono", text: summary.name })] }),
+        el("span", { className: "kind-tag", text: `group · ${summary.runs.length} runs` }),
+        el("button", {
+          className: "profile-link mono",
+          text: summary.profile ? `profile: ${summary.profile}` : "profile: (default)",
+          attrs: { type: "button" },
+          onClick: () => this.goToProfiles(summary.profile || null),
+        }),
+        el("span", { className: "subtitle", text: summary.created ? `created ${summary.created}` : "" }),
+        el("button", {
+          className: "btn btn-danger-secondary run-header-archive",
+          text: "Archive group",
+          onClick: () => this.openArchiveGroupModal(),
+        }),
+      ],
+    });
+    this.mainEl.appendChild(header);
+
+    const captureBtn = (label, phase, primary) => el("button", {
+      className: "btn " + (primary ? "btn-primary" : "btn-secondary"),
+      text: label,
+      attrs: batchActive ? { disabled: "disabled" } : {},
+      onClick: batchActive ? null : () => this.startGroupCapture(phase),
+    });
+    const tracked = Object.values(tasks).filter((t) => t.task_id);
+    const done = tracked.filter((t) => t.state === "done" || t.state === "failed").length;
+    const phaseRunning = (tracked.find((t) => t.state === "queued" || t.state === "running") || {}).phase;
+    const bar = el("div", {
+      className: "group-actions",
+      children: [
+        captureBtn("Capture pre on all", "pre", true),
+        captureBtn("Capture post on all", "post", false),
+        captureBtn("Capture rollback on all", "rollback", false),
+        el("button", { className: "btn btn-secondary", text: "+ Add devices", onClick: () => this.openAddDevicesModal() }),
+        batchActive ? el("span", { className: "group-progress-text", text: `${phaseRunning} capture running · ${done}/${tracked.length} done` }) : null,
+        this.buildVerdictStrip(summary.verdicts),
+      ],
+    });
+    this.mainEl.appendChild(bar);
+    if (batchActive) {
+      this.mainEl.appendChild(el("div", { className: "group-progress", children: [
+        el("div", { style: { width: `${tracked.length ? Math.round((100 * done) / tracked.length) : 0}%` } }),
+      ] }));
+    }
+    if (this.cache.groupError) {
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", text: this.cache.groupError }));
+    }
+    this.mainEl.appendChild(this.buildGroupTable(summary, tasks));
+  }
+
+  buildVerdictStrip(verdicts) {
+    const order = ["PASS", "RECV", "WARN", "FAIL", "SKIP", "INFO"];
+    const children = [];
+    for (const key of order) {
+      if (verdicts[key]) children.push(el("span", { className: "pill pill-" + key.toLowerCase(), text: `${key} ${verdicts[key]}` }));
+    }
+    if (verdicts.none) children.push(el("span", { className: "pill pill-none", text: `no post ${verdicts.none}` }));
+    if (verdicts.error) children.push(el("span", { className: "pill pill-fail", text: `error ${verdicts.error}` }));
+    return el("div", { className: "verdict-strip", children });
+  }
+
+  buildGroupTable(summary, tasks) {
+    const sort = this.state.groupSort;
+    const columns = [
+      ["node", "Device"], ["host", "Host"], ["platform", "Platform"],
+      ["pre", "Pre"], ["post", "Post"], ["rollback", "Rollback"],
+      ["verdict", "Verdict"], [null, "Services"], [null, "Checks"], [null, ""],
+    ];
+    const head = el("div", { className: "group-row group-head" });
+    for (const [key, label] of columns) {
+      const active = key && sort.key === key;
+      head.appendChild(el("span", {
+        className: "group-th" + (key ? " sortable" : "") + (active ? " active" : ""),
+        text: label + (active ? (sort.dir === "asc" ? " ▲" : " ▼") : ""),
+        onClick: key ? () => {
+          this.state.groupSort = active ? { key, dir: sort.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" };
+          this.render();
+        } : null,
+      }));
+    }
+    const table = el("div", { className: "group-table", children: [head] });
+    const rows = MigView.sortGroupRows(summary.runs, sort.key, sort.dir);
+    for (const row of rows) table.appendChild(this.buildGroupRow(row, tasks[row.run] || null));
+    return table;
+  }
+
+  buildGroupRow(row, taskState) {
+    const tone = row.error ? "error" : (row.verdict || "none").toLowerCase();
+    const counts = (c) => el("span", { className: "count-pills", children:
+      ["pass", "recv", "warn", "fail"].filter((k) => c && c[k]).map((k) => el("span", { className: "pill pill-" + k, text: String(c[k]) })),
+    });
+    const phase = (name) => {
+      const cell = MigView.phaseCell(row, name, taskState);
+      return el("span", { className: "phase-cell phase-" + cell.kind, text: cell.text, attrs: cell.title ? { title: cell.title } : {} });
+    };
+    const menu = el("select", { className: "form-select row-capture", children: [
+      el("option", { text: "capture ▾", attrs: { value: "" } }),
+      ...["pre", "post", "rollback"].map((p) => el("option", { text: p, attrs: { value: p } })),
+    ] });
+    menu.addEventListener("change", (e) => {
+      const p = e.target.value;
+      e.target.value = "";
+      if (p && row.node) this.startRowCapture(row.run, row.node, p);
+    });
+    return el("div", {
+      className: "group-row tone-" + tone,
+      children: [
+        el("span", { className: "mono", text: row.node || row.run }),
+        el("span", { className: "mono", text: row.host || "" }),
+        el("span", { text: row.platform || "" }),
+        phase("pre"), phase("post"), phase("rollback"),
+        row.error
+          ? el("span", { className: "verdict verdict-error", text: "error", attrs: { title: row.error } })
+          : el("span", { className: "verdict verdict-" + (row.verdict || "none").toLowerCase(), text: row.verdict || "no post" }),
+        counts(row.services), counts(row.checks),
+        el("span", { className: "row-actions", children: [
+          el("a", { className: "crumb-link", text: "open ›", attrs: { href: "#" }, onClick: (e) => { e.preventDefault(); this.selectRun(row.run); } }),
+          menu,
+        ] }),
+      ],
+    });
+  }
+
+  // -- archive group modal --------------------------------------------------
+
+  openArchiveGroupModal() {
+    if (!this.leaveGuard()) return;
+    this.state.archiveGroupModal = { submitting: false, error: null };
+    this.render();
+  }
+
+  closeArchiveGroupModal() {
+    this.state.archiveGroupModal = null;
+    this.render();
+  }
+
+  async confirmArchiveGroup() {
+    const modal = this.state.archiveGroupModal;
+    const name = this.state.group;
+    if (!modal || !name || modal.submitting) return;
+    modal.submitting = true;
+    modal.error = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/groups/${encodeURIComponent(name)}/archive`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        modal.error = body.detail || `archivace selhala (${res.status})`;
+        modal.submitting = false;
+        this.render();
+        return;
+      }
+      this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
+      this.state.archiveGroupModal = null;
+      this.state.group = null;
+      this.cache.groupSummary = null;
+      this.cache.groupError = null;
+      this.cache.groupTasks = {};
+      if (this.cache.runs.length === 0) {
+        this.state.view = "empty";
+        this.render();
+      } else {
+        await this.selectRun(this.cache.runs[0].name);
+      }
+    } catch (err) {
+      modal.error = String(err);
+      modal.submitting = false;
+      this.render();
+    }
   }
 
   async selectSnapshot(file) {
@@ -1465,7 +1856,7 @@ class App {
     this.btnProfilesEl.classList.toggle("btn-toggle-active", this.state.view === "profiles");
     const noRuns = this.cache.runs.length === 0;
     this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
-    document.getElementById("btn-new-capture").disabled = noRuns;
+    document.getElementById("btn-new-capture").disabled = noRuns || this.state.view === "group";
     switch (this.state.view) {
       case "empty":
         this.renderEmptyState();
@@ -1485,11 +1876,15 @@ class App {
       case "editmapping":
         this.renderEditMapping();
         break;
+      case "group":
+        this.renderGroupView();
+        break;
       default:
         this.renderRunOverview();
         break;
     }
     this.syncCapturePolling();
+    this.syncGroupPolling();
   }
 
   renderGuide() {
@@ -1668,6 +2063,13 @@ class App {
     if (single && singleDevice) {
       const label = PLATFORM_LABEL[singleDevice.platform] || singleDevice.platform;
       header.appendChild(el("span", { className: "kind-tag", text: "single device" }));
+      if (detail.group) {
+        header.appendChild(el("button", {
+          className: "profile-link mono", text: `group: ${detail.group}`,
+          attrs: { type: "button", title: "otevřít skupinu" },
+          onClick: () => this.openGroup(detail.group),
+        }));
+      }
       header.appendChild(
         el("span", {
           className: "subtitle",
