@@ -98,11 +98,15 @@ def _member_row(
     row: dict[str, Any] = {
         "run": store.name, "node": None, "host": None, "platform": None,
         "phases": {phase: None for phase in PHASES}, "active_task": None,
+        "last_task": None,
         "verdict": None, "services": _zero(), "checks": _zero(), "error": None,
     }
     task = manager.active_task(store.name)
     if task is not None:
         row["active_task"] = {"id": task.id, "phase": task.phase, "state": task.state}
+    last = manager.last_finished(store.name)
+    if last is not None:
+        row["last_task"] = {"id": last.id, "phase": last.phase, "state": last.state, "error": last.error}
     try:
         manifest = store.load()
     except (ValueError, OSError, yaml.YAMLError) as error:

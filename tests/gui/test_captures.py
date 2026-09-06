@@ -202,6 +202,21 @@ def test_busy_run_vidi_jen_bezici_task_daneho_runu():
     assert manager.busy_run("mig01") is False
 
 
+def test_last_finished_vraci_posledni_dokonceny():
+    manager = CaptureManager()
+    task = manager.start(_fail_fn, run="g-a", device="MX1", port=None, phase="pre")
+    _wait_done(manager, task.id)
+    last = manager.last_finished("g-a")
+    assert last.state == "failed"
+    assert last.error == "autentizace selhala"
+    assert manager.last_finished("g-b") is None
+
+    task2 = manager.start(_ok_fn, run="g-a", device="MX1", port=None, phase="post")
+    _wait_done(manager, task2.id)
+    last = manager.last_finished("g-a")
+    assert last.state == "done"
+
+
 def test_pool_drzi_treti_capture_ve_fronte():
     manager = CaptureManager(pool=2)
     gate = threading.Event()

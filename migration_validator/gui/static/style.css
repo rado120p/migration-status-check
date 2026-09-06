@@ -1143,6 +1143,5 @@ a:hover { color: #0e3fa9; }
 .verdict-none, .verdict-skip, .verdict-info { background: #f3f4f6; color: #9ca3af; font-weight: 400; }
 .verdict-error { background: #f3f4f6; color: #6b7280; cursor: help; }
 .row-actions { display: flex; gap: 8px; align-items: center; justify-self: end; }
-.row-capture { font-size: 11px; padding: 2px 4px; width: auto; }
 .run-combo-row.grouped { padding-left: 28px; }
 .run-combo-group .kind-tag { margin-left: 8px; }

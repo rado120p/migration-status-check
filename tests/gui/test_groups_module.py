@@ -166,6 +166,28 @@ def test_summary_active_task_z_manageru(tmp_path):
     gate.set()
 
 
+def test_summary_last_task_z_manageru(tmp_path):
+    import time
+
+    _group(tmp_path)
+    manager = CaptureManager()
+
+    def failing(on_progress):
+        raise ValueError("auth")
+
+    task = manager.start(failing, run="g-ptx1", device="PTX1", port=None, phase="pre")
+    deadline = time.monotonic() + 5.0
+    while manager.get(task.id).state != "failed" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert manager.get(task.id).state == "failed"
+
+    rows = {row["run"]: row for row in _summary(tmp_path, manager=manager)["runs"]}
+    assert rows["g-ptx1"]["last_task"] == {
+        "id": task.id, "phase": "pre", "state": "failed", "error": "auth",
+    }
+    assert rows["g-mx2"]["last_task"] is None
+
+
 def test_summary_cache_nevyhodnocuje_dvakrat(tmp_path, monkeypatch):
     ptx, _ = _group(tmp_path)
     _capture(ptx, "pre", "PTX1", "10.0.0.1")

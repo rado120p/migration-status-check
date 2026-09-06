@@ -109,7 +109,7 @@ const GUIDE_TEXT = {
       "Skupina = N single-device runů se stejným group v run.yml, jeden na box. Každý řádek je samostatný run — open ho otevře jako každý jiný single run.",
       "Capture pre/post/rollback on all zařadí capture každého boxu do fronty; naráz jich běží nejvýš capture_pool (settings.yml, výchozí 10). Obsazený box se přeskočí a hlásí chybu v buňce fáze, ostatní pokračují.",
       "Verdict = nejhorší stav vyhodnocení runu (post nebo rollback proti vlastnímu pre). Řádky jsou seřazené od nejhoršího; kliknutím na hlavičku přeřadíš.",
-      "Capture ▾ u řádku spustí capture jen pro ten box — třeba když post jednoho boxu selhal. Add devices přidá další boxy do skupiny se stejným profilem.",
+      "capture › u řádku otevře formulář New capture předvyplněný tímto boxem — fáze, port i parse services se volí tam; po spuštění se vrátíš do skupiny. Add devices přidá další boxy do skupiny se stejným profilem.",
       "Archive group archivuje všechny runy skupiny najednou; se spuštěným capture odmítne.",
     ],
   },
@@ -135,6 +135,7 @@ class App {
       groupSort: { key: null, dir: "asc" },
       archiveGroupModal: null,
       addDevicesModal: null,
+      captureReturnGroup: null,
     };
     this.cache = {
       runs: [],
@@ -934,6 +935,10 @@ class App {
     this.state.selectedSnapshot = null;
     this.state.groupSort = { key: null, dir: "asc" };
     this.cache.groupTasks = {};
+    this.cache.detail = null;
+    this.cache.detailError = null;
+    this.cache.evaluation = null;
+    this.cache.evaluationError = null;
     await this.loadGroupSummary();
     this.render();
   }
@@ -962,10 +967,18 @@ class App {
   seedActiveTasks(summary) {
     for (const row of (summary && summary.runs) || []) {
       const active = row.active_task;
-      if (!active) continue;
-      const tracked = this.cache.groupTasks[row.run];
-      if (tracked && tracked.task_id === active.id) continue;
-      this.cache.groupTasks[row.run] = { task_id: active.id, phase: active.phase, state: active.state, error: null };
+      if (active) {
+        const tracked = this.cache.groupTasks[row.run];
+        if (tracked && tracked.task_id === active.id) continue;
+        this.cache.groupTasks[row.run] = { task_id: active.id, phase: active.phase, state: active.state, error: null };
+        continue;
+      }
+      const last = row.last_task;
+      if (last && last.state === "failed" && !this.cache.groupTasks[row.run]) {
+        this.cache.groupTasks[row.run] = {
+          task_id: last.id, phase: last.phase, state: "failed", error: last.error || "capture selhal",
+        };
+      }
     }
   }
 
@@ -996,23 +1009,6 @@ class App {
       }
     } catch (err) {
       this.cache.groupError = String(err);
-    }
-    this.render();
-  }
-
-  async startRowCapture(run, node, phase) {
-    try {
-      const res = await fetch("/api/captures", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ run, device: node, port: null, phase, parse_services: false }),
-      });
-      const body = await res.json().catch(() => ({}));
-      this.cache.groupTasks[run] = res.status === 202
-        ? { task_id: body.id, phase, state: "queued", error: null }
-        : { task_id: null, phase, state: "failed", error: body.detail || `capture se nespustil (${res.status})` };
-    } catch (err) {
-      this.cache.groupTasks[run] = { task_id: null, phase, state: "failed", error: String(err) };
     }
     this.render();
   }
@@ -1154,11 +1150,11 @@ class App {
     }
     const table = el("div", { className: "group-table", children: [head] });
     const rows = MigView.sortGroupRows(summary.runs, sort.key, sort.dir);
-    for (const row of rows) table.appendChild(this.buildGroupRow(row, tasks[row.run] || null));
+    for (const row of rows) table.appendChild(this.buildGroupRow(row, tasks[row.run] || null, summary.name));
     return table;
   }
 
-  buildGroupRow(row, taskState) {
+  buildGroupRow(row, taskState, groupName) {
     const tone = row.error ? "error" : (row.verdict || "none").toLowerCase();
     const counts = (c) => el("span", { className: "count-pills", children:
       ["pass", "recv", "warn", "fail"].filter((k) => c && c[k]).map((k) => el("span", { className: "pill pill-" + k, text: String(c[k]) })),
@@ -1167,19 +1163,6 @@ class App {
       const cell = MigView.phaseCell(row, name, taskState);
       return el("span", { className: "phase-cell phase-" + cell.kind, text: cell.text, attrs: cell.title ? { title: cell.title } : {} });
     };
-    const menu = el("select", {
-      className: "form-select row-capture",
-      attrs: this.groupBatchActive() ? { disabled: "disabled" } : {},
-      children: [
-        el("option", { text: "capture ▾", attrs: { value: "" } }),
-        ...["pre", "post", "rollback"].map((p) => el("option", { text: p, attrs: { value: p } })),
-      ],
-    });
-    menu.addEventListener("change", (e) => {
-      const p = e.target.value;
-      e.target.value = "";
-      if (p && row.node) this.startRowCapture(row.run, row.node, p);
-    });
     return el("div", {
       className: "group-row tone-" + tone,
       children: [
@@ -1193,7 +1176,7 @@ class App {
         counts(row.services), counts(row.checks),
         el("span", { className: "row-actions", children: [
           el("a", { className: "crumb-link", text: "open ›", attrs: { href: "#" }, onClick: (e) => { e.preventDefault(); this.selectRun(row.run); } }),
-          menu,
+          el("a", { className: "crumb-link", text: "capture ›", attrs: { href: "#" }, onClick: (e) => { e.preventDefault(); this.openCaptureForm(row.run, groupName); } }),
         ] }),
       ],
     });
@@ -1561,9 +1544,10 @@ class App {
 
   // -- new capture form (screen 4) ---------------------------------------
 
-  async openCaptureForm() {
+  async openCaptureForm(run = null, returnGroup = null) {
     if (!this.leaveGuard()) return;
-    const run = this.state.run || (this.cache.runs[0] && this.cache.runs[0].name) || null;
+    run = run || this.state.run || (this.cache.runs[0] && this.cache.runs[0].name) || null;
+    this.state.captureReturnGroup = returnGroup;
     this.state.view = "capture";
     this.state.selectedSnapshot = null;
     this.state.captureSubmitError = null;
@@ -1864,6 +1848,12 @@ class App {
   }
 
   async backToRunFromCapture(targetRun) {
+    const group = this.state.captureReturnGroup;
+    this.state.captureReturnGroup = null;
+    if (group) {
+      await this.openGroup(group);
+      return;
+    }
     if (targetRun && targetRun !== this.state.run) {
       this.state.run = targetRun;
       await this.loadRun();
@@ -3466,9 +3456,9 @@ class App {
       if (res.status === 201) {
         this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
         this.state.newRunForm = null;
-        this.cache.groupTasks = {};
-        if (body.batch) this.trackBatch(body.batch, "pre");
         await this.openGroup(body.name);
+        if (body.batch) this.trackBatch(body.batch, "pre");
+        this.render();
         return;
       }
       this.applyGroupErrors(body, res.status, (msg) => { form.submitError = msg; }, bulk);

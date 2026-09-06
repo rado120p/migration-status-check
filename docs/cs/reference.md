@@ -821,8 +821,11 @@ najednou — validace proběhne celá dopředu a `409` nese `detail.rows` s `ind
 (`null` = chyba skupiny: jméno, profil, prázdný seznam, existující skupina), nic se nezaloží
 napůl. `POST /{group}/devices` přidá boxy se stejným profilem. `POST /{group}/captures`
 (`{"phase"}`) zařadí capture každého člena do `CaptureManager`; obsazený box je řádková
-chyba v odpovědi (`task_id: null, error`), ne selhání dávky. `GET /{group}` vrací řádek na
-člena: fáze (`taken` celoboxové capture), `active_task`, `verdict` (nejhorší `Status` přes
+chyba v odpovědi (`task_id: null, error`), ne selhání dávky. První capture runu bez
+inventáře si služby naparsuje sama (jako `--parse-services`), další captures existující
+inventář znovu použijí; volbu není třeba zadávat. `GET /{group}` vrací řádek na
+člena: fáze (`taken` celoboxové capture), `active_task`, `last_task` (poslední dokončený
+task s `error`), `verdict` (nejhorší `Status` přes
 evaluace runu, `null` bez post/rollback), počty služeb a checků, `error` (rozbitý run.yml,
 chybějící snímek, chybějící profil — ostatní řádky se vykreslí). Verdikty se cachují podle
 mtime `run.yml` a souboru profilu. `POST /{group}/archive` (admin) archivuje všechny členy,

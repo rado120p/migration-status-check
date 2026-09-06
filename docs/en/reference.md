@@ -835,7 +835,10 @@ once — validation runs first in full, and on conflict `409` carries `detail.ro
 nothing is created partially. `POST /{group}/devices` adds boxes with the same profile.
 `POST /{group}/captures` (`{"phase"}`) enqueues each member's capture to `CaptureManager`;
 an occupied box is a per-row error in the reply (task_id: null, error), not a batch failure.
+The first capture of a run without an inventory parses services itself (as with
+`--parse-services`); later captures reuse the existing inventory, so no flag is needed.
 `GET /{group}` returns one row per member: phase (taken = whole-box capture), `active_task`,
+`last_task` (last finished task, with `error`),
 `verdict` (worst `Status` across the run's evaluations, null without post/rollback), service
 and check counts, `error` (broken run.yml, missing snapshot, missing profile — other rows
 render). Verdicts cache by the `run.yml` mtime and profile file mtime. `POST /{group}/archive`

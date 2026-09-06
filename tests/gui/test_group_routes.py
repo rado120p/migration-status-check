@@ -107,11 +107,14 @@ def test_post_devices_neznama_skupina_404(tmp_path):
 
 
 
-def _blocking_capture(monkeypatch, gate):
-    """Nahradi capture_into_run necim, co ceka na gate a nic nezapisuje."""
+def _blocking_capture(monkeypatch, gate, calls=None):
+    """Nahradi capture_into_run necim, co ceka na gate, nic nezapisuje a
+    zaznamena kwargs (parse_services) do `calls`."""
     import migration_validator.gui.capture_launch as launch
 
     def fake(store, **kwargs):
+        if calls is not None:
+            calls.append((store.name, kwargs))
         gate.wait(5)
         return object()
 
@@ -149,6 +152,33 @@ def test_post_captures_obsazene_zarizeni_je_radkova_chyba(tmp_path, monkeypatch)
     assert "uz bezi capture" in tasks["pop1-ptx1"]["error"]
     assert tasks["pop1-mx2"]["task_id"] is not None
     gate.set()
+
+
+def test_post_captures_bez_inventory_parsuje_sluzby(tmp_path, monkeypatch):
+    gate = threading.Event()
+    calls = []
+    _blocking_capture(monkeypatch, gate, calls)
+    client = _client(tmp_path)
+    client.post("/api/groups", json=_body())
+    client.post("/api/groups/pop1/captures", json={"phase": "pre"})
+    gate.set()
+    assert sorted((name, kw["parse_services"]) for name, kw in calls) == [
+        ("pop1-mx2", True), ("pop1-ptx1", True),
+    ]
+
+
+def test_post_captures_s_inventory_ji_znovu_pouzije(tmp_path, monkeypatch):
+    gate = threading.Event()
+    calls = []
+    _blocking_capture(monkeypatch, gate, calls)
+    client = _client(tmp_path)
+    client.post("/api/groups", json=_body())
+    (tmp_path / "pop1-ptx1" / "inventory_PTX1_all.yml").write_text("[]\n", encoding="utf-8")
+    client.post("/api/groups/pop1/captures", json={"phase": "post"})
+    gate.set()
+    assert dict((name, kw["parse_services"]) for name, kw in calls) == {
+        "pop1-mx2": True, "pop1-ptx1": False,
+    }
 
 
 def test_post_captures_rozbity_run_yml_clena_je_radkova_chyba(tmp_path, monkeypatch):

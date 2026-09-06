@@ -94,9 +94,12 @@ def build_groups_router(
                 profile = profile_for_run(
                     manifest, store.manifest_path, store=profiles, default_path=profile_path,
                 )
+                # Prvni capture runu nema inventory - vyrobi se automaticky,
+                # dalsi captures ji znovu pouziji (post proti pre inventari).
+                parse_services = not store.inventory_path(node, None).exists()
                 task = launch_capture(
                     manager, store=store, manifest=manifest, node=node, phase=phase,
-                    port=None, parse_services=False, profile=profile, settings=settings,
+                    port=None, parse_services=parse_services, profile=profile, settings=settings,
                 )
                 entry["task_id"] = task.id
             except (ValueError, OSError, StopIteration, DeviceBusy, yaml.YAMLError) as error:

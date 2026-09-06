@@ -67,6 +67,14 @@ class CaptureManager:
                     return task
         return None
 
+    def last_finished(self, run: str) -> CaptureTask | None:
+        """Posledni dokonceny (done/failed) task runu - insertion order slovniku."""
+        with self._lock:
+            for task in reversed(list(self._tasks.values())):
+                if task.run == run and task.state in ("done", "failed"):
+                    return task
+        return None
+
     def start(
         self,
         fn: Callable[[Callable], Any],
