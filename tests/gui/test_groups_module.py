@@ -164,3 +164,29 @@ def test_summary_cache_nevyhodnocuje_dvakrat(tmp_path, monkeypatch):
     os.utime(ptx.manifest_path, (stamp, stamp))
     _summary(tmp_path, cache=cache)
     assert len(calls) == 2
+
+
+def test_summary_cache_sdilena_pres_skupiny_se_neprorezava(tmp_path, monkeypatch):
+    ptx, _ = _group(tmp_path)
+    api.create_group(
+        "h", [{"node": "SW1", "host": "10.0.0.9", "platform": "junos"}],
+        run_root=tmp_path, profiles_root=tmp_path / "p",
+    )
+    _capture(ptx, "pre", "PTX1", "10.0.0.1")
+    _capture(ptx, "post", "PTX1", "10.0.0.1")
+    calls = []
+    real = api.evaluate
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "evaluate", spy)
+    cache = SummaryCache()
+    _summary(tmp_path, cache=cache)
+    build_group_summary(
+        "h", run_root=tmp_path, profiles=ProfileStore(tmp_path / "p"), default_path=None,
+        manager=CaptureManager(), cache=cache,
+    )
+    _summary(tmp_path, cache=cache)
+    assert len(calls) == 1

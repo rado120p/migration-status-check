@@ -130,10 +130,11 @@ def build_group_summary(
     group: str, *, run_root: Path, profiles: ProfileStore, default_path: str | None,
     manager: CaptureManager, cache: SummaryCache,
 ) -> dict[str, Any] | None:
-    members = api.group_runs(run_root).get(group)
+    groups = api.group_runs(run_root)
+    members = groups.get(group)
     if not members:
         return None
-    cache.retain(set(members))
+    cache.retain({name for names in groups.values() for name in names})
     rows = [
         _member_row(RunStore(run_root, name), profiles=profiles, default_path=default_path,
                     manager=manager, cache=cache)
