@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from migration_validator.capture import ProgressCallback, capture_device
 from migration_validator.checks.all import load_all
 from migration_validator.checks.registry import all_checks
@@ -180,6 +182,206 @@ def create_run(
 
     store.save(manifest)
     return manifest
+
+
+# --- skupiny (bulk single runy) --------------------------------------------
+
+KNOWN_PLATFORMS = frozenset({"junos", "junos-evo"})
+
+
+class GroupError(ValueError):
+    """Validace skupiny selhala. `rows` = (index zarizeni | None, hlaska);
+    None = chyba cele skupiny (jmeno, profil, prazdny seznam)."""
+
+    def __init__(self, rows: list[tuple[int | None, str]]) -> None:
+        self.rows = rows
+        super().__init__("; ".join(message for _, message in rows))
+
+
+class GroupWriteError(OSError):
+    """Zapis run.yml selhal uprostred - `written` uz na disku je."""
+
+    def __init__(self, written: list[str], cause: str) -> None:
+        self.written = written
+        self.cause = cause
+        super().__init__(f"zapis skupiny selhal po {len(written)} runech: {cause}")
+
+
+def group_run_name(group: str, node: str) -> str:
+    return f"{group}-{node.lower()}"
+
+
+def _raw_manifest(path: Path) -> dict[str, Any] | None:
+    """Klice z run.yml bez validace - rozbity manifest vrati None."""
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def group_runs(run_root: str | Path = Path("runs")) -> dict[str, list[str]]:
+    """group -> serazena jmena clenu. Teckovane adresare (archiv) se
+    preskakuji, rozbity run.yml take (summary ho ukaze jako error radek,
+    ale az kdyz uz skupinu zname z jinych clenu)."""
+    root = Path(run_root)
+    groups: dict[str, list[str]] = {}
+    if not root.is_dir():
+        return groups
+    for entry in sorted(root.iterdir()):
+        if entry.name.startswith("."):
+            continue
+        raw = _raw_manifest(entry / "run.yml")
+        if raw is None or not raw.get("group"):
+            continue
+        groups.setdefault(str(raw["group"]), []).append(entry.name)
+    return groups
+
+
+def _iso_mtime(path: Path) -> str:
+    stamp = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    return stamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def list_groups(run_root: str | Path = Path("runs")) -> list[dict[str, Any]]:
+    root = Path(run_root)
+    out = []
+    for name, members in sorted(group_runs(root).items()):
+        manifests = [_raw_manifest(root / m / "run.yml") or {} for m in members]
+        profile = next((m.get("profile") for m in manifests if m.get("profile")), None)
+        created = min(_iso_mtime(root / m / "run.yml") for m in members)
+        out.append({"name": name, "runs": len(members), "profile": profile, "created": created})
+    return out
+
+
+def _group_device(index: int, data: dict[str, str]) -> tuple[str, RunDevice]:
+    label = data.get("node") or "?"
+    for key in ("node", "host", "platform"):
+        if not (data.get(key) or "").strip():
+            raise GroupError([(index, f"zarizeni '{label}': chybi '{key}'")])
+    platform = data["platform"].strip()
+    if platform not in KNOWN_PLATFORMS:
+        raise GroupError([(
+            index,
+            f"zarizeni '{label}': neznama platforma '{platform}', "
+            "ocekavano junos nebo junos-evo",
+        )])
+    return data["node"].strip(), RunDevice(host=data["host"].strip(), platform=platform, role="single")
+
+
+def _validate_group_devices(
+    group: str, devices: list[dict[str, str]], run_root: Path
+) -> list[tuple[str, str, RunDevice]]:
+    """Vrati (run name, node, device) pro kazde zarizeni, nebo GroupError
+    se vsemi radkovymi chybami najednou - formular je ukaze u radku."""
+    rows: list[tuple[int | None, str]] = []
+    # Prvni vyskyt kazdeho node (bez ohledu na velikost pismen) se urci
+    # dopredu, aby duplicita platila i vuci radku, ktery sam neprosel.
+    first: dict[str, int] = {}
+    for index, data in enumerate(devices):
+        key = (data.get("node") or "").strip().lower()
+        if key:
+            first.setdefault(key, index)
+    planned: list[tuple[str, str, RunDevice]] = []
+    for index, data in enumerate(devices):
+        try:
+            node, device = _group_device(index, data)
+        except GroupError as error:
+            rows.extend(error.rows)
+            continue
+        if first[node.lower()] != index:
+            rows.append((index, f"zarizeni '{node}' je uvedeno dvakrat (radek {first[node.lower()] + 1})"))
+            continue
+        name = group_run_name(group, node)
+        if RunStore(run_root, name).dir.exists():
+            rows.append((index, f"run '{name}' uz existuje"))
+            continue
+        planned.append((name, node, device))
+    if rows:
+        raise GroupError(rows)
+    return planned
+
+
+def _write_group_members(
+    group: str, planned: list[tuple[str, str, RunDevice]], *, profile: str | None, run_root: Path
+) -> list[str]:
+    written: list[str] = []
+    for name, node, device in planned:
+        manifest = RunManifest(
+            devices={node: device}, kind="single", profile=profile, group=group,
+        )
+        try:
+            RunStore(run_root, name).save(manifest)
+        except OSError as error:
+            raise GroupWriteError(written, str(error)) from error
+        written.append(name)
+    return written
+
+
+def create_group(
+    group: str,
+    devices: list[dict[str, str]],
+    *,
+    profile: str | None = None,
+    run_root: str | Path = Path("runs"),
+    profiles_root: str | Path = Path("profiles"),
+) -> list[str]:
+    """Zalozi N single runu `<group>-<node>` se spolecnym `group`. Validuje
+    vsechno dopredu; pri chybe se nezapise nic."""
+    root = Path(run_root)
+    if not _RUN_NAME_RE.match(group):
+        raise GroupError([(None, f"nevalidni jmeno skupiny '{group}' - povolene znaky: a-z 0-9 _ -")])
+    if not devices:
+        raise GroupError([(None, "seznam zarizeni je prazdny")])
+    if group in group_runs(root):
+        raise GroupError([(None, f"skupina '{group}' uz existuje")])
+    if profile is not None:
+        profiles = ProfileStore(Path(profiles_root))
+        if not profiles.exists(profile):
+            raise GroupError([(None, f"profil '{profile}' neexistuje ({profiles.path(profile)})")])
+    planned = _validate_group_devices(group, devices, root)
+    return _write_group_members(group, planned, profile=profile, run_root=root)
+
+
+def add_group_devices(
+    group: str,
+    devices: list[dict[str, str]],
+    *,
+    run_root: str | Path = Path("runs"),
+) -> list[str]:
+    """Prida cleny do existujici skupiny; profil dedi po skupine."""
+    root = Path(run_root)
+    members = group_runs(root).get(group)
+    if not members:
+        raise FileNotFoundError(f"skupina '{group}' neexistuje")
+    if not devices:
+        raise GroupError([(None, "seznam zarizeni je prazdny")])
+    manifests = [_raw_manifest(root / m / "run.yml") or {} for m in members]
+    profile = next((m.get("profile") for m in manifests if m.get("profile")), None)
+    planned = _validate_group_devices(group, devices, root)
+    return _write_group_members(group, planned, profile=profile, run_root=root)
+
+
+def archive_group(
+    group: str,
+    *,
+    run_root: str | Path = Path("runs"),
+    now: datetime | None = None,
+) -> list[str]:
+    """Archivuje vsechny cleny skupiny (stejne razitko). Vraci jmena
+    archivnich adresaru v poradi clenu."""
+    root = Path(run_root)
+    members = group_runs(root).get(group)
+    if not members:
+        raise FileNotFoundError(f"skupina '{group}' neexistuje")
+    stamp_now = now or datetime.now(timezone.utc)
+    archived: list[str] = []
+    for name in members:
+        try:
+            archived.append(archive_run(name, run_root=root, now=stamp_now).name)
+        except OSError as error:
+            raise GroupWriteError(archived, str(error)) from error
+    return archived
 
 
 ARCHIVE_DIR = ".archive"
