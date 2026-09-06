@@ -293,6 +293,13 @@ def _validate_group_devices(
             rows.append((index, f"zarizeni '{node}' je uvedeno dvakrat (radek {first[node.lower()] + 1})"))
             continue
         name = group_run_name(group, node)
+        if not _RUN_NAME_RE.match(name):
+            rows.append((
+                index,
+                f"zarizeni '{node}': jmeno runu '{name}' neni validni - "
+                "povolene znaky: a-z 0-9 _ -",
+            ))
+            continue
         if RunStore(run_root, name).dir.exists():
             rows.append((index, f"run '{name}' uz existuje"))
             continue

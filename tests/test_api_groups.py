@@ -79,6 +79,17 @@ def test_create_group_radkove_chyby_maji_index_a_nic_se_nezapise(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["pop1-ex9"]
 
 
+def test_create_group_nevalidni_jmeno_runu_z_node(tmp_path):
+    devices = [{"node": "sw1.example.com", "host": "10.0.0.5", "platform": "junos"}]
+    with pytest.raises(api.GroupError) as excinfo:
+        api.create_group("pop1", devices, run_root=tmp_path, profiles_root=tmp_path / "p")
+    assert excinfo.value.rows == [
+        (0, "zarizeni 'sw1.example.com': jmeno runu 'pop1-sw1.example.com' "
+            "neni validni - povolene znaky: a-z 0-9 _ -")
+    ]
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_group_runs_a_list_groups(tmp_path):
     api.create_group("pop1", DEVICES, run_root=tmp_path, profiles_root=tmp_path / "p")
     api.create_run("solo", kind="single", devices=[
