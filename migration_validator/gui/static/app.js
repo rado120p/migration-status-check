@@ -169,6 +169,12 @@ class App {
     this.comboToggleEl = document.getElementById("run-combo-toggle");
     this.comboCurrentEl = document.getElementById("run-combo-current");
     this.comboPanelEl = document.getElementById("run-combo-panel");
+    this.comboBackEl = document.getElementById("run-combo-back");
+    this.comboBackGroup = null;
+    this.comboBackEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (this.comboBackGroup) this.openGroup(this.comboBackGroup);
+    });
     this.comboFilterEl = document.getElementById("run-combo-filter");
     this.comboListEl = document.getElementById("run-combo-list");
     this.btnNewRunEl = document.getElementById("btn-new-run");
@@ -287,10 +293,12 @@ class App {
 
   renderRunCombo() {
     const combo = this.state.combo;
-    this.comboCurrentEl.textContent =
-      this.state.view === "group"
-        ? `${this.state.group} (group)`
-        : this.state.run || (this.cache.runsError ? "(nelze nacist runy)" : "—");
+    const label = MigView.comboLabel(
+      this.state.view, this.state.run, this.state.group, this.cache.runs, this.cache.runsError
+    );
+    this.comboCurrentEl.textContent = label.text;
+    this.comboBackGroup = label.group;
+    this.comboBackEl.hidden = !label.group;
     this.comboToggleEl.setAttribute("aria-expanded", combo.open ? "true" : "false");
     this.comboPanelEl.hidden = !combo.open;
     if (!combo.open) return;

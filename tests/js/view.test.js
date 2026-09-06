@@ -346,3 +346,11 @@ test("phaseCell: time, none, queued, running, error", () => {
   // done task shows the time again (summary refetched by then)
   assert.strictEqual(MigView.phaseCell(row, "pre", { phase: "pre", state: "done", error: null }).kind, "time");
 });
+
+test("comboLabel: group view, grouped run with back link, plain run, empty", () => {
+  assert.deepStrictEqual(MigView.comboLabel("group", null, "pop1", GROUP_RUNS, null), { text: "pop1 (group)", group: null });
+  assert.deepStrictEqual(MigView.comboLabel("run", "pop1-ptx1", null, GROUP_RUNS, null), { text: "pop1 › pop1-ptx1", group: "pop1" });
+  assert.deepStrictEqual(MigView.comboLabel("run", "solo", null, GROUP_RUNS, null), { text: "solo", group: null });
+  assert.deepStrictEqual(MigView.comboLabel("run", null, null, [], null), { text: "—", group: null });
+  assert.deepStrictEqual(MigView.comboLabel("run", null, null, [], "boom"), { text: "(nelze nacist runy)", group: null });
+});

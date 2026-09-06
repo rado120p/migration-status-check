@@ -261,6 +261,17 @@ function comboEntries(runs, query) {
   return out;
 }
 
+/* Closed label of the run combobox. A member of a group reads
+   "<group> › <run>" and exposes the group for the "‹ group" back link;
+   the group view reads "<group> (group)". */
+function comboLabel(view, run, group, runs, runsError) {
+  if (view === "group" && group) return { text: `${group} (group)`, group: null };
+  if (!run) return { text: runsError ? "(nelze nacist runy)" : "—", group: null };
+  const entry = (runs || []).find((r) => r && r.name === run);
+  const owner = entry && entry.group ? entry.group : null;
+  return owner ? { text: `${owner} › ${run}`, group: owner } : { text: run, group: null };
+}
+
 const VERDICT_ORDER = ["FAIL", "WARN", "RECV", "PASS", "SKIP", "INFO"];
 
 function verdictRank(row) {
@@ -320,6 +331,7 @@ const MigView = {
   profileDirty,
   toggleListValue,
   comboEntries,
+  comboLabel,
   VERDICT_ORDER,
   groupRowOrder,
   sortGroupRows,
