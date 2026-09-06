@@ -899,12 +899,27 @@ class App {
       const res = await fetch(`/api/groups/${encodeURIComponent(this.state.group)}`);
       if (res.ok) {
         this.cache.groupSummary = await res.json();
+        this.seedActiveTasks(this.cache.groupSummary);
       } else {
         const body = await res.json().catch(() => ({}));
         this.cache.groupError = body.detail || `skupinu se nepodarilo nacist (${res.status})`;
       }
     } catch (err) {
       this.cache.groupError = String(err);
+    }
+  }
+
+  /* Pick up capture tasks already in flight on the server (page reload mid
+     batch, a second tab, or a row capture started elsewhere). Rows whose
+     active_task is null keep whatever the client already tracked - a just
+     finished task keeps its done/failed state until the next batch. */
+  seedActiveTasks(summary) {
+    for (const row of (summary && summary.runs) || []) {
+      const active = row.active_task;
+      if (!active) continue;
+      const tracked = this.cache.groupTasks[row.run];
+      if (tracked && tracked.task_id === active.id) continue;
+      this.cache.groupTasks[row.run] = { task_id: active.id, phase: active.phase, state: active.state, error: null };
     }
   }
 
