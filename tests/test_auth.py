@@ -104,3 +104,21 @@ def test_nemapovy_yaml_je_chyba(tmp_path):
     path.write_text("- polozka\n", encoding="utf-8")
     with pytest.raises(ValueError, match="mapping"):
         load_settings(path)
+
+
+def test_capture_pool_default_je_10(tmp_path):
+    settings = load_settings(tmp_path / "settings.yml")
+    assert settings.capture_pool == 10
+
+
+def test_capture_pool_se_cte_ze_souboru(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  capture_pool: 3\n", encoding="utf-8")
+    assert load_settings(path).capture_pool == 3
+
+
+def test_capture_pool_pod_1_je_chyba(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  capture_pool: 0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="capture_pool musi byt >= 1"):
+        load_settings(path)

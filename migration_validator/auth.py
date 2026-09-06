@@ -20,9 +20,11 @@ DEFAULT_USERNAME = "ansible"
 DEFAULT_NETCONF_PORT = 830
 DEFAULT_TIMEOUT = 30
 DEFAULT_SSH_KEY_PATHS = ("~/.ssh/id_ed25519", "~/.ssh/id_rsa")
+DEFAULT_CAPTURE_POOL = 10
 
 _KNOWN_KEYS = frozenset(
-    {"netconf_port", "timeout", "username", "ssh_key_paths", "password", "password_env"}
+    {"netconf_port", "timeout", "username", "ssh_key_paths", "password",
+     "password_env", "capture_pool"}
 )
 
 
@@ -33,6 +35,8 @@ class ConnectionSettings:
     netconf_port: int = DEFAULT_NETCONF_PORT
     timeout: int = DEFAULT_TIMEOUT
     password: str | None = None
+    # Kolik captures smi bezet naraz (GUI, vsechny runy dohromady).
+    capture_pool: int = DEFAULT_CAPTURE_POOL
 
 
 def _expand(paths) -> tuple[str, ...]:
@@ -85,10 +89,17 @@ def load_settings(path: Path | None = None) -> ConnectionSettings:
     if key_paths is None:
         key_paths = DEFAULT_SSH_KEY_PATHS
 
+    capture_pool = DEFAULT_CAPTURE_POOL
+    if connection.get("capture_pool") is not None:
+        capture_pool = int(connection["capture_pool"])
+        if capture_pool < 1:
+            raise ValueError(f"{path}: capture_pool musi byt >= 1")
+
     return ConnectionSettings(
         username=connection.get("username") or DEFAULT_USERNAME,
         ssh_key_paths=_expand(key_paths),
         netconf_port=int(connection["netconf_port"]) if connection.get("netconf_port") is not None else DEFAULT_NETCONF_PORT,
         timeout=int(connection["timeout"]) if connection.get("timeout") is not None else DEFAULT_TIMEOUT,
         password=password,
+        capture_pool=capture_pool,
     )
