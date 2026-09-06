@@ -291,3 +291,58 @@ test("toggleListValue: add, remove, null when empty", () => {
   assert.deepStrictEqual(MigView.toggleListValue(["bgp", "arp"], "bgp"), ["arp"]);
   assert.strictEqual(MigView.toggleListValue(["bgp"], "bgp"), null);
 });
+
+const GROUP_RUNS = [
+  { name: "solo", kind: "single", group: null, devices: { X: {} } },
+  { name: "pop1-mx2", kind: "single", group: "pop1", devices: { MX2: {} } },
+  { name: "pop1-ptx1", kind: "single", group: "pop1", devices: { PTX1: {} } },
+  { name: "mig01", kind: "migration", group: null, devices: { MX1: {}, PTX9: {} } },
+];
+
+test("comboEntries: groups first with members indented, ungrouped after", () => {
+  const entries = MigView.comboEntries(GROUP_RUNS, "");
+  assert.deepStrictEqual(entries.map((e) => e.type === "group" ? `G:${e.name}:${e.count}` : `${e.grouped ? "  " : ""}${e.run.name}`), [
+    "G:pop1:2", "  pop1-mx2", "  pop1-ptx1", "mig01", "solo",
+  ]);
+});
+
+test("comboEntries: query on group name keeps the whole group; query on a node keeps its header", () => {
+  const byGroup = MigView.comboEntries(GROUP_RUNS, "POP1");
+  assert.deepStrictEqual(byGroup.map((e) => e.type === "group" ? e.name : e.run.name), ["pop1", "pop1-mx2", "pop1-ptx1"]);
+  const byNode = MigView.comboEntries(GROUP_RUNS, "ptx1");
+  assert.deepStrictEqual(byNode.map((e) => e.type === "group" ? e.name : e.run.name), ["pop1", "pop1-ptx1"]);
+  const solo = MigView.comboEntries(GROUP_RUNS, "solo");
+  assert.deepStrictEqual(solo.map((e) => e.run.name), ["solo"]);
+});
+
+const ROWS = [
+  { run: "g-a", node: "A", host: "1", platform: "junos", verdict: "PASS", error: null, phases: { pre: "t", post: "t", rollback: null } },
+  { run: "g-b", node: "B", host: "2", platform: "junos", verdict: null, error: null, phases: { pre: "t", post: null, rollback: null } },
+  { run: "g-c", node: "C", host: "3", platform: "junos-evo", verdict: "FAIL", error: null, phases: { pre: "t", post: "t", rollback: null } },
+  { run: "g-d", node: "D", host: "4", platform: "junos", verdict: null, error: "rozbity", phases: { pre: null, post: null, rollback: null } },
+  { run: "g-e", node: "E", host: "5", platform: "junos", verdict: "WARN", error: null, phases: { pre: "t", post: "t", rollback: null } },
+];
+
+test("groupRowOrder: worst first, no verdict after, error rows last", () => {
+  assert.deepStrictEqual(MigView.groupRowOrder(ROWS).map((r) => r.node), ["C", "E", "A", "B", "D"]);
+});
+
+test("sortGroupRows: by column with direction; null key = worst-first", () => {
+  assert.deepStrictEqual(MigView.sortGroupRows(ROWS, "node", "desc").map((r) => r.node), ["E", "D", "C", "B", "A"]);
+  assert.deepStrictEqual(MigView.sortGroupRows(ROWS, "platform", "asc").map((r) => r.node), ["A", "B", "D", "E", "C"]);
+  assert.deepStrictEqual(MigView.sortGroupRows(ROWS, "post", "asc").map((r) => r.node), ["B", "D", "A", "C", "E"]);
+  assert.deepStrictEqual(MigView.sortGroupRows(ROWS, null, "asc").map((r) => r.node), ["C", "E", "A", "B", "D"]);
+});
+
+test("phaseCell: time, none, queued, running, error", () => {
+  const row = { phases: { pre: "2026-09-06T08:14:02Z", post: null, rollback: null } };
+  assert.deepStrictEqual(MigView.phaseCell(row, "pre", null), { kind: "time", text: "08:14", title: "2026-09-06T08:14:02Z" });
+  assert.deepStrictEqual(MigView.phaseCell(row, "post", null), { kind: "none", text: "—", title: "" });
+  assert.deepStrictEqual(MigView.phaseCell(row, "post", { phase: "post", state: "queued", error: null }), { kind: "queued", text: "queued", title: "" });
+  assert.deepStrictEqual(MigView.phaseCell(row, "post", { phase: "post", state: "running", error: null }), { kind: "running", text: "running…", title: "" });
+  assert.deepStrictEqual(MigView.phaseCell(row, "post", { phase: "post", state: "failed", error: "auth" }), { kind: "error", text: "error", title: "auth" });
+  // task on another phase does not touch this cell
+  assert.strictEqual(MigView.phaseCell(row, "pre", { phase: "post", state: "running", error: null }).kind, "time");
+  // done task shows the time again (summary refetched by then)
+  assert.strictEqual(MigView.phaseCell(row, "pre", { phase: "pre", state: "done", error: null }).kind, "time");
+});

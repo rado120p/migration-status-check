@@ -231,6 +231,78 @@ function toggleListValue(list, value) {
   return next.length ? next : null;
 }
 
+/* Run combobox entries: group headers first (sorted by name) with their
+   members indented, then ungrouped runs. A query matching a group name keeps
+   the whole group; otherwise filterRuns decides per run and a matching
+   member keeps its header. */
+function comboEntries(runs, query) {
+  const needle = (query || "").trim().toLowerCase();
+  const groups = new Map();
+  const loose = [];
+  for (const run of runs || []) {
+    if (run.group) {
+      if (!groups.has(run.group)) groups.set(run.group, []);
+      groups.get(run.group).push(run);
+    } else {
+      loose.push(run);
+    }
+  }
+  const out = [];
+  for (const name of [...groups.keys()].sort()) {
+    const members = groups.get(name).slice().sort((a, b) => a.name.localeCompare(b.name));
+    const kept = needle && !name.toLowerCase().includes(needle) ? filterRuns(members, needle) : members;
+    if (!kept.length) continue;
+    out.push({ type: "group", name, count: members.length });
+    for (const run of kept) out.push({ type: "run", run, grouped: true });
+  }
+  for (const run of filterRuns(loose.slice().sort((a, b) => a.name.localeCompare(b.name)), needle)) {
+    out.push({ type: "run", run, grouped: false });
+  }
+  return out;
+}
+
+const VERDICT_ORDER = ["FAIL", "WARN", "RECV", "PASS", "SKIP", "INFO"];
+
+function verdictRank(row) {
+  if (row.error) return VERDICT_ORDER.length + 1;
+  if (!row.verdict) return VERDICT_ORDER.length;
+  const index = VERDICT_ORDER.indexOf(row.verdict);
+  return index === -1 ? VERDICT_ORDER.length : index;
+}
+
+function groupRowOrder(rows) {
+  return rows.slice().sort((a, b) => verdictRank(a) - verdictRank(b) || (a.node || "").localeCompare(b.node || ""));
+}
+
+function sortGroupRows(rows, key, dir) {
+  if (!key) return groupRowOrder(rows);
+  const sign = dir === "desc" ? -1 : 1;
+  const value = (row) => {
+    if (key === "verdict") return verdictRank(row);
+    if (key === "pre" || key === "post" || key === "rollback") return (row.phases && row.phases[key]) || "";
+    return row[key] || "";
+  };
+  return rows.slice().sort((a, b) => {
+    const va = value(a), vb = value(b);
+    const cmp = typeof va === "number" ? va - vb : String(va).localeCompare(String(vb));
+    return sign * cmp || (a.node || "").localeCompare(b.node || "");
+  });
+}
+
+/* Phase cell of the group table. taskState = {phase, state, error} from the
+   client's polling map for that run, or null. */
+function phaseCell(row, phase, taskState) {
+  if (taskState && taskState.phase === phase) {
+    if (taskState.state === "queued") return { kind: "queued", text: "queued", title: "" };
+    if (taskState.state === "running") return { kind: "running", text: "running…", title: "" };
+    if (taskState.state === "failed") return { kind: "error", text: "error", title: taskState.error || "" };
+  }
+  const taken = row.phases && row.phases[phase];
+  if (!taken) return { kind: "none", text: "—", title: "" };
+  const match = /T(\d{2}:\d{2})/.exec(taken);
+  return { kind: "time", text: match ? match[1] : taken, title: taken };
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -247,6 +319,11 @@ const MigView = {
   normalizeProfileDocument,
   profileDirty,
   toggleListValue,
+  comboEntries,
+  VERDICT_ORDER,
+  groupRowOrder,
+  sortGroupRows,
+  phaseCell,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;
