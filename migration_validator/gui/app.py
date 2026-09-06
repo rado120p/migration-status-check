@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -16,6 +15,8 @@ from migration_validator.collectors.registry import collectors_for
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
 from migration_validator.gui.capture_launch import launch_capture
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.group_routes import build_groups_router
+from migration_validator.gui.groups import SummaryCache
 from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
@@ -60,20 +61,14 @@ def _devices_dict(manifest: RunManifest) -> dict:
     }
 
 
-# "created" je mtime souboru run.yml (posune se pri kazdem capture nebo
-# uprave mappingu) - GUI ho pouziva jen k predvyberu typu noveho runu.
-def _created_iso(path: Path) -> str:
-    stamp = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-    return stamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
 def _run_summary(store: RunStore) -> dict:
     manifest = store.load()
     return {
         "name": store.name,
         "kind": manifest.kind,
         "profile": manifest.profile,
-        "created": _created_iso(store.manifest_path),
+        "group": manifest.group,
+        "created": api._iso_mtime(store.manifest_path),
         "devices": _devices_dict(manifest),
         "snapshots": len(manifest.captures),
         "mapped_ports": len(manifest.interface_mapping),
@@ -98,6 +93,12 @@ def create_app(
     app.state.captures = manager
     app.state.actor_provider = anonymous_admin
     app.include_router(build_profiles_router(profiles, run_root, profile_path))
+    cache = SummaryCache()
+    app.state.group_cache = cache
+    app.include_router(build_groups_router(
+        run_root=run_root, profiles=profiles, profile_path=profile_path,
+        manager=manager, cache=cache,
+    ))
 
     @app.get("/api/checks")
     def list_checks(actor: Actor = require(Permission.VIEW)) -> dict:
@@ -158,6 +159,7 @@ def create_app(
             "name": run,
             "kind": manifest.kind,
             "profile": manifest.profile,
+            "group": manifest.group,
             "devices": _devices_dict(manifest),
             "rows": status_rows(manifest),
             "snapshots": snapshot_list(manifest),

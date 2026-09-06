@@ -86,3 +86,8 @@ def test_runs_single_run_ma_kind_single(client, tmp_path):
     runs = {r["name"]: r for r in client.get("/api/runs").json()["runs"]}
     assert runs["upg01"]["kind"] == "single"
     assert runs["mig01"]["kind"] == "migration"
+
+
+def test_runs_bez_skupiny_maji_group_null(client):
+    assert client.get("/api/runs").json()["runs"][0]["group"] is None
+    assert client.get("/api/runs/mig01").json()["group"] is None
