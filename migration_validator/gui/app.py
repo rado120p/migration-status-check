@@ -13,8 +13,8 @@ from pydantic import BaseModel
 from migration_validator import api
 from migration_validator.auth import DEFAULT_CAPTURE_POOL, load_settings
 from migration_validator.collectors.registry import collectors_for
-from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
+from migration_validator.gui.capture_launch import launch_capture
 from migration_validator.gui.captures import CaptureManager, DeviceBusy
 from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
@@ -22,7 +22,6 @@ from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.models.snapshot import load_snapshot
 from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
-from migration_validator.runs.orchestrate import capture_into_run
 from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
 
@@ -317,8 +316,7 @@ def create_app(
     def start_capture(body: CaptureBody, actor: Actor = require(Permission.OPERATE)) -> dict:
         store = _require_store(body.run)
         manifest = store.load()
-        device = manifest.devices.get(body.device)
-        if device is None:
+        if body.device not in manifest.devices:
             raise HTTPException(
                 status_code=404, detail=f"zarizeni '{body.device}' neni v runu"
             )
@@ -327,32 +325,11 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         profile = _profile_for(store, manifest)
-        options = ConnectionOptions(
-            host=device.host,
-            username=settings.username,
-            ssh_key_paths=settings.ssh_key_paths,
-            password=settings.password,
-            port=settings.netconf_port,
-            timeout=settings.timeout,
-        )
-
-        def fn(on_progress):
-            return capture_into_run(
-                store,
-                host=device.host,
-                phase=body.phase,
-                port=body.port,
-                options=options,
-                profile=profile,
-                parse_services=body.parse_services,
-                overwrite=True,  # GUI resi prepis potvrzenim ve formulari
-                on_progress=on_progress,
-            )
-
         try:
-            task = manager.start(
-                fn, run=body.run, device=body.device,
-                port=body.port, phase=body.phase,
+            task = launch_capture(
+                manager, store=store, manifest=manifest, node=body.device,
+                phase=body.phase, port=body.port, parse_services=body.parse_services,
+                profile=profile, settings=settings,
             )
         except DeviceBusy as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
