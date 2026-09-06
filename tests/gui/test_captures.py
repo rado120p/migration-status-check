@@ -21,7 +21,7 @@ def _wait_done(manager, task_id, timeout=5.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         task = manager.get(task_id)
-        if task.state != "running":
+        if task.state in ("done", "failed"):
             return task
         time.sleep(0.01)
     raise AssertionError("capture nedobehl")
@@ -31,10 +31,19 @@ def _wait_done_route(client, task_id, timeout=5.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         task = client.get(f"/api/captures/{task_id}").json()
-        if task["state"] != "running":
+        if task["state"] in ("done", "failed"):
             return task
         time.sleep(0.01)
     raise AssertionError("capture nedobehl")
+
+
+def _wait_state(manager, task_id, state, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if manager.get(task_id).state == state:
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"task {task_id} nedosel do stavu {state}")
 
 
 def test_uspesny_capture_ma_kroky_a_stav_done():
@@ -191,3 +200,59 @@ def test_busy_run_vidi_jen_bezici_task_daneho_runu():
     gate.set()
     _wait_done(manager, task.id)
     assert manager.busy_run("mig01") is False
+
+
+def test_pool_drzi_treti_capture_ve_fronte():
+    manager = CaptureManager(pool=2)
+    gate = threading.Event()
+
+    def blocking(on_progress):
+        gate.wait(5)
+        return object()
+
+    a = manager.start(blocking, run="g-a", device="A", port=None, phase="pre")
+    b = manager.start(blocking, run="g-b", device="B", port=None, phase="pre")
+    c = manager.start(blocking, run="g-c", device="C", port=None, phase="pre")
+    _wait_state(manager, a.id, "running")
+    _wait_state(manager, b.id, "running")
+    time.sleep(0.05)
+    assert manager.get(c.id).state == "queued"
+    gate.set()
+    for task in (a, b, c):
+        assert _wait_done(manager, task.id).state == "done"
+
+
+def test_queued_zarizeni_je_busy():
+    manager = CaptureManager(pool=1)
+    gate = threading.Event()
+
+    def blocking(on_progress):
+        gate.wait(5)
+        return object()
+
+    manager.start(blocking, run="g-a", device="A", port=None, phase="pre")
+    queued = manager.start(blocking, run="g-b", device="B", port=None, phase="pre")
+    assert manager.get(queued.id).state == "queued"
+    with pytest.raises(DeviceBusy):
+        manager.start(blocking, run="g-b", device="B", port=None, phase="post")
+    assert manager.busy_run("g-b") is True
+    gate.set()
+
+
+def test_active_task_vraci_queued_nebo_running():
+    manager = CaptureManager(pool=1)
+    gate = threading.Event()
+
+    def blocking(on_progress):
+        gate.wait(5)
+        return object()
+
+    running = manager.start(blocking, run="g-a", device="A", port=None, phase="pre")
+    queued = manager.start(blocking, run="g-b", device="B", port=None, phase="pre")
+    _wait_state(manager, running.id, "running")
+    assert manager.active_task("g-a").id == running.id
+    assert manager.active_task("g-b").id == queued.id
+    assert manager.active_task("g-c") is None
+    gate.set()
+    _wait_done(manager, queued.id)
+    assert manager.active_task("g-a") is None

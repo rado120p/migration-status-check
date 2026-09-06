@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from migration_validator import api
-from migration_validator.auth import load_settings
+from migration_validator.auth import DEFAULT_CAPTURE_POOL, load_settings
 from migration_validator.collectors.registry import collectors_for
 from migration_validator.connection.junos import ConnectionOptions
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
@@ -88,13 +88,14 @@ def create_app(
     run_root: Path = Path("runs"),
     profile_path: str | None = None,
     profiles_root: Path = Path("profiles"),
+    capture_pool: int = DEFAULT_CAPTURE_POOL,
 ) -> FastAPI:
     app = FastAPI(title="mig-validate")
     app.state.run_root = run_root
     app.state.profile_path = profile_path
     profiles = ProfileStore(Path(profiles_root))
     app.state.profiles = profiles
-    manager = CaptureManager()
+    manager = CaptureManager(pool=capture_pool)
     app.state.captures = manager
     app.state.actor_provider = anonymous_admin
     app.include_router(build_profiles_router(profiles, run_root, profile_path))

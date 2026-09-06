@@ -16,6 +16,9 @@ class DeviceBusy(Exception):
     """Na zarizeni uz bezi capture - PyEZ session se nesdili."""
 
 
+ACTIVE_STATES = ("queued", "running")
+
+
 @dataclass
 class CaptureTask:
     id: str
@@ -23,7 +26,7 @@ class CaptureTask:
     device: str
     port: str | None
     phase: str
-    state: str = "running"  # running | done | failed
+    state: str = "queued"  # queued | running | done | failed
     steps: list[dict] = field(default_factory=list)
     error: str | None = None
     failed_collectors: dict = field(default_factory=dict)
@@ -40,20 +43,29 @@ class CaptureTask:
 
 
 class CaptureManager:
-    def __init__(self) -> None:
+    """Pool omezuje pocet soucasne bezicich captures (settings.yml
+    connection.capture_pool). Task ceka jako `queued`, dokud se neuvolni
+    slot; busy kontrola zarizeni i runu pocita queued i running."""
+
+    def __init__(self, pool: int = 10) -> None:
         self._tasks: dict[str, CaptureTask] = {}
         self._lock = threading.Lock()
+        self._slots = threading.Semaphore(pool)
 
     def get(self, task_id: str) -> CaptureTask | None:
-        return self._tasks.get(task_id)
+        with self._lock:
+            return self._tasks.get(task_id)
 
     def busy_run(self, run: str) -> bool:
-        """True, dokud na runu bezi aspon jeden capture - archivace ceka."""
+        """True, dokud na runu ceka nebo bezi aspon jeden capture."""
+        return self.active_task(run) is not None
+
+    def active_task(self, run: str) -> CaptureTask | None:
         with self._lock:
-            return any(
-                task.run == run and task.state == "running"
-                for task in self._tasks.values()
-            )
+            for task in self._tasks.values():
+                if task.run == run and task.state in ACTIVE_STATES:
+                    return task
+        return None
 
     def start(
         self,
@@ -66,7 +78,7 @@ class CaptureManager:
     ) -> CaptureTask:
         with self._lock:
             for task in self._tasks.values():
-                if task.device == device and task.state == "running":
+                if task.device == device and task.state in ACTIVE_STATES:
                     raise DeviceBusy(
                         f"na zarizeni {device} uz bezi capture ({task.id})"
                     )
@@ -90,18 +102,21 @@ class CaptureManager:
                             break
 
         def worker() -> None:
-            try:
-                outcome = fn(on_progress)
-                failed = getattr(outcome, "failed_collectors", None)
-                if failed:
-                    task.failed_collectors = failed
-                warns = getattr(outcome, "warnings", None)
-                if warns:
-                    task.warnings = warns
-                task.state = "done"
-            except Exception as error:  # noqa: BLE001 - stav musi byt failed vzdy
-                task.state = "failed"
-                task.error = str(error)
+            with self._slots:
+                with self._lock:
+                    task.state = "running"
+                try:
+                    outcome = fn(on_progress)
+                    failed = getattr(outcome, "failed_collectors", None)
+                    if failed:
+                        task.failed_collectors = failed
+                    warns = getattr(outcome, "warnings", None)
+                    if warns:
+                        task.warnings = warns
+                    task.state = "done"
+                except Exception as error:  # noqa: BLE001 - stav musi byt failed vzdy
+                    task.state = "failed"
+                    task.error = str(error)
 
         threading.Thread(target=worker, daemon=True).start()
         return task

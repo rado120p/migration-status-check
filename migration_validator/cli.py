@@ -486,10 +486,13 @@ def _cmd_gui(args: argparse.Namespace) -> int:
         raise ToolError(
             "GUI vyzaduje 'pip install migration-validator[gui]'"
         ) from error
+    from migration_validator.auth import load_settings
     from migration_validator.gui.app import create_app
 
     app = create_app(
-        run_root=args.run_root, profile_path=args.profile, profiles_root=args.profiles_root
+        run_root=args.run_root, profile_path=args.profile,
+        profiles_root=args.profiles_root,
+        capture_pool=load_settings().capture_pool,
     )
     uvicorn.run(app, host=args.host, port=args.gui_port)
     return EXIT_OK
