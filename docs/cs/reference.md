@@ -724,7 +724,7 @@ Provozní návod se stromem, hybridním `run.yml` a odvozeným příkladem je v
 |---|---|---|
 | `kind` | `single` \| `migration` | chybí-li, výchozí je `migration`; `single` = jedno zařízení, pre/post/rollback kolem upgradu, bez `interface_mapping` |
 | `profile` | jméno profilu | volitelné; chybí-li, použije se serverový default |
-| `group` | jméno skupiny | rezervováno pro bulk (N `single` runů se stejnou skupinou); zatím to nic nezapisuje |
+| `group` | jméno skupiny | bulk: N `single` runů `<skupina>-<node>` se stejným `group`; zapisuje GUI (`POST /api/groups`), CLI ho jen zachová |
 | `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; fáze 4 podporuje jednoho `old` a jednoho `new`; `single` smí mít v runu typu `single` právě jedno zařízení a nesmí mít `interface_mapping` |
 | `interface_mapping` | seznam `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | páruje logické jednotky (`ge-0/0/0`), stejný tvar jako `mapping.yml` selektor `interface` |
 | `captures` | seznam `{phase, device, port, snapshot, taken}` | `port: all` v souboru odpovídá `port: null` v modelu (celoboxová capture); vede ji aplikace, ne operátor |
@@ -807,6 +807,29 @@ collectoru z `requires`, `general` pro checky bez collectoru) s defaulty šedě 
 s odchylkou je žlutý s `●` a odkazem `reset`. Vpravo je živý náhled YAML z `POST /preview`
 (300 ms po poslední změně) a počet `<n> overrides`. Uložený profil se projeví při dalším
 načtení přehledu runu — už zachycené snapshoty se nemění.
+
+### Skupiny (bulk, GUI)
+
+Skupina je N `single` runů založených z jednoho seznamu boxů: run `<skupina>-<node malými>`,
+`kind: single`, jedno zařízení role `single`, společný `profile` a `group`. Skupina existuje,
+dokud má aspoň jednoho nearchivovaného člena — žádný soubor navíc. Jméno skupiny i boxů
+podléhá `^[a-z0-9_-]+$` (node se před použitím v názvu runu převede na malá písmena).
+
+API (`/api/groups`): `GET` seznam (`name`, `runs`, `profile`, `created`), `POST`
+(`{"group","profile","devices":[{node,host,platform}],"capture_pre"}`) založí všechny runy
+najednou — validace proběhne celá dopředu a `409` nese `detail.rows` s `index` řádku
+(`null` = chyba skupiny: jméno, profil, prázdný seznam, existující skupina), nic se nezaloží
+napůl. `POST /{group}/devices` přidá boxy se stejným profilem. `POST /{group}/captures`
+(`{"phase"}`) zařadí capture každého člena do `CaptureManager`; obsazený box je řádková
+chyba v odpovědi (`task_id: null, error`), ne selhání dávky. `GET /{group}` vrací řádek na
+člena: fáze (`taken` celoboxové capture), `active_task`, `verdict` (nejhorší `Status` přes
+evaluace runu, `null` bez post/rollback), počty služeb a checků, `error` (rozbitý run.yml,
+chybějící snímek, chybějící profil — ostatní řádky se vykreslí). Verdikty se cachují podle
+mtime `run.yml` a souboru profilu. `POST /{group}/archive` (admin) archivuje všechny členy,
+`409 skupina '<g>' ma bezici capture` dokud některý má queued/running task.
+
+`connection.capture_pool` v `config/settings.yml` (výchozí `10`, min `1`) omezuje počet
+současně běžících captures na celém serveru; ostatní čekají ve stavu `queued`.
 
 ### Pravidla párování `evaluate --run`
 

@@ -751,7 +751,7 @@ section 8 — see the note at the end).
 |---|---|---|
 | `kind` | `single` \| `migration` | missing defaults to `migration`; `single` = one device, pre/post/rollback around an upgrade, no `interface_mapping` |
 | `profile` | profile name | optional; missing means the server default |
-| `group` | group name | reserved for bulk (N `single` runs sharing a group); nothing writes it yet |
+| `group` | group name | bulk: N `single` runs `<group>-<node lowercased>` sharing the same `group`; written by the GUI (`POST /api/groups`), CLI only preserves it |
 | `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; a `single`-kind run has exactly one device with role `single` and no `interface_mapping` |
 | `interface_mapping` | list of `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | pairs logical units (`ge-0/0/0`), same shape as the `mapping.yml` `interface` selector. **Several entries may share the same `new`** — N:1 (LAG) mapping: multiple old ports migrating onto one new LAG port |
 | `captures` | list of `{phase, device, port, snapshot, taken}` | `port: all` in the file corresponds to `port: null` in the model (whole-box capture); the application maintains this section, not the operator |
@@ -819,6 +819,31 @@ collector in `requires`, `general` for checks without one) with defaults in grey
 row that deviates is yellow with `●` and a `reset` link. To the right a live YAML preview
 comes from `POST /preview` (300 ms after the last edit) with `<n> overrides` below. A saved
 profile takes effect on the next load of a run overview — captured snapshots never change.
+
+### Groups (bulk, GUI)
+
+A group is N `single` runs created from a single device list: runs named `<group>-<node
+lowercased>`, kind `single`, one device with role `single`, sharing the same `profile` and
+`group`. A group exists as long as it has at least one unarchived member — no extra files.
+Group names and device names are subject to `^[a-z0-9_-]+$` (the node name is lowercased
+before being used in the run name).
+
+API (`/api/groups`): `GET` list (name, runs, profile, created); `POST`
+(`{"group","profile","devices":[{node,host,platform}],"capture_pre"}`) creates all runs at
+once — validation runs first in full, and on conflict `409` carries `detail.rows` with row
+`index` (null = group error: name, profile, empty device list, or group already exists), and
+nothing is created partially. `POST /{group}/devices` adds boxes with the same profile.
+`POST /{group}/captures` (`{"phase"}`) enqueues each member's capture to `CaptureManager`;
+an occupied box is a per-row error in the reply (task_id: null, error), not a batch failure.
+`GET /{group}` returns one row per member: phase (taken = whole-box capture), `active_task`,
+`verdict` (worst `Status` across the run's evaluations, null without post/rollback), service
+and check counts, `error` (broken run.yml, missing snapshot, missing profile — other rows
+render). Verdicts cache by the `run.yml` mtime and profile file mtime. `POST /{group}/archive`
+(admin) archives all members, returning `409 skupina '<g>' ma bezici capture` until any member
+is queued or running.
+
+`connection.capture_pool` in `config/settings.yml` (default `10`, min `1`) limits the number
+of concurrent captures across the entire server; the rest wait in state `queued`.
 
 ### Pairing rules
 
