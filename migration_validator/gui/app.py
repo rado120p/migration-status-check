@@ -68,7 +68,7 @@ def _run_summary(store: RunStore) -> dict:
         "kind": manifest.kind,
         "profile": manifest.profile,
         "group": manifest.group,
-        "created": api._iso_mtime(store.manifest_path),
+        "created": api.iso_mtime(store.manifest_path),
         "devices": _devices_dict(manifest),
         "snapshots": len(manifest.captures),
         "mapped_ports": len(manifest.interface_mapping),

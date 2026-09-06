@@ -507,7 +507,11 @@ class App {
     const modal = this.state.addDevicesModal;
     const children = [
       el("h3", { text: "Add devices" }),
-      this.buildBulkDeviceRows(modal.devices, modal.touched, modal.rowErrors, () => { modal.rowErrors = {}; }),
+      this.buildBulkDeviceRows(modal.devices, modal.touched, modal.rowErrors, () => {
+        const had = Object.keys(modal.rowErrors).length > 0;
+        modal.rowErrors = {};
+        if (had) this.render();
+      }),
     ];
     if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
     children.push(
@@ -929,6 +933,7 @@ class App {
     this.state.group = name;
     this.state.selectedSnapshot = null;
     this.state.groupSort = { key: null, dir: "asc" };
+    this.cache.groupTasks = {};
     await this.loadGroupSummary();
     this.render();
   }
@@ -1162,10 +1167,14 @@ class App {
       const cell = MigView.phaseCell(row, name, taskState);
       return el("span", { className: "phase-cell phase-" + cell.kind, text: cell.text, attrs: cell.title ? { title: cell.title } : {} });
     };
-    const menu = el("select", { className: "form-select row-capture", children: [
-      el("option", { text: "capture ▾", attrs: { value: "" } }),
-      ...["pre", "post", "rollback"].map((p) => el("option", { text: p, attrs: { value: p } })),
-    ] });
+    const menu = el("select", {
+      className: "form-select row-capture",
+      attrs: this.groupBatchActive() ? { disabled: "disabled" } : {},
+      children: [
+        el("option", { text: "capture ▾", attrs: { value: "" } }),
+        ...["pre", "post", "rollback"].map((p) => el("option", { text: p, attrs: { value: p } })),
+      ],
+    });
     menu.addEventListener("change", (e) => {
       const p = e.target.value;
       e.target.value = "";
@@ -1267,6 +1276,7 @@ class App {
         this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
         this.state.addDevicesModal = null;
         this.cache.groupSummary = body;
+        this.seedActiveTasks(body);
         this.render();
         return;
       }
@@ -3406,7 +3416,11 @@ class App {
     ] }));
     this.mainEl.appendChild(el("div", { className: "form-card", children: [
       el("div", { className: "form-section-label", text: "Devices" }),
-      this.buildBulkDeviceRows(bulk.devices, form.touched, bulk.rowErrors, () => { bulk.rowErrors = {}; }),
+      this.buildBulkDeviceRows(bulk.devices, form.touched, bulk.rowErrors, () => {
+        const had = Object.keys(bulk.rowErrors).length > 0;
+        bulk.rowErrors = {};
+        if (had) this.render();
+      }),
     ] }));
     const valid = !this.bulkGroupError() && this.bulkRowsValid(bulk.devices) && !Object.keys(bulk.rowErrors).length;
     const checkbox = el("input", { attrs: { type: "checkbox" } });

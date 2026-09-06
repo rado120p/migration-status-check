@@ -58,6 +58,13 @@ def test_post_groups_chyba_skupiny_ma_index_null(tmp_path):
     assert resp.json()["detail"]["rows"][0]["index"] is None
 
 
+def test_post_groups_nevalidni_profil_je_409(tmp_path):
+    resp = _client(tmp_path).post("/api/groups", json=_body(profile="Bad Name"))
+    assert resp.status_code == 409
+    assert isinstance(resp.json()["detail"], str)
+    assert not (tmp_path / "pop1-ptx1").exists()
+
+
 def test_post_groups_vyzaduje_operate(tmp_path):
     resp = _client(tmp_path, role="viewer").post("/api/groups", json=_body())
     assert resp.status_code == 403
@@ -96,6 +103,8 @@ def test_post_devices_prida_cleny(tmp_path):
 def test_post_devices_neznama_skupina_404(tmp_path):
     resp = _client(tmp_path).post("/api/groups/neni/devices", json={"devices": DEVICES})
     assert resp.status_code == 404
+
+
 
 
 def _blocking_capture(monkeypatch, gate):

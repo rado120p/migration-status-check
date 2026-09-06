@@ -238,7 +238,7 @@ def group_runs(run_root: str | Path = Path("runs")) -> dict[str, list[str]]:
     return groups
 
 
-def _iso_mtime(path: Path) -> str:
+def iso_mtime(path: Path) -> str:
     stamp = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
     return stamp.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -249,7 +249,7 @@ def list_groups(run_root: str | Path = Path("runs")) -> list[dict[str, Any]]:
     for name, members in sorted(group_runs(root).items()):
         manifests = [_raw_manifest(root / m / "run.yml") or {} for m in members]
         profile = next((m.get("profile") for m in manifests if m.get("profile")), None)
-        created = min(_iso_mtime(root / m / "run.yml") for m in members)
+        created = min(iso_mtime(root / m / "run.yml") for m in members)
         out.append({"name": name, "runs": len(members), "profile": profile, "created": created})
     return out
 

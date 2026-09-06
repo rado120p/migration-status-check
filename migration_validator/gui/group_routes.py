@@ -119,6 +119,8 @@ def build_groups_router(
             raise _group_error(error) from error
         except api.GroupWriteError as error:
             raise _write_error(error) from error
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         batch = _start_batch(body.group, "pre") if body.capture_pre else None
         return {**_summary_or_404(body.group), "batch": batch}
 
@@ -136,6 +138,8 @@ def build_groups_router(
             raise _group_error(error) from error
         except api.GroupWriteError as error:
             raise _write_error(error) from error
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
         return _summary_or_404(group)
 
     @router.post("/{group}/captures", status_code=202)
