@@ -27,7 +27,7 @@ function statusClass(status) {
   return (status || "").toLowerCase();
 }
 
-/* New run type cards. Bulk is a placeholder: rendered, never selectable. */
+/* New run type cards. */
 const RUN_TYPES = [
   {
     kind: "single",
@@ -43,8 +43,6 @@ const RUN_TYPES = [
     kind: "bulk",
     title: "Bulk",
     desc: "many single-device runs from a device list",
-    disabled: true,
-    note: "bulk · pripravuje se",
   },
 ];
 
@@ -95,9 +93,10 @@ const GUIDE_TEXT = {
   newrun: {
     title: "New run",
     body: [
-      "Vyber typ runu: Single device = pre/post snímky jednoho boxu (upgrade, rekonfigurace), Two devices = migrace old → new s párováním portů. Bulk se připravuje.",
+      "Vyber typ runu: Single device = pre/post snímky jednoho boxu (upgrade, rekonfigurace), Two devices = migrace old → new s párováním portů. Bulk = víc single-device runů z jednoho seznamu boxů (skupina), třeba celý POP před upgradem.",
       "Pojmenuj run a vyplň zařízení. U Two devices můžeš mapování portů doplnit i později přes Edit mapping.",
       "Profil vyber ze seznamu profiles/ — (default) je serverový profil. Profily spravuješ tlačítkem Profiles v horní liště.",
+      "U Bulk zadej jméno skupiny a tabulku boxů (node, host, platforma); každý box dostane run <skupina>-<node>. Chyba na řádku zablokuje Create, nic se nezaloží napůl. Zaškrtnuté \"start pre capture on all\" spustí pre capture hned po založení.",
     ],
   },
   editmapping: {
@@ -405,6 +404,10 @@ class App {
       this.renderArchiveGroupModal(root);
       return;
     }
+    if (this.state.addDevicesModal) {
+      this.renderAddDevicesModal(root);
+      return;
+    }
     const modal = this.state.archiveModal;
     if (!modal) return;
     const detail = this.cache.detail || {};
@@ -496,6 +499,44 @@ class App {
           }
         },
         children: [el("div", { className: "modal", children })],
+      })
+    );
+  }
+
+  renderAddDevicesModal(root) {
+    const modal = this.state.addDevicesModal;
+    const children = [
+      el("h3", { text: "Add devices" }),
+      this.buildBulkDeviceRows(modal.devices, modal.touched, modal.rowErrors, () => { modal.rowErrors = {}; }),
+    ];
+    if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
+    children.push(
+      el("div", {
+        className: "footer-actions",
+        children: [
+          el("button", {
+            className: "btn btn-secondary",
+            text: "Cancel",
+            onClick: modal.submitting ? null : () => { this.state.addDevicesModal = null; this.render(); },
+          }),
+          el("button", {
+            className: "btn btn-primary",
+            text: modal.submitting ? "Adding…" : "Add",
+            onClick: modal.submitting ? null : () => this.confirmAddDevices(),
+          }),
+        ],
+      })
+    );
+    root.appendChild(
+      el("div", {
+        className: "modal-backdrop",
+        onClick: (e) => {
+          if (e.target.classList.contains("modal-backdrop") && !modal.submitting) {
+            this.state.addDevicesModal = null;
+            this.render();
+          }
+        },
+        children: [el("div", { className: "modal modal-wide", children })],
       })
     );
   }
@@ -1195,6 +1236,46 @@ class App {
       modal.submitting = false;
       this.render();
     }
+  }
+
+  // -- add devices modal -----------------------------------------------------
+
+  openAddDevicesModal() {
+    this.state.addDevicesModal = {
+      devices: [{ node: "", host: "", platform: "junos" }], submitting: false, error: null, rowErrors: {}, touched: false,
+    };
+    this.render();
+  }
+
+  async confirmAddDevices() {
+    const modal = this.state.addDevicesModal;
+    const summary = this.cache.groupSummary;
+    if (!modal || !summary || modal.submitting) return;
+    modal.touched = true;
+    if (!this.bulkRowsValid(modal.devices)) { this.render(); return; }
+    modal.submitting = true;
+    modal.error = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/groups/${encodeURIComponent(summary.name)}/devices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ devices: modal.devices.map((d) => ({ node: d.node.trim(), host: d.host.trim(), platform: d.platform })) }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 201) {
+        this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
+        this.state.addDevicesModal = null;
+        this.cache.groupSummary = body;
+        this.render();
+        return;
+      }
+      this.applyGroupErrors(body, res.status, (msg) => { modal.error = msg; }, modal);
+    } catch (err) {
+      modal.error = String(err);
+    }
+    modal.submitting = false;
+    this.render();
   }
 
   async selectSnapshot(file) {
@@ -2977,6 +3058,56 @@ class App {
     return wrap;
   }
 
+  /* Bulk device table: one buildDeviceSubform-compatible object per row,
+     rendered inline. rowErrors = {index: message} from the server. */
+  buildBulkDeviceRows(devices, touched, rowErrors, onChange) {
+    const table = el("div", { className: "bulk-table" });
+    table.appendChild(el("div", { className: "bulk-row bulk-head", children: [
+      el("span", { text: "Node" }), el("span", { text: "Host" }), el("span", { text: "Platform" }), el("span", { text: "" }),
+    ] }));
+    const seen = new Map();
+    devices.forEach((device, i) => {
+      const key = device.node.trim().toLowerCase();
+      const dup = key && seen.has(key);
+      if (key && !dup) seen.set(key, i);
+      const field = (prop, mono) => {
+        const input = el("input", { className: "form-input" + (mono ? " mono" : ""), attrs: { type: "text" } });
+        input.value = device[prop];
+        input.addEventListener("input", (e) => { device[prop] = e.target.value; onChange(); });
+        input.addEventListener("blur", () => this.render());
+        return input;
+      };
+      const platform = el("select", { className: "form-select", children: ["junos", "junos-evo"].map((p) =>
+        el("option", { text: p, attrs: p === device.platform ? { value: p, selected: "selected" } : { value: p } })
+      ) });
+      platform.addEventListener("change", (e) => { device.platform = e.target.value; onChange(); });
+      const errors = [];
+      if (touched && !device.node.trim()) errors.push("node is required");
+      if (touched && !device.host.trim()) errors.push("host is required");
+      if (dup) errors.push(`duplicate node (row ${seen.get(key) + 1})`);
+      if (rowErrors[i]) errors.push(rowErrors[i]);
+      table.appendChild(el("div", { className: "bulk-row" + (errors.length ? " has-error" : ""), children: [
+        field("node", true), field("host", false), platform,
+        el("button", { className: "btn btn-secondary bulk-remove", text: "×", attrs: { type: "button", title: "remove row" },
+          onClick: () => { devices.splice(i, 1); onChange(); this.render(); } }),
+        errors.length ? el("div", { className: "field-error bulk-row-error", text: errors.join(" · ") }) : null,
+      ] }));
+    });
+    table.appendChild(el("button", { className: "btn btn-secondary", text: "+ add device", attrs: { type: "button" },
+      onClick: () => { devices.push({ node: "", host: "", platform: "junos" }); this.render(); } }));
+    return table;
+  }
+
+  bulkRowsValid(devices) {
+    const seen = new Set();
+    for (const d of devices) {
+      const key = d.node.trim().toLowerCase();
+      if (!key || !d.host.trim() || seen.has(key)) return false;
+      seen.add(key);
+    }
+    return devices.length > 0;
+  }
+
   // -- new run (screen 5) --------------------------------------------------
 
   async openNewRunForm() {
@@ -2993,6 +3124,7 @@ class App {
       old: { node: "", host: "", platform: "junos" },
       new: { node: "", host: "", platform: "junos-evo" },
       mappings: [],
+      bulk: { group: "", devices: [{ node: "", host: "", platform: "junos" }], capturePre: true, rowErrors: {} },
       submitting: false,
       submitError: null,
     };
@@ -3150,6 +3282,8 @@ class App {
       })
     );
 
+    if (form.kind === "bulk") { this.renderBulkForm(form); return; }
+
     const nameInput = el("input", {
       className: "form-input mono",
       attrs: { type: "text", placeholder: single ? "e.g. upgrade-ptx1" : "e.g. mig01" },
@@ -3251,6 +3385,102 @@ class App {
         ],
       })
     );
+  }
+
+  renderBulkForm(form) {
+    const bulk = form.bulk;
+    const groupInput = el("input", { className: "form-input mono", attrs: { type: "text", placeholder: "e.g. pop1-upgrade-2026-09" } });
+    groupInput.value = bulk.group;
+    groupInput.addEventListener("input", (e) => { bulk.group = e.target.value; });
+    groupInput.addEventListener("blur", () => { form.touched = true; this.render(); });
+    const groupErr = form.touched ? this.bulkGroupError() : null;
+    const groupField = [el("label", { className: "field-label", text: "Group name" }), groupInput];
+    if (groupErr) groupField.push(el("div", { className: "field-error", text: groupErr }));
+    if (form.submitError) groupField.push(el("div", { className: "field-error", text: form.submitError }));
+    this.mainEl.appendChild(el("div", { className: "form-card", children: [
+      el("div", { className: "form-section-label", text: "Group" }),
+      el("div", { className: "name-profile-grid", children: [
+        el("div", { className: "form-field", children: groupField }),
+        this.buildProfilePicker(form),
+      ] }),
+    ] }));
+    this.mainEl.appendChild(el("div", { className: "form-card", children: [
+      el("div", { className: "form-section-label", text: "Devices" }),
+      this.buildBulkDeviceRows(bulk.devices, form.touched, bulk.rowErrors, () => { bulk.rowErrors = {}; }),
+    ] }));
+    const valid = !this.bulkGroupError() && this.bulkRowsValid(bulk.devices) && !Object.keys(bulk.rowErrors).length;
+    const checkbox = el("input", { attrs: { type: "checkbox" } });
+    checkbox.checked = bulk.capturePre;
+    checkbox.addEventListener("change", (e) => { bulk.capturePre = e.target.checked; });
+    this.mainEl.appendChild(el("div", { className: "footer-actions", children: [
+      el("button", { className: "btn btn-secondary", text: "Cancel", onClick: () => this.cancelNewRunForm() }),
+      el("button", {
+        className: "btn btn-primary", text: form.submitting ? "Creating…" : `Create ${bulk.devices.length} run${bulk.devices.length === 1 ? "" : "s"}`,
+        attrs: valid && !form.submitting ? {} : { disabled: "disabled" },
+        onClick: valid && !form.submitting ? () => this.submitBulk() : null,
+      }),
+      el("label", { className: "bulk-capture-pre", children: [checkbox, document.createTextNode(" start pre capture on all after creating")] }),
+    ] }));
+  }
+
+  bulkGroupError() {
+    const name = (this.state.newRunForm.bulk.group || "").trim();
+    if (!name) return "group name is required";
+    if (!/^[a-z0-9_-]+$/.test(name)) return "only a-z 0-9 _ - allowed";
+    return null;
+  }
+
+  async submitBulk() {
+    const form = this.state.newRunForm;
+    const bulk = form.bulk;
+    form.touched = true;
+    form.submitting = true;
+    form.submitError = null;
+    this.render();
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group: bulk.group.trim(),
+          profile: form.profile || null,
+          devices: bulk.devices.map((d) => ({ node: d.node.trim(), host: d.host.trim(), platform: d.platform })),
+          capture_pre: bulk.capturePre,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 201) {
+        this.cache.runs = (await (await fetch("/api/runs")).json()).runs;
+        this.state.newRunForm = null;
+        this.cache.groupTasks = {};
+        if (body.batch) this.trackBatch(body.batch, "pre");
+        await this.openGroup(body.name);
+        return;
+      }
+      this.applyGroupErrors(body, res.status, (msg) => { form.submitError = msg; }, bulk);
+    } catch (err) {
+      form.submitError = String(err);
+    }
+    form.submitting = false;
+    this.render();
+  }
+
+  /* 409 detail is {message, rows:[{index, message}]}; index null goes to
+     the form-level error, others to their row. Any other status is a plain
+     detail string. */
+  applyGroupErrors(body, status, setFormError, target) {
+    const detail = body.detail;
+    if (detail && typeof detail === "object" && Array.isArray(detail.rows)) {
+      target.rowErrors = {};
+      const general = [];
+      for (const row of detail.rows) {
+        if (row.index === null || row.index === undefined) general.push(row.message);
+        else target.rowErrors[row.index] = row.message;
+      }
+      setFormError(general.length ? general.join("; ") : null);
+      return;
+    }
+    setFormError((typeof detail === "string" && detail) || (detail && detail.message) || `skupinu se nepodarilo zalozit (${status})`);
   }
 
   // -- edit mapping (screen 6) ---------------------------------------------
