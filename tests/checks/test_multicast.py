@@ -9,13 +9,17 @@ from migration_validator.checks.multicast import (
     NO_REPORT,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
+    RECEIVER,
+    SENDER,
     CoreMulticastForwardingCheck,
     IgmpMembershipReportCheck,
     MulticastForwardingStatusCheck,
     MvpnCmulticastStatusCheck,
     assign_sources,
+    expected_pairs,
     format_uptime_hms,
     igmp_pairs,
+    pim_pairs,
     routes_for,
     sg_label,
     stream_rows,
@@ -50,6 +54,21 @@ def _ctx(subject, baseline=None, scope=None, baseline_scope=None):
 
 def _igmp(iface, *pairs):
     return {"igmp_group": {iface: [{"source": s, "group": g} for s, g in pairs]}}
+
+
+def _join(upstream, downstream, source="10.11.11.1", group="232.1.1.1"):
+    return {f"{source or '*'},{group}": {
+        "source": source, "group": group, "upstream_interface": upstream,
+        "upstream_neighbor": None, "downstream_interfaces": list(downstream),
+        "uptime_seconds": 10,
+    }}
+
+
+def _pim(instance="master", *joins):
+    table = {}
+    for join in joins:
+        table.update(join)
+    return {"pim_join": {instance: table}}
 
 
 # --- helpery --------------------------------------------------------------
@@ -98,6 +117,42 @@ def test_stream_rows_skip_when_rate_missing():
     )
     assert rate_row.outcome is Outcome.BROKEN
     assert rate_row.value == "0 pps"
+
+
+def test_pim_pairs_role_from_upstream_or_downstream():
+    facts = _pim("master",
+                 _join("Through BGP", [POST]),                       # receiver
+                 _join(POST, ["Pseudo-MVPN"], group="232.1.1.2"),    # sender
+                 _join("et-0/0/0.0", ["irb.9"], group="232.1.1.3"))  # cizi rozhrani
+    assert pim_pairs(facts, _scope()) == [
+        ("10.11.11.1", "232.1.1.1", frozenset({RECEIVER})),
+        ("10.11.11.1", "232.1.1.2", frozenset({SENDER})),
+    ]
+    assert pim_pairs(None, _scope()) == []
+    assert pim_pairs({"pim_join": {}}, _scope()) == []
+
+
+def test_pim_pairs_asm_and_link_local():
+    facts = _pim("master",
+                 _join("et-0/0/0.0", [POST], source=None, group="239.1.1.1"),
+                 _join("et-0/0/0.0", [POST], source=None, group="224.0.0.13"))
+    assert pim_pairs(facts, _scope()) == [(None, "239.1.1.1", frozenset({RECEIVER}))]
+
+
+def test_expected_pairs_unions_igmp_and_pim_with_role_merge():
+    # SG je z IGMP (receiver) i z PIM joinu, kde je servisni rozhrani upstream
+    # i downstream zaroven (sender + receiver) -> unie roli.
+    facts = {**_igmp(POST, SG, ("10.0.0.9", "232.9.9.9")),
+             **_pim("master", _join(POST, [POST]))}
+    assert expected_pairs(facts, _scope()) == [
+        ("10.0.0.9", "232.9.9.9", frozenset({RECEIVER})),
+        ("10.11.11.1", "232.1.1.1", frozenset({RECEIVER, SENDER})),
+    ]
+
+
+def test_expected_pairs_without_any_source_is_empty():
+    assert expected_pairs({}, _scope()) == []
+    assert expected_pairs(_igmp(POST), _scope()) == []
 
 
 # --- igmp_membership_report -----------------------------------------------

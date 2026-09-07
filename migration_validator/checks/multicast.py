@@ -72,6 +72,62 @@ def igmp_pairs(facts: dict[str, Any] | None, scope: Scope) -> list[tuple[str | N
     return sorted(pairs, key=lambda p: (p[0] or "", p[1]))
 
 
+RECEIVER = "receiver"
+SENDER = "sender"
+
+Pair = tuple[str | None, str, frozenset[str]]
+
+
+def _service_interface(scope: Scope) -> str | None:
+    return scope.selectors.interfaces[0] if scope.selectors.interfaces else None
+
+
+def pim_pairs(facts: dict[str, Any] | None, scope: Scope) -> list[Pair]:
+    """(source, group, roles) z PIM join tabulky scopu (spec 2026-09-07).
+    Role z vypisu, ne z konfigurace: servisni rozhrani mezi downstream =
+    receiver, servisni rozhrani == upstream = sender. Join, ktery se
+    rozhrani nedotyka, patri jine sluzbe v teze instanci."""
+    iface = _service_interface(scope)
+    if iface is None:
+        return []
+    found: dict[tuple[str | None, str], set[str]] = {}
+    for table in ((facts or {}).get("pim_join") or {}).values():
+        for join in table.values():
+            group = str(join.get("group") or "")
+            if not group or _link_local(group):
+                continue
+            roles = set()
+            if iface in (join.get("downstream_interfaces") or []):
+                roles.add(RECEIVER)
+            if join.get("upstream_interface") == iface:
+                roles.add(SENDER)
+            if roles:
+                found.setdefault((join.get("source"), group), set()).update(roles)
+    return sorted(
+        ((s, g, frozenset(r)) for (s, g), r in found.items()),
+        key=lambda p: (p[0] or "", p[1]),
+    )
+
+
+def expected_pairs(facts: dict[str, Any] | None, scope: Scope) -> list[Pair]:
+    """Sjednoceni IGMP paru (vzdy receiver) a PIM paru; stejne (S,G) dostane
+    unii roli. Tohle je mnozina ocekavanych streamu pro forwarding
+    a c-multicast checky (rozhodnuti 2026-09-07)."""
+    merged: dict[tuple[str | None, str], set[str]] = {}
+    for source, group in igmp_pairs(facts, scope):
+        merged.setdefault((source, group), set()).add(RECEIVER)
+    for source, group, roles in pim_pairs(facts, scope):
+        merged.setdefault((source, group), set()).update(roles)
+    return sorted(
+        ((s, g, frozenset(r)) for (s, g), r in merged.items()),
+        key=lambda p: (p[0] or "", p[1]),
+    )
+
+
+def roles_label(roles: frozenset[str]) -> str:
+    return "/".join(sorted(roles))
+
+
 def multicast_table(facts: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     """Scope ma nejvys jednu instanci (Scope.select), tak se tabulky slouci."""
     table: dict[str, dict[str, Any]] = {}
