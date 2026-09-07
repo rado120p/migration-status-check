@@ -35,6 +35,7 @@ MVPN_UPSTREAM_PREFIXES = ("lsi.", "vt-", "ge-", "xe-", "et-", "ae", "irb")
 LINK_LOCAL_GROUPS = ipaddress.ip_network("224.0.0.0/24")
 
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
+NO_REPORT_PIM_INFO = "bez IGMP reportu, o streamy se hlasi PIM join"
 NO_REPORT_SKIP = "bez IGMP reportu"
 NO_JOIN = "Zadny PIM join"
 NO_JOIN_IGMP_INFO = "bez PIM join, o streamy se hlasi IGMP"
@@ -230,6 +231,13 @@ class IgmpMembershipReportCheck(Check):
         # ne "bylo prazdno".
         was_value = pairs_text(was) if was else None
         if not now:
+            if pim_pairs(ctx.subject, ctx.scope):
+                # Rozhrani s obema zamery: streamy nese PIM join, IGMP mlci
+                # (rozhodnuti 2026-09-07). pim_join area se cte volitelne.
+                return [Finding(
+                    Outcome.INFO, "receiver neposila IGMP report, o streamy se hlasi PIM join",
+                    label=self.label, value=NO_REPORT_PIM_INFO, baseline_value=was_value,
+                )]
             return [Finding(
                 Outcome.BROKEN, "receiver neposila zadny IGMP membership report",
                 label=self.label, value=NO_REPORT, baseline_value=was_value,

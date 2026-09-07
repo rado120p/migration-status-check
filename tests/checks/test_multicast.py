@@ -9,6 +9,7 @@ from migration_validator.checks.multicast import (
     NO_JOIN,
     NO_JOIN_IGMP_INFO,
     NO_REPORT,
+    NO_REPORT_PIM_INFO,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
     RECEIVER,
@@ -210,6 +211,19 @@ def test_igmp_check_applies_only_to_multicast_subtypes():
     assert not check.applies_to(_scope("et-0/0/8.13", "Internet", None))
     assert not check.applies_to(_scope("irb.3", "IPVPN", None, ["RI"]))
     assert not check.applies_to(_scope("lo0.0", "Core", "loopback"))
+
+
+def test_igmp_report_missing_with_pim_join_is_info():
+    facts = {**_igmp(POST), **_pim("master", _join("Through BGP", [POST]))}
+    (finding,) = IgmpMembershipReportCheck().run(_ctx(facts))
+    assert (finding.outcome, finding.value) == (Outcome.INFO, NO_REPORT_PIM_INFO)
+
+
+def test_igmp_report_missing_without_pim_area_stays_fail():
+    """Snapshot bez pim_join area (schema 12 fixture nebo selhany collector)
+    nesmi zmenit dosavadni chovani."""
+    (finding,) = IgmpMembershipReportCheck().run(_ctx(_igmp(POST)))
+    assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT)
 
 
 # --- multicast_forwarding_status -------------------------------------------
