@@ -36,6 +36,9 @@ LINK_LOCAL_GROUPS = ipaddress.ip_network("224.0.0.0/24")
 
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
 NO_REPORT_SKIP = "bez IGMP reportu"
+NO_JOIN = "Zadny PIM join"
+NO_JOIN_IGMP_INFO = "bez PIM join, o streamy se hlasi IGMP"
+SENDER_NO_RECEIVER = "sender site bez vzdaleneho receiveru, neni co overit"
 # junos-evo casto vraci <multicast-statistics-timed-out/> misto
 # forwarding-rate-packets i na zive Forwarding route (overeno 2026-09-02).
 # Absence hodnoty neni nula - musi se odlisit SKIP od BROKEN.
@@ -50,6 +53,14 @@ def sg_label(source: str | None, group: str) -> str:
 
 def pairs_text(pairs: list[tuple[str | None, str]]) -> str:
     return ", ".join(sg_label(s, g) for s, g in pairs)
+
+
+def role_pairs_text(pairs: list[Pair]) -> str:
+    return ", ".join(f"{sg_label(s, g)} [{roles_label(r)}]" for s, g, r in pairs)
+
+
+def _sg_set(pairs: list[Pair]) -> set[tuple[str | None, str]]:
+    return {(s, g) for s, g, _ in pairs}
 
 
 def _link_local(group: str) -> bool:
@@ -235,6 +246,60 @@ class IgmpMembershipReportCheck(Check):
         )]
 
 
+# --- pim_join ---------------------------------------------------------------
+
+@register
+class PimJoinCheck(Check):
+    id = "pim_join"
+    order = 11
+    title = "PIM join na servisnim rozhrani"
+    label = "PIM join"
+    mode = Mode.BOTH
+    requires = ("pim_join",)
+    requires_inventory = True
+    service_types = MULTICAST_TYPES
+    service_subtypes = MULTICAST_SUBTYPES
+    default_severity = Severity.CRITICAL
+
+    def run(self, ctx: CheckContext) -> list[Finding]:
+        if "pim" not in ctx.scope.selectors.protocols:
+            # Bez zameru ticho, ne SKIP - stejne jako pim_neighbor_state.
+            return []
+        now = pim_pairs(ctx.subject, ctx.scope)
+        was = pim_pairs(ctx.baseline, ctx.baseline_scope or ctx.scope) if ctx.has_baseline else []
+        was_value = role_pairs_text(was) if was else None
+        if not now:
+            if igmp_pairs(ctx.subject, ctx.scope):
+                return [Finding(
+                    Outcome.INFO,
+                    "zadny PIM join na servisnim rozhrani, o streamy se hlasi IGMP",
+                    label=self.label, value=NO_JOIN_IGMP_INFO, baseline_value=was_value,
+                )]
+            if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
+                # Sender-only site bez vzdaleneho receiveru nema zadny join
+                # state - neni co overit, ale neni to rozbity receiver
+                # (rozhodnuti 2026-09-07).
+                return [Finding(
+                    Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
+                    label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
+                )]
+            return [Finding(
+                Outcome.BROKEN, "zadny PIM join na servisnim rozhrani",
+                label=self.label, value=NO_JOIN, baseline_value=was_value,
+            )]
+        # Role se neporovnavaji - migraci se nemeni, pri rozdilu by slo
+        # o jiny stream. Porovnava se jen mnozina (S,G).
+        if was and _sg_set(was) != _sg_set(now):
+            return [Finding(
+                Outcome.DEGRADED, f"PIM join se zmenil proti baseline: {role_pairs_text(now)}",
+                label=self.label, value=role_pairs_text(now), baseline_value=was_value,
+            )]
+        return [Finding(
+            Outcome.OK, f"PIM join: {role_pairs_text(now)}",
+            label=self.label, value=role_pairs_text(now), baseline_value=was_value,
+        )]
+
+
 # --- multicast_forwarding_status --------------------------------------------
 
 def _upstream_problem(subtype: str | None, upstream: str | None) -> str | None:
@@ -260,7 +325,7 @@ def _summary(label: str, total: int, failed: int) -> Finding:
 @register
 class MulticastForwardingStatusCheck(Check):
     id = "multicast_forwarding_status"
-    order = 11
+    order = 12
     title = "Multicast forwarding na servisnim rozhrani"
     label = "Multicast forwarding status"
     mode = Mode.STATE
@@ -374,7 +439,7 @@ def _labels_of(streams: list[tuple[str, dict[str, Any]]]) -> str:
 @register
 class CoreMulticastForwardingCheck(Check):
     id = "core_multicast_forwarding"
-    order = 12
+    order = 13
     title = "Multicast forwarding pro inet.2 statiky"
     label = "Multicast forwarding status"
     mode = Mode.BOTH
@@ -488,7 +553,7 @@ def _cmulticast_entry(
 @register
 class MvpnCmulticastStatusCheck(Check):
     id = "mvpn_cmulticast_status"
-    order = 13
+    order = 14
     title = "MVPN c-multicast a provider tunnel"
     label = "C-Multicast status"
     mode = Mode.BOTH

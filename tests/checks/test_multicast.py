@@ -6,15 +6,19 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext
 from migration_validator.checks.multicast import (
+    NO_JOIN,
+    NO_JOIN_IGMP_INFO,
     NO_REPORT,
     NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
     RECEIVER,
     SENDER,
+    SENDER_NO_RECEIVER,
     CoreMulticastForwardingCheck,
     IgmpMembershipReportCheck,
     MulticastForwardingStatusCheck,
     MvpnCmulticastStatusCheck,
+    PimJoinCheck,
     assign_sources,
     expected_pairs,
     format_uptime_hms,
@@ -34,13 +38,14 @@ SG = ("10.11.11.1", "232.1.1.1")
 
 
 def _scope(interface=POST, service_type="Internet", subtype="multicast", instances=(),
-           static_routes=()):
+           static_routes=(), protocols=("igmp", "pim"), mvpn_site=()):
     return Scope(
         id=f"svc:x:{service_type}", kind="service",
         key=ScopeKey("x", service_type, subtype),
         selectors=Selectors(
             interfaces=[interface], routing_instances=list(instances),
             static_routes=[dict(r) for r in static_routes],
+            protocols=list(protocols), mvpn_site=list(mvpn_site),
         ),
     )
 
@@ -664,3 +669,65 @@ def test_forwarding_mvpn_upstream_accepts_physical_and_irb():
         findings = MulticastForwardingStatusCheck().run(_ctx(facts, scope=scope))
         up = [f for f in findings if f.label == "Upstream interface"][0]
         assert up.outcome is Outcome.OK, upstream
+
+
+# --- pim_join ---------------------------------------------------------------
+
+def test_pim_join_pass_lists_pairs_with_role():
+    facts = _pim("master", _join("Through BGP", [POST]), _join(POST, ["Pseudo-MVPN"], group="232.1.1.2"))
+    (finding,) = PimJoinCheck().run(_ctx(facts))
+    assert finding.outcome is Outcome.OK
+    assert finding.label == "PIM join"
+    assert finding.value == "(10.11.11.1, 232.1.1.1) [receiver], (10.11.11.1, 232.1.1.2) [sender]"
+    assert finding.baseline_value is None
+
+
+def test_pim_join_changed_set_is_warn_roles_ignored():
+    now = _pim("master", _join("Through BGP", [POST]), _join(POST, ["Pseudo-MVPN"], group="232.1.1.2"))
+    was = _pim("master", _join("Through BGP", [PRE]))
+    (finding,) = PimJoinCheck().run(_ctx(now, baseline=was, baseline_scope=_scope(PRE)))
+    assert finding.outcome is Outcome.DEGRADED
+    assert finding.baseline_value == "(10.11.11.1, 232.1.1.1) [receiver]"
+
+
+def test_pim_join_same_set_different_role_is_pass():
+    now = _pim("master", _join(POST, ["Pseudo-MVPN"]))
+    was = _pim("master", _join("Through BGP", [PRE]))
+    (finding,) = PimJoinCheck().run(_ctx(now, baseline=was, baseline_scope=_scope(PRE)))
+    assert finding.outcome is Outcome.OK
+
+
+def test_pim_join_missing_with_igmp_is_info():
+    facts = {**_igmp(POST, SG), "pim_join": {}}
+    (finding,) = PimJoinCheck().run(_ctx(facts))
+    assert (finding.outcome, finding.value) == (Outcome.INFO, NO_JOIN_IGMP_INFO)
+
+
+def test_pim_join_missing_on_sender_only_site_is_warn():
+    scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=["sender"])
+    (finding,) = PimJoinCheck().run(_ctx({"pim_join": {}}, scope=scope))
+    assert (finding.outcome, finding.value) == (Outcome.DEGRADED, SENDER_NO_RECEIVER)
+
+
+def test_pim_join_missing_on_receiver_or_both_site_is_fail():
+    for site in ([], ["receiver"], ["receiver", "sender"]):
+        scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
+        (finding,) = PimJoinCheck().run(_ctx({"pim_join": {}}, scope=scope))
+        assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_JOIN), site
+
+
+def test_pim_join_silent_without_pim_intent():
+    assert PimJoinCheck().run(_ctx(_pim("master", _join("Through BGP", [POST])), scope=_scope(protocols=["igmp"]))) == []
+
+
+def test_pim_join_applies_to_multicast_and_mvpn_only():
+    check = PimJoinCheck()
+    assert check.applies_to(_scope())
+    assert check.applies_to(_scope("irb.10", "IPVPN", "mvpn", ["RI"]))
+    assert not check.applies_to(_scope("irb.3", "IPVPN", None, ["RI"]))
+    assert not check.applies_to(_scope("lo0.0", "Core", "loopback"))
+
+
+def test_multicast_check_order():
+    assert [c.order for c in (IgmpMembershipReportCheck, PimJoinCheck, MulticastForwardingStatusCheck,
+                              CoreMulticastForwardingCheck, MvpnCmulticastStatusCheck)] == [10, 11, 12, 13, 14]
