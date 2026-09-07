@@ -55,6 +55,7 @@ COLLECTOR_NAMES = (
     "igmp_group",
     "multicast_route",
     "mvpn_instance",
+    "pim_join",
 )
 
 
@@ -164,6 +165,7 @@ def _facts_for(scopes, pps: int) -> dict:
     igmp_group = {}
     multicast_route = {}
     mvpn_instance = {}
+    pim_join = {}
 
     for scope in scopes:
         for name in scope.selectors.interfaces + scope.selectors.physical_interfaces:
@@ -380,6 +382,17 @@ def _facts_for(scopes, pps: int) -> dict:
                     "sender_pe": "150.0.0.13",
                 }]}
 
+                # PIM join (spec 2026-09-07): receiver site, join s IRB jako
+                # downstream, upstream pres MVPN.
+                pim_join.setdefault(instance, {})[f"{source},{group}"] = {
+                    "source": source,
+                    "group": group,
+                    "upstream_interface": "Through BGP",
+                    "upstream_neighbor": "Through MVPN",
+                    "downstream_interfaces": [iface],
+                    "uptime_seconds": 3266,
+                }
+
         # Core lo0.0: ke kazde inet.2 statice existuje stream se zdrojem
         # uvnitr prefixu a upstream == via z route zrcadla vyse (ten je
         # scope.selectors.interfaces[0], tedy "lo0.0" - synteticky, ale
@@ -494,6 +507,7 @@ def _facts_for(scopes, pps: int) -> dict:
         "igmp_group": igmp_group,
         "multicast_route": multicast_route,
         "mvpn_instance": mvpn_instance,
+        "pim_join": pim_join,
     }
 
 

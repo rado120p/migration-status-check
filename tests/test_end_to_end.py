@@ -936,3 +936,14 @@ def test_sluzba_stoji_za_svym_l1_blokem(synthetic_snapshot):
         elif parents[0] in l1_ports:
             assert parents[0] == last_l1_port, (
                 f"{scope_id}: rodic {parents[0]}, ale posledni L1 blok {last_l1_port}")
+
+
+def test_synthetic_mvpn_scope_has_pim_join(synthetic_snapshot):
+    """Zdravy MVPN receiver ma join s IRB jako downstream (spec 2026-09-07);
+    bez nej by pim_join check zil jen z INFO zrcadla a sender vetev
+    forwarding checku by synteza nikdy neprosla."""
+    snapshot = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+    table = snapshot.facts["pim_join"]["MULTICAST-STREAM-B-MUX1-RECEIVER"]
+    (join,) = table.values()
+    assert join["downstream_interfaces"] == ["irb.2"]
+    assert join["upstream_interface"] == "Through BGP"
