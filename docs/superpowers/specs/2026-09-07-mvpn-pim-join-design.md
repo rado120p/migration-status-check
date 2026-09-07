@@ -211,8 +211,15 @@ se nemění; při rozdílu by šlo o jiný stream). IGMP páry se čtou z
 
 Bez IGMP párů, ale s PIM páry ⇒ INFO `bez IGMP reportu, o streamy se
 hlasi PIM join` místo BROKEN. `pim_join` se čte volitelně (není
-v `requires`), takže check běží i nad snapshotem schema 12 beze změny
-chování.
+v `requires`); selhal-li `pim_join` collector a IGMP páry chybí, řádek je
+SKIP `PIM join nezmereno` (ne BROKEN — absence měření není absence stavu).
+Zrcadlově `pim_join` check při selhaném `igmp_group` collectoru bez PIM
+párů dá SKIP `IGMP report nezmereno`. Gate: IGMP řádek běží jen s `"igmp"`
+v `scope.selectors.protocols` (PIM-only `mvpn` rozhraní IGMP report
+neslibuje). `multicast_forwarding_status` a `mvpn_cmulticast_status` mají
+`pim_join` v `requires`, takže při jeho selhání kaskádují do frameworkového
+SKIP místo tichého zúžení `expected_pairs()` (upřesněno po finálním review
+2026-09-07).
 
 ## 4. Role-aware forwarding a c-multicast
 
