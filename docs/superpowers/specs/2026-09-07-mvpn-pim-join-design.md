@@ -217,8 +217,11 @@ value `bez IGMP reportu ani PIM join`. Per nalezená routa:
   downstream`. Bez prefix pravidla na downstream (laborka: `ge-0/0/0.0`).
 - obě role: řádek `Stream` OK, splní-li podmínku kterákoli role; řádek
   `Upstream interface` se hodnotí podle role, jejíž Stream podmínka
-  prošla (při obou prošlých receiver). Neprošla-li žádná, obě BROKEN
-  s receiver texty.
+  prošla (při obou prošlých receiver). Neprošla-li žádná, Stream je
+  BROKEN s receiver textem a `Upstream interface` se hodnotí receiver
+  prefix pravidlem nezávisle — stejně jako u čistě receiver páru
+  (upřesněno 2026-09-07 při dokumentaci: řádky jsou nezávislé, ne
+  „obě BROKEN").
 - `Forwarding-rate` a `Route uptime` řádky beze změny.
 
 ### `mvpn_cmulticast_status`
