@@ -7,7 +7,7 @@ is in [architecture.md](architecture.md).
 
 ## 1. Check catalogue
 
-Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
+Matches the output of `mig-validate checks` (as of 2026-09-07, 31 checks):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
@@ -37,10 +37,11 @@ Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
 | `pim_neighbor_state` | both | critical | Core (transit) | only where the interface is under `protocols pim` (otherwise no finding at all, not SKIP); otherwise same as LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS on the interface is `Up`; interface missing from output = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | a BFD session bound to the interface (not a peer address) is always expected and `Up` |
-| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | the receiver sends an IGMP membership report; the (S,G) set against baseline — a different set is WARN |
-| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | a single SKIP with no IGMP report; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); IGMP groups in 224.0.0.0/24 are ignored |
+| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn) | the receiver sends an IGMP membership report; the (S,G) set against baseline — a different set is WARN; no report but a PIM join = INFO |
+| `pim_join` | both | critical | Internet (multicast), IPVPN (mvpn) | only where the interface is under `protocols pim` (otherwise no finding); (S,G) from the PIM join table with role `[receiver]` (interface among downstream) / `[sender]` (interface is upstream); set against baseline = WARN; no join: INFO when IGMP reports the streams, WARN on a sender-only site, otherwise FAIL |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn) | a single SKIP with no IGMP report and no PIM join; pairs = union of IGMP + PIM join; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); sender role: upstream == service interface, downstream non-empty; IGMP groups in 224.0.0.0/24 are ignored |
 | `core_multicast_forwarding` | both | critical | Core (loopback) | driven by the global `inet.2` statics, not IGMP; no rows at all without inet.2 statics; upstream against the `via` of the inet.2 route |
-| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | the c-multicast entry and provider tunnel exist; against baseline only the tunnel's sender PE is compared, not the full tunnel id |
+| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn) | the c-multicast entry and provider tunnel exist; pairs = union of IGMP + PIM join; against baseline only the tunnel's sender PE is compared, not the full tunnel id |
 
 `mode` semantics:
 
@@ -644,8 +645,8 @@ L2: ge-0/0/3.4094, ge-0/0/4.4094
 ```
 
 The source is `ServiceEntry.l2_interface` (inventory schema 8, `Selectors.l2_interfaces`)
-— see [files/models.md](files/models.md) and
-[files/parsers.md](files/parsers.md#multicast-igmp-intent-inet2--lo00-irb-l2_interface-2026-09-02-wave).
+— see [files/models.md](files/models.md) and the Multicast section of
+[files/parsers.md](files/parsers.md).
 The `L2 cast:`/`L3 cast:` note from an EVPN link takes precedence when an IRB link exists
 too.
 

@@ -405,16 +405,17 @@ collector bere první a další tiše zahazuje — v nahrávkách z laborky k to
 `{rozhraní: {state}}`. `state` defaultuje na `"unknown"`, pokud `mpls-interface-state`
 chybí.
 
-## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (vlna 2026-09-02)
+## `multicast.py` — IGMP, PIM join, multicast forwarding, MVPN c-multicast (vlna 2026-09-02, `pim_join` 2026-09-07)
 
-Tři collectory pro čtyři nové checky z `checks/multicast.py`: `igmp_group`,
-`multicast_route`, `mvpn_instance`. CLI ekvivalenty:
+Čtyři collectory pro pět checků z `checks/multicast.py`: `igmp_group`,
+`multicast_route`, `mvpn_instance`, `pim_join`. CLI ekvivalenty:
 
 | fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI ekvivalent |
 |---|---|---|
 | `igmp_group` | `get_igmp_group_information` | `show igmp group` |
 | `multicast_route` | `get_multicast_route_information(extensive=True[, instance=...])` | `show multicast route instance all extensive` |
 | `mvpn_instance` | `get_mvpn_instance_information(inet=True)` | `show mvpn instance inet` |
+| `pim_join` | `get_pim_join_information(extensive=True[, instance=...])` | `show pim join instance all extensive` |
 
 Žádný z collectorů neinterpretuje verdikt — `local` u IGMP se zahazuje jen proto, že to
 není rozhraní (nikdy nemůže být servisní rozhraní), ne kvůli PASS/FAIL. Absence
@@ -427,6 +428,16 @@ mapuje na `source: None`, ne na text `"0.0.0.0"` — check pak testuje `is None`
 magický řetězec. Pseudo-rozhraní `local` (skupiny, které si router sám nasadil, ne
 receiver) se zahazuje při parsování. Rozhraní bez skupin nedostává klíč s prázdným
 seznamem — absence je absence.
+
+### `_PerInstanceCollector` — sdílený základ (spec 2026-09-07)
+
+`MulticastRouteCollector` i `PimJoinCollector` dědí z `_PerInstanceCollector`: sdílí
+`record_calls()` (MX dopočítá VRF z `get-instance-information(brief=True)`, junos-evo
+jedno volání s `instance="all"`) i `collect()` (per-RPC agregace tabulek, `CollectorError`
+při jakémkoli neúspěchu volání nebo při selhání zjištění seznamu instancí). Podtřída jen
+dodává `rpc_name()`/`rpc_kwargs()` a `parse(xml, platform) -> {instance: {klíč:
+payload}}`. Refaktor nemění chování `multicast_route` — existující testy zůstávají
+zelené.
 
 ### `MulticastRouteCollector` (`multicast_route`)
 
@@ -466,3 +477,27 @@ dvojtečce na `source_prefix`/`group_prefix`. `sender_pe` je vytažená PE adres
 pokud tunnel id chybí nebo obsahuje `"invalid"` (`I-P-tnl:invalid`). Instance, která je ve
 výpisu, ale bez c-multicast záznamů, si klíč nechává s prázdným seznamem — check tak
 rozlišuje „instance není ve výpisu vůbec" od „instance je, ale bez c-multicast".
+
+### `PimJoinCollector` (`pim_join`, spec 2026-09-07)
+
+`{instance: {"S,G": {source, group, upstream_interface, upstream_neighbor,
+downstream_interfaces, uptime_seconds}}}`. Jen `address-family INET` (INET6 se
+ignoruje). Klíč je `route_key(source or "*", group)` — pro `(*, G)` (join-group bez
+`multicast-source-address`) je klíč `"*,group"`, aby zůstal JSON-safe a jednoznačný;
+`source` v payloadu samotném zůstává `None`. `pim-instance` má prefix `PIM.`, který se
+stripuje (`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` → `NGMVPN-PIM-SOURCE`).
+
+`upstream_interface` a `upstream_neighbor` se drží verbatim — `"Through BGP"`,
+`"Through MVPN"` zůstávají textem, roli přiřazuje až check. `downstream_interfaces`
+sbírá z každého `downstream-interface` jak `pim-interface-name`, tak
+`pim-pseudo-downstream-interface-name` (obě, jsou-li přítomny), bez duplicit, v pořadí
+výpisu — Internet/multicast join v master instanci nese downstream `Pseudo-GMP` a
+skutečné jméno rozhraní až v `pim-pseudo-downstream-interface-name`. `uptime_seconds`
+z `junos:seconds` atributu elementu `uptime` (`_seconds_attr`). Instance bez
+`join-group` nemá klíč — collector nic nesyntetizuje.
+
+Sdílí `_PerInstanceCollector` s `multicast_route` (viz výš): stejné dva RPC tvary podle
+platformy (`get_pim_join_information(extensive=True, instance="all")` na junos-evo,
+`get_pim_join_information(extensive=True)` + jedno volání per VRF na MX), stejný
+`record_calls()`. `record` proto na MX uloží `pim_join.xml` (master) +
+`pim_join.2.xml`, `.3.xml`… per RI, přesně jako `multicast_route`.

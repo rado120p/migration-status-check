@@ -962,18 +962,21 @@ scope by dostal overview taky.
 
 ---
 
-## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (vlna 2026-09-02)
+## `multicast.py` — IGMP, PIM join, multicast forwarding, MVPN c-multicast (vlna 2026-09-02, `pim_join` od 2026-09-07)
 
-Čtyři nové checky nad třemi novými collectory (`igmp_group`, `multicast_route`,
-`mvpn_instance`). Pokrývají tři role: **Internet/multicast** (zákaznický receiver pod
-`protocols igmp`), **Core/loopback** (globální `inet.2` statiky na lo0.0) a
-**IPVPN/mvpn-igmp** (IRB v MVPN VRF s IGMP receiverem). Sdílejí modul, dvě sdílené
-sekce (`igmp_pairs`, `multicast_table`, `stream_rows`) a jedno pravidlo napříč všemi:
+Pět checků nad čtyřmi collectory (`igmp_group`, `multicast_route`, `mvpn_instance`,
+`pim_join` — poslední od 2026-09-07). Pokrývají tři role: **Internet/multicast**
+(zákaznický receiver pod `protocols igmp` nebo `protocols pim`), **Core/loopback**
+(globální `inet.2` statiky na lo0.0) a **IPVPN/mvpn** (IRB nebo tranzit v MVPN VRF
+s IGMP nebo PIM záměrem, receiver i sender site). Sdílejí modul, sdílené sekce
+(`igmp_pairs`, `pim_pairs`, `expected_pairs`, `multicast_table`, `stream_rows`) a
+jedno pravidlo napříč všemi:
 
-- **Chybějící IGMP množina kaskáduje do SKIP.** `igmp_membership_report` definuje
-  očekávané streamy; `multicast_forwarding_status` a `mvpn_cmulticast_status` bez ní
-  vrátí jediný `SKIP` řádek, ne nezávislé hledání v tabulce.
-- **Proti baseline se porovnává jen množina (S,G) a sender PE tunelu** — upstream,
+- **Prázdné sjednocení IGMP + PIM join párů (`expected_pairs()`) kaskáduje do SKIP
+  `bez IGMP reportu ani PIM join`.** `multicast_forwarding_status` a
+  `mvpn_cmulticast_status` bez ní vrátí jediný `SKIP` řádek, ne nezávislé hledání
+  v tabulce.
+- **Proti baseline se porovnává jen množina (S,G) a sender PE tunelu** — role, upstream,
   downstream, forwarding rate a route uptime se neporovnávají nikdy, protože se
   migrací mění z definice (jiná rozhraní, jiná lsi.X čísla).
 - **Absence `forwarding_rate_pps` není nula.** junos-evo často vrací
@@ -984,15 +987,18 @@ sekce (`igmp_pairs`, `multicast_table`, `stream_rows`) a jedno pravidlo napří�
   `   -- (S, G)`, aby `Forwarding-rate`/`Route uptime` nebyly u víc streamů
   nejednoznačné.
 
-### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
+### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn, both, critical)
 
-`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
+`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn"}`.
 Vyžaduje `igmp_group`. Skupiny z `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …)
 `igmp_pairs()` vynechává (rozhodnutí 2026-09-07) — hlásí je protokoly, ne receiver, takže
 rozhraní jen s nimi je „bez IGMP reportu".
 
 Skupiny na servisním rozhraní ze scopu, seřazené, bez duplicit; ASM položky (bez
-zdroje) jako `(*, G)`. Žádné skupiny → `BROKEN | IGMP membership report : Receiver
+zdroje) jako `(*, G)`. Žádné skupiny, ale rozhraní má PIM join (`pim_pairs()`, čte se
+volitelně, `pim_join` není v `requires`) → `INFO | IGMP membership report : bez IGMP
+reportu, o streamy se hlasi PIM join` (zrcadlo `pim_join` checku, rozhodnutí
+2026-09-07). Žádné skupiny ani PIM join → `BROKEN | IGMP membership report : Receiver
 neposila zadny IGMP membership report`. Proti baseline: shodná množina → `OK`; jiná
 množina → `DEGRADED`, `value` je aktuální množina, `baseline_value` ta stará; baseline
 bez skupin → bez porovnání (no-baseline pravidlo — `baseline_value` `None`, ne "bylo
@@ -1003,30 +1009,71 @@ větvi „množina se liší" nechá padnout `test_igmp_report_changed_set_is_wa
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| na rozhraních služby žádné skupiny | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| na rozhraních služby žádné skupiny, ale PIM join je | `info` | INFO | `bez IGMP reportu, o streamy se hlasi PIM join` |
+| na rozhraních služby žádné skupiny ani PIM join | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
 | baseline měla skupiny, aktuální množina se liší | `degraded` | WARN | aktuální množina `(S, G)`, spojená |
 | aktuální množina sedí na baseline (nebo bez baseline, nebo baseline žádnou neměla) | `ok` | PASS | aktuální množina `(S, G)`, spojená |
 
-### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
+### `pim_join` (Internet/multicast, IPVPN/mvpn, both, critical)
 
-Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`.
+`id="pim_join"`, `order=11` (`igmp_membership_report` 10, `multicast_forwarding_status`
+12, `core_multicast_forwarding` 13, `mvpn_cmulticast_status` 14). `service_types=
+{"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn"}`. `requires=("pim_join",)`.
+Gate `"pim" in scope.selectors.protocols` — bez záměru žádné řádky (ticho, ne SKIP),
+stejně jako `pim_neighbor_state`.
 
-Bez IGMP skupin → jediný `SKIP | Multicast forwarding status : bez IGMP reportu`,
-žádné řádky streamů. Jinak souhrnný řádek (`OK` `{n} S,G`, nebo `BROKEN`
-`{k}/{n} S,G nefunguje`, počítáno z toho, jestli S,G chybí v tabulce nebo mu selže
-Stream/Upstream řádek) a pro každý pár:
+`pim_pairs()` bere z PIM join tabulky instance scopu jen joiny, kterých se servisní
+rozhraní (`selectors.interfaces[0]`) dotýká: mezi `downstream_interfaces` (včetně
+`pim-pseudo-downstream-interface-name`) = role `receiver`, rovno `upstream_interface` =
+role `sender`. Link-local skupiny z `224.0.0.0/24` se zahazují stejně jako u IGMP.
+Hodnota řádku `(S, G) [role], …` (`role_pairs_text()`), role se spojují `/`, je-li
+join zaznamenán z obou stran zároveň.
 
-- **Stream** — `OK`, je-li servisní rozhraní v `downstream_interfaces` routy; jinak
-  `BROKEN`.
-- **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
-  IPVPN/mvpn-igmp `lsi.`/`vt-`/`ge-`/`xe-`/`et-`/`ae`/`irb` (od 2026-09-07 — zdroj v témže
-  VRF přichází přímo, ne tunelem). Splněno → `OK` se jménem; jinak
-  `BROKEN`, hodnota nalezené jméno nebo `-`. **Zpráva rozlišuje dva důvody selhání**:
-  prázdný upstream je `<sg>: upstream - S,G je v tabulce ale nema upstream interface`,
-  upstream, který je, ale se špatným prefixem, je `<sg>: upstream <up> neni z ocekavane
-  role (ocekavano <prefixes>)` — dřívější formulace tvrdila „nemá upstream interface" i
-  když nějaký existoval, jen se špatnou rolí.
-- **Forwarding-rate**, **Route uptime** — `stream_rows()`, viz výš.
+Mutant kill: viz `tests/checks/test_multicast.py` (řádek `pim_join`, tabulka outcomes,
+gate bez `"pim"`).
+
+| situace | Outcome | status | `value` |
+|---|---|---|---|
+| PIM páry, množina (S,G) shodná s baseline nebo bez baseline | `ok` | PASS | `(S, G) [role], …` |
+| PIM páry, množina (S,G) se liší od baseline | `degraded` | WARN | `(S, G) [role], …`, `baseline_value` staré páry |
+| bez PIM párů, IGMP páry jsou | `info` | INFO | `bez PIM join, o streamy se hlasi IGMP` |
+| bez PIM párů, bez IGMP párů, `selectors.mvpn_site == ["sender"]` | `degraded` | WARN | `sender site bez vzdaleneho receiveru, neni co overit` |
+| bez PIM párů, bez IGMP párů, jinak | `broken` | FAIL | `Zadny PIM join` |
+
+### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
+
+Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route` (`pim_join` se čte
+volitelně přes `expected_pairs()`, není v `requires`).
+
+Bez IGMP párů ani PIM joinu → jediný `SKIP | Multicast forwarding status : bez IGMP
+reportu ani PIM join`, žádné řádky streamů. Jinak souhrnný řádek (`OK` `{n} S,G`, nebo
+`BROKEN` `{k}/{n} S,G nefunguje`, počítáno z toho, jestli S,G chybí v tabulce nebo mu
+selže Stream/Upstream řádek) a pro každý pár (páry a jejich role z `expected_pairs()`
+— sjednocení IGMP a PIM join):
+
+- **role `receiver`** (beze změny) — **Stream**: `OK`, je-li servisní rozhraní
+  v `downstream_interfaces` routy; jinak `BROKEN`. **Upstream interface**: role-aware
+  prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`, IPVPN/mvpn `lsi.`/`vt-`/`ge-`/`xe-`/
+  `et-`/`ae`/`irb` (od 2026-09-07 — zdroj v témže VRF přichází přímo, ne tunelem).
+  Splněno → `OK` se jménem; jinak `BROKEN`, hodnota nalezené jméno nebo `-`. **Zpráva
+  rozlišuje dva důvody selhání**: prázdný upstream je `<sg>: upstream - S,G je
+  v tabulce ale nema upstream interface`, upstream, který je, ale se špatným prefixem,
+  je `<sg>: upstream <up> neni z ocekavane role (ocekavano <prefixes>)`.
+- **role `sender`** — **Stream**: `OK`, je-li `downstream_interfaces` routy neprázdné
+  (`Stream odchazi na <downstream>`); jinak `BROKEN` (`S,G je v tabulce ale nema zadny
+  downstream`) — bez prefix pravidla na downstream (v laborce viděno `ge-0/0/0.0`).
+  **Upstream interface**: `OK`, je-li `upstream_interface == servisní rozhraní`; jinak
+  `BROKEN upstream <x> neni servisni rozhrani <iface>`.
+- **obě role** (join zaznamenán z obou stran) — projde-li receiver Stream (servisní
+  rozhraní v `downstream_interfaces`), vyhrává celá `receiver` větev (Stream `OK`,
+  Upstream podle prefix pravidla), i když by sender Stream taky prošel. Neprojde-li
+  receiver Stream, ale projde sender Stream (`downstream_interfaces` neprázdné), vyhrává
+  celá `sender` větev (Stream `OK`, Upstream podle `upstream_interface == servisní
+  rozhraní`). **Neprojde-li ani jeden**, řádky se vydají v `receiver` větvi: Stream
+  `BROKEN` s `receiver` textem, ale řádek **Upstream interface** se přesto počítá podle
+  `receiver` prefix pravidla nezávisle na tom, že Stream selhal — může proto vyjít `OK`
+  i u páru, kde je Stream `BROKEN`.
+- **Forwarding-rate**, **Route uptime** — `stream_rows()`, viz výš (role-nezávislé).
 
 Chybí-li S,G v tabulce vůbec, vydá se jen `BROKEN | Stream : S,G neni v multicast
 tabulce`, další řádky streamu se nevydávají. Žádné porovnání proti baseline
@@ -1045,15 +1092,19 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| bez IGMP skupin na scopu | `SKIP` | SKIP | `bez IGMP reportu` |
+| bez IGMP párů ani PIM joinu na scopu | `SKIP` | SKIP | `bez IGMP reportu ani PIM join` |
 | souhrnný řádek: aspoň jedno S,G selhalo | `broken` | FAIL | `<failed>/<total> S,G nefunguje` |
 | souhrnný řádek: žádné neselhalo | `ok` | PASS | `<total> S,G` |
 | pár nemá v tabulce žádnou odpovídající routu | `broken` | FAIL | `S,G neni v multicast tabulce` |
-| per spárovaná routa, servisní rozhraní je v `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
-| per spárovaná routa, servisní rozhraní v `downstream_interfaces` není | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
-| per spárovaná routa, upstream prázdný | `broken` | FAIL | jméno upstreamu nebo `-` |
-| per spárovaná routa, upstream je, ale se špatným prefixem role | `broken` | FAIL | jméno upstreamu |
-| per spárovaná routa, upstream odpovídá očekávané roli | `ok` | PASS | jméno upstreamu |
+| role `receiver`, servisní rozhraní je v `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
+| role `receiver`, servisní rozhraní v `downstream_interfaces` není | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
+| role `receiver`, upstream prázdný | `broken` | FAIL | jméno upstreamu nebo `-` |
+| role `receiver`, upstream je, ale se špatným prefixem role | `broken` | FAIL | jméno upstreamu |
+| role `receiver`, upstream odpovídá očekávané roli | `ok` | PASS | jméno upstreamu |
+| role `sender`, `downstream_interfaces` neprázdné | `ok` | PASS | `Stream odchazi na <downstream>` |
+| role `sender`, `downstream_interfaces` prázdné | `broken` | FAIL | `S,G je v tabulce ale nema zadny downstream` |
+| role `sender`, `upstream_interface == servisní rozhraní` | `ok` | PASS | jméno upstreamu |
+| role `sender`, `upstream_interface` je jiné rozhraní | `broken` | FAIL | jméno upstreamu nebo `-` |
 | per spárovaná routa, `forwarding_rate_pps` je `None` | `SKIP` | SKIP | `statistiky nedostupne` |
 | per spárovaná routa, `pps > 0` | `ok` | PASS | `<pps> pps` |
 | per spárovaná routa, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
@@ -1110,14 +1161,15 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
 | per routa, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
 | per routa, route uptime (vždy) | `info` | INFO | formátovaný uptime nebo `-` |
 
-### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
+### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
-`service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Vyžaduje `igmp_group`,
-`mvpn_instance`.
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`. `requires=("mvpn_instance",)` —
+`igmp_group` a `pim_join` se čtou volitelně přes `expected_pairs()`.
 
-Bez IGMP skupin → `SKIP | C-Multicast status : bez IGMP reportu`. Instance chybí
-v `mvpn_instance` výpisu → `BROKEN | ... : instance neni v mvpn vypisu`. Jinak pro
-každý (S,G) pár:
+Bez IGMP párů ani PIM joinu (`expected_pairs()` prázdné) → `SKIP | C-Multicast status :
+bez IGMP reportu ani PIM join`. Instance chybí v `mvpn_instance` výpisu → `BROKEN | ... :
+instance neni v mvpn vypisu`. Jinak pro každý (S,G) pár — řádky jsou role-nezávislé
+(c-multicast záznam a provider tunnel se ověřují stejně bez ohledu na `receiver`/`sender`):
 
 - **C-Multicast status** — `OK` s `S/32:G/32`, existuje-li c-multicast záznam
   se shodným source i group prefixem (`_cmulticast_entry`, ASM `(*, G)` porovnává jen
@@ -1135,7 +1187,7 @@ tunnel se stejnou PE adresou by dostal falešné `DEGRADED`).
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| bez IGMP skupin na scopu | `SKIP` | SKIP | `bez IGMP reportu` |
+| bez IGMP párů ani PIM joinu na scopu | `SKIP` | SKIP | `bez IGMP reportu ani PIM join` |
 | instance chybí ve výpisu `mvpn_instance` | `broken` | FAIL | `instance neni v mvpn vypisu` |
 | pár nemá odpovídající c-multicast záznam | `broken` | FAIL | `chybi c-multicast zaznam` |
 | pár má odpovídající c-multicast záznam | `ok` | PASS | `<source_prefix>:<group_prefix>` |

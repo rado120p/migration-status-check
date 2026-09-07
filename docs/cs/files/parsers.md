@@ -282,7 +282,7 @@ viz sekci „Statické routy: per-hop next-hopy a agregáty" výš. Holý `next-
 
 ---
 
-## Multicast: IGMP záměr, `inet.2` → lo0.0, IRB `l2_interface` (vlna 2026-09-02)
+## Multicast: IGMP záměr, PIM záměr, `mvpn_site`, `inet.2` → lo0.0, IRB `l2_interface` (vlna 2026-09-02, PIM/mvpn_site 2026-09-07)
 
 **IGMP záměr** se čte z `protocols igmp interface X` — globálně i uvnitř `routing-instances/
 instance/protocols/igmp` (`_parse_igmp_interfaces()`). XPath je sjednocený přes obě větve
@@ -290,13 +290,52 @@ instance/protocols/igmp` (`_parse_igmp_interfaces()`). XPath je sjednocený pře
 `RoutingInstance.protocols`, dostalo by IGMP záměr každé rozhraní instance, ne jen to pod
 `igmp interface`. Rozhraní pod tímhle záměrem jsou v `self.igmp_interfaces`.
 
-**Subtypy `multicast` a `mvpn-igmp`.** Detekce služby (`_detect_service`):
+**PIM záměr** (spec 2026-09-07) se čte stejným způsobem: `protocols pim interface X`,
+globálně i uvnitř `routing-instances/instance/protocols/pim` (`_parse_pim_interfaces()`),
+XPath sjednocený stejně přes `|`. Rozhraní jsou v `self.pim_interfaces` — je to jediný
+zdroj per-rozhraní PIM záměru pro detekci subtype `mvpn`; instance-level `"pim"`, které
+`RoutingInstance.protocols` (`child_names(./protocols/*)`) rozsévá na všechna rozhraní
+instance, na detekci subtype nestačí (gate PIM neighbor checku na Core tranzitu se
+nemění a dál čte instance-level `"pim"`).
+
+**Subtypy `multicast` a `mvpn`.** Detekce služby (`_detect_service`):
 
 - Internet rozhraní v `self.igmp_interfaces` → `("Internet", "multicast", "high", …)`.
-- IPVPN rozhraní v `self.igmp_interfaces` **a** jeho instance má `protocols mvpn` →
-  `("IPVPN", "mvpn-igmp", "high", …)` (`_ipvpn_subtype()`). Bez IGMP záměru na rozhraní
-  nebo bez `protocols mvpn` v instanci zůstává IPVPN subtype, jaký byl předtím (plain
-  IPVPN, žádný multicast).
+- IPVPN rozhraní, jehož instance má `protocols mvpn`, **a** rozhraní je v
+  `self.igmp_interfaces` nebo `self.pim_interfaces` → `("IPVPN", "mvpn", "high", …)`
+  (`_ipvpn_subtype()`). Reason text vyjmenuje nalezené záměry, např. „Rozhraní je pod
+  protocols pim a instance má protocols mvpn — MVPN site." (u obou záměrů zároveň
+  `protocols igmp a pim`). Bez IGMP ani PIM záměru na rozhraní, nebo bez `protocols mvpn`
+  v instanci, zůstává IPVPN subtype, jaký byl předtím (plain IPVPN, žádný multicast).
+  Subtype `mvpn` nahrazuje dřívější IGMP-only variantu (do 2026-09-07 jen s IGMP
+  záměrem, jiné jméno subtype).
+
+### `mvpn_site`
+
+`RoutingInstance.mvpn_site: list[str]` (`_parse_mvpn_site()`) — role MVPN site
+odvozená z `./protocols/mvpn` a `./provider-tunnel` uzlu instance, hodnoty z
+`{"sender", "receiver"}`, seřazeno:
+
+| konfigurace | `mvpn_site` |
+|---|---|
+| bez `protocols mvpn` | `[]` |
+| `mvpn sender-site`, bez tunelu | `["sender"]` |
+| `mvpn receiver-site` | `["receiver"]` |
+| `provider-tunnel` + `mvpn sender-site` | `["sender"]` |
+| `provider-tunnel` + `mvpn receiver-site` | `["receiver", "sender"]` |
+| `provider-tunnel`, mvpn bez site klíčového slova | `["receiver", "sender"]` |
+| mvpn bez site klíčového slova, bez tunelu | `["receiver"]` |
+
+Pravidlo: `sender` ⇔ `sender-site` nebo `provider-tunnel`; `receiver` ⇔ `receiver-site`
+nebo (`sender-site` není nakonfigurováno) — Junos default bez site klíčového slova je
+obojí. `InterfaceService` i `ServiceEntry` dostanou `mvpn_site` zkopírované z instance
+(prázdné mimo MVPN), `Selectors.mvpn_site` totéž — check `pim_join` z něj čte roli
+sender-only site, ne z konfigurace přímo. `provider-tunnel` bez site klíčového slova dá
+obě role — přijaté riziko: takový site může hostit receiver a tabulka to nerozliší.
+
+`INVENTORY_SCHEMA_VERSION` 8 → **9** (nový klíč `mvpn_site`, přejmenovaný subtype). Staré
+inventory se starým subtype jménem se na pre straně nepáruje přes subtype pravidlo —
+stejný dopad jako při zavedení subtype 2026-09-02.
 
 **Globální `inet.2` statiky patří Core lo0.0.** `ServiceInstance._matches_route()`: routa
 s `route.rib == "inet.2"` patří `service.service_type == "Core" and service.interface ==

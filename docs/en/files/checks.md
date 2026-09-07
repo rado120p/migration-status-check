@@ -975,22 +975,24 @@ the transit scope would receive the overview fact too.
 
 ---
 
-## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (2026-09-02 wave)
+## `multicast.py` — IGMP, PIM join, multicast forwarding, MVPN c-multicast (2026-09-02 wave, `pim_join` since 2026-09-07)
 
-Four new checks over three new collectors (`igmp_group`, `multicast_route`,
-`mvpn_instance`). They cover three roles: **Internet/multicast** (a customer receiver
-under `protocols igmp`), **Core/loopback** (global `inet.2` statics on lo0.0) and
-**IPVPN/mvpn-igmp** (an IRB in an MVPN VRF with an IGMP receiver). They share the module,
-two shared helper sections (`igmp_pairs`, `multicast_table`, `stream_rows`) and one rule
-across all of them:
+Five checks over four collectors (`igmp_group`, `multicast_route`, `mvpn_instance`,
+`pim_join` — the last since 2026-09-07). They cover three roles:
+**Internet/multicast** (a customer receiver under `protocols igmp` or `protocols pim`),
+**Core/loopback** (global `inet.2` statics on lo0.0) and **IPVPN/mvpn** (an IRB or
+physical/aggregate transit in an MVPN VRF with an IGMP or PIM intent, both receiver and
+sender site). They share the module, shared helper sections (`igmp_pairs`, `pim_pairs`,
+`expected_pairs`, `multicast_table`, `stream_rows`) and one rule across all of them:
 
-- **A missing IGMP set cascades into SKIP.** `igmp_membership_report` defines the expected
-  streams; `multicast_forwarding_status` and `mvpn_cmulticast_status` without it return a
-  single `SKIP` row, not an independent lookup into the table.
+- **An empty union of IGMP + PIM join pairs (`expected_pairs()`) cascades into SKIP
+  `bez IGMP reportu ani PIM join`.** `multicast_forwarding_status` and
+  `mvpn_cmulticast_status` without it return a single `SKIP` row, not an independent
+  lookup into the table.
 - **Against baseline, only the (S,G) set and the tunnel's sender PE are compared** —
-  upstream, downstream, forwarding rate and route uptime are never compared, because by
-  definition they change with the migration (different interfaces, different lsi.X
-  numbers).
+  role, upstream, downstream, forwarding rate and route uptime are never compared,
+  because by definition they change with the migration (different interfaces, different
+  lsi.X numbers).
 - **Absence of `forwarding_rate_pps` is not zero.** junos-evo often returns
   `<multicast-statistics-timed-out/>` even on a live Forwarding route — `stream_rows()`
   on `None` returns `SKIP | ... : statistics unavailable`, not `BROKEN` with an invented
@@ -999,49 +1001,96 @@ across all of them:
   `   -- (S, G)`, so `Forwarding-rate`/`Route uptime` are unambiguous with more than one
   stream.
 
-### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
+### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn, both, critical)
 
-`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
+`service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn"}`.
 Requires `igmp_group`. Groups in `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …) are
 dropped by `igmp_pairs()` (2026-09-07 decision) — protocols report them, not the receiver, so
 an interface with only those counts as "no IGMP report".
 
 Groups on the service interface from the scope, sorted, deduplicated; ASM entries
-(no source) render as `(*, G)`. No groups → `BROKEN | IGMP membership report : Receiver
-neposila zadny IGMP membership report`. Against baseline: same set → `OK`; a different
-set → `DEGRADED`, `value` is the current set, `baseline_value` the old one; baseline with
-no groups → no comparison (no-baseline rule — `baseline_value` is `None`, not "it was
-empty").
+(no source) render as `(*, G)`. No groups, but the interface has a PIM join
+(`pim_pairs()`, read optionally — `pim_join` is not in `requires`) → `INFO | IGMP
+membership report : bez IGMP reportu, o streamy se hlasi PIM join` (a mirror of the
+`pim_join` check, 2026-09-07 decision). No groups and no PIM join → `BROKEN | IGMP
+membership report : Receiver neposila zadny IGMP membership report`. Against baseline:
+same set → `OK`; a different set → `DEGRADED`, `value` is the current set,
+`baseline_value` the old one; baseline with no groups → no comparison (no-baseline rule
+— `baseline_value` is `None`, not "it was empty").
 
 Mutant kill (2026-09-03, verified by running it): `Outcome.DEGRADED` → `Outcome.OK` in the
 "set differs" branch makes `test_igmp_report_changed_set_is_warn` fail.
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
-| no groups on the service's interfaces | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| no groups on the service's interfaces, but a PIM join exists | `info` | INFO | `bez IGMP reportu, o streamy se hlasi PIM join` |
+| no groups on the service's interfaces and no PIM join | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
 | baseline had groups, current set differs | `degraded` | WARN | current `(S, G)` set, joined |
 | current set matches baseline (or no baseline, or baseline had none) | `ok` | PASS | current `(S, G)` set, joined |
 
-### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn-igmp, state, critical)
+### `pim_join` (Internet/multicast, IPVPN/mvpn, both, critical)
 
-Same two subtypes. Requires `igmp_group`, `multicast_route`.
+`id="pim_join"`, `order=11` (`igmp_membership_report` 10,
+`multicast_forwarding_status` 12, `core_multicast_forwarding` 13,
+`mvpn_cmulticast_status` 14). `service_types={"Internet", "IPVPN"}`,
+`service_subtypes={"multicast", "mvpn"}`. `requires=("pim_join",)`. Gate `"pim" in
+scope.selectors.protocols` — no intent means no rows at all (silence, not SKIP), same as
+`pim_neighbor_state`.
 
-No IGMP groups → a single `SKIP | Multicast forwarding status : bez IGMP reportu`, no
-stream rows at all. Otherwise a summary row (`OK` `{n} S,G`, or `BROKEN`
-`{k}/{n} S,G nefunguje`, counted from whether the S,G is missing from the table or its
-Stream/Upstream row fails) and for each pair:
+`pim_pairs()` takes, from the scope instance's PIM join table, only the joins that touch
+the service interface (`selectors.interfaces[0]`): among `downstream_interfaces`
+(including `pim-pseudo-downstream-interface-name`) = role `receiver`, equal to
+`upstream_interface` = role `sender`. Link-local groups in `224.0.0.0/24` are dropped
+the same way as for IGMP. The row's value is `(S, G) [role], …` (`role_pairs_text()`),
+roles joined with `/` if a join is recorded from both sides at once.
 
-- **Stream** — `OK` if the service interface is in the route's `downstream_interfaces`;
-  otherwise `BROKEN`.
-- **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
-  IPVPN/mvpn-igmp `lsi.`/`vt-`/`ge-`/`xe-`/`et-`/`ae`/`irb` (since 2026-09-07 — a source in
-  the same VRF arrives directly, not through the tunnel). Match → `OK` with the name; otherwise
-  `BROKEN`, value the found name or `-`. **The message distinguishes the two failure
-  reasons**: an empty upstream is `<sg>: upstream - S,G je v tabulce ale nema upstream
-  interface`, an upstream present but with the wrong prefix is `<sg>: upstream <up> neni z
-  ocekavane role (ocekavano <prefixes>)` — the earlier wording claimed "no upstream
-  interface" even when one existed with the wrong role.
-- **Forwarding-rate**, **Route uptime** — `stream_rows()`, see above.
+Mutant kill: see `tests/checks/test_multicast.py` (the `pim_join` row, the outcomes
+table, the gate without `"pim"`).
+
+| situation | Outcome | status | `value` |
+|---|---|---|---|
+| PIM pairs, (S,G) set matches baseline or no baseline | `ok` | PASS | `(S, G) [role], …` |
+| PIM pairs, (S,G) set differs from baseline | `degraded` | WARN | `(S, G) [role], …`, `baseline_value` the old pairs |
+| no PIM pairs, IGMP pairs exist | `info` | INFO | `bez PIM join, o streamy se hlasi IGMP` |
+| no PIM pairs, no IGMP pairs, `selectors.mvpn_site == ["sender"]` | `degraded` | WARN | `sender site bez vzdaleneho receiveru, neni co overit` |
+| no PIM pairs, no IGMP pairs, otherwise | `broken` | FAIL | `Zadny PIM join` |
+
+### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
+
+Same two subtypes. Requires `igmp_group`, `multicast_route` (`pim_join` is read
+optionally through `expected_pairs()`, not in `requires`).
+
+No IGMP pairs and no PIM join → a single `SKIP | Multicast forwarding status : bez IGMP
+reportu ani PIM join`, no stream rows at all. Otherwise a summary row (`OK` `{n} S,G`, or
+`BROKEN` `{k}/{n} S,G nefunguje`, counted from whether the S,G is missing from the table
+or its Stream/Upstream row fails) and for each pair (pairs and their roles from
+`expected_pairs()` — the union of IGMP and PIM join):
+
+- **role `receiver`** (unchanged) — **Stream**: `OK` if the service interface is in the
+  route's `downstream_interfaces`; otherwise `BROKEN`. **Upstream interface**:
+  role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`, IPVPN/mvpn `lsi.`/`vt-`/
+  `ge-`/`xe-`/`et-`/`ae`/`irb` (since 2026-09-07 — a source in the same VRF arrives
+  directly, not through the tunnel). Match → `OK` with the name; otherwise `BROKEN`,
+  value the found name or `-`. **The message distinguishes the two failure reasons**: an
+  empty upstream is `<sg>: upstream - S,G je v tabulce ale nema upstream interface`, an
+  upstream present but with the wrong prefix is `<sg>: upstream <up> neni z ocekavane
+  role (ocekavano <prefixes>)`.
+- **role `sender`** — **Stream**: `OK` if the route's `downstream_interfaces` is
+  non-empty (`Stream odchazi na <downstream>`); otherwise `BROKEN` (`S,G je v tabulce ale
+  nema zadny downstream`) — no prefix rule on the downstream (the lab shows
+  `ge-0/0/0.0`). **Upstream interface**: `OK` if `upstream_interface == service
+  interface`; otherwise `BROKEN upstream <x> neni servisni rozhrani <iface>`.
+- **both roles** (a join recorded from both sides) — if the receiver Stream condition
+  passes (service interface in `downstream_interfaces`), the whole `receiver` branch
+  wins (Stream `OK`, Upstream by the prefix rule), even if the sender Stream condition
+  would also pass. If the receiver Stream fails but the sender Stream passes
+  (`downstream_interfaces` non-empty), the whole `sender` branch wins (Stream `OK`,
+  Upstream by `upstream_interface == service interface`). **If neither passes**, the
+  rows are emitted from the `receiver` branch: Stream `BROKEN` with the `receiver` text,
+  but the **Upstream interface** row is still computed by the `receiver` prefix rule
+  regardless of the Stream failure — so it can come out `OK` on a pair whose Stream is
+  `BROKEN`.
+- **Forwarding-rate**, **Route uptime** — `stream_rows()`, see above (role-independent).
 
 If the S,G is missing from the table entirely, only `BROKEN | Stream : S,G neni v
 multicast tabulce` is emitted, no further stream rows. No baseline comparison at all
@@ -1060,15 +1109,19 @@ Mutant kill (2026-09-03, verified by running each):
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
-| no IGMP groups on the scope | `SKIP` | SKIP | `bez IGMP reportu` |
+| no IGMP pairs and no PIM join on the scope | `SKIP` | SKIP | `bez IGMP reportu ani PIM join` |
 | summary row: at least one (S,G) failed | `broken` | FAIL | `<failed>/<total> S,G nefunguje` |
 | summary row: none failed | `ok` | PASS | `<total> S,G` |
 | pair has no matching route in the table at all | `broken` | FAIL | `S,G neni v multicast tabulce` |
-| per matched route, service interface in `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
-| per matched route, service interface not in `downstream_interfaces` | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
-| per matched route, upstream empty | `broken` | FAIL | upstream name or `-` |
-| per matched route, upstream present with the wrong role prefix | `broken` | FAIL | upstream name |
-| per matched route, upstream present with the expected role prefix | `ok` | PASS | upstream name |
+| role `receiver`, service interface in `downstream_interfaces` | `ok` | PASS | `Stream se na <iface> posila` |
+| role `receiver`, service interface not in `downstream_interfaces` | `broken` | FAIL | `S,G je v tabulce ale stream se na <iface> neposila` |
+| role `receiver`, upstream empty | `broken` | FAIL | upstream name or `-` |
+| role `receiver`, upstream present with the wrong role prefix | `broken` | FAIL | upstream name |
+| role `receiver`, upstream present with the expected role prefix | `ok` | PASS | upstream name |
+| role `sender`, `downstream_interfaces` non-empty | `ok` | PASS | `Stream odchazi na <downstream>` |
+| role `sender`, `downstream_interfaces` empty | `broken` | FAIL | `S,G je v tabulce ale nema zadny downstream` |
+| role `sender`, `upstream_interface == service interface` | `ok` | PASS | upstream name |
+| role `sender`, `upstream_interface` is a different interface | `broken` | FAIL | upstream name or `-` |
 | per matched route, `forwarding_rate_pps` is `None` | `SKIP` | SKIP | `statistiky nedostupne` |
 | per matched route, `pps > 0` | `ok` | PASS | `<pps> pps` |
 | per matched route, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
@@ -1127,14 +1180,16 @@ Mutant kill (2026-09-03, verified by running each):
 | per route, `pps <= 0` | `broken` | FAIL | `<pps> pps` |
 | per route, route uptime (always) | `info` | INFO | formatted uptime or `-` |
 
-### `mvpn_cmulticast_status` (IPVPN/mvpn-igmp, both, critical)
+### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
-`service_types={"IPVPN"}`, `service_subtypes={"mvpn-igmp"}`. Requires `igmp_group`,
-`mvpn_instance`.
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`. `requires=("mvpn_instance",)` —
+`igmp_group` and `pim_join` are read optionally through `expected_pairs()`.
 
-No IGMP groups → `SKIP | C-Multicast status : bez IGMP reportu`. The instance is missing
-from the `mvpn_instance` listing → `BROKEN | ... : instance neni v mvpn vypisu`.
-Otherwise, for each (S,G) pair:
+No IGMP pairs and no PIM join (`expected_pairs()` empty) → `SKIP | C-Multicast status :
+bez IGMP reportu ani PIM join`. The instance is missing from the `mvpn_instance` listing
+→ `BROKEN | ... : instance neni v mvpn vypisu`. Otherwise, for each (S,G) pair — the rows
+are role-independent (the c-multicast entry and provider tunnel are checked the same way
+regardless of `receiver`/`sender`):
 
 - **C-Multicast status** — `OK` with `S/32:G/32`, if a c-multicast entry exists with a
   matching source and group prefix (`_cmulticast_entry`, ASM `(*, G)` compares group
@@ -1152,7 +1207,7 @@ sender PE) makes `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
-| no IGMP groups on the scope | `SKIP` | SKIP | `bez IGMP reportu` |
+| no IGMP pairs and no PIM join on the scope | `SKIP` | SKIP | `bez IGMP reportu ani PIM join` |
 | instance missing from the `mvpn_instance` listing | `broken` | FAIL | `instance neni v mvpn vypisu` |
 | pair has no matching c-multicast entry | `broken` | FAIL | `chybi c-multicast zaznam` |
 | pair has a matching c-multicast entry | `ok` | PASS | `<source_prefix>:<group_prefix>` |

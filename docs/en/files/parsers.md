@@ -301,7 +301,7 @@ cannot be deactivated on its own, only as the whole route.
 
 ---
 
-## Multicast: IGMP intent, `inet.2` → lo0.0, IRB `l2_interface` (2026-09-02 wave)
+## Multicast: IGMP intent, PIM intent, `mvpn_site`, `inet.2` → lo0.0, IRB `l2_interface` (2026-09-02 wave, PIM/`mvpn_site` 2026-09-07)
 
 **IGMP intent** is read from `protocols igmp interface X` — both globally and inside
 `routing-instances/instance/protocols/igmp` (`_parse_igmp_interfaces()`). The XPath is
@@ -310,13 +310,54 @@ instance — using `RoutingInstance.protocols` instead would give IGMP intent to
 interface of the instance, not just the one under `igmp interface`. Interfaces with this
 intent live in `self.igmp_interfaces`.
 
-**Subtypes `multicast` and `mvpn-igmp`.** Service detection (`_detect_service`):
+**PIM intent** (2026-09-07 spec) is read the same way: `protocols pim interface X`, both
+globally and inside `routing-instances/instance/protocols/pim`
+(`_parse_pim_interfaces()`), the XPath unified across the same `|` branches. Interfaces
+live in `self.pim_interfaces` — this is the sole source of per-interface PIM intent for
+detecting the `mvpn` subtype; the instance-level `"pim"` that `RoutingInstance.protocols`
+(`child_names(./protocols/*)`) spreads onto every interface of the instance is not enough
+for that detection (the PIM neighbor check's gate on Core transit is unchanged and still
+reads the instance-level `"pim"`).
+
+**Subtypes `multicast` and `mvpn`.** Service detection (`_detect_service`):
 
 - An Internet interface in `self.igmp_interfaces` → `("Internet", "multicast", "high", …)`.
-- An IPVPN interface in `self.igmp_interfaces` **and** its instance has `protocols mvpn`
-  → `("IPVPN", "mvpn-igmp", "high", …)` (`_ipvpn_subtype()`). Without IGMP intent on the
-  interface or without `protocols mvpn` in the instance, the IPVPN subtype stays whatever
-  it was before (plain IPVPN, no multicast).
+- An IPVPN interface whose instance has `protocols mvpn`, **and** the interface is in
+  `self.igmp_interfaces` or `self.pim_interfaces` → `("IPVPN", "mvpn", "high", …)`
+  (`_ipvpn_subtype()`). The reason text lists the intents found, e.g. "Rozhraní je pod
+  protocols pim a instance má protocols mvpn — MVPN site." (with both intents,
+  `protocols igmp a pim`). Without IGMP or PIM intent on the interface, or without
+  `protocols mvpn` in the instance, the IPVPN subtype stays whatever it was before (plain
+  IPVPN, no multicast). Subtype `mvpn` replaces the earlier IGMP-only variant (a
+  differently-named subtype, IGMP intent only, before 2026-09-07).
+
+### `mvpn_site`
+
+`RoutingInstance.mvpn_site: list[str]` (`_parse_mvpn_site()`) — the MVPN site role
+derived from the instance's `./protocols/mvpn` and `./provider-tunnel` nodes, values from
+`{"sender", "receiver"}`, sorted:
+
+| configuration | `mvpn_site` |
+|---|---|
+| no `protocols mvpn` | `[]` |
+| `mvpn sender-site`, no tunnel | `["sender"]` |
+| `mvpn receiver-site` | `["receiver"]` |
+| `provider-tunnel` + `mvpn sender-site` | `["sender"]` |
+| `provider-tunnel` + `mvpn receiver-site` | `["receiver", "sender"]` |
+| `provider-tunnel`, mvpn with no site keyword | `["receiver", "sender"]` |
+| mvpn with no site keyword, no tunnel | `["receiver"]` |
+
+Rule: `sender` ⇔ `sender-site` or `provider-tunnel`; `receiver` ⇔ `receiver-site` or
+(`sender-site` is not configured) — Junos's default with no site keyword is both.
+`InterfaceService` and `ServiceEntry` both get `mvpn_site` copied from the instance
+(empty outside MVPN), and `Selectors.mvpn_site` carries the same — the `pim_join` check
+reads the sender-only site role from it, not straight from configuration.
+`provider-tunnel` with no site keyword gives both roles — an accepted risk: such a site
+can host a receiver and the table won't tell them apart.
+
+`INVENTORY_SCHEMA_VERSION` 8 → **9** (new `mvpn_site` key, renamed subtype). Old
+inventory with the old subtype name does not match on the pre side through the subtype
+rule — the same impact as when the subtype was introduced on 2026-09-02.
 
 **Global `inet.2` statics belong to Core lo0.0.** `ServiceInstance._matches_route()`: a
 route with `route.rib == "inet.2"` belongs to `service.service_type == "Core" and

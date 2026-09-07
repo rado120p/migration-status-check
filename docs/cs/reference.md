@@ -7,7 +7,7 @@ v [architecture.md](architecture.md).
 
 ## 1. Katalog checků
 
-Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
+Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
@@ -37,10 +37,11 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
 | `pim_neighbor_state` | both | critical | Core (transit) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález, ne SKIP); jinak stejně jako LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS na rozhraní je `Up`; chybějící rozhraní v outputu = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | BFD session vázaná na rozhraní (ne na peer adresu) je vždy očekávaná a `Up` |
-| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | receiver posílá IGMP membership report; množina (S,G) proti baseline — jiná množina = WARN |
-| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | bez IGMP reportu jediný SKIP; jinak per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); IGMP skupiny z 224.0.0.0/24 se ignorují |
+| `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn) | receiver posílá IGMP membership report; množina (S,G) proti baseline — jiná množina = WARN; bez reportu, ale s PIM join = INFO |
+| `pim_join` | both | critical | Internet (multicast), IPVPN (mvpn) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález); (S,G) z PIM join tabulky s rolí `[receiver]` (rozhraní mezi downstream) / `[sender]` (rozhraní je upstream); množina proti baseline = WARN; bez joinu: INFO když streamy hlásí IGMP, WARN u sender-only site, jinak FAIL |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn) | bez IGMP reportu ani PIM join jediný SKIP; páry = sjednocení IGMP + PIM join; jinak per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); sender role: upstream == servisní rozhraní, downstream neprázdný; IGMP skupiny z 224.0.0.0/24 se ignorují |
 | `core_multicast_forwarding` | both | critical | Core (loopback) | řízeno globálními `inet.2` statikami, ne IGMP; bez inet.2 statik žádné řádky (ticho); upstream proti `via` inet.2 routy |
-| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | c-multicast záznam a provider tunnel existují; proti baseline se porovnává jen sender PE tunelu, ne celý tunnel id |
+| `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn) | c-multicast záznam a provider tunnel existují; páry = sjednocení IGMP + PIM join; proti baseline se porovnává jen sender PE tunelu, ne celý tunnel id |
 
 Význam `mode`:
 
@@ -626,7 +627,7 @@ L2: ge-0/0/3.4094, ge-0/0/4.4094
 ```
 
 Zdroj je `ServiceEntry.l2_interface` (inventory schema 8, `Selectors.l2_interfaces`) —
-viz [files/models.md](files/models.md) a [files/parsers.md](files/parsers.md#multicast-igmp-zamer-inet2--lo00-irb-l2_interface-vlna-2026-09-02).
+viz [files/models.md](files/models.md) a sekci Multicast v [files/parsers.md](files/parsers.md).
 Poznámka `L2 cast:`/`L3 cast:` z EVPN vazby má přednost, pokud IRB link existuje zároveň.
 
 Pokud `--filter`/`--status` vybere jeden z páru, filtr ponechá i druhého partnera, i když sám

@@ -33,6 +33,7 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `static_route` | `list[dict]` | záměr z konfigurace: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | záměr z konfigurace: `{peer, minimum_interval, multiplier, source}` |
 | `l2_interface` | `list[str]` | (schema 8) L2 access porty bridge-domains/vlanů, které IRB routuje — singulár pole podle konvence `bridge_domain`/`customer_vlan`; v `Selectors` je plurál `l2_interfaces` (builder překládá) |
+| `mvpn_site` | `list[str]` | (schema 9) role MVPN site zkopírovaná z `RoutingInstance.mvpn_site` (`{"sender", "receiver"}`), prázdné mimo MVPN |
 
 `static_route` a `bfd` jsou **konfigurační záměr, ne měření**. Právě proti nim checky
 `static_route_status` a `bfd_session_state` porovnávají, co se v tabulce a v session
@@ -55,7 +56,7 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 7`).
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 9`).
 `load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
 
 Důvod je u všech zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
@@ -77,10 +78,16 @@ zelená služba.
   a nové protokolové checky (`isis_adjacency_state` a další, vázané přes
   `service_subtypes`) by na starém souboru neběžely vůbec.
 - **7 → 8** (vlna 2026-09-02): `ServiceEntry` dostal `l2_interface` (IRB routuje L2
-  access porty globálních i uvnitř-instančních bridge-domains/vlanů — viz
-  [parsers.md](parsers.md#multicast-igmp-zamer-inet2--lo00-irb-l2_interface-vlna-2026-09-02)).
-  Stará inventory bez pole by prošla tolerantním čtením s prázdným seznamem — hlavička
-  reportu by mlčky přišla o poznámku `L2: …`, ne o chybu.
+  access porty globálních i uvnitř-instančních bridge-domains/vlanů — viz sekci Multicast
+  v [parsers.md](parsers.md)) a subtypy Internet `multicast` / IPVPN pro MVPN se
+  záměrem jen IGMP (do 2026-09-07). Stará inventory bez pole by prošla tolerantním čtením
+  s prázdným seznamem a subtype `None` — hlavička reportu by mlčky přišla o poznámku
+  `L2: …` a subtype-vázané checky by na starém souboru neběžely vůbec.
+- **8 → 9** (spec 2026-09-07): subtype IPVPN `mvpn` nahrazuje dřívější IGMP-only variantu
+  (teď IGMP nebo PIM záměr) a `ServiceEntry` dostal `mvpn_site` (role instance
+  z konfigurace). Stará inventory by nesla starý subtype, na který už žádný check
+  nenaskočí — párovací pravidlo `description + type + subtype` by MVPN službu na baseline
+  straně vyřadilo z nových multicast checků.
 
 Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 
@@ -100,7 +107,14 @@ použít jako klíč slovníku — čehož využívá `builder.py` při detekci 
 
 Seznamy řetězců: `interfaces`, `physical_interfaces`, `routing_instances`,
 `bgp_neighbors`, `bgp_neighbors_inactive`, `local_ipv4`, `local_ipv6`, `virtual_gw_v4`,
-`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `l2_interfaces`, `protocols`.
+`virtual_gw_v6`, `vlans`, `bridge_domains`, `lag_members`, `l2_interfaces`, `protocols`,
+`mvpn_site`.
+
+**`mvpn_site`** (schema 9, spec 2026-09-07) nese roli MVPN site zkopírovanou
+z `RoutingInstance.mvpn_site` (`{"sender", "receiver"}`, viz [parsers.md](parsers.md)) —
+prázdné mimo MVPN. Do výběru faktů se nepromítá, čte ho přímo check `pim_join`
+(`scope.selectors.mvpn_site == ["sender"]` odlišuje sender-only site bez vzdáleného
+receiveru od rozbitého receiveru).
 `l2_interfaces` (schema 8, plurál — `ServiceEntry.l2_interface` je singulár, builder
 překládá) nese L2 access porty domén routovaných IRB; do výběru faktů se **nepromítá**
 (L2 port do IRB scopu nepatří), slouží jen jako poznámka `L2: …` v hlavičce reportu. Adresy i
@@ -162,6 +176,7 @@ Filtrování per oblast:
 | `optics` | `matches_interface(název)` nebo `název ∈ selectors.lag_members` |
 | `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface` | `matches_interface(název)` — stejně jako `interfaces`/`optics` (vlna 2026-08-26) |
 | `isis_overview` | **device-global fakt**, ne per-rozhraní — dostane ho jen Core scope se `service_subtype == "loopback"` (jinak prázdný dict); device scope propouští vše beze změny (vlna 2026-08-26) |
+| `multicast_route`, `pim_join` | **patří instanci, ne rozhraní** (`_instance_table()`): scope bez RI dostane `master`, scope s RI svou tabulku — jen role, které multicast měří (Internet, IPVPN, Core/loopback); jinak prázdný dict. Filtr per (S,G) / per rozhraní (upstream i downstream) dělá až check (`pim_join` podle instance stejně jako `multicast_route`, spec 2026-09-07) |
 | `ping` | `probe["scope_id"] == scope.id` |
 
 Dvě věci, které stojí za zdůraznění:
@@ -205,7 +220,7 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 12` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 13` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
 `peers` místo plochého `status`/`local_sid`/`remote_sid`). Zvýšení z 10 na 11 (vlna
@@ -213,8 +228,10 @@ záznamů naučených přes IRB (`interface` + `learned_via` místo neořezanéh
 (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`,
 `mpls_interface`) — viz [collectors.md](collectors.md) pro tvar každé area. Zvýšení z 11 na
 12 (vlna 2026-09-02) přidalo tři multicast fact areas (`igmp_group`, `multicast_route`,
-`mvpn_instance`) — viz [collectors.md](collectors.md#multicastpy--igmp-multicast-forwarding-mvpn-c-multicast-vlna-2026-09-02).
-Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
+`mvpn_instance`) — viz sekci `multicast.py` v [collectors.md](collectors.md).
+Zvýšení z 12 na 13 (spec 2026-09-07) přidalo čtvrtou multicast fact area `pim_join`
+(PIM join tabulka, klíčovaná stejně jako `multicast_route` — instance → `"source,group"`
+→ payload) do `FACT_AREAS`. Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
 
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje

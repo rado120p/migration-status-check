@@ -413,16 +413,17 @@ rest — the lab recordings never hit this case (1:1).
 `{interface: {state}}`. `state` defaults to `"unknown"` when `mpls-interface-state` is
 missing.
 
-## `multicast.py` — IGMP, multicast forwarding, MVPN c-multicast (2026-09-02 wave)
+## `multicast.py` — IGMP, PIM join, multicast forwarding, MVPN c-multicast (2026-09-02 wave, `pim_join` 2026-09-07)
 
-Three collectors for four new checks in `checks/multicast.py`: `igmp_group`,
-`multicast_route`, `mvpn_instance`. CLI equivalents:
+Four collectors for five checks in `checks/multicast.py`: `igmp_group`,
+`multicast_route`, `mvpn_instance`, `pim_join`. CLI equivalents:
 
 | fact area | RPC (`rpc_name` + `rpc_kwargs`) | CLI equivalent |
 |---|---|---|
 | `igmp_group` | `get_igmp_group_information` | `show igmp group` |
 | `multicast_route` | `get_multicast_route_information(extensive=True[, instance=...])` | `show multicast route instance all extensive` |
 | `mvpn_instance` | `get_mvpn_instance_information(inet=True)` | `show mvpn instance inet` |
+| `pim_join` | `get_pim_join_information(extensive=True[, instance=...])` | `show pim join instance all extensive` |
 
 None of the collectors interprets a verdict — `local` under IGMP is dropped only because it
 is not an interface (it can never be a service interface), not because of PASS/FAIL. A
@@ -435,6 +436,17 @@ maps to `source: None`, not to the literal text `"0.0.0.0"` — checks then test
 not a magic string. The `local` pseudo-interface (groups the router joined itself, not a
 receiver) is dropped while parsing. An interface with no groups gets no key with an empty
 list — absence is absence.
+
+### `_PerInstanceCollector` — shared base (2026-09-07 spec)
+
+Both `MulticastRouteCollector` and `PimJoinCollector` inherit from
+`_PerInstanceCollector`: it shares `record_calls()` (MX adds the VRF list from
+`get-instance-information(brief=True)`, junos-evo one call with `instance="all"`) and
+`collect()` (per-RPC table aggregation, `CollectorError` on any failed call or on
+failure to discover the instance list). The subclass only supplies
+`rpc_name()`/`rpc_kwargs()` and `parse(xml, platform) -> {instance: {key: payload}}`.
+The refactor does not change `multicast_route`'s behavior — the existing tests stay
+green.
 
 ### `MulticastRouteCollector` (`multicast_route`)
 
@@ -476,3 +488,29 @@ when the tunnel id is missing or contains `"invalid"` (`I-P-tnl:invalid`). An in
 present in the reply but with no c-multicast entries keeps its key with an empty list — this
 is how the check distinguishes "instance not in the mvpn listing at all" from "instance is
 there, but no c-multicast".
+
+### `PimJoinCollector` (`pim_join`, 2026-09-07 spec)
+
+`{instance: {"S,G": {source, group, upstream_interface, upstream_neighbor,
+downstream_interfaces, uptime_seconds}}}`. Only `address-family INET` (INET6 is
+ignored). The key is `route_key(source or "*", group)` — for `(*, G)` (a join-group
+with no `multicast-source-address`) the key is `"*,group"`, keeping it JSON-safe and
+unambiguous; `source` in the payload itself stays `None`. `pim-instance` carries a
+`PIM.` prefix that gets stripped (`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` →
+`NGMVPN-PIM-SOURCE`).
+
+`upstream_interface` and `upstream_neighbor` are kept verbatim — `"Through BGP"`,
+`"Through MVPN"` stay as text, role assignment is left to the check. `downstream_
+interfaces` collects, from each `downstream-interface`, both `pim-interface-name` and
+`pim-pseudo-downstream-interface-name` (both, if present), deduplicated, in listing
+order — an Internet/multicast join in the master instance carries downstream
+`Pseudo-GMP` with the real interface name only in
+`pim-pseudo-downstream-interface-name`. `uptime_seconds` comes from the `junos:seconds`
+attribute on the `uptime` element (`_seconds_attr`). An instance with no `join-group`
+has no key — the collector synthesizes nothing.
+
+Shares `_PerInstanceCollector` with `multicast_route` (see above): the same two RPC
+shapes per platform (`get_pim_join_information(extensive=True, instance="all")` on
+junos-evo, `get_pim_join_information(extensive=True)` plus one call per VRF on MX), the
+same `record_calls()`. `record` therefore saves `pim_join.xml` (master) plus
+`pim_join.2.xml`, `.3.xml`… per RI on MX, exactly like `multicast_route`.
