@@ -227,6 +227,22 @@ def test_igmp_report_missing_without_pim_area_stays_fail():
     assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT)
 
 
+def test_igmp_report_missing_on_sender_only_site_is_warn():
+    """Overeno v laborce 2026-09-07: MX1-POP2 irb.2 (sender, NGMVPN-IGMP-SOURCE)
+    bez IGMP i bez PIM join drive hlasil FAIL s receiver formulaci - stejny
+    pripad jako pim_join na sender-only site, ne rozbity receiver."""
+    scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=["sender"])
+    (finding,) = IgmpMembershipReportCheck().run(_ctx({"igmp_group": {}}, scope=scope))
+    assert (finding.outcome, finding.value) == (Outcome.DEGRADED, SENDER_NO_RECEIVER)
+
+
+def test_igmp_report_missing_on_receiver_or_both_site_is_fail():
+    for site in ([], ["receiver"], ["receiver", "sender"]):
+        scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
+        (finding,) = IgmpMembershipReportCheck().run(_ctx({"igmp_group": {}}, scope=scope))
+        assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT), site
+
+
 # --- multicast_forwarding_status -------------------------------------------
 
 def _route(upstream="et-0/0/0.0", downstream=(POST,), pps=6, uptime=3266):

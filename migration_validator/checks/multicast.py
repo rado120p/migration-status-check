@@ -240,6 +240,16 @@ class IgmpMembershipReportCheck(Check):
                     Outcome.INFO, "receiver neposila IGMP report, o streamy se hlasi PIM join",
                     label=self.label, value=NO_REPORT_PIM_INFO, baseline_value=was_value,
                 )]
+            if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
+                # Sender-only site nikdy neposila IGMP membership report sam
+                # za sebe - stejne jako u pim_join (rozhodnuti 2026-09-07,
+                # overeno v laborce 2026-09-07: MX1-POP2 irb.2 sender bez
+                # PIM join take hlasil FAIL s receiver formulaci, coz je
+                # spatne oznaceni role, ne rozbity receiver).
+                return [Finding(
+                    Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
+                    label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
+                )]
             return [Finding(
                 Outcome.BROKEN, "receiver neposila zadny IGMP membership report",
                 label=self.label, value=NO_REPORT, baseline_value=was_value,
