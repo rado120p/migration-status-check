@@ -36,7 +36,21 @@ Vše pro obě platformy (MX i EVO), fixtures z živé laborky
   nemá páry ani jeden protokol.
 - **Sender-only instance bez joinu** (žádný vzdálený receiver) je
   DEGRADED, ne BROKEN — bez receiveru není co ověřit a nejde to odlišit
-  od rozbitého receiveru jinak než konfigurací.
+  od rozbitého receiveru jinak než konfigurací. Platí pro řádek `PIM join`
+  i pro řádek `IGMP membership report` (doplněno při ověření v laborce
+  2026-09-07: sender site MX1-POP2 irb.2 bez receiveru hlásil BROKEN
+  „receiver neposila…", což je receiver formulace na senderu).
+- **Ověření v laborce 2026-09-07 (po implementaci):** 9 z 12 očekávaných
+  řádků sedí (PTX irb.10 receiver, MX1-POP2 irb.10 sender včetně
+  `Stream odchazi na ge-0/0/0.0` a tunelu se sender PE 150.0.0.13).
+  Tři řádky PTX irb.2 (IGMP report, PIM join, forwarding SKIP) neseděly,
+  protože stream `NGMVPN-IGMP` (239.1.1.1) v laborce v tu chvíli neběžel
+  — syrové RPC nesou jen 224.0.0.x skupiny a `PIM.NGMVPN-IGMP-RECEIVER`
+  bez join-group. Kód hlásí stav krabice, není to chyba. Dále: PTX irb.10
+  má v konfiguraci i `protocols igmp` (obě receiver instance), takže
+  `protocol` nese `igmp` i `pim`; MX1-POP1 má MVPN instance deaktivované,
+  ne smazané, takže ukázkové inventory nese `mvpn_site: [receiver]`
+  (deaktivovaná služba zůstává v inventory).
 - **Struktura (varianta A):** jeden collector `pim_join`, jeden nový check
   `pim_join`, sdílený helper `expected_pairs()` (sjednocení IGMP + PIM
   párů s rolemi). Forwarding a c-multicast checky berou páry z helperu
