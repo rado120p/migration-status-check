@@ -1,0 +1,52 @@
+<pim-join-information>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-RECEIVER</pim-instance>
+    <address-family>INET</address-family>
+    <join-group style="sparse">
+      <multicast-group-address>232.10.10.1</multicast-group-address>
+      <multicast-source-address>10.10.10.1</multicast-source-address>
+      <pim-group-flags>
+        <sparse/>
+        <spt/>
+      </pim-group-flags>
+      <upstream-protocol-name>BGP</upstream-protocol-name>
+      <upstream-interface-name>Through BGP</upstream-interface-name>
+      <upstream-neighbor>Through MVPN</upstream-neighbor>
+      <upstream-state-flags>
+        <join-to-source/>
+      </upstream-state-flags>
+      <keepalive-timeout>61</keepalive-timeout>
+      <uptime seconds="569">00:09:29</uptime>
+      <downstream-interfaces>
+        <dummy/>
+        <downstream-interface>
+          <pim-interface-name>irb.10</pim-interface-name>
+          <pim-interface-state>(assert winner)</pim-interface-state>
+          <downstream-neighbor>
+            <neighbor-address>10.100.11.2</neighbor-address>
+            <neighbor-state>Join</neighbor-state>
+            <terse-sparse/>
+            <neighbor-timeout>208</neighbor-timeout>
+            <downstream-if-uptime seconds="569">00:09:29</downstream-if-uptime>
+            <downstream-last-jp>
+              <downstream-last-jp-oper>Join</downstream-last-jp-oper>
+              <downstream-last-jp-time seconds="1">00:00:01</downstream-last-jp-time>
+            </downstream-last-jp>
+          </downstream-neighbor>
+          <downstream-assert-neighbor>
+            <neighbor-address>10.100.11.1</neighbor-address>
+            <neighbor-assert-metric>0</neighbor-assert-metric>
+            <neighbor-assert-preference>170</neighbor-assert-preference>
+            <neighbor-assert-timeout>80</neighbor-assert-timeout>
+          </downstream-assert-neighbor>
+        </downstream-interface>
+      </downstream-interfaces>
+      <downstream-interface-count>1</downstream-interface-count>
+      <downstream-neighbor-count>1</downstream-neighbor-count>
+    </join-group>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-RECEIVER</pim-instance>
+    <address-family>INET6</address-family>
+  </join-family>
+</pim-join-information>

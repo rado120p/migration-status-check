@@ -1,0 +1,40 @@
+<pim-join-information>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-SOURCE</pim-instance>
+    <address-family>INET</address-family>
+    <join-group style="sparse">
+      <multicast-group-address>232.10.10.1</multicast-group-address>
+      <multicast-source-address>10.10.10.1</multicast-source-address>
+      <pim-group-flags>
+        <sparse/>
+        <spt/>
+      </pim-group-flags>
+      <upstream-interface-name>irb.10</upstream-interface-name>
+      <upstream-neighbor>10.10.13.1</upstream-neighbor>
+      <upstream-state-flags>
+        <join-to-source/>
+      </upstream-state-flags>
+      <keepalive-timeout>6</keepalive-timeout>
+      <uptime seconds="354">00:05:54</uptime>
+      <downstream-interfaces>
+        <dummy/>
+        <downstream-interface>
+          <pim-interface-name>Pseudo-MVPN</pim-interface-name>
+          <downstream-neighbor>
+            <downstream-if-uptime seconds="354">00:05:54</downstream-if-uptime>
+            <downstream-last-jp>
+              <downstream-last-jp-oper>Join</downstream-last-jp-oper>
+              <downstream-last-jp-time seconds="354">00:05:54</downstream-last-jp-time>
+            </downstream-last-jp>
+          </downstream-neighbor>
+        </downstream-interface>
+      </downstream-interfaces>
+      <downstream-interface-count>1</downstream-interface-count>
+      <downstream-neighbor-count>1</downstream-neighbor-count>
+    </join-group>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-SOURCE</pim-instance>
+    <address-family>INET6</address-family>
+  </join-family>
+</pim-join-information>

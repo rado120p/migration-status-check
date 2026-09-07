@@ -1,0 +1,100 @@
+<multicast-route-information>
+  <route-family>
+    <multicast-instance>NGMVPN-IGMP-RECEIVER</multicast-instance>
+    <address-family>INET</address-family>
+    <multicast-route style="extensive">
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
+      <multicast-source-prefix-length>32</multicast-source-prefix-length>
+      <upstream-interface-name>lsi.259</upstream-interface-name>
+      <downstream-interface-names>
+        <interface-name>irb.2</interface-name>
+        <pair-nh-index>6056</pair-nh-index>
+      </downstream-interface-names>
+      <outgoing-interface-count>1</outgoing-interface-count>
+      <for-blank-line-line/>
+      <session-name>Organisational Local Scope</session-name>
+      <forwarding-rate-kilobytes>0</forwarding-rate-kilobytes>
+      <forwarding-rate-packets>6</forwarding-rate-packets>
+      <forwarded-packet-count>1904</forwarded-packet-count>
+      <next-hop-id>6087</next-hop-id>
+      <multicast-route-next-hop-type>Paired MCNH</multicast-route-next-hop-type>
+      <upstream-protocol>Upstream protocol: Multicast</upstream-protocol>
+      <multicast-route-state>Active</multicast-route-state>
+      <multicast-route-forwarding-state>Forwarding</multicast-route-forwarding-state>
+      <multicast-route-timeout>forever</multicast-route-timeout>
+      <interface-mismatch-count>0</interface-mismatch-count>
+      <multicast-route-uptime seconds="352">00:05:52</multicast-route-uptime>
+      <multicast-route-sensor>0xf000001c</multicast-route-sensor>
+    </multicast-route>
+  </route-family>
+  <route-family>
+    <multicast-instance>NGMVPN-IGMP-RECEIVER</multicast-instance>
+    <address-family>INET6</address-family>
+  </route-family>
+  <route-family>
+    <multicast-instance>NGMVPN-PIM-RECEIVER</multicast-instance>
+    <address-family>INET</address-family>
+    <multicast-route style="extensive">
+      <multicast-group-address>232.10.10.1</multicast-group-address>
+      <multicast-source-address>10.10.10.1</multicast-source-address>
+      <multicast-source-prefix-length>32</multicast-source-prefix-length>
+      <upstream-interface-name>lsi.260</upstream-interface-name>
+      <downstream-interface-names>
+        <interface-name>irb.10</interface-name>
+        <pair-nh-index>10018</pair-nh-index>
+      </downstream-interface-names>
+      <outgoing-interface-count>1</outgoing-interface-count>
+      <for-blank-line-line/>
+      <session-name>Source specific multicast</session-name>
+      <forwarding-rate-kilobytes>0</forwarding-rate-kilobytes>
+      <forwarding-rate-packets>6</forwarding-rate-packets>
+      <forwarded-packet-count>1897</forwarded-packet-count>
+      <next-hop-id>6089</next-hop-id>
+      <multicast-route-next-hop-type>Paired MCNH</multicast-route-next-hop-type>
+      <upstream-protocol>Upstream protocol: Multicast</upstream-protocol>
+      <multicast-route-state>Active</multicast-route-state>
+      <multicast-route-forwarding-state>Forwarding</multicast-route-forwarding-state>
+      <multicast-route-timeout>forever</multicast-route-timeout>
+      <interface-mismatch-count>0</interface-mismatch-count>
+      <multicast-route-uptime seconds="352">00:05:52</multicast-route-uptime>
+      <multicast-route-sensor>0xf000001e</multicast-route-sensor>
+    </multicast-route>
+  </route-family>
+  <route-family>
+    <multicast-instance>NGMVPN-PIM-RECEIVER</multicast-instance>
+    <address-family>INET6</address-family>
+  </route-family>
+  <route-family>
+    <multicast-instance>master</multicast-instance>
+    <address-family>INET</address-family>
+    <multicast-route style="extensive">
+      <multicast-group-address>232.1.1.1</multicast-group-address>
+      <multicast-source-address>10.11.11.1</multicast-source-address>
+      <multicast-source-prefix-length>32</multicast-source-prefix-length>
+      <upstream-interface-name>et-0/0/0.0</upstream-interface-name>
+      <downstream-interface-names>
+        <interface-name>et-0/0/8.11</interface-name>
+      </downstream-interface-names>
+      <outgoing-interface-count>1</outgoing-interface-count>
+      <for-blank-line-line/>
+      <session-name>Source specific multicast</session-name>
+      <forwarding-rate-kilobytes>0</forwarding-rate-kilobytes>
+      <forwarding-rate-packets>6</forwarding-rate-packets>
+      <forwarded-packet-count>1917</forwarded-packet-count>
+      <next-hop-id>6075</next-hop-id>
+      <multicast-route-next-hop-type>Paired MCNH</multicast-route-next-hop-type>
+      <upstream-protocol>Upstream protocol: Multicast</upstream-protocol>
+      <multicast-route-state>Active</multicast-route-state>
+      <multicast-route-forwarding-state>Forwarding</multicast-route-forwarding-state>
+      <multicast-route-timeout>forever</multicast-route-timeout>
+      <interface-mismatch-count>0</interface-mismatch-count>
+      <multicast-route-uptime seconds="353">00:05:53</multicast-route-uptime>
+      <multicast-route-sensor>0xf000001a</multicast-route-sensor>
+    </multicast-route>
+  </route-family>
+  <route-family>
+    <multicast-instance>master</multicast-instance>
+    <address-family>INET6</address-family>
+  </route-family>
+</multicast-route-information>

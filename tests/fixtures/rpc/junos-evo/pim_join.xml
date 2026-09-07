@@ -1,0 +1,119 @@
+<pim-join-information>
+  <join-family style="brief">
+    <pim-instance>PIM.master</pim-instance>
+    <address-family>INET</address-family>
+    <join-group style="sparse">
+      <multicast-group-address>232.1.1.1</multicast-group-address>
+      <multicast-source-address>10.11.11.1</multicast-source-address>
+      <pim-group-flags>
+        <sparse/>
+        <spt/>
+      </pim-group-flags>
+      <upstream-interface-name>et-0/0/0.0</upstream-interface-name>
+      <upstream-neighbor>10.1.1.2</upstream-neighbor>
+      <upstream-state-flags>
+        <join-to-source/>
+      </upstream-state-flags>
+      <keepalive-timeout>8</keepalive-timeout>
+      <uptime seconds="352">00:05:52</uptime>
+      <downstream-interfaces>
+        <dummy/>
+        <downstream-interface>
+          <pim-interface-name>Pseudo-GMP</pim-interface-name>
+          <pim-pseudo-downstream-interface-name>et-0/0/8.11</pim-pseudo-downstream-interface-name>
+        </downstream-interface>
+      </downstream-interfaces>
+      <downstream-interface-count>1</downstream-interface-count>
+      <downstream-neighbor-count>0</downstream-neighbor-count>
+    </join-group>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.master</pim-instance>
+    <address-family>INET6</address-family>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-IGMP-RECEIVER</pim-instance>
+    <address-family>INET</address-family>
+    <join-group style="sparse">
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
+      <pim-group-flags>
+        <sparse/>
+        <spt/>
+      </pim-group-flags>
+      <upstream-protocol-name>BGP</upstream-protocol-name>
+      <upstream-interface-name>Through BGP</upstream-interface-name>
+      <upstream-neighbor>Through MVPN</upstream-neighbor>
+      <upstream-state-flags>
+        <join-to-source/>
+      </upstream-state-flags>
+      <keepalive-timeout>11</keepalive-timeout>
+      <uptime seconds="198">00:03:18</uptime>
+      <downstream-interfaces>
+        <dummy/>
+        <downstream-interface>
+          <pim-interface-name>irb.2</pim-interface-name>
+          <downstream-neighbor>
+            <neighbor-address>10.12.11.2</neighbor-address>
+            <neighbor-state>Join</neighbor-state>
+            <terse-sparse/>
+            <downstream-if-uptime seconds="198">00:03:18</downstream-if-uptime>
+            <downstream-last-jp>
+              <downstream-last-jp-oper>Join</downstream-last-jp-oper>
+              <downstream-last-jp-time seconds="198">00:03:18</downstream-last-jp-time>
+            </downstream-last-jp>
+          </downstream-neighbor>
+        </downstream-interface>
+      </downstream-interfaces>
+      <downstream-interface-count>1</downstream-interface-count>
+      <downstream-neighbor-count>1</downstream-neighbor-count>
+    </join-group>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-IGMP-RECEIVER</pim-instance>
+    <address-family>INET6</address-family>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-RECEIVER</pim-instance>
+    <address-family>INET</address-family>
+    <join-group style="sparse">
+      <multicast-group-address>232.10.10.1</multicast-group-address>
+      <multicast-source-address>10.10.10.1</multicast-source-address>
+      <pim-group-flags>
+        <sparse/>
+        <spt/>
+      </pim-group-flags>
+      <upstream-protocol-name>BGP</upstream-protocol-name>
+      <upstream-interface-name>Through BGP</upstream-interface-name>
+      <upstream-neighbor>Through MVPN</upstream-neighbor>
+      <upstream-state-flags>
+        <join-to-source/>
+      </upstream-state-flags>
+      <no-keepalive-timeout/>
+      <uptime seconds="352">00:05:52</uptime>
+      <downstream-interfaces>
+        <dummy/>
+        <downstream-interface>
+          <pim-interface-name>irb.10</pim-interface-name>
+          <downstream-neighbor>
+            <neighbor-address>10.100.11.2</neighbor-address>
+            <neighbor-state>Join</neighbor-state>
+            <terse-sparse/>
+            <neighbor-timeout>161</neighbor-timeout>
+            <downstream-if-uptime seconds="352">00:05:52</downstream-if-uptime>
+            <downstream-last-jp>
+              <downstream-last-jp-oper>Join</downstream-last-jp-oper>
+              <downstream-last-jp-time seconds="49">00:00:49</downstream-last-jp-time>
+            </downstream-last-jp>
+          </downstream-neighbor>
+        </downstream-interface>
+      </downstream-interfaces>
+      <downstream-interface-count>1</downstream-interface-count>
+      <downstream-neighbor-count>1</downstream-neighbor-count>
+    </join-group>
+  </join-family>
+  <join-family style="brief">
+    <pim-instance>PIM.NGMVPN-PIM-RECEIVER</pim-instance>
+    <address-family>INET6</address-family>
+  </join-family>
+</pim-join-information>
