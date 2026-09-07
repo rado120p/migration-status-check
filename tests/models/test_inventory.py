@@ -52,7 +52,7 @@ def test_load_inventory(tmp_path):
     path.write_text(
         textwrap.dedent(
             """\
-            schema_version: 8
+            schema_version: 9
             device: 172.20.20.4
             interfaces:
             - interface: ge-0/0/2.113
@@ -92,7 +92,7 @@ def test_load_inventory(tmp_path):
 
 def test_load_inventory_rejects_missing_interfaces_key(tmp_path):
     path = tmp_path / "bad.yml"
-    path.write_text("schema_version: 8\ndevice: 1.2.3.4\n", encoding="utf-8")
+    path.write_text("schema_version: 9\ndevice: 1.2.3.4\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="interfaces"):
         load_inventory(path)
@@ -150,7 +150,7 @@ def test_old_inventory_fails_loudly(tmp_path):
 def test_current_inventory_loads(tmp_path):
     path = tmp_path / "new.yml"
     path.write_text(
-        "schema_version: 8\n"
+        "schema_version: 9\n"
         "device: 172.20.20.4\n"
         "interfaces:\n"
         "  - interface: ge-0/0/2.13\n"
@@ -186,7 +186,7 @@ def test_static_routes_and_bfd_survive_load(tmp_path):
     path = tmp_path / "nova.yml"
     path.write_text(
         """
-schema_version: 8
+schema_version: 9
 device: r1
 interfaces:
   - interface: et-0/0/8.113
@@ -220,7 +220,7 @@ interfaces:
 def test_missing_new_fields_default_to_empty(tmp_path):
     path = tmp_path / "bez.yml"
     path.write_text(
-        "schema_version: 8\ndevice: r1\n"
+        "schema_version: 9\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n",
         encoding="utf-8",
     )
@@ -243,7 +243,7 @@ def test_mapping_list_rejects_scalars(tmp_path):
     """
     path = tmp_path / "spatna.yml"
     path.write_text(
-        "schema_version: 8\ndevice: r1\n"
+        "schema_version: 9\ndevice: r1\n"
         "interfaces:\n  - interface: et-0/0/8.13\n    service_type: Internet\n"
         "    static_route: [not-a-mapping]\n",
         encoding="utf-8",
@@ -262,7 +262,7 @@ def test_service_entry_carries_both_deactivation_flags(tmp_path):
     """
     path = tmp_path / "inv.yml"
     path.write_text(
-        "schema_version: 8\ndevice: r1\n"
+        "schema_version: 9\ndevice: r1\n"
         "interfaces:\n"
         "  - interface: ge-0/0/4.0\n"
         "    service_type: IPVPN\n"
@@ -287,7 +287,7 @@ def test_entry_reads_inactive_bgp_neighbors(tmp_path):
     """Deaktivovany soused se cte do vlastniho seznamu, ne do zivych."""
     path = tmp_path / "inv.yml"
     path.write_text(
-        "schema_version: 8\n"
+        "schema_version: 9\n"
         "device: dev\n"
         "interfaces:\n"
         "- interface: ge-0/0/2.13\n"
@@ -309,4 +309,10 @@ def test_inventory_schema_version_is_eight():
     netestoval: telo jen asertuje hodnotu konstanty. Skutecne odmitnuti
     stare inventory pokryva test_old_inventory_fails_loudly a ten zustava.
     """
-    assert INVENTORY_SCHEMA_VERSION == 8
+    assert INVENTORY_SCHEMA_VERSION == 9
+
+
+def test_service_entry_roundtrips_mvpn_site():
+    entry = ServiceEntry(interface="irb.10", service_type="IPVPN", mvpn_site=["receiver", "sender"])
+    assert ServiceEntry.from_dict(entry.to_dict()).mvpn_site == ["receiver", "sender"]
+    assert ServiceEntry.from_dict({"interface": "x", "service_type": "IPVPN"}).mvpn_site == []

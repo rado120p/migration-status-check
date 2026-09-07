@@ -69,6 +69,7 @@ class ServiceEntry:
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
     l2_interface: list[str] = field(default_factory=list)
+    mvpn_site: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
     static_route: list[dict[str, Any]] = field(default_factory=list)
     bfd: list[dict[str, Any]] = field(default_factory=list)
@@ -104,6 +105,7 @@ class ServiceEntry:
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
             l2_interface=_as_list(data.get("l2_interface")),
+            mvpn_site=_as_list(data.get("mvpn_site")),
             lag_members=_as_list(data.get("lag_members")),
             static_route=_as_mapping_list(data.get("static_route")),
             bfd=_as_mapping_list(data.get("bfd")),
@@ -128,6 +130,7 @@ class ServiceEntry:
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
             "l2_interface": list(self.l2_interface),
+            "mvpn_site": list(self.mvpn_site),
             "lag_members": list(self.lag_members),
             "static_route": [dict(route) for route in self.static_route],
             "bfd": [dict(intent) for intent in self.bfd],
@@ -146,7 +149,11 @@ class Inventory:
 #    (IRB -> access porty). Subtype je odvozene datum: stara inventory by
 #    na pre strane nesla None a parovaci pravidlo description+type+subtype
 #    by baseline scope vyradilo z novych checku.
-INVENTORY_SCHEMA_VERSION = 8
+# 9: subtype IPVPN "mvpn" nahrazuje "mvpn-igmp" (IGMP nebo PIM zamer) a pole
+#    mvpn_site (role instance z konfigurace, spec 2026-09-07). Stara inventory
+#    by nesla "mvpn-igmp" a parovaci pravidlo description+type+subtype by
+#    baseline scope vyradilo z multicast checku.
+INVENTORY_SCHEMA_VERSION = 9
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -174,6 +181,11 @@ def load_inventory(path: str | Path) -> Inventory:
     tise vratilo None subtype i prazdny l2_interface - subtype-vazane
     checky (Task 6) by nemely na co naskocit a IRB blok by ztratil L2
     poznamku v hlavicce, aniz by to bylo videt.
+
+    Verze 9 prejmenovala "mvpn-igmp" na "mvpn" a pridala mvpn_site.
+    Tolerantni cteni stare (v8) inventory by nechalo subtype "mvpn-igmp",
+    na ktery uz zadny check nenaskoci - MVPN sluzba by tise prosla bez
+    multicast radku.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):

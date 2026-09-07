@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from migration_validator.models.inventory import Inventory, ServiceEntry
+from migration_validator.models.scope import Selectors
 from migration_validator.scoping.builder import build_scopes, is_management
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -264,6 +265,16 @@ def test_tranzitni_porty_si_scope_zachovaji():
     ])
     l1_ids = {s.id for s in build_scopes(inventory) if s.kind == "layer1"}
     assert l1_ids == {"l1:ae0", "l1:ge-0/0/2"}
+
+
+def test_mvpn_site_protece_do_selektoru():
+    entry = ServiceEntry(
+        interface="irb.10", service_type="IPVPN", service_subtype="mvpn",
+        routing_instance="NGMVPN-PIM-SOURCE", mvpn_site=["sender"],
+    )
+    (scope,) = build_scopes(Inventory(device="x", entries=[entry]))
+    assert scope.selectors.mvpn_site == ["sender"]
+    assert Selectors.from_dict(scope.selectors.to_dict()).mvpn_site == ["sender"]
 
 
 def test_l2_interface_protece_do_selektoru():

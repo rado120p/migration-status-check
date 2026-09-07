@@ -1,4 +1,4 @@
-schema_version: 8
+schema_version: 9
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
@@ -18,6 +18,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -47,6 +48,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -71,6 +73,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -101,6 +104,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -124,6 +128,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -154,6 +159,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -177,6 +183,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -204,6 +211,7 @@ interfaces:
   customer_vlan:
   - '11'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -230,6 +238,7 @@ interfaces:
   customer_vlan:
   - '12'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -260,6 +269,7 @@ interfaces:
   customer_vlan:
   - '13'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route:
   - rib: inet.0
@@ -321,6 +331,7 @@ interfaces:
   customer_vlan:
   - '113'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route:
   - rib: L3VPN-CPE13-NNI.inet.0
@@ -368,6 +379,7 @@ interfaces:
   customer_vlan:
   - '213'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -396,6 +408,7 @@ interfaces:
   customer_vlan:
   - '313'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -422,6 +435,7 @@ interfaces:
   customer_vlan:
   - '413'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -452,6 +466,7 @@ interfaces:
   - 0x8100.4094
   - '4094'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -475,6 +490,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -501,6 +517,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -524,6 +541,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -555,6 +573,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -579,6 +598,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -609,6 +629,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route:
   - rib: inet6.0
@@ -643,6 +664,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -672,6 +694,7 @@ interfaces:
   - 0x8100.4094
   - '4094'
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -695,6 +718,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -727,6 +751,7 @@ interfaces:
   - '12'
   l2_interface:
   - ge-0/0/2.12
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -761,6 +786,7 @@ interfaces:
   l2_interface:
   - ge-0/0/6.4094
   - ge-0/0/2.4094
+  mvpn_site: []
   lag_members: []
   static_route:
   - rib: MGMT.inet.0
@@ -800,6 +826,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
@@ -832,6 +859,7 @@ interfaces:
   bridge_domain: []
   customer_vlan: []
   l2_interface: []
+  mvpn_site: []
   lag_members: []
   static_route:
   - rib: inet.0

@@ -92,6 +92,9 @@ class Selectors:
     # areas se vybiraji podle rozhrani, ne podle tohoto pole), je to jen
     # zaznam zameru pro budouci checky.
     protocols: list[str] = field(default_factory=list)
+    # Role MVPN instance z konfigurace (spec 2026-09-07) - jen zamer pro
+    # interpretaci prazdne PIM join tabulky, do vyberu faktu se nepromita.
+    mvpn_site: list[str] = field(default_factory=list)
 
     def matches_interface(self, name: str) -> bool:
         return name in self.interfaces or name in self.physical_interfaces
@@ -114,6 +117,7 @@ class Selectors:
             "static_routes": [dict(route) for route in self.static_routes],
             "bfd_peers": [dict(intent) for intent in self.bfd_peers],
             "protocols": list(self.protocols),
+            "mvpn_site": list(self.mvpn_site),
         }
 
     @classmethod

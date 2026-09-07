@@ -123,6 +123,13 @@ class RoutingInstance:
     # rozbil čtyři testy členství v enginu a ve scopu bez užitku.
     bgp_neighbors_inactive: list[str] = field(default_factory=list)
     bfd: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Role MVPN site z konfigurace (spec 2026-09-07): podmnozina
+    # ["receiver", "sender"], prazdne bez `protocols mvpn`. Sender <=>
+    # sender-site nebo provider-tunnel (sender musi byt root P2MP tunelu);
+    # receiver <=> receiver-site nebo zadne site klicove slovo (Junos
+    # default je obojí). Checky s tim interpretuji prazdnou PIM join tabulku,
+    # role per (S,G) se ale bere z vypisu, ne odsud.
+    mvpn_site: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -194,6 +201,8 @@ class InterfaceService:
     # bridge-domain/vlan (globalnich i v instanci). Report z toho dela
     # poznamku "L2: ..." v hlavicce IRB bloku (spec 2026-09-02).
     l2_interface: list[str] = field(default_factory=list)
+    # Role MVPN instance (viz RoutingInstance.mvpn_site), prazdne mimo MVPN.
+    mvpn_site: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
     detection_confidence: str = "medium"
     detection_reason: list[str] = field(default_factory=list)
@@ -543,6 +552,7 @@ class JunosServiceParserCore:
                 bgp_neighbors=instance_neighbors,
                 bgp_neighbors_inactive=instance_neighbors_inactive,
                 bfd=self._parse_bfd(node, "./protocols/bgp"),
+                mvpn_site=self._parse_mvpn_site(node),
             )
 
             self.routing_instances[instance_name] = instance
@@ -557,6 +567,21 @@ class JunosServiceParserCore:
                     self.interface_to_instances.setdefault(interface_name, []).append(
                         instance_name
                     )
+
+    @staticmethod
+    def _parse_mvpn_site(node: etree._Element) -> list[str]:
+        """Role MVPN site z `protocols mvpn` + `provider-tunnel` (spec 2026-09-07)."""
+        if not node.xpath("./protocols/mvpn"):
+            return []
+        sender_site = bool(node.xpath("./protocols/mvpn/sender-site"))
+        receiver_site = bool(node.xpath("./protocols/mvpn/receiver-site"))
+        tunnel = bool(node.xpath("./provider-tunnel"))
+        roles = []
+        if receiver_site or not sender_site:
+            roles.append("receiver")
+        if sender_site or tunnel:
+            roles.append("sender")
+        return roles
 
     def _parse_route_distinguisher(self, node: etree._Element) -> str | None:
         return first_text(
@@ -1207,6 +1232,7 @@ class JunosServiceParserCore:
             l2_interface=unique(
                 [iface for domain in irb_domains for iface in domain.interfaces]
             ),
+            mvpn_site=list(instance.mvpn_site) if instance else [],
             detection_confidence=confidence,
             detection_reason=reasons,
         )
@@ -2024,6 +2050,7 @@ def clean_service_dict(data: dict[str, Any]) -> dict[str, Any]:
         "bridge_domain",
         "customer_vlan",
         "l2_interface",
+        "mvpn_site",
         "lag_members",
         "static_route",
         "bfd",
