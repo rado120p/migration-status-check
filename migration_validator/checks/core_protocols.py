@@ -222,13 +222,23 @@ def _neighbor_findings(
             ))
             continue
         seconds = entry.get("uptime_seconds")
-        up = bool(seconds and seconds > 0)
-        findings.append(Finding(
-            Outcome.OK if up else Outcome.BROKEN,
-            f"{name}: session {'bezi' if up else 'nebezi'}",
-            label=qualified(status_label, name),
-            value=f"Up for {format_uptime(seconds)}" if up else "Down",
-        ))
+        if seconds is None:
+            # Soused ve vypisu je, jen uptime collector neprecetl (nezname
+            # format). 'Down' by byl vymysleny stav - stav se nikdy
+            # nefabuluje; radek rika presne to, co se zmerilo.
+            findings.append(Finding(
+                Outcome.DEGRADED,
+                f"{name}: soused ve vypisu je, uptime se nepodarilo precist",
+                label=qualified(status_label, name), value="uptime nezmereno",
+            ))
+        else:
+            up = seconds > 0
+            findings.append(Finding(
+                Outcome.OK if up else Outcome.BROKEN,
+                f"{name}: session {'bezi' if up else 'nebezi'}",
+                label=qualified(status_label, name),
+                value=f"Up for {format_uptime(seconds)}" if up else "Down",
+            ))
         address = entry.get("neighbor_address")
         was_address = was.get("neighbor_address") if was else None
         changed = ctx.has_baseline and was is not None and address != was_address

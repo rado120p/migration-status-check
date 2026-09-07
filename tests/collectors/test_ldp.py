@@ -76,3 +76,39 @@ LDP_ONLY_LO0 = """
 def test_ldp_neighbor_only_lo0_entry_yields_empty_dict(platform):
     data = LdpNeighborCollector().parse(etree.fromstring(LDP_ONLY_LO0.encode()), platform)
     assert data == {}
+
+
+LDP_TEXT_UPTIME = """
+<ldp-neighbor-information>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.2.0</ldp-neighbor-address>
+    <interface-name>xe-0/0/0.0</interface-name>
+    <ldp-up-time>112w2d 18:30:36</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.3.0</ldp-neighbor-address>
+    <interface-name>xe-0/0/1.0</interface-name>
+    <ldp-up-time>3d 00:00:01</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.4.0</ldp-neighbor-address>
+    <interface-name>xe-0/0/2.0</interface-name>
+    <ldp-up-time>01:02:03</ldp-up-time>
+  </ldp-neighbor>
+  <ldp-neighbor>
+    <ldp-neighbor-address>10.1.5.0</ldp-neighbor-address>
+    <interface-name>xe-0/0/3.0</interface-name>
+    <ldp-up-time>nesmysl</ldp-up-time>
+  </ldp-neighbor>
+</ldp-neighbor-information>
+"""
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_ldp_neighbor_parses_text_uptime_without_seconds_attr(platform):
+    """Nektere MX verze neposilaji junos:seconds, jen text '112w2d 18:30:36'."""
+    data = LdpNeighborCollector().parse(etree.fromstring(LDP_TEXT_UPTIME.encode()), platform)
+    assert data["xe-0/0/0.0"]["uptime_seconds"] == 112 * 7 * 86400 + 2 * 86400 + 18 * 3600 + 30 * 60 + 36
+    assert data["xe-0/0/1.0"]["uptime_seconds"] == 3 * 86400 + 1
+    assert data["xe-0/0/2.0"]["uptime_seconds"] == 3723
+    assert data["xe-0/0/3.0"]["uptime_seconds"] is None

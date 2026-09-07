@@ -673,3 +673,41 @@ def test_errors_v_service_scopu_s_netranzitnim_rodicem_skip_ne_prazdno():
     assert len(rows) == 1
     assert rows[0].outcome is Outcome.SKIP
     assert rows[0].value == "netranzitni rozhrani"
+
+
+# --- errors proti baseline (2026-09-07) ---------------------------------------
+
+def test_errors_same_as_baseline_is_pass():
+    """Countery se nenulovaly, ale od baseline nepribyly - chyby jsou stare,
+    ne z migrace: PASS 'stejne jako baseline'."""
+    now = {"interfaces": {"ge-0/0/2": {"input_errors": 3, "output_errors": 0, "framing_errors": 1}}}
+    ctx = _ctx(now, baseline=now)
+    results = run_check(InterfaceErrorsCheck(), ctx)
+    assert results[0].status is Status.PASS
+    assert "stejne jako baseline" in results[0].message
+    assert results[0].baseline_value == "input_errors=3, framing_errors=1"
+
+
+def test_errors_increased_since_baseline_warns_with_delta():
+    now = {"interfaces": {"ge-0/0/2": {"input_errors": 5, "output_errors": 0, "framing_errors": 1}}}
+    before = {"interfaces": {"ge-0/0/2": {"input_errors": 3, "output_errors": 0, "framing_errors": 1}}}
+    results = run_check(InterfaceErrorsCheck(), _ctx(now, baseline=before))
+    assert results[0].status is Status.WARN
+    assert "input_errors=3 -> 5" in results[0].message
+    assert results[0].baseline_value == "input_errors=3, framing_errors=1"
+
+
+def test_errors_zero_with_baseline_is_pass_without_delta():
+    now = {"interfaces": {"ge-0/0/2": {"input_errors": 0, "output_errors": 0, "framing_errors": 0}}}
+    before = {"interfaces": {"ge-0/0/2": {"input_errors": 7, "output_errors": 0, "framing_errors": 0}}}
+    results = run_check(InterfaceErrorsCheck(), _ctx(now, baseline=before))
+    assert results[0].status is Status.PASS
+    assert results[0].value == "bez chyb"
+
+
+def test_errors_nonzero_without_baseline_entry_still_warns():
+    now = {"interfaces": {"ge-0/0/2": {"input_errors": 3, "output_errors": 0}}}
+    before = {"interfaces": {"xe-0/0/9": {"input_errors": 3, "output_errors": 0}}}
+    results = run_check(InterfaceErrorsCheck(), _ctx(now, baseline=before))
+    assert results[0].status is Status.WARN
+    assert results[0].baseline_value is None

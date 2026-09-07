@@ -1042,3 +1042,19 @@ def test_old_bfd_check_still_applies_to_internet_and_device_scope():
 
     assert old_check.applies_to(internet_scope) is True
     assert old_check.applies_to(device_scope()) is True
+
+
+def test_ldp_neighbor_present_without_uptime_is_not_down():
+    """Soused ve vypisu je, jen uptime se nepodarilo precist - 'Down' by byl
+    vymysleny stav (stav se nikdy nefabuluje)."""
+    findings = LdpNeighborStateCheck().run(
+        _ctx_area(
+            "ldp_neighbor",
+            {IFACE: {"neighbor_address": "10.0.0.2", "uptime_seconds": None}},
+        )
+    )
+    status_row = findings[0]
+    assert status_row.outcome is Outcome.DEGRADED
+    assert status_row.value == "uptime nezmereno"
+    assert "nebezi" not in status_row.message
+    assert "Down" not in status_row.message

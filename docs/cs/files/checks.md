@@ -148,9 +148,15 @@ stav s velkým první písmenem (`Up`, `Down`).
 | `oper_status == "up"` | `ok` | PASS | `Up` |
 | `oper_status != "up"` (chybí → `"unknown"`) | `broken` | FAIL | stav s velkým písmenem |
 
-### `interface_errors` (state, advisory)
+### `interface_errors` (both, advisory)
 
-Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. Běží jen na
+Součet `input_errors`, `output_errors`, `framing_errors` musí být 0. S baseline (rozhodnutí
+2026-09-07) vadí jen **přírůstek**: countery jsou kumulativní od bootu, takže stejné (nebo
+nižší, po rebootu) hodnoty jsou staré chyby, ne důsledek migrace — `ok` se zprávou
+`chybove countery stejne jako baseline (...)`; vzrostlý counter je `broken` se zprávou
+`chybove countery od baseline vzrostly (input_errors=3 -> 5)`. `baseline_value` nese nenulové
+countery baseline (nebo `bez chyb`). Rozhraní bez záznamu v baseline (jméno se migrací mění)
+se hodnotí jako bez baseline. Běží jen na
 **tranzitních fyzických** rozhraních (`is_physical()` — bez tečky v názvu): logická
 jednotka vlastní chybové countery na žádné z platforem nemá, plní se nulami
 (`collectors/interfaces.py`), takže řádek „bez chyb" na unitu by tvrdil měření, které
@@ -850,7 +856,8 @@ takže chybějící soused je rovnou FAIL, ne tiché nic.
 |---|---|---|---|
 | soused ve výpisu není | `broken` | FAIL | `Down` |
 | `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
-| `uptime_seconds` chybí nebo `0` | `broken` | FAIL | `Down` |
+| `uptime_seconds == 0` | `broken` | FAIL | `Down` |
+| `uptime_seconds` je `None` (soused ve výpisu je, uptime nešel přečíst) | `degraded` | WARN | `uptime nezmereno` |
 | adresa souseda je `None`, beze změny proti baseline (nebo bez baseline) | `broken` | FAIL | `chybi v outputu` (zpráva `adresa souseda chybi`) |
 | adresa souseda je, beze změny proti baseline (nebo bez baseline) | `info` | INFO | adresa |
 | adresa souseda se změnila proti baseline, nová adresa je | `degraded` | WARN | adresa |
@@ -980,7 +987,9 @@ sekce (`igmp_pairs`, `multicast_table`, `stream_rows`) a jedno pravidlo napří�
 ### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
 
 `service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
-Vyžaduje `igmp_group`.
+Vyžaduje `igmp_group`. Skupiny z `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …)
+`igmp_pairs()` vynechává (rozhodnutí 2026-09-07) — hlásí je protokoly, ne receiver, takže
+rozhraní jen s nimi je „bez IGMP reportu".
 
 Skupiny na servisním rozhraní ze scopu, seřazené, bez duplicit; ASM položky (bez
 zdroje) jako `(*, G)`. Žádné skupiny → `BROKEN | IGMP membership report : Receiver
@@ -1010,7 +1019,8 @@ Stream/Upstream řádek) a pro každý pár:
 - **Stream** — `OK`, je-li servisní rozhraní v `downstream_interfaces` routy; jinak
   `BROKEN`.
 - **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
-  IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Splněno → `OK` se jménem; jinak
+  IPVPN/mvpn-igmp `lsi.`/`vt-`/`ge-`/`xe-`/`et-`/`ae`/`irb` (od 2026-09-07 — zdroj v témže
+  VRF přichází přímo, ne tunelem). Splněno → `OK` se jménem; jinak
   `BROKEN`, hodnota nalezené jméno nebo `-`. **Zpráva rozlišuje dva důvody selhání**:
   prázdný upstream je `<sg>: upstream - S,G je v tabulce ale nema upstream interface`,
   upstream, který je, ale se špatným prefixem, je `<sg>: upstream <up> neni z ocekavane

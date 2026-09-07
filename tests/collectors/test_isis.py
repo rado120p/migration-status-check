@@ -234,8 +234,14 @@ def test_seconds_attr_reads_namespaced_attribute():
     assert _seconds_attr(node) == 42
 
 
-def test_seconds_attr_missing_attribute_is_none():
+def test_seconds_attr_missing_attribute_falls_back_to_text():
+    """Bez junos:seconds se cte text (MX verze, ktere atribut neposilaji)."""
     node = etree.fromstring(b"<last-transition-time>00:00:42</last-transition-time>")
+    assert _seconds_attr(node) == 42
+
+
+def test_seconds_attr_unparseable_text_is_none():
+    node = etree.fromstring(b"<last-transition-time>Never</last-transition-time>")
     assert _seconds_attr(node) is None
 
 

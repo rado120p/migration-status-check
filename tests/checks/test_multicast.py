@@ -233,17 +233,18 @@ def test_forwarding_internet_upstream_must_be_transit():
 
 
 def test_upstream_wrong_role_uses_mvpn_prefixes():
-    """Mvpn-igmp scope hlasi jinou ocekavanou roli nez Internet/multicast."""
+    """Mvpn-igmp scope hlasi jinou ocekavanou roli nez Internet/multicast
+    (od 2026-09-07 i fyzicke/ae/irb, lo0 porad ne)."""
     scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
-    routes = {"10.12.12.1,239.1.1.1": _route(upstream="et-0/0/0.0", downstream=["irb.2"])}
+    routes = {"10.12.12.1,239.1.1.1": _route(upstream="lo0.0", downstream=["irb.2"])}
     pair = (("10.12.12.1", "239.1.1.1"),)
     findings = MulticastForwardingStatusCheck().run(
         _ctx(_facts("irb.2", "RI", pair, routes), scope=scope))
     row = _by_label(findings, "(10.12.12.1, 239.1.1.1)")["Upstream interface"]
     assert row.outcome is Outcome.BROKEN
     assert row.message == (
-        "(10.12.12.1, 239.1.1.1): upstream et-0/0/0.0 neni z ocekavane role "
-        "(ocekavano lsi./vt-)"
+        "(10.12.12.1, 239.1.1.1): upstream lo0.0 neni z ocekavane role "
+        "(ocekavano lsi./vt-/ge-/xe-/et-/ae/irb)"
     )
 
 
@@ -264,7 +265,7 @@ def test_forwarding_mvpn_upstream_must_be_lsi_or_vt():
     vraci True vzdy."""
     scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
     ok = {"10.12.12.1,239.1.1.1": _route(upstream="lsi.1048576", downstream=["irb.2"])}
-    bad = {"10.12.12.1,239.1.1.1": _route(upstream="et-0/0/0.0", downstream=["irb.2"])}
+    bad = {"10.12.12.1,239.1.1.1": _route(upstream="lo0.0", downstream=["irb.2"])}
     pair = (("10.12.12.1", "239.1.1.1"),)
     good = MulticastForwardingStatusCheck().run(_ctx(_facts("irb.2", "RI", pair, ok), scope=scope))
     wrong = MulticastForwardingStatusCheck().run(_ctx(_facts("irb.2", "RI", pair, bad), scope=scope))
@@ -582,3 +583,29 @@ def test_mvpn_check_applies_only_to_mvpn_igmp():
     assert check.applies_to(_mvpn_scope())
     assert not check.applies_to(_scope())
     assert not check.applies_to(_scope("irb.3", "IPVPN", None, [RI]))
+
+
+# --- opravy 2026-09-07 -------------------------------------------------------
+
+def test_igmp_pairs_ignores_link_local_224_0_0_groups():
+    """224.0.0.0/24 jsou link-local (all-routers, PIM, IGMPv3) - nikdy to
+    neni receiver stream, do ocekavane mnoziny nepatri."""
+    facts = _igmp(POST, (None, "224.0.0.2"), (None, "224.0.0.22"), (None, "224.0.1.1"), SG)
+    assert igmp_pairs(facts, _scope()) == [(None, "224.0.1.1"), SG]
+
+
+def test_igmp_report_only_link_local_is_no_report():
+    facts = _igmp(POST, (None, "224.0.0.2"))
+    findings = IgmpMembershipReportCheck().run(_ctx(facts))
+    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].value == NO_REPORT
+
+
+def test_forwarding_mvpn_upstream_accepts_physical_and_irb():
+    scope = _scope(interface="irb.2", service_type="IPVPN", subtype="mvpn-igmp")
+    for upstream in ("xe-0/0/1.0", "ge-0/0/1.0", "et-0/0/1.0", "ae3.0", "irb.100", "lsi.1048576", "vt-0/0/0.1"):
+        routes = {"10.12.12.1,239.1.1.1": _route(upstream=upstream, downstream=["irb.2"])}
+        facts = {**_igmp("irb.2", ("10.12.12.1", "239.1.1.1")), "multicast_route": {"VRF": routes}}
+        findings = MulticastForwardingStatusCheck().run(_ctx(facts, scope=scope))
+        up = [f for f in findings if f.label == "Upstream interface"][0]
+        assert up.outcome is Outcome.OK, upstream

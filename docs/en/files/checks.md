@@ -155,9 +155,15 @@ column carries the state capitalised (`Up`, `Down`).
 | `oper_status == "up"` | `ok` | PASS | `Up` |
 | `oper_status != "up"` (missing → `"unknown"`) | `broken` | FAIL | capitalised state |
 
-### `interface_errors` (state, advisory)
+### `interface_errors` (both, advisory)
 
-The sum of `input_errors`, `output_errors` and `framing_errors` must be 0. Transit interfaces
+The sum of `input_errors`, `output_errors` and `framing_errors` must be 0. With a baseline
+(2026-09-07 decision) only **growth** matters: the counters are cumulative since boot, so equal
+(or lower, after a reboot) values are old errors, not a consequence of the migration — `ok`
+with message `chybove countery stejne jako baseline (...)`; a counter that grew is `broken`
+with `chybove countery od baseline vzrostly (input_errors=3 -> 5)`. `baseline_value` carries
+the baseline's non-zero counters (or `bez chyb`). An interface with no baseline record (names
+change during migration) is evaluated as if without baseline. Transit interfaces
 only. One `Finding` per interface (label `Interface errors (<name>)`) — the counters are folded
 into a single message (`input_errors=3`), unlike `interface_state`/`interface_traffic` this one
 does not split into separate rows. A physical transit interface whose data carries **none** of
@@ -859,7 +865,8 @@ missing neighbor is a straight FAIL, never quiet nothing.
 |---|---|---|---|
 | neighbor missing from output | `broken` | FAIL | `Down` |
 | `uptime_seconds > 0` | `ok` | PASS | `Up for <uptime>` |
-| `uptime_seconds` missing or `0` | `broken` | FAIL | `Down` |
+| `uptime_seconds == 0` | `broken` | FAIL | `Down` |
+| `uptime_seconds` is `None` (neighbor listed, uptime unreadable) | `degraded` | WARN | `uptime nezmereno` |
 | neighbor address is `None`, unchanged vs. baseline (or no baseline) | `broken` | FAIL | `chybi v outputu` (message `adresa souseda chybi`) |
 | neighbor address present, unchanged vs. baseline (or no baseline) | `info` | INFO | address |
 | neighbor address changed vs. baseline, new address present | `degraded` | WARN | address |
@@ -995,7 +1002,9 @@ across all of them:
 ### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn-igmp, both, critical)
 
 `service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn-igmp"}`.
-Requires `igmp_group`.
+Requires `igmp_group`. Groups in `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …) are
+dropped by `igmp_pairs()` (2026-09-07 decision) — protocols report them, not the receiver, so
+an interface with only those counts as "no IGMP report".
 
 Groups on the service interface from the scope, sorted, deduplicated; ASM entries
 (no source) render as `(*, G)`. No groups → `BROKEN | IGMP membership report : Receiver
@@ -1025,7 +1034,8 @@ Stream/Upstream row fails) and for each pair:
 - **Stream** — `OK` if the service interface is in the route's `downstream_interfaces`;
   otherwise `BROKEN`.
 - **Upstream interface** — role-aware prefix: Internet/multicast `ge-`/`xe-`/`et-`/`ae`,
-  IPVPN/mvpn-igmp `lsi.`/`vt-` (`_upstream_ok`). Match → `OK` with the name; otherwise
+  IPVPN/mvpn-igmp `lsi.`/`vt-`/`ge-`/`xe-`/`et-`/`ae`/`irb` (since 2026-09-07 — a source in
+  the same VRF arrives directly, not through the tunnel). Match → `OK` with the name; otherwise
   `BROKEN`, value the found name or `-`. **The message distinguishes the two failure
   reasons**: an empty upstream is `<sg>: upstream - S,G je v tabulce ale nema upstream
   interface`, an upstream present but with the wrong prefix is `<sg>: upstream <up> neni z

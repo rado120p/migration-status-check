@@ -10,6 +10,8 @@ nenasel.
 
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 from lxml import etree
@@ -25,10 +27,20 @@ def _localname_text(node: etree._Element, name: str) -> str | None:
     return None
 
 
+_UPTIME_TEXT = re.compile(
+    r"^\s*(?:(?P<w>\d+)w)?\s*(?:(?P<d>\d+)d)?\s*(?P<h>\d+):(?P<m>\d+):(?P<s>\d+)\s*$"
+)
+
+
 def _seconds_attr(node: etree._Element | None) -> int | None:
-    """junos:seconds - atribut nese verzi OS v URI, matchuje se proto na obe
-    varianty: `seconds` (nahravky bez namespace) i `{...}seconds` (ziva
-    odpoved s prefixem junos:)."""
+    """Uptime v sekundach. Prednost ma atribut junos:seconds - nese verzi OS
+    v URI, matchuje se proto na obe varianty: `seconds` (nahravky bez
+    namespace) i `{...}seconds` (ziva odpoved s prefixem junos:).
+
+    Nektere MX verze atribut neposilaji vubec a v elementu je jen text
+    '112w2d 18:30:36' / '3d 00:00:01' / '01:02:03' (zmereno 2026-09-07,
+    LDP). Ten se parsuje jako zaloha; neznamy format = None, ne 0 - nula
+    by v checku znamenala 'Down', coz se nezmerilo."""
     if node is None:
         return None
     for key, value in node.attrib.items():
@@ -37,7 +49,11 @@ def _seconds_attr(node: etree._Element | None) -> int | None:
                 return int(value)
             except ValueError:
                 return None
-    return None
+    match = _UPTIME_TEXT.match(node.text or "")
+    if match is None:
+        return None
+    weeks, days, hours, minutes, seconds = (int(match.group(g) or 0) for g in "wdhms")
+    return ((weeks * 7 + days) * 24 + hours) * 3600 + minutes * 60 + seconds
 
 
 @register

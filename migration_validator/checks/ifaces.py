@@ -149,7 +149,7 @@ class InterfaceErrorsCheck(Check):
     id = "interface_errors"
     title = "Chybove countery rozhrani"
     label = "Interface errors"
-    mode = Mode.STATE
+    mode = Mode.BOTH
     requires = ("interfaces",)
     default_severity = Severity.ADVISORY
     layer1 = True
@@ -218,29 +218,65 @@ class InterfaceErrorsCheck(Check):
                 )
                 continue
             counters = {key: int(value) for key, value in raw_counters.items()}
-            total = sum(counters.values())
-            if total == 0:
-                findings.append(
-                    Finding(
-                        Outcome.OK,
-                        f"{name}: bez chyb",
-                        label=label,
-                        value="bez chyb",
-                        subject=counters,
-                    )
-                )
-            else:
-                detail = ", ".join(f"{key}={value}" for key, value in counters.items() if value)
-                findings.append(
-                    Finding(
-                        Outcome.BROKEN,
-                        f"{name}: chybove countery nenulove ({detail})",
-                        label=label,
-                        value=detail,
-                        subject=counters,
-                    )
-                )
+            findings.append(_errors_finding(name, label, counters, _baseline_counters(ctx, name)))
         return findings
+
+
+def _baseline_counters(ctx: CheckContext, name: str) -> dict[str, int] | None:
+    """Countery tehoz rozhrani v baseline; None bez baseline nebo bez
+    zaznamu (jmeno se migraci meni, ge- -> et-)."""
+    data = (ctx.baseline or {}).get("interfaces", {}).get(name)
+    if not data:
+        return None
+    counters = {
+        key: int(data[key])
+        for key in ("input_errors", "output_errors", "framing_errors")
+        if key in data
+    }
+    return counters or None
+
+
+def _nonzero_text(counters: dict[str, int]) -> str:
+    return ", ".join(f"{key}={value}" for key, value in counters.items() if value)
+
+
+def _errors_finding(
+    name: str, label: str, counters: dict[str, int], baseline: dict[str, int] | None
+) -> Finding:
+    """Countery jsou kumulativni od bootu, takze bez baseline vadi kazda
+    nenula. S baseline vadi jen prirustek - stejne (nebo nizsi, po rebootu)
+    hodnoty jsou stare chyby, ne dusledek migrace: PASS 'stejne jako
+    baseline' (rozhodnuti 2026-09-07)."""
+    baseline_value = _nonzero_text(baseline) or "bez chyb" if baseline else None
+    if sum(counters.values()) == 0:
+        return Finding(
+            Outcome.OK, f"{name}: bez chyb", label=label, value="bez chyb",
+            subject=counters, baseline_value=baseline_value, baseline=baseline,
+        )
+    if baseline is not None:
+        grown = {
+            key: value for key, value in counters.items() if value > baseline.get(key, 0)
+        }
+        if not grown:
+            return Finding(
+                Outcome.OK,
+                f"{name}: chybove countery stejne jako baseline ({_nonzero_text(counters)})",
+                label=label, value=_nonzero_text(counters),
+                subject=counters, baseline_value=baseline_value, baseline=baseline,
+            )
+        delta = ", ".join(f"{key}={baseline.get(key, 0)} -> {value}" for key, value in grown.items())
+        return Finding(
+            Outcome.BROKEN,
+            f"{name}: chybove countery od baseline vzrostly ({delta})",
+            label=label, value=_nonzero_text(counters),
+            subject=counters, baseline_value=baseline_value, baseline=baseline,
+        )
+    detail = _nonzero_text(counters)
+    return Finding(
+        Outcome.BROKEN,
+        f"{name}: chybove countery nenulove ({detail})",
+        label=label, value=detail, subject=counters,
+    )
 
 
 @register

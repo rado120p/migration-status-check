@@ -12,7 +12,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
 | `interface_state` | state | critical | všechny | `admin_status` i `oper_status` je `up` — jeden nález na každé z obou zvlášť |
-| `interface_errors` | state | advisory | všechny | nulové `input/output/framing` chyby — **jen tranzitní rozhraní** |
+| `interface_errors` | both | advisory | všechny | nulové `input/output/framing` chyby, s baseline jen přírůstek — **jen tranzitní rozhraní** |
 | `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní**, jeden nález na směr |
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, žádná tmavá strana, posun proti baseline v mezích `tolerance_db` |
@@ -33,12 +33,12 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-03, 30 checků):
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency je `Up`, soused a adresy sedí proti baseline; chybějící rozhraní v outputu = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 nakonfigurován, level 1 ne; Passive flag role-aware (loopback ho vyžaduje, transit ne) |
 | `isis_overview` | state | advisory | Core (loopback) | overload bit routeru není nastaven |
-| `ldp_neighbor_state` | both | critical | Core (transit) | LDP soused je vždy očekávaný; `uptime_seconds > 0`, adresa proti baseline |
+| `ldp_neighbor_state` | both | critical | Core (transit) | LDP soused je vždy očekávaný; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, adresa proti baseline |
 | `pim_neighbor_state` | both | critical | Core (transit) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález, ne SKIP); jinak stejně jako LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS na rozhraní je `Up`; chybějící rozhraní v outputu = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | BFD session vázaná na rozhraní (ne na peer adresu) je vždy očekávaná a `Up` |
 | `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | receiver posílá IGMP membership report; množina (S,G) proti baseline — jiná množina = WARN |
-| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | bez IGMP reportu jediný SKIP; jinak per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream role-aware (transit prefix vs. `lsi.`/`vt-`) |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | bez IGMP reportu jediný SKIP; jinak per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); IGMP skupiny z 224.0.0.0/24 se ignorují |
 | `core_multicast_forwarding` | both | critical | Core (loopback) | řízeno globálními `inet.2` statikami, ne IGMP; bez inet.2 statik žádné řádky (ticho); upstream proti `via` inet.2 routy |
 | `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | c-multicast záznam a provider tunnel existují; proti baseline se porovnává jen sender PE tunelu, ne celý tunnel id |
 

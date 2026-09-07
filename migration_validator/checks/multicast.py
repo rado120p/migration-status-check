@@ -23,9 +23,15 @@ MULTICAST_TYPES = frozenset({"Internet", "IPVPN"})
 MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn-igmp"})
 
 # Internet/multicast prijima stream primo z fyzickeho/agregovaneho transit
-# rozhrani; IPVPN/mvpn-igmp jde pres MVPN core tunel (lsi.* nebo vt-*).
+# rozhrani; IPVPN/mvpn-igmp jde bud pres MVPN core tunel (lsi.* nebo vt-*),
+# nebo - kdyz je zdroj lokalne v tomtez VRF/PE - primo z fyzickeho,
+# agregovaneho nebo irb rozhrani (rozhodnuti 2026-09-07).
 INTERNET_UPSTREAM_PREFIXES = ("ge-", "xe-", "et-", "ae")
-MVPN_UPSTREAM_PREFIXES = ("lsi.", "vt-")
+MVPN_UPSTREAM_PREFIXES = ("lsi.", "vt-", "ge-", "xe-", "et-", "ae", "irb")
+
+# 224.0.0.0/24 je link-local (all-routers, PIM, IGMPv3 ...) - hlasi ho
+# protokoly samotne, ne receiver, do ocekavane mnoziny streamu nepatri.
+LINK_LOCAL_GROUPS = ipaddress.ip_network("224.0.0.0/24")
 
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
 NO_REPORT_SKIP = "bez IGMP reportu"
@@ -45,6 +51,13 @@ def pairs_text(pairs: list[tuple[str | None, str]]) -> str:
     return ", ".join(sg_label(s, g) for s, g in pairs)
 
 
+def _link_local(group: str) -> bool:
+    try:
+        return ipaddress.ip_address(group) in LINK_LOCAL_GROUPS
+    except ValueError:
+        return False
+
+
 def igmp_pairs(facts: dict[str, Any] | None, scope: Scope) -> list[tuple[str | None, str]]:
     """(source, group) pro rozhrani scopu - serazene, bez duplicit.
     Baseline se cte s baseline scopem: jmena rozhrani se migraci meni."""
@@ -53,7 +66,7 @@ def igmp_pairs(facts: dict[str, Any] | None, scope: Scope) -> list[tuple[str | N
         (entry.get("source"), str(entry["group"]))
         for name in scope.selectors.interfaces
         for entry in groups.get(name, [])
-        if entry.get("group")
+        if entry.get("group") and not _link_local(str(entry["group"]))
     }
     return sorted(pairs, key=lambda p: (p[0] or "", p[1]))
 

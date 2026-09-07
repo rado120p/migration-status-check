@@ -12,7 +12,7 @@ Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
 | `interface_state` | state | critical | all | both `admin_status` and `oper_status` are `up` — one finding for each, separately |
-| `interface_errors` | state | advisory | all | zero `input/output/framing` errors — **transit interfaces only** |
+| `interface_errors` | both | advisory | all | zero `input/output/framing` errors, with a baseline only growth — **transit interfaces only** |
 | `interface_traffic` | both | advisory | all | `input_pps`/`output_pps` > 0; with a baseline, also the drop against tolerance — **transit interfaces only**, one finding per direction |
 | `traffic_ceased` | compare | advisory | all | traffic on the old interface went quiet after the migration — **disabled by default** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, no dark side, shift vs baseline within `tolerance_db` |
@@ -33,12 +33,12 @@ Matches the output of `mig-validate checks` (as of 2026-09-03, 30 checks):
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency is `Up`, neighbor and addresses match the baseline; interface missing from output = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 configured, level 1 not; passive flag is role-aware (loopback requires it, transit forbids it) |
 | `isis_overview` | state | advisory | Core (loopback) | the router's overload bit is not set |
-| `ldp_neighbor_state` | both | critical | Core (transit) | an LDP neighbor is always expected; `uptime_seconds > 0`, address checked against baseline |
+| `ldp_neighbor_state` | both | critical | Core (transit) | an LDP neighbor is always expected; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, address checked against baseline |
 | `pim_neighbor_state` | both | critical | Core (transit) | only where the interface is under `protocols pim` (otherwise no finding at all, not SKIP); otherwise same as LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS on the interface is `Up`; interface missing from output = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | a BFD session bound to the interface (not a peer address) is always expected and `Up` |
 | `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn-igmp) | the receiver sends an IGMP membership report; the (S,G) set against baseline — a different set is WARN |
-| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | a single SKIP with no IGMP report; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`) |
+| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn-igmp) | a single SKIP with no IGMP report; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); IGMP groups in 224.0.0.0/24 are ignored |
 | `core_multicast_forwarding` | both | critical | Core (loopback) | driven by the global `inet.2` statics, not IGMP; no rows at all without inet.2 statics; upstream against the `via` of the inet.2 route |
 | `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn-igmp) | the c-multicast entry and provider tunnel exist; against baseline only the tunnel's sender PE is compared, not the full tunnel id |
 
