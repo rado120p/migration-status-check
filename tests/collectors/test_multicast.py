@@ -293,6 +293,12 @@ class _FakeRpc:
             raise RuntimeError(f"neocekavane volani instance={key!r}")
         return etree.fromstring(self._replies[key])
 
+    def get_pim_join_information(self, **kwargs):
+        key = kwargs.get("instance")
+        if key not in self._replies:
+            raise RuntimeError(f"neocekavane volani instance={key!r}")
+        return etree.fromstring(self._replies[key])
+
 
 class _FakeDevice:
     def __init__(self, replies):
@@ -458,6 +464,29 @@ def test_pim_join_asm_has_none_source_and_star_key_and_unique_downstream():
     assert join["uptime_seconds"] == 7
 
 
+_PIM_ASM_XML_ZERO_SOURCE = _PIM_ASM_XML.replace(
+    "<multicast-group-address>239.5.5.5</multicast-group-address>",
+    "<multicast-group-address>239.5.5.5</multicast-group-address>"
+    "\n      <multicast-source-address>0.0.0.0</multicast-source-address>",
+)
+
+_PIM_ASM_XML_STAR_SOURCE = _PIM_ASM_XML.replace(
+    "<multicast-group-address>239.5.5.5</multicast-group-address>",
+    "<multicast-group-address>239.5.5.5</multicast-group-address>"
+    "\n      <multicast-source-address>*</multicast-source-address>",
+)
+
+
+@pytest.mark.parametrize("xml", [_PIM_ASM_XML_ZERO_SOURCE, _PIM_ASM_XML_STAR_SOURCE])
+def test_pim_join_asm_normalizes_zero_and_star_source_to_none(xml):
+    """F3: realny ASM join muze nest '0.0.0.0' nebo '*' v
+    multicast-source-address (na rozdil od zaznamenanych fixtures, ktere
+    jsou vsechny SSM) - mirror IgmpGroupCollector's ASM_SOURCE handling."""
+    data = PimJoinCollector().parse(etree.fromstring(xml), "junos")
+    join = data["master"]["*,239.5.5.5"]
+    assert join["source"] is None
+
+
 def test_pim_join_rpc_names_and_kwargs():
     collector = PimJoinCollector()
     assert collector.rpc_name("junos") == "get_pim_join_information"
@@ -469,3 +498,47 @@ def test_pim_join_record_calls_on_junos_includes_master_and_per_vrf():
     calls = PimJoinCollector().record_calls(_FakeDevice({}), "junos")
     assert ("get_pim_join_information", {"extensive": True}) in calls
     assert ("get_pim_join_information", {"extensive": True, "instance": "MULTICAST-STREAM-B-MUX1-RECEIVER"}) in calls
+
+
+_PIM_MASTER_XML = """
+<pim-join-information>
+  <join-family>
+    <pim-instance>PIM.master</pim-instance>
+    <address-family>INET</address-family>
+    <join-group>
+      <multicast-group-address>232.1.1.1</multicast-group-address>
+      <multicast-source-address>10.11.11.1</multicast-source-address>
+      <upstream-interface-name>et-0/0/0.0</upstream-interface-name>
+    </join-group>
+  </join-family>
+</pim-join-information>
+"""
+
+_PIM_RI_XML = """
+<pim-join-information>
+  <join-family>
+    <pim-instance>PIM.MULTICAST-STREAM-B-MUX1-RECEIVER</pim-instance>
+    <address-family>INET</address-family>
+    <join-group>
+      <multicast-group-address>239.1.1.1</multicast-group-address>
+      <multicast-source-address>10.12.12.1</multicast-source-address>
+      <upstream-interface-name>lsi.3</upstream-interface-name>
+    </join-group>
+  </join-family>
+</pim-join-information>
+"""
+
+
+def test_pim_join_collect_merges_master_and_per_vrf_on_junos():
+    device = _FakeDevice({None: _PIM_MASTER_XML, "MULTICAST-STREAM-B-MUX1-RECEIVER": _PIM_RI_XML})
+    data = PimJoinCollector().collect(device, "junos")
+    assert route_key("10.11.11.1", "232.1.1.1") in data["master"]
+    assert route_key("10.12.12.1", "239.1.1.1") in data["MULTICAST-STREAM-B-MUX1-RECEIVER"]
+
+
+def test_pim_join_collect_raises_when_a_per_vrf_call_fails_on_junos():
+    # Jen master ma odpoved - RI volani spadne, castecna data nesmi vypadat
+    # jako zmerena (stejne jako u MulticastRouteCollector).
+    device = _FakeDevice({None: _PIM_MASTER_XML})
+    with pytest.raises(CollectorError):
+        PimJoinCollector().collect(device, "junos")

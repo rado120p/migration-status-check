@@ -482,10 +482,14 @@ rozlišuje „instance není ve výpisu vůbec" od „instance je, ale bez c-mul
 
 `{instance: {"S,G": {source, group, upstream_interface, upstream_neighbor,
 downstream_interfaces, uptime_seconds}}}`. Jen `address-family INET` (INET6 se
-ignoruje). Klíč je `route_key(source or "*", group)` — pro `(*, G)` (join-group bez
-`multicast-source-address`) je klíč `"*,group"`, aby zůstal JSON-safe a jednoznačný;
-`source` v payloadu samotném zůstává `None`. `pim-instance` má prefix `PIM.`, který se
-stripuje (`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` → `NGMVPN-PIM-SOURCE`).
+ignoruje). Klíč je `route_key(source or "*", group)` — pro `(*, G)` je klíč
+`"*,group"`, aby zůstal JSON-safe a jednoznačný; `source` v payloadu samotném zůstává
+`None`. ASM se normalizuje defenzivně (F3, 2026-09-07): chybějící
+`multicast-source-address` element, prázdný text, `"*"` i `"0.0.0.0"` všechny dají
+`source = None` — zachycené fixture jsou všechny SSM, ale reálný ASM join může nést
+kterýkoli z těchto zápisů (mirror `IgmpGroupCollector`'s `ASM_SOURCE` handling,
+nefabuluje se nic navíc). `pim-instance` má prefix `PIM.`, který se stripuje
+(`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` → `NGMVPN-PIM-SOURCE`).
 
 `upstream_interface` a `upstream_neighbor` se drží verbatim — `"Through BGP"`,
 `"Through MVPN"` zůstávají textem, roli přiřazuje až check. `downstream_interfaces`

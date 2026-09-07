@@ -281,7 +281,13 @@ class PimJoinCollector(_PerInstanceCollector):
                 group = _localname_text(join_node, "multicast-group-address")
                 if not group:
                     continue
-                source = _localname_text(join_node, "multicast-source-address") or None
+                # ASM (*, G) normalizace: realne zachycene joiny jsou vsechny
+                # SSM, ale realny ASM join muze nest '*' nebo '0.0.0.0'
+                # (mirror IgmpGroupCollector.parse - ASM_SOURCE). Fabulace
+                # zadna - jen sjednoceni ruznych zapisu "zadny zdroj".
+                source = _localname_text(join_node, "multicast-source-address")
+                if source in (None, "", "*", ASM_SOURCE):
+                    source = None
                 downstream: list[str] = []
                 for iface_node in join_node.iter("{*}downstream-interface"):
                     for element in ("pim-interface-name", "pim-pseudo-downstream-interface-name"):

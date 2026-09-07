@@ -493,11 +493,14 @@ there, but no c-multicast".
 
 `{instance: {"S,G": {source, group, upstream_interface, upstream_neighbor,
 downstream_interfaces, uptime_seconds}}}`. Only `address-family INET` (INET6 is
-ignored). The key is `route_key(source or "*", group)` — for `(*, G)` (a join-group
-with no `multicast-source-address`) the key is `"*,group"`, keeping it JSON-safe and
-unambiguous; `source` in the payload itself stays `None`. `pim-instance` carries a
-`PIM.` prefix that gets stripped (`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` →
-`NGMVPN-PIM-SOURCE`).
+ignored). The key is `route_key(source or "*", group)` — for `(*, G)` the key is
+`"*,group"`, keeping it JSON-safe and unambiguous; `source` in the payload itself
+stays `None`. ASM is normalized defensively (F3, 2026-09-07): a missing
+`multicast-source-address` element, empty text, `"*"` and `"0.0.0.0"` all give
+`source = None` — the recorded fixtures are all SSM, but a real ASM join can carry
+any of these spellings (mirrors `IgmpGroupCollector`'s `ASM_SOURCE` handling,
+fabricating nothing extra). `pim-instance` carries a `PIM.` prefix that gets stripped
+(`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` → `NGMVPN-PIM-SOURCE`).
 
 `upstream_interface` and `upstream_neighbor` are kept verbatim — `"Through BGP"`,
 `"Through MVPN"` stay as text, role assignment is left to the check. `downstream_
