@@ -399,6 +399,7 @@ class JunosServiceParserCore:
 
         self.global_protocols_by_interface: dict[str, set[str]] = {}
         self.igmp_interfaces: set[str] = set()
+        self.pim_interfaces: set[str] = set()
         self.default_bgp_neighbors: list[str] = []
         self.default_bgp_neighbors_inactive: list[str] = []
         self.default_bgp_neighbors_internal: list[str] = []
@@ -423,7 +424,7 @@ class JunosServiceParserCore:
         self._parse_default_bgp_neighbors()
         self._parse_global_eline_interfaces("l2circuit", self.global_l2circuits)
         self._parse_global_eline_interfaces("connections", self.global_ccc_interfaces)
-        self._parse_global_protocol_interfaces("pim")
+        self._parse_pim_interfaces()
         self._parse_igmp_interfaces()
 
         interface_configs = self._parse_interfaces()
@@ -957,14 +958,7 @@ class JunosServiceParserCore:
             )
 
     def _parse_global_protocol_interfaces(self, protocol: str) -> None:
-        """Rozhraní pod globálním protokolem (protocols <protocol> interface X).
-
-        PIM: protocols pim interface ge-0/0/0.0 - zamer, ze na teto
-        logicke jednotce se ceka PIM soused (spec 2026-08-26, check je
-        az Task 10). RI-PIM (routing-instances X protocols pim ...) tudy
-        neprochazi - tam uz RoutingInstance.protocols nese "pim" samo
-        (child_names nad ./protocols/*) a _collect_protocols ho pripoji.
-        """
+        """Rozhraní pod globálním protokolem (protocols <protocol> interface X)."""
 
         interface_names = all_texts(
             self.config_xml, f"./protocols/{protocol}/interface/name/text()"
@@ -995,6 +989,25 @@ class JunosServiceParserCore:
         for name in names:
             self.igmp_interfaces.add(name)
             self.global_protocols_by_interface.setdefault(name, set()).add("igmp")
+
+    def _parse_pim_interfaces(self) -> None:
+        """Rozhraní pod `protocols pim interface X` — globálně i uvnitř
+        routing-instance (spec 2026-09-07). Záměr říká: tady se čeká PIM
+        soused (Core transit) nebo PIM join (MVPN site).
+
+        RI-scoped varianta se čte přímo tady, ne přes `RoutingInstance.protocols`
+        — ta dává "pim" každému rozhraní instance, ne jen tomu pod
+        `pim interface`. Množina `pim_interfaces` je proto jediný zdroj
+        per-rozhraní PIM záměru pro detekci subtype `mvpn`.
+        """
+        names = all_texts(
+            self.config_xml,
+            "./protocols/pim/interface/name/text()"
+            " | ./routing-instances/instance/protocols/pim/interface/name/text()",
+        )
+        for name in names:
+            self.pim_interfaces.add(name)
+            self.global_protocols_by_interface.setdefault(name, set()).add("pim")
 
     # ------------------------------------------------------------------
     # Rozhraní
