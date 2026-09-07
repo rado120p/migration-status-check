@@ -589,19 +589,19 @@ class MvpnCmulticastStatusCheck(Check):
     title = "MVPN c-multicast a provider tunnel"
     label = "C-Multicast status"
     mode = Mode.BOTH
-    requires = ("igmp_group", "mvpn_instance")
+    requires = ("mvpn_instance",)
     requires_inventory = True
     service_types = frozenset({"IPVPN"})
     service_subtypes = frozenset({MVPN_SUBTYPE})
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
-        pairs = igmp_pairs(ctx.subject, ctx.scope)
+        pairs = expected_pairs(ctx.subject, ctx.scope)
         if not pairs:
-            # Kaskada (rozhodnuti 2026-09-02): bez IGMP mnoziny neni co hledat v MVPN.
+            # Kaskada (rozhodnuti 2026-09-02/07): bez ocekavane mnoziny neni co hledat v MVPN.
             return [Finding(
-                Outcome.SKIP, "bez IGMP reportu neni co hledat v MVPN",
-                label=self.label, value=NO_REPORT_SKIP,
+                Outcome.SKIP, "bez IGMP reportu ani PIM join neni co hledat v MVPN",
+                label=self.label, value=NO_PAIRS_SKIP,
             )]
         instance = (
             ctx.scope.selectors.routing_instances[0]
@@ -618,7 +618,7 @@ class MvpnCmulticastStatusCheck(Check):
             ((ctx.baseline or {}).get("mvpn_instance") or {}).get(instance) or {}
         ).get("c_multicast") or []
         findings: list[Finding] = []
-        for source, group in pairs:
+        for source, group, _roles in pairs:
             sg = sg_label(source, group)
             entry = _cmulticast_entry(entries, source, group)
             if entry is None:

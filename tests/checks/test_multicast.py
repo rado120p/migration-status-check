@@ -663,10 +663,26 @@ def test_mvpn_pass_rows():
     assert rows["Provider tunnel"].value == TUNNEL
 
 
-def test_mvpn_without_igmp_is_skip():
+def test_mvpn_without_any_pairs_is_skip():
     findings = MvpnCmulticastStatusCheck().run(_ctx(_mvpn_facts(pairs=()), scope=_mvpn_scope()))
     assert [(f.outcome, f.label, f.value) for f in findings] == [
-        (Outcome.SKIP, "C-Multicast status", NO_REPORT_SKIP)]
+        (Outcome.SKIP, "C-Multicast status", NO_PAIRS_SKIP)]
+
+
+def test_mvpn_sender_pairs_from_pim_join_pass_rows():
+    scope = _scope("irb.10", "IPVPN", "mvpn", [RI], mvpn_site=["sender"])
+    facts = {
+        **_pim(RI, _join("irb.10", ["Pseudo-MVPN"], source=MSG[0], group=MSG[1])),
+        "mvpn_instance": {RI: {"c_multicast": [_entry()]}},
+    }
+    findings = MvpnCmulticastStatusCheck().run(_ctx(facts, scope=scope))
+    rows = _by_label(findings, sg_label(*MSG))
+    assert rows["C-Multicast status"].outcome is Outcome.OK
+    assert rows["Provider tunnel"].outcome is Outcome.OK
+
+
+def test_mvpn_requires_only_mvpn_instance():
+    assert MvpnCmulticastStatusCheck.requires == ("mvpn_instance",)
 
 
 def test_mvpn_instance_missing_is_fail():
