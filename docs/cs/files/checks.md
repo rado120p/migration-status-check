@@ -990,18 +990,25 @@ jedno pravidlo napříč všemi:
 ### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn, both, critical)
 
 `service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn"}`.
-Vyžaduje `igmp_group`. Skupiny z `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …)
-`igmp_pairs()` vynechává (rozhodnutí 2026-09-07) — hlásí je protokoly, ne receiver, takže
-rozhraní jen s nimi je „bez IGMP reportu".
+Vyžaduje `igmp_group`. Gate `"igmp" in scope.selectors.protocols` — bez záměru žádné
+řádky (ticho, ne SKIP, stejně jako `pim_neighbor_state`/`pim_join`): subtype `mvpn`
+může být čistě PIM-only záměr (rozhodnutí 2026-09-07). Skupiny z `224.0.0.0/24`
+(link-local: all-routers, PIM, IGMPv3 …) `igmp_pairs()` vynechává (rozhodnutí
+2026-09-07) — hlásí je protokoly, ne receiver, takže rozhraní jen s nimi je „bez IGMP
+reportu".
 
 Skupiny na servisním rozhraní ze scopu, seřazené, bez duplicit; ASM položky (bez
 zdroje) jako `(*, G)`. Žádné skupiny, ale rozhraní má PIM join (`pim_pairs()`, čte se
 volitelně, `pim_join` není v `requires`) → `INFO | IGMP membership report : bez IGMP
 reportu, o streamy se hlasi PIM join` (zrcadlo `pim_join` checku, rozhodnutí
-2026-09-07). Žádné skupiny ani PIM join → `BROKEN | IGMP membership report : Receiver
-neposila zadny IGMP membership report`. Proti baseline: shodná množina → `OK`; jiná
-množina → `DEGRADED`, `value` je aktuální množina, `baseline_value` ta stará; baseline
-bez skupin → bez porovnání (no-baseline pravidlo — `baseline_value` `None`, ne "bylo
+2026-09-07). Žádné skupiny, žádný PIM join a `pim_join` collector v daném běhu selhal
+(`"pim_join" in ctx.failed_collectors`) → `SKIP | IGMP membership report : PIM join
+nezmereno` — bez funkčního `pim_join` nelze rozhodnout, jestli receiver je rozbitý,
+nebo streamy nese PIM join, který se právě nezměřil. Žádné skupiny ani PIM join (a
+`pim_join` neselhal) → `BROKEN | IGMP membership report : Receiver neposila zadny
+IGMP membership report`. Proti baseline: shodná množina → `OK`; jiná množina →
+`DEGRADED`, `value` je aktuální množina, `baseline_value` ta stará; baseline bez
+skupin → bez porovnání (no-baseline pravidlo — `baseline_value` `None`, ne "bylo
 prázdno").
 
 Mutant kill (2026-09-03, ověřeno spuštěním): `Outcome.DEGRADED` → `Outcome.OK` ve
@@ -1009,8 +1016,10 @@ větvi „množina se liší" nechá padnout `test_igmp_report_changed_set_is_wa
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
+| bez `"igmp"` v `scope.selectors.protocols` | *(žádný nález)* | — | — |
 | na rozhraních služby žádné skupiny, ale PIM join je | `info` | INFO | `bez IGMP reportu, o streamy se hlasi PIM join` |
-| na rozhraních služby žádné skupiny ani PIM join | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| na rozhraních služby žádné skupiny, žádný PIM join, `pim_join` collector selhal | `SKIP` | SKIP | `PIM join nezmereno` |
+| na rozhraních služby žádné skupiny ani PIM join, `pim_join` neselhal | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
 | baseline měla skupiny, aktuální množina se liší | `degraded` | WARN | aktuální množina `(S, G)`, spojená |
 | aktuální množina sedí na baseline (nebo bez baseline, nebo baseline žádnou neměla) | `ok` | PASS | aktuální množina `(S, G)`, spojená |
 
@@ -1029,6 +1038,10 @@ role `sender`. Link-local skupiny z `224.0.0.0/24` se zahazují stejně jako u I
 Hodnota řádku `(S, G) [role], …` (`role_pairs_text()`), role se spojují `/`, je-li
 join zaznamenán z obou stran zároveň.
 
+Bez PIM párů, žádné IGMP páry a `igmp_group` collector v daném běhu selhal
+(`"igmp_group" in ctx.failed_collectors`) → `SKIP | PIM join : IGMP report nezmereno`
+— symetricky k `igmp_membership_report`.
+
 Mutant kill: viz `tests/checks/test_multicast.py` (řádek `pim_join`, tabulka outcomes,
 gate bez `"pim"`).
 
@@ -1037,13 +1050,16 @@ gate bez `"pim"`).
 | PIM páry, množina (S,G) shodná s baseline nebo bez baseline | `ok` | PASS | `(S, G) [role], …` |
 | PIM páry, množina (S,G) se liší od baseline | `degraded` | WARN | `(S, G) [role], …`, `baseline_value` staré páry |
 | bez PIM párů, IGMP páry jsou | `info` | INFO | `bez PIM join, o streamy se hlasi IGMP` |
+| bez PIM párů, bez IGMP párů, `igmp_group` collector selhal | `SKIP` | SKIP | `IGMP report nezmereno` |
 | bez PIM párů, bez IGMP párů, `selectors.mvpn_site == ["sender"]` | `degraded` | WARN | `sender site bez vzdaleneho receiveru, neni co overit` |
 | bez PIM párů, bez IGMP párů, jinak | `broken` | FAIL | `Zadny PIM join` |
 
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
 
-Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route` (`pim_join` se čte
-volitelně přes `expected_pairs()`, není v `requires`).
+Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`, `pim_join` (od F2
+2026-09-07 — dřív se `pim_join` četl volitelně a jeho selhání tiše zúžilo
+`expected_pairs()` na samotné IGMP páry; teď framework `run_check()` selhání
+kteréhokoli z `requires` vyhodnotí jako `SKIP` ještě před `check.run()`).
 
 Bez IGMP párů ani PIM joinu → jediný `SKIP | Multicast forwarding status : bez IGMP
 reportu ani PIM join`, žádné řádky streamů. Jinak souhrnný řádek (`OK` `{n} S,G`, nebo
@@ -1163,8 +1179,10 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
 
 ### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
-`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`. `requires=("mvpn_instance",)` —
-`igmp_group` a `pim_join` se čtou volitelně přes `expected_pairs()`.
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`.
+`requires=("mvpn_instance", "pim_join")` (`pim_join` od F2 2026-09-07 — stejný důvod
+jako u `multicast_forwarding_status`). `igmp_group` se čte volitelně přes
+`expected_pairs()`.
 
 Bez IGMP párů ani PIM joinu (`expected_pairs()` prázdné) → `SKIP | C-Multicast status :
 bez IGMP reportu ani PIM join`. Instance chybí v `mvpn_instance` výpisu → `BROKEN | ... :

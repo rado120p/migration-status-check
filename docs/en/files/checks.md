@@ -1004,15 +1004,22 @@ sender site). They share the module, shared helper sections (`igmp_pairs`, `pim_
 ### `igmp_membership_report` (Internet/multicast, IPVPN/mvpn, both, critical)
 
 `service_types={"Internet", "IPVPN"}`, `service_subtypes={"multicast", "mvpn"}`.
-Requires `igmp_group`. Groups in `224.0.0.0/24` (link-local: all-routers, PIM, IGMPv3 …) are
-dropped by `igmp_pairs()` (2026-09-07 decision) — protocols report them, not the receiver, so
-an interface with only those counts as "no IGMP report".
+Requires `igmp_group`. Gate `"igmp" in scope.selectors.protocols` — no intent means no
+rows at all (silence, not SKIP, same as `pim_neighbor_state`/`pim_join`): subtype
+`mvpn` can be a PIM-only intent (2026-09-07 decision). Groups in `224.0.0.0/24`
+(link-local: all-routers, PIM, IGMPv3 …) are dropped by `igmp_pairs()` (2026-09-07
+decision) — protocols report them, not the receiver, so an interface with only those
+counts as "no IGMP report".
 
 Groups on the service interface from the scope, sorted, deduplicated; ASM entries
 (no source) render as `(*, G)`. No groups, but the interface has a PIM join
 (`pim_pairs()`, read optionally — `pim_join` is not in `requires`) → `INFO | IGMP
 membership report : bez IGMP reportu, o streamy se hlasi PIM join` (a mirror of the
-`pim_join` check, 2026-09-07 decision). No groups and no PIM join → `BROKEN | IGMP
+`pim_join` check, 2026-09-07 decision). No groups, no PIM join, and the `pim_join`
+collector failed this run (`"pim_join" in ctx.failed_collectors`) → `SKIP | IGMP
+membership report : PIM join nezmereno` — without a working `pim_join` there is no way
+to tell a broken receiver from streams carried by a PIM join that simply wasn't
+measured. No groups and no PIM join (and `pim_join` did not fail) → `BROKEN | IGMP
 membership report : Receiver neposila zadny IGMP membership report`. Against baseline:
 same set → `OK`; a different set → `DEGRADED`, `value` is the current set,
 `baseline_value` the old one; baseline with no groups → no comparison (no-baseline rule
@@ -1023,8 +1030,10 @@ Mutant kill (2026-09-03, verified by running it): `Outcome.DEGRADED` → `Outcom
 
 | situation | Outcome | status | `value` |
 |---|---|---|---|
+| no `"igmp"` in `scope.selectors.protocols` | *(no finding)* | — | — |
 | no groups on the service's interfaces, but a PIM join exists | `info` | INFO | `bez IGMP reportu, o streamy se hlasi PIM join` |
-| no groups on the service's interfaces and no PIM join | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
+| no groups, no PIM join, `pim_join` collector failed | `SKIP` | SKIP | `PIM join nezmereno` |
+| no groups on the service's interfaces and no PIM join, `pim_join` did not fail | `broken` | FAIL | `Receiver neposila zadny IGMP membership report` |
 | baseline had groups, current set differs | `degraded` | WARN | current `(S, G)` set, joined |
 | current set matches baseline (or no baseline, or baseline had none) | `ok` | PASS | current `(S, G)` set, joined |
 
@@ -1044,6 +1053,10 @@ the service interface (`selectors.interfaces[0]`): among `downstream_interfaces`
 the same way as for IGMP. The row's value is `(S, G) [role], …` (`role_pairs_text()`),
 roles joined with `/` if a join is recorded from both sides at once.
 
+No PIM pairs, no IGMP pairs, and the `igmp_group` collector failed this run
+(`"igmp_group" in ctx.failed_collectors`) → `SKIP | PIM join : IGMP report nezmereno`
+— symmetric to `igmp_membership_report`.
+
 Mutant kill: see `tests/checks/test_multicast.py` (the `pim_join` row, the outcomes
 table, the gate without `"pim"`).
 
@@ -1052,13 +1065,16 @@ table, the gate without `"pim"`).
 | PIM pairs, (S,G) set matches baseline or no baseline | `ok` | PASS | `(S, G) [role], …` |
 | PIM pairs, (S,G) set differs from baseline | `degraded` | WARN | `(S, G) [role], …`, `baseline_value` the old pairs |
 | no PIM pairs, IGMP pairs exist | `info` | INFO | `bez PIM join, o streamy se hlasi IGMP` |
+| no PIM pairs, no IGMP pairs, `igmp_group` collector failed | `SKIP` | SKIP | `IGMP report nezmereno` |
 | no PIM pairs, no IGMP pairs, `selectors.mvpn_site == ["sender"]` | `degraded` | WARN | `sender site bez vzdaleneho receiveru, neni co overit` |
 | no PIM pairs, no IGMP pairs, otherwise | `broken` | FAIL | `Zadny PIM join` |
 
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
 
-Same two subtypes. Requires `igmp_group`, `multicast_route` (`pim_join` is read
-optionally through `expected_pairs()`, not in `requires`).
+Same two subtypes. Requires `igmp_group`, `multicast_route`, `pim_join` (since F2
+2026-09-07 — previously `pim_join` was read optionally, and its failure silently
+narrowed `expected_pairs()` to the IGMP pairs alone; now `run_check()` treats a
+failure of any of `requires` as a `SKIP` before `check.run()` even gets called).
 
 No IGMP pairs and no PIM join → a single `SKIP | Multicast forwarding status : bez IGMP
 reportu ani PIM join`, no stream rows at all. Otherwise a summary row (`OK` `{n} S,G`, or
@@ -1182,8 +1198,10 @@ Mutant kill (2026-09-03, verified by running each):
 
 ### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
-`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`. `requires=("mvpn_instance",)` —
-`igmp_group` and `pim_join` are read optionally through `expected_pairs()`.
+`service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`.
+`requires=("mvpn_instance", "pim_join")` (`pim_join` since F2 2026-09-07 — same reason
+as `multicast_forwarding_status`). `igmp_group` is read optionally through
+`expected_pairs()`.
 
 No IGMP pairs and no PIM join (`expected_pairs()` empty) → `SKIP | C-Multicast status :
 bez IGMP reportu ani PIM join`. The instance is missing from the `mvpn_instance` listing

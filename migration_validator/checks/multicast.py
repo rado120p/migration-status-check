@@ -227,6 +227,10 @@ class IgmpMembershipReportCheck(Check):
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
+        if "igmp" not in ctx.scope.selectors.protocols:
+            # Bez zameru ticho, ne SKIP - stejne jako pim_neighbor_state/pim_join.
+            # Subtype mvpn muze byt cisty PIM-only zamer (rozhodnuti 2026-09-07).
+            return []
         now = igmp_pairs(ctx.subject, ctx.scope)
         was = _baseline_pairs(ctx)
         # Baseline bez skupin = neni s cim porovnat (no-baseline pravidlo),
@@ -239,6 +243,15 @@ class IgmpMembershipReportCheck(Check):
                 return [Finding(
                     Outcome.INFO, "receiver neposila IGMP report, o streamy se hlasi PIM join",
                     label=self.label, value=NO_REPORT_PIM_INFO, baseline_value=was_value,
+                )]
+            if "pim_join" in ctx.failed_collectors:
+                # Bez IGMP reportu a bez funkcniho pim_join collectoru nelze
+                # rozhodnout, jestli je receiver rozbity nebo streamy nese
+                # PIM join, ktery se prave nezmeril (rozhodnuti 2026-09-07).
+                return [Finding(
+                    Outcome.SKIP,
+                    "bez IGMP reportu a pim_join collector selhal, nelze rozhodnout",
+                    label=self.label, value="PIM join nezmereno", baseline_value=was_value,
                 )]
             if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
                 # Sender-only site nikdy neposila IGMP membership report sam
@@ -295,6 +308,14 @@ class PimJoinCheck(Check):
                     "zadny PIM join na servisnim rozhrani, o streamy se hlasi IGMP",
                     label=self.label, value=NO_JOIN_IGMP_INFO, baseline_value=was_value,
                 )]
+            if "igmp_group" in ctx.failed_collectors:
+                # Symetricky k igmp_membership_report: bez PIM join a bez
+                # funkcniho igmp_group collectoru nelze rozhodnout.
+                return [Finding(
+                    Outcome.SKIP,
+                    "bez PIM join a igmp_group collector selhal, nelze rozhodnout",
+                    label=self.label, value="IGMP report nezmereno", baseline_value=was_value,
+                )]
             if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
                 # Sender-only site bez vzdaleneho receiveru nema zadny join
                 # state - neni co overit, ale neni to rozbity receiver
@@ -349,7 +370,7 @@ class MulticastForwardingStatusCheck(Check):
     title = "Multicast forwarding na servisnim rozhrani"
     label = "Multicast forwarding status"
     mode = Mode.STATE
-    requires = ("igmp_group", "multicast_route")
+    requires = ("igmp_group", "multicast_route", "pim_join")
     requires_inventory = True
     service_types = MULTICAST_TYPES
     service_subtypes = MULTICAST_SUBTYPES
@@ -599,7 +620,7 @@ class MvpnCmulticastStatusCheck(Check):
     title = "MVPN c-multicast a provider tunnel"
     label = "C-Multicast status"
     mode = Mode.BOTH
-    requires = ("mvpn_instance",)
+    requires = ("mvpn_instance", "pim_join")
     requires_inventory = True
     service_types = frozenset({"IPVPN"})
     service_subtypes = frozenset({MVPN_SUBTYPE})

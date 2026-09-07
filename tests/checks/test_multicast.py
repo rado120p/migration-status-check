@@ -52,10 +52,11 @@ def _scope(interface=POST, service_type="Internet", subtype="multicast", instanc
     )
 
 
-def _ctx(subject, baseline=None, scope=None, baseline_scope=None):
+def _ctx(subject, baseline=None, scope=None, baseline_scope=None, failed_collectors=None):
     return CheckContext(
         scope=scope or _scope(), subject=subject, baseline=baseline,
         config=default_config(), baseline_scope=baseline_scope,
+        failed_collectors=failed_collectors or {},
     )
 
 
@@ -221,10 +222,20 @@ def test_igmp_report_missing_with_pim_join_is_info():
 
 
 def test_igmp_report_missing_without_pim_area_stays_fail():
-    """Snapshot bez pim_join area (schema 12 fixture nebo selhany collector)
-    nesmi zmenit dosavadni chovani."""
+    """Snapshot bez pim_join klice a bez zaznamu o selhani collectoru
+    (ctx.failed_collectors prazdne) nesmi zmenit dosavadni chovani."""
     (finding,) = IgmpMembershipReportCheck().run(_ctx(_igmp(POST)))
     assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT)
+
+
+def test_igmp_report_missing_with_failed_pim_join_is_skip():
+    """F2: bez IGMP reportu a s pim_join collectorem, ktery selhal, nelze
+    rozhodnout, jestli receiver je rozbity - kaskada by BROKEN fabulovala."""
+    (finding,) = IgmpMembershipReportCheck().run(
+        _ctx(_igmp(POST), failed_collectors={"pim_join": "boom"})
+    )
+    assert (finding.outcome, finding.value) == (
+        Outcome.SKIP, "PIM join nezmereno")
 
 
 def test_igmp_report_missing_on_sender_only_site_is_warn():
@@ -241,6 +252,15 @@ def test_igmp_report_missing_on_receiver_or_both_site_is_fail():
         scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
         (finding,) = IgmpMembershipReportCheck().run(_ctx({"igmp_group": {}}, scope=scope))
         assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT), site
+
+
+def test_igmp_report_silent_without_igmp_intent():
+    """Subtype mvpn muze byt cisty PIM-only zamer (rozhodnuti 2026-09-07):
+    bez 'igmp' v protokolech se check nema o cem vyjadrovat, i kdyz IGMP
+    fakta v jinem rozhrani existuji."""
+    assert IgmpMembershipReportCheck().run(
+        _ctx(_igmp(POST, SG), scope=_scope(protocols=["pim"]))
+    ) == []
 
 
 # --- multicast_forwarding_status -------------------------------------------
@@ -697,8 +717,8 @@ def test_mvpn_sender_pairs_from_pim_join_pass_rows():
     assert rows["Provider tunnel"].outcome is Outcome.OK
 
 
-def test_mvpn_requires_only_mvpn_instance():
-    assert MvpnCmulticastStatusCheck.requires == ("mvpn_instance",)
+def test_mvpn_requires_mvpn_instance_and_pim_join():
+    assert MvpnCmulticastStatusCheck.requires == ("mvpn_instance", "pim_join")
 
 
 def test_mvpn_instance_missing_is_fail():
@@ -834,6 +854,16 @@ def test_pim_join_missing_on_receiver_or_both_site_is_fail():
         scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
         (finding,) = PimJoinCheck().run(_ctx({"pim_join": {}}, scope=scope))
         assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_JOIN), site
+
+
+def test_pim_join_missing_with_failed_igmp_is_skip():
+    """F2 symetricky: bez PIM join a s igmp_group collectorem, ktery selhal,
+    nelze rozhodnout."""
+    (finding,) = PimJoinCheck().run(
+        _ctx({"pim_join": {}}, failed_collectors={"igmp_group": "boom"})
+    )
+    assert (finding.outcome, finding.value) == (
+        Outcome.SKIP, "IGMP report nezmereno")
 
 
 def test_pim_join_silent_without_pim_intent():
