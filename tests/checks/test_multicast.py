@@ -8,6 +8,7 @@ from migration_validator.checks.base import CheckContext
 from migration_validator.checks.multicast import (
     NO_JOIN,
     NO_JOIN_IGMP_INFO,
+    NO_PAIRS_SKIP,
     NO_REPORT,
     NO_REPORT_PIM_INFO,
     NO_REPORT_SKIP,
@@ -268,7 +269,80 @@ def test_forwarding_pass_block_shape():
 def test_forwarding_without_igmp_is_single_skip():
     findings = MulticastForwardingStatusCheck().run(_ctx(
         {"igmp_group": {}, "multicast_route": {"master": {f"{SG[0]},{SG[1]}": _route()}}}))
-    assert [(f.outcome, f.value) for f in findings] == [(Outcome.SKIP, NO_REPORT_SKIP)]
+    assert [(f.outcome, f.value) for f in findings] == [(Outcome.SKIP, NO_PAIRS_SKIP)]
+
+
+def _sender_scope():
+    return _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=["sender"])
+
+
+def _sender_facts(upstream="irb.10", downstream=("ge-0/0/0.0",)):
+    return {
+        **_pim("RI", _join("irb.10", ["Pseudo-MVPN"], source="10.10.10.1", group="232.10.10.1")),
+        "multicast_route": {"RI": {"10.10.10.1,232.10.10.1": _route(upstream, downstream)}},
+    }
+
+
+def test_forwarding_pairs_come_from_pim_join_too():
+    facts = {**_pim("master", _join("et-0/0/0.0", [POST])),
+             "multicast_route": {"master": {"10.11.11.1,232.1.1.1": _route()}}}
+    findings = MulticastForwardingStatusCheck().run(_ctx(facts))
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].value == "1 S,G"
+
+
+def test_forwarding_sender_pass_rows():
+    findings = MulticastForwardingStatusCheck().run(_ctx(_sender_facts(), scope=_sender_scope()))
+    rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
+    assert findings[0].outcome is Outcome.OK
+    assert rows["Stream"].outcome is Outcome.OK
+    assert rows["Stream"].value == "Stream odchazi na ge-0/0/0.0"
+    assert rows["Upstream interface"].outcome is Outcome.OK
+    assert rows["Upstream interface"].value == "irb.10"
+
+
+def test_forwarding_sender_upstream_must_be_service_interface():
+    findings = MulticastForwardingStatusCheck().run(_ctx(_sender_facts(upstream="lsi.5"), scope=_sender_scope()))
+    rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
+    assert rows["Upstream interface"].outcome is Outcome.BROKEN
+    assert "neni servisni rozhrani irb.10" in rows["Upstream interface"].message
+    assert rows["Stream"].outcome is Outcome.OK
+
+
+def test_forwarding_sender_without_downstream_fails_stream_row():
+    findings = MulticastForwardingStatusCheck().run(_ctx(_sender_facts(downstream=()), scope=_sender_scope()))
+    rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
+    assert rows["Stream"].outcome is Outcome.BROKEN
+    assert rows["Stream"].value == "S,G je v tabulce ale nema zadny downstream"
+    assert findings[0].outcome is Outcome.BROKEN
+
+
+def test_forwarding_both_roles_passes_when_either_role_matches():
+    """Stejne (S,G) z IGMP (receiver) i z PIM jako sender: Stream OK, kdyz
+    plati kterakoli role; Upstream se hodnoti podle role, jejiz Stream prosel."""
+    scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"])
+    facts = {
+        **_igmp("irb.10", ("10.10.10.1", "232.10.10.1")),
+        **_pim("RI", _join("irb.10", ["Pseudo-MVPN"], source="10.10.10.1", group="232.10.10.1")),
+        "multicast_route": {"RI": {"10.10.10.1,232.10.10.1": _route("irb.10", ("ge-0/0/0.0",))}},
+    }
+    findings = MulticastForwardingStatusCheck().run(_ctx(facts, scope=scope))
+    rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
+    assert rows["Stream"].outcome is Outcome.OK
+    assert rows["Upstream interface"].outcome is Outcome.OK
+
+
+def test_forwarding_both_roles_neither_matching_fails_with_receiver_texts():
+    scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"])
+    facts = {
+        **_igmp("irb.10", ("10.10.10.1", "232.10.10.1")),
+        **_pim("RI", _join("irb.10", ["Pseudo-MVPN"], source="10.10.10.1", group="232.10.10.1")),
+        "multicast_route": {"RI": {"10.10.10.1,232.10.10.1": _route("lsi.5", ())}},
+    }
+    findings = MulticastForwardingStatusCheck().run(_ctx(facts, scope=scope))
+    rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
+    assert rows["Stream"].outcome is Outcome.BROKEN
+    assert rows["Stream"].value == "S,G je v tabulce ale stream se na irb.10 neposila"
 
 
 def test_forwarding_sg_missing_from_table():

@@ -2,8 +2,9 @@
 forwarding (IGMP-rizene pro Internet/IPVPN, inet.2-rizene pro Core lo0.0)
 a MVPN c-multicast / provider tunnel.
 
-IGMP mnozina definuje ocekavane streamy. Bez ni forwarding i MVPN radky
-kaskaduji do SKIP (ne nezavisle hledani v tabulce). Upstream, downstream,
+Sjednoceni IGMP a PIM join paru (expected_pairs) definuje ocekavane streamy.
+Bez nich forwarding i MVPN radky kaskaduji do SKIP (ne nezavisle hledani
+v tabulce). Upstream, downstream,
 rate a uptime se proti baseline neporovnavaji nikdy - meni se migraci
 z definice; porovnava se jen mnozina (S,G) a sender PE tunelu.
 """
@@ -37,6 +38,7 @@ LINK_LOCAL_GROUPS = ipaddress.ip_network("224.0.0.0/24")
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
 NO_REPORT_PIM_INFO = "bez IGMP reportu, o streamy se hlasi PIM join"
 NO_REPORT_SKIP = "bez IGMP reportu"
+NO_PAIRS_SKIP = "bez IGMP reportu ani PIM join"
 NO_JOIN = "Zadny PIM join"
 NO_JOIN_IGMP_INFO = "bez PIM join, o streamy se hlasi IGMP"
 SENDER_NO_RECEIVER = "sender site bez vzdaleneho receiveru, neni co overit"
@@ -344,18 +346,18 @@ class MulticastForwardingStatusCheck(Check):
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
-        pairs = igmp_pairs(ctx.subject, ctx.scope)
+        pairs = expected_pairs(ctx.subject, ctx.scope)
         if not pairs:
-            # Kaskada (rozhodnuti 2026-09-02): bez IGMP mnoziny neni co hledat.
+            # Kaskada (rozhodnuti 2026-09-02/07): bez ocekavane mnoziny neni co hledat.
             return [Finding(
-                Outcome.SKIP, "bez IGMP reportu neni co hledat v multicast tabulce",
-                value=NO_REPORT_SKIP,
+                Outcome.SKIP, "bez IGMP reportu ani PIM join neni co hledat v multicast tabulce",
+                value=NO_PAIRS_SKIP,
             )]
         table = multicast_table(ctx.subject)
         iface = ctx.scope.selectors.interfaces[0]
         rows: list[Finding] = []
         failed = 0
-        for source, group in pairs:
+        for source, group, roles in pairs:
             matches = routes_for(table, source, group)
             if not matches:
                 sg = sg_label(source, group)
@@ -370,7 +372,7 @@ class MulticastForwardingStatusCheck(Check):
                 # Skupina nese realny zdroj z tabulky - u ASM zaznamu (*, G)
                 # je to jediny zpusob, jak streamy rozlisit.
                 sg = sg_label(key.split(",", 1)[0], group)
-                stream = self._stream(sg, iface, ctx.scope.service_subtype, route)
+                stream = self._stream(sg, iface, ctx.scope.service_subtype, route, roles)
                 if any(f.outcome is Outcome.BROKEN for f in stream):
                     pair_failed = True
                 rows.extend(stream)
@@ -379,28 +381,50 @@ class MulticastForwardingStatusCheck(Check):
         return [_summary(self.label, len(pairs), failed), *rows]
 
     @staticmethod
-    def _stream(sg: str, iface: str, subtype: str | None, route: dict[str, Any]) -> list[Finding]:
+    def _stream(
+        sg: str, iface: str, subtype: str | None, route: dict[str, Any], roles: frozenset[str]
+    ) -> list[Finding]:
         downstream = route.get("downstream_interfaces") or []
-        on_iface = iface in downstream
         upstream = route.get("upstream_interface")
-        problem = _upstream_problem(subtype, upstream)
-        return [
-            Finding(
-                Outcome.OK if on_iface else Outcome.BROKEN,
-                f"{sg}: stream se na {iface} " + ("posila" if on_iface else "neposila"),
+        receiver_ok = RECEIVER in roles and iface in downstream
+        sender_ok = SENDER in roles and bool(downstream)
+        # Obe role: Stream OK, kdyz plati kterakoli; Upstream podle role,
+        # jejiz Stream prosel (obe prosle -> receiver). Zadna prosla ->
+        # receiver texty (rozhodnuti 2026-09-07).
+        as_sender = (sender_ok and not receiver_ok) or roles == frozenset({SENDER})
+        if as_sender:
+            stream_row = Finding(
+                Outcome.OK if sender_ok else Outcome.BROKEN,
+                f"{sg}: stream " + (f"odchazi na {', '.join(downstream)}" if sender_ok
+                                    else "nema zadny downstream"),
+                label="Stream", group=sg,
+                value=(f"Stream odchazi na {', '.join(downstream)}" if sender_ok
+                       else "S,G je v tabulce ale nema zadny downstream"),
+            )
+            upstream_ok = upstream == iface
+            upstream_row = Finding(
+                Outcome.OK if upstream_ok else Outcome.BROKEN,
+                f"{sg}: upstream {upstream or '-'}"
+                + ("" if upstream_ok else f" neni servisni rozhrani {iface}"),
+                label="Upstream interface", group=sg, value=upstream or "-",
+            )
+        else:
+            problem = _upstream_problem(subtype, upstream)
+            stream_row = Finding(
+                Outcome.OK if receiver_ok else Outcome.BROKEN,
+                f"{sg}: stream se na {iface} " + ("posila" if receiver_ok else "neposila"),
                 label="Stream", group=sg,
                 value=(
-                    f"Stream se na {iface} posila" if on_iface
+                    f"Stream se na {iface} posila" if receiver_ok
                     else f"S,G je v tabulce ale stream se na {iface} neposila"
                 ),
-            ),
-            Finding(
+            )
+            upstream_row = Finding(
                 Outcome.OK if problem is None else Outcome.BROKEN,
                 f"{sg}: upstream {upstream or '-'}{problem or ''}",
                 label="Upstream interface", group=sg, value=upstream or "-",
-            ),
-            *stream_rows(sg, route, rate_label="Forwarding-rate"),
-        ]
+            )
+        return [stream_row, upstream_row, *stream_rows(sg, route, rate_label="Forwarding-rate")]
 
 
 # --- core_multicast_forwarding -----------------------------------------------
