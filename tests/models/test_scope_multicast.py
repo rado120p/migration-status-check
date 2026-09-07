@@ -13,6 +13,10 @@ FACTS = {
         "MVPN-RI": {"10.12.12.1,239.1.1.1": {"upstream_interface": "lsi.1048576"}},
     },
     "mvpn_instance": {"MVPN-RI": {"c_multicast": []}},
+    "pim_join": {
+        "master": {"10.11.11.1,232.1.1.1": {"upstream_interface": "et-0/0/0.0"}},
+        "MVPN-RI": {"10.12.12.1,239.1.1.1": {"upstream_interface": "Through BGP"}},
+    },
 }
 
 
@@ -59,7 +63,21 @@ def test_missing_instance_table_yields_empty_dict_not_key_error():
     assert selected["multicast_route"] == {}
 
 
+def test_pim_join_is_selected_per_instance_like_multicast_route():
+    internet = _scope("Internet", "multicast", ["et-0/0/8.11"]).select(FACTS)
+    mvpn = _scope("IPVPN", "mvpn", ["irb.2"], ["MVPN-RI"]).select(FACTS)
+    transit = _scope("Core", "transit", ["et-0/0/0.0"]).select(FACTS)
+    assert set(internet["pim_join"]) == {"master"}
+    assert set(mvpn["pim_join"]) == {"MVPN-RI"}
+    assert transit["pim_join"] == {}
+
+
+def test_pim_join_missing_instance_yields_empty_dict():
+    assert _scope("IPVPN", "mvpn", ["irb.5"], ["OTHER-RI"]).select(FACTS)["pim_join"] == {}
+
+
 def test_device_scope_passes_everything():
     selected = device_scope().select(FACTS)
     assert selected["multicast_route"] == FACTS["multicast_route"]
     assert selected["mvpn_instance"] == FACTS["mvpn_instance"]
+    assert selected["pim_join"] == FACTS["pim_join"]

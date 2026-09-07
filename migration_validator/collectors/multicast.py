@@ -1,5 +1,6 @@
 """Sber multicast stavu: IGMP skupiny, multicast routy, MVPN instance
-(spec 2026-09-02). Tri collectory v jednom modulu - sdileji helpery.
+(spec 2026-09-02), PIM join tabulka (spec 2026-09-07). Ctyri collectory
+v jednom modulu - sdileji helpery.
 
 Zadny z nich neinterpretuje: `local` u IGMP se zahazuje jen proto, ze to
 neni rozhrani (nikdy nemuze byt sluzbou), ne kvuli verdiktu. Absence
@@ -245,3 +246,57 @@ class MvpnInstanceCollector(Collector):
             # rozlisuje "instance neni v mvpn vypisu" od "chybi c-multicast".
             instances[name] = {"c_multicast": c_multicast}
         return instances
+
+
+PIM_INSTANCE_PREFIX = "PIM."
+ASM_KEY_SOURCE = "*"
+
+
+@register
+class PimJoinCollector(_PerInstanceCollector):
+    """PIM join tabulka (spec 2026-09-07). Rozhrani sluzby je bud upstream
+    (sender site) nebo mezi downstream (receiver site) - obe pole se drzi
+    verbatim ("Through BGP", "Pseudo-MVPN"), role rozhoduje az check."""
+
+    name = "pim_join"
+
+    def rpc_name(self, platform: str) -> str:
+        return "get_pim_join_information"
+
+    def rpc_kwargs(self, platform: str) -> dict[str, Any]:
+        if platform == "junos-evo":
+            return {"extensive": True, "instance": "all"}
+        return {"extensive": True}
+
+    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, dict[str, Any]]]:
+        tables: dict[str, dict[str, dict[str, Any]]] = {}
+        for family_node in xml.iter("{*}join-family"):
+            if (_localname_text(family_node, "address-family") or "").upper() != "INET":
+                continue
+            instance = _localname_text(family_node, "pim-instance") or MASTER
+            if instance.startswith(PIM_INSTANCE_PREFIX):
+                instance = instance[len(PIM_INSTANCE_PREFIX):]
+            joins: dict[str, dict[str, Any]] = {}
+            for join_node in family_node.iter("{*}join-group"):
+                group = _localname_text(join_node, "multicast-group-address")
+                if not group:
+                    continue
+                source = _localname_text(join_node, "multicast-source-address") or None
+                downstream: list[str] = []
+                for iface_node in join_node.iter("{*}downstream-interface"):
+                    for element in ("pim-interface-name", "pim-pseudo-downstream-interface-name"):
+                        name = _localname_text(iface_node, element)
+                        if name and name not in downstream:
+                            downstream.append(name)
+                uptime = next(join_node.iter("{*}uptime"), None)
+                joins[route_key(source or ASM_KEY_SOURCE, group)] = {
+                    "source": source,
+                    "group": group,
+                    "upstream_interface": _localname_text(join_node, "upstream-interface-name"),
+                    "upstream_neighbor": _localname_text(join_node, "upstream-neighbor"),
+                    "downstream_interfaces": downstream,
+                    "uptime_seconds": _seconds_attr(uptime),
+                }
+            if joins:
+                tables.setdefault(instance, {}).update(joins)
+        return tables

@@ -37,6 +37,7 @@ FACT_AREAS = (
     "igmp_group",
     "multicast_route",
     "mvpn_instance",
+    "pim_join",
 )
 
 
@@ -301,23 +302,16 @@ class Scope:
             for name, data in (facts.get("igmp_group") or {}).items()
             if self.selectors.matches_interface(name)
         }
-        # Multicast tabulka patri instanci, ne lince: scope bez RI dostane
-        # master, scope s RI svou tabulku. Filtr per (S,G) dela check
-        # (IGMP mnozina / inet.2 prefixy). Jen role, ktere multicast meri -
-        # tranzitni Core ani L2 sluzby tabulku nedostanou (spec 2026-09-02).
-        multicast_route: dict[str, Any] = {}
+        # Multicast tabulka i PIM join patri instanci, ne lince: scope bez RI
+        # dostane master, scope s RI svou tabulku. Filtr per (S,G) / per
+        # rozhrani (upstream i downstream) dela check. Jen role, ktere
+        # multicast meri - tranzitni Core ani L2 sluzby tabulku nedostanou
+        # (spec 2026-09-02, pim_join spec 2026-09-07).
         measures_multicast = self.service_type in ("Internet", "IPVPN") or (
             self.service_type == "Core" and self.service_subtype == "loopback"
         )
-        if measures_multicast:
-            instance = (
-                self.selectors.routing_instances[0]
-                if self.selectors.routing_instances
-                else "master"
-            )
-            table = (facts.get("multicast_route") or {}).get(instance)
-            if table:
-                multicast_route = {instance: table}
+        multicast_route = self._instance_table(facts, "multicast_route", measures_multicast)
+        pim_join = self._instance_table(facts, "pim_join", measures_multicast)
         mvpn_instance = {
             name: data
             for name, data in (facts.get("mvpn_instance") or {}).items()
@@ -344,9 +338,21 @@ class Scope:
             "isis_overview": isis_overview,
             "igmp_group": igmp_group,
             "multicast_route": multicast_route,
+            "pim_join": pim_join,
             "mvpn_instance": mvpn_instance,
             **protocol_areas,
         }
+
+    def _instance_table(self, facts: dict[str, Any], area: str, enabled: bool) -> dict[str, Any]:
+        if not enabled:
+            return {}
+        instance = (
+            self.selectors.routing_instances[0]
+            if self.selectors.routing_instances
+            else "master"
+        )
+        table = (facts.get(area) or {}).get(instance)
+        return {instance: table} if table else {}
 
     def to_dict(self) -> dict[str, Any]:
         return {

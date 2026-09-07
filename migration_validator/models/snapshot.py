@@ -25,7 +25,8 @@ from migration_validator.models.scope import Scope
 #     pim_neighbor/mpls_interface (Core transit/loopback checky).
 # 12: fact areas igmp_group/multicast_route/mvpn_instance (multicast checky,
 #     spec 2026-09-02) a selektor l2_interfaces (IRB -> access porty).
-SCHEMA_VERSION = 12
+# 13: fact area pim_join (PIM join tabulka per instance, spec 2026-09-07).
+SCHEMA_VERSION = 13
 
 
 class SnapshotVersionError(Exception):

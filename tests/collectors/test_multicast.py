@@ -18,6 +18,7 @@ from migration_validator.collectors.multicast import (
     IgmpGroupCollector,
     MulticastRouteCollector,
     MvpnInstanceCollector,
+    PimJoinCollector,
     _vrf_instances,
     parse_sender_pe,
     route_key,
@@ -380,3 +381,91 @@ def test_record_calls_on_evo_is_just_the_static_call():
     device = _FakeDevice({})
     calls = MulticastRouteCollector().record_calls(device, "junos-evo")
     assert calls == (("get_multicast_route_information", {"extensive": True, "instance": "all"}),)
+
+
+# --- pim_join (spec 2026-09-07) --------------------------------------------
+
+PIM_RI_RECEIVER = "NGMVPN-PIM-RECEIVER"
+PIM_RI_SENDER = "NGMVPN-PIM-SOURCE"
+PIM_SG = route_key("10.10.10.1", "232.10.10.1")
+
+
+def test_pim_join_parses_receiver_on_junos(rpc_fixture):
+    data = PimJoinCollector().parse(rpc_fixture("junos", "pim_join"), "junos")
+    join = data[PIM_RI_RECEIVER][PIM_SG]
+    assert join["source"] == "10.10.10.1"
+    assert join["group"] == "232.10.10.1"
+    assert join["upstream_interface"] == "Through BGP"
+    assert join["upstream_neighbor"] == "Through MVPN"
+    assert join["downstream_interfaces"] == ["irb.10"]
+    assert isinstance(join["uptime_seconds"], int)
+
+
+def test_pim_join_parses_sender_on_junos(rpc_fixture):
+    data = PimJoinCollector().parse(rpc_fixture("junos", "pim_join.2"), "junos")
+    join = data[PIM_RI_SENDER][PIM_SG]
+    assert join["upstream_interface"] == "irb.10"
+    assert join["upstream_neighbor"] == "10.10.13.1"
+    assert join["downstream_interfaces"] == ["Pseudo-MVPN"]
+
+
+def test_pim_join_parses_all_instances_on_evo(rpc_fixture):
+    data = PimJoinCollector().parse(rpc_fixture("junos-evo", "pim_join"), "junos-evo")
+    assert set(data) == {"master", "NGMVPN-IGMP-RECEIVER", PIM_RI_RECEIVER}
+    # Internet/multicast join: downstream Pseudo-GMP + skutecne jmeno v
+    # pim-pseudo-downstream-interface-name - obe se sbiraji.
+    master = data["master"][route_key("10.11.11.1", "232.1.1.1")]
+    assert master["upstream_interface"] == "et-0/0/0.0"
+    assert master["downstream_interfaces"] == ["Pseudo-GMP", "et-0/0/8.11"]
+    assert data["NGMVPN-IGMP-RECEIVER"][route_key("10.12.12.1", "239.1.1.1")]["downstream_interfaces"] == ["irb.2"]
+
+
+def test_pim_join_inet6_family_and_empty_instance_have_no_key(rpc_fixture):
+    data = PimJoinCollector().parse(rpc_fixture("junos", "pim_join.2"), "junos")
+    assert set(data) == {PIM_RI_SENDER}
+
+
+_PIM_ASM_XML = """
+<pim-join-information>
+  <join-family>
+    <pim-instance>PIM.master</pim-instance>
+    <address-family>INET</address-family>
+    <join-group>
+      <multicast-group-address>239.5.5.5</multicast-group-address>
+      <upstream-interface-name>et-0/0/0.0</upstream-interface-name>
+      <upstream-neighbor>10.1.1.2</upstream-neighbor>
+      <uptime seconds="7">00:00:07</uptime>
+      <downstream-interfaces>
+        <downstream-interface>
+          <pim-interface-name>irb.7</pim-interface-name>
+        </downstream-interface>
+        <downstream-interface>
+          <pim-interface-name>irb.7</pim-interface-name>
+        </downstream-interface>
+      </downstream-interfaces>
+    </join-group>
+  </join-family>
+</pim-join-information>
+"""
+
+
+def test_pim_join_asm_has_none_source_and_star_key_and_unique_downstream():
+    data = PimJoinCollector().parse(etree.fromstring(_PIM_ASM_XML), "junos")
+    join = data["master"]["*,239.5.5.5"]
+    assert join["source"] is None
+    assert join["group"] == "239.5.5.5"
+    assert join["downstream_interfaces"] == ["irb.7"]
+    assert join["uptime_seconds"] == 7
+
+
+def test_pim_join_rpc_names_and_kwargs():
+    collector = PimJoinCollector()
+    assert collector.rpc_name("junos") == "get_pim_join_information"
+    assert collector.rpc_kwargs("junos") == {"extensive": True}
+    assert collector.rpc_kwargs("junos-evo") == {"extensive": True, "instance": "all"}
+
+
+def test_pim_join_record_calls_on_junos_includes_master_and_per_vrf():
+    calls = PimJoinCollector().record_calls(_FakeDevice({}), "junos")
+    assert ("get_pim_join_information", {"extensive": True}) in calls
+    assert ("get_pim_join_information", {"extensive": True, "instance": "MULTICAST-STREAM-B-MUX1-RECEIVER"}) in calls

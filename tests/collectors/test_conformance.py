@@ -41,6 +41,7 @@ from migration_validator.collectors.multicast import (
     IgmpGroupCollector,
     MulticastRouteCollector,
     MvpnInstanceCollector,
+    PimJoinCollector,
 )
 from migration_validator.collectors.nd import NdCollector
 from migration_validator.collectors.optics import OpticsCollector
@@ -87,6 +88,7 @@ COLLECTORS = (
     IgmpGroupCollector(),
     MulticastRouteCollector(),
     MvpnInstanceCollector(),
+    PimJoinCollector(),
 )
 
 # optics na junos (vMX) drive nemela fixture vubec - `record` na RPC padalo
