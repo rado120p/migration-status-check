@@ -83,6 +83,56 @@ def _vrf_instances(device: Any) -> list[str]:
     return names
 
 
+class _PerInstanceCollector(Collector):
+    """Zaklad pro RPC, ktere MX neumi zavolat pres vsechny instance najednou
+    (`instance all` vraci <output>instance is not running</output>, zmereno
+    2026-09-02): EVO jedno volani, MX master bez argumentu + jedno volani
+    per VRF z get-instance-information. Podtrida dava rpc_name/rpc_kwargs
+    a parse(xml) -> {instance: {klic: payload}}."""
+
+    def record_calls(self, device: Any, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
+        """Na MX se seznam instanci bere ze zarizeni (get-instance-information,
+        instance-type vrf) - collector inventory nema a jmena RI hardcodovat nesmi."""
+        calls = list(self.rpc_calls(platform))
+        if platform == "junos-evo":
+            return tuple(calls)
+        rpc_name = self.rpc_name(platform)
+        base = dict(self.rpc_kwargs(platform))
+        for name in _vrf_instances(device):
+            calls.append((rpc_name, {**base, "instance": name}))
+        return tuple(calls)
+
+    def collect(self, device: Any, platform: str) -> Any:
+        if not self.supports(platform):
+            raise CollectorError(f"collector '{self.name}' nepodporuje platformu '{platform}'")
+        tables: dict[str, dict[str, dict[str, Any]]] = {}
+        failures: list[str] = []
+        try:
+            # record_calls() na MX vola get-instance-information (_vrf_instances)
+            # - selhani tohoto volani je stejna chyba jako selhani samotne RPC,
+            # ne neosetrena vyjimka co spadne mimo capture.
+            calls = self.record_calls(device, platform)
+        except Exception as error:  # noqa: BLE001
+            raise CollectorError(
+                f"collector '{self.name}': zjisteni seznamu instanci selhalo - "
+                f"{type(error).__name__}: {error}"
+            ) from error
+        for rpc_name, kwargs in calls:
+            variant = f"{rpc_name}({kwargs})"
+            try:
+                xml = getattr(device.rpc, rpc_name)(**kwargs)
+                parsed = self.parse(xml, platform)
+            except Exception as error:  # noqa: BLE001
+                failures.append(f"{variant}: {type(error).__name__}: {error}")
+                continue
+            for instance, entries in parsed.items():
+                tables.setdefault(instance, {}).update(entries)
+        if failures:
+            # Castecna data nesmi vypadat jako zmerena (stejne jako routes.py).
+            raise CollectorError(f"collector '{self.name}': RPC selhalo - " + "; ".join(failures))
+        return tables
+
+
 @register
 class IgmpGroupCollector(Collector):
     name = "igmp_group"
@@ -113,7 +163,7 @@ class IgmpGroupCollector(Collector):
 
 
 @register
-class MulticastRouteCollector(Collector):
+class MulticastRouteCollector(_PerInstanceCollector):
     name = "multicast_route"
 
     def rpc_name(self, platform: str) -> str:
@@ -126,46 +176,6 @@ class MulticastRouteCollector(Collector):
         if platform == "junos-evo":
             return {"extensive": True, "instance": "all"}
         return {"extensive": True}
-
-    def record_calls(self, device: Any, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
-        """Na MX se seznam instanci bere ze zarizeni (get-instance-information,
-        instance-type vrf) - collector inventory nema a jmena RI hardcodovat nesmi."""
-        calls = list(self.rpc_calls(platform))
-        if platform == "junos-evo":
-            return tuple(calls)
-        for name in _vrf_instances(device):
-            calls.append(("get_multicast_route_information", {"extensive": True, "instance": name}))
-        return tuple(calls)
-
-    def collect(self, device: Any, platform: str) -> Any:
-        if not self.supports(platform):
-            raise CollectorError(f"collector '{self.name}' nepodporuje platformu '{platform}'")
-        tables: dict[str, dict[str, dict[str, Any]]] = {}
-        failures: list[str] = []
-        try:
-            # record_calls() na MX vola get-instance-information (_vrf_instances)
-            # - selhani tohoto volani je stejna chyba jako selhani samotne
-            # multicast route RPC, ne neosetrena vyjimka co spadne mimo capture.
-            calls = self.record_calls(device, platform)
-        except Exception as error:  # noqa: BLE001
-            raise CollectorError(
-                f"collector '{self.name}': zjisteni seznamu instanci selhalo - "
-                f"{type(error).__name__}: {error}"
-            ) from error
-        for rpc_name, kwargs in calls:
-            variant = f"{rpc_name}({kwargs})"
-            try:
-                xml = getattr(device.rpc, rpc_name)(**kwargs)
-                parsed = self.parse(xml, platform)
-            except Exception as error:  # noqa: BLE001
-                failures.append(f"{variant}: {type(error).__name__}: {error}")
-                continue
-            for instance, routes in parsed.items():
-                tables.setdefault(instance, {}).update(routes)
-        if failures:
-            # Castecna data nesmi vypadat jako zmerena (stejne jako routes.py).
-            raise CollectorError(f"collector '{self.name}': RPC selhalo - " + "; ".join(failures))
-        return tables
 
     def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, dict[str, Any]]]:
         tables: dict[str, dict[str, dict[str, Any]]] = {}

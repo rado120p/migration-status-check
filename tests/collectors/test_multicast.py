@@ -356,6 +356,7 @@ def test_record_calls_on_junos_includes_master_and_per_vrf():
     names = [kwargs.get("instance") for _, kwargs in calls]
     assert None in names
     assert "MULTICAST-STREAM-B-MUX1-RECEIVER" in names
+    assert ("get_multicast_route_information", {"extensive": True, "instance": "MULTICAST-STREAM-B-MUX1-RECEIVER"}) in calls
 
 
 def test_collect_raises_when_instance_lookup_fails_on_junos():
