@@ -1071,8 +1071,8 @@ table, the gate without `"pim"`).
 
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
 
-Same two subtypes. Requires `igmp_group`, `multicast_route`, `pim_join` (since F2
-2026-09-07 — previously `pim_join` was read optionally, and its failure silently
+Same two subtypes. Requires `igmp_group`, `multicast_route`, `pim_join` (since the 2026-09-07
+decision — previously `pim_join` was read optionally, and its failure silently
 narrowed `expected_pairs()` to the IGMP pairs alone; now `run_check()` treats a
 failure of any of `requires` as a `SKIP` before `check.run()` even gets called).
 
@@ -1199,7 +1199,7 @@ Mutant kill (2026-09-03, verified by running each):
 ### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
 `service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`.
-`requires=("mvpn_instance", "pim_join")` (`pim_join` since F2 2026-09-07 — same reason
+`requires=("mvpn_instance", "pim_join")` (`pim_join` since the 2026-09-07 decision — same reason
 as `multicast_forwarding_status`). `igmp_group` is read optionally through
 `expected_pairs()`.
 

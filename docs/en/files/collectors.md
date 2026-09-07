@@ -495,7 +495,7 @@ there, but no c-multicast".
 downstream_interfaces, uptime_seconds}}}`. Only `address-family INET` (INET6 is
 ignored). The key is `route_key(source or "*", group)` — for `(*, G)` the key is
 `"*,group"`, keeping it JSON-safe and unambiguous; `source` in the payload itself
-stays `None`. ASM is normalized defensively (F3, 2026-09-07): a missing
+stays `None`. ASM is normalized defensively (2026-09-07 decision): a missing
 `multicast-source-address` element, empty text, `"*"` and `"0.0.0.0"` all give
 `source = None` — the recorded fixtures are all SSM, but a real ASM join can carry
 any of these spellings (mirrors `IgmpGroupCollector`'s `ASM_SOURCE` handling,

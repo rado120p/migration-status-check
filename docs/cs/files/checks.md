@@ -1056,7 +1056,7 @@ gate bez `"pim"`).
 
 ### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
 
-Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`, `pim_join` (od F2
+Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`, `pim_join` (od rozhodnutí
 2026-09-07 — dřív se `pim_join` četl volitelně a jeho selhání tiše zúžilo
 `expected_pairs()` na samotné IGMP páry; teď framework `run_check()` selhání
 kteréhokoli z `requires` vyhodnotí jako `SKIP` ještě před `check.run()`).
@@ -1180,7 +1180,7 @@ Mutant kill (2026-09-03, ověřeno spuštěním):
 ### `mvpn_cmulticast_status` (IPVPN/mvpn, both, critical)
 
 `service_types={"IPVPN"}`, `service_subtypes={"mvpn"}`.
-`requires=("mvpn_instance", "pim_join")` (`pim_join` od F2 2026-09-07 — stejný důvod
+`requires=("mvpn_instance", "pim_join")` (`pim_join` od rozhodnutí 2026-09-07 — stejný důvod
 jako u `multicast_forwarding_status`). `igmp_group` se čte volitelně přes
 `expected_pairs()`.
 

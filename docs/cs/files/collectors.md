@@ -484,7 +484,7 @@ rozlišuje „instance není ve výpisu vůbec" od „instance je, ale bez c-mul
 downstream_interfaces, uptime_seconds}}}`. Jen `address-family INET` (INET6 se
 ignoruje). Klíč je `route_key(source or "*", group)` — pro `(*, G)` je klíč
 `"*,group"`, aby zůstal JSON-safe a jednoznačný; `source` v payloadu samotném zůstává
-`None`. ASM se normalizuje defenzivně (F3, 2026-09-07): chybějící
+`None`. ASM se normalizuje defenzivně (rozhodnutí 2026-09-07): chybějící
 `multicast-source-address` element, prázdný text, `"*"` i `"0.0.0.0"` všechny dají
 `source = None` — zachycené fixture jsou všechny SSM, ale reálný ASM join může nést
 kterýkoli z těchto zápisů (mirror `IgmpGroupCollector`'s `ASM_SOURCE` handling,
