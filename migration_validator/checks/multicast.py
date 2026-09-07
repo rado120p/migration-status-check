@@ -20,10 +20,11 @@ from migration_validator.models.result import Finding, Outcome, Severity
 from migration_validator.models.scope import Scope
 
 MULTICAST_TYPES = frozenset({"Internet", "IPVPN"})
-MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn-igmp"})
+MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn"})
+MVPN_SUBTYPE = "mvpn"
 
 # Internet/multicast prijima stream primo z fyzickeho/agregovaneho transit
-# rozhrani; IPVPN/mvpn-igmp jde bud pres MVPN core tunel (lsi.* nebo vt-*),
+# rozhrani; IPVPN/mvpn jde bud pres MVPN core tunel (lsi.* nebo vt-*),
 # nebo - kdyz je zdroj lokalne v tomtez VRF/PE - primo z fyzickeho,
 # agregovaneho nebo irb rozhrani (rozhodnuti 2026-09-07).
 INTERNET_UPSTREAM_PREFIXES = ("ge-", "xe-", "et-", "ae")
@@ -185,7 +186,7 @@ def _upstream_problem(subtype: str | None, upstream: str | None) -> str | None:
     - odlisuje chybejici upstream od upstreamu ze spatne role."""
     if not upstream:
         return " - S,G je v tabulce ale nema upstream interface"
-    prefixes = MVPN_UPSTREAM_PREFIXES if subtype == "mvpn-igmp" else INTERNET_UPSTREAM_PREFIXES
+    prefixes = MVPN_UPSTREAM_PREFIXES if subtype == MVPN_SUBTYPE else INTERNET_UPSTREAM_PREFIXES
     if upstream.startswith(prefixes):
         return None
     return f" neni z ocekavane role (ocekavano {'/'.join(prefixes)})"
@@ -438,7 +439,7 @@ class MvpnCmulticastStatusCheck(Check):
     requires = ("igmp_group", "mvpn_instance")
     requires_inventory = True
     service_types = frozenset({"IPVPN"})
-    service_subtypes = frozenset({"mvpn-igmp"})
+    service_subtypes = frozenset({MVPN_SUBTYPE})
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:

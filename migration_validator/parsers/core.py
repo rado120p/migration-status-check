@@ -1613,18 +1613,22 @@ class JunosServiceParserCore:
         instance: RoutingInstance | None,
         reasons: list[str],
     ) -> str | None:
-        """`mvpn-igmp` = IGMP záměr na rozhraní + `protocols mvpn` v instanci.
-        IGMP bez mvpn zůstává obyčejná IPVPN (rozhodnutí 2026-09-02)."""
-        if (
-            interface.name in self.igmp_interfaces
-            and instance is not None
-            and "mvpn" in instance.protocols
-        ):
-            reasons.append(
-                "Rozhraní je pod protocols igmp a instance má protocols mvpn — MVPN-IGMP receiver site."
-            )
-            return "mvpn-igmp"
-        return None
+        """`mvpn` = `protocols mvpn` v instanci + IGMP nebo PIM záměr na rozhraní
+        (spec 2026-09-07; do té doby `mvpn-igmp` jen s IGMP). Bez per-rozhraní
+        záměru zůstává obyčejná IPVPN — instance-level "pim" nestačí."""
+        if instance is None or "mvpn" not in instance.protocols:
+            return None
+        intents = [
+            name
+            for name, members in (("igmp", self.igmp_interfaces), ("pim", self.pim_interfaces))
+            if interface.name in members
+        ]
+        if not intents:
+            return None
+        reasons.append(
+            f"Rozhraní je pod protocols {' a '.join(intents)} a instance má protocols mvpn — MVPN site."
+        )
+        return "mvpn"
 
     def _detect_service(
         self,

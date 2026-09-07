@@ -32,7 +32,7 @@ def test_internet_multicast_scope_gets_its_igmp_and_master_table():
 
 
 def test_mvpn_scope_gets_ri_table_and_mvpn_instance():
-    selected = _scope("IPVPN", "mvpn-igmp", ["irb.2"], ["MVPN-RI"]).select(FACTS)
+    selected = _scope("IPVPN", "mvpn", ["irb.2"], ["MVPN-RI"]).select(FACTS)
     assert set(selected["igmp_group"]) == {"irb.2"}
     assert set(selected["multicast_route"]) == {"MVPN-RI"}
     assert set(selected["mvpn_instance"]) == {"MVPN-RI"}
@@ -55,7 +55,7 @@ def test_elan_scope_sees_no_multicast_area():
 
 
 def test_missing_instance_table_yields_empty_dict_not_key_error():
-    selected = _scope("IPVPN", "mvpn-igmp", ["irb.5"], ["OTHER-RI"]).select(FACTS)
+    selected = _scope("IPVPN", "mvpn", ["irb.5"], ["OTHER-RI"]).select(FACTS)
     assert selected["multicast_route"] == {}
 
 

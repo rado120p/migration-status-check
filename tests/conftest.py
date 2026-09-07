@@ -160,7 +160,7 @@ def _facts_for(scopes, pps: int) -> dict:
     pim_neighbor = {}
     mpls_interface = {}
     # igmp_group/multicast_route/mvpn_instance se plni jen pro scopy s
-    # multicast rolí (multicast/mvpn-igmp/Core loopback) - viz syntéza nize.
+    # multicast rolí (multicast/mvpn/Core loopback) - viz syntéza nize.
     igmp_group = {}
     multicast_route = {}
     mvpn_instance = {}
@@ -353,7 +353,7 @@ def _facts_for(scopes, pps: int) -> dict:
         # Multicast (spec 2026-09-02): zdravy receiver posila IGMP report,
         # stream tece na servisni rozhrani, upstream odpovida roli. Bez
         # toho by nove checky hlasily FAIL na kazde zdrave migraci (AR-29).
-        if scope.service_subtype in ("multicast", "mvpn-igmp") and scope.selectors.interfaces:
+        if scope.service_subtype in ("multicast", "mvpn") and scope.selectors.interfaces:
             iface = scope.selectors.interfaces[0]
             instance = (
                 scope.selectors.routing_instances[0]
@@ -362,7 +362,7 @@ def _facts_for(scopes, pps: int) -> dict:
             )
             source, group = "10.200.0.1", "232.200.0.1"
             igmp_group[iface] = [{"source": source, "group": group}]
-            upstream = "lsi.1048576" if scope.service_subtype == "mvpn-igmp" else "et-0/0/0.0"
+            upstream = "lsi.1048576" if scope.service_subtype == "mvpn" else "et-0/0/0.0"
             multicast_route.setdefault(instance, {})[f"{source},{group}"] = {
                 "upstream_interface": upstream,
                 "downstream_interfaces": [iface],
@@ -371,7 +371,7 @@ def _facts_for(scopes, pps: int) -> dict:
                 "state": "Active",
                 "forwarding_state": "Forwarding",
             }
-            if scope.service_subtype == "mvpn-igmp":
+            if scope.service_subtype == "mvpn":
                 tunnel = "RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13"
                 mvpn_instance[instance] = {"c_multicast": [{
                     "source_prefix": f"{source}/32",

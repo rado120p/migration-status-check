@@ -146,7 +146,7 @@ def test_igmp_report_baseline_without_groups_is_not_compared():
 def test_igmp_check_applies_only_to_multicast_subtypes():
     check = IgmpMembershipReportCheck()
     assert check.applies_to(_scope())
-    assert check.applies_to(_scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"]))
+    assert check.applies_to(_scope("irb.2", "IPVPN", "mvpn", ["RI"]))
     assert not check.applies_to(_scope("et-0/0/8.13", "Internet", None))
     assert not check.applies_to(_scope("irb.3", "IPVPN", None, ["RI"]))
     assert not check.applies_to(_scope("lo0.0", "Core", "loopback"))
@@ -233,9 +233,9 @@ def test_forwarding_internet_upstream_must_be_transit():
 
 
 def test_upstream_wrong_role_uses_mvpn_prefixes():
-    """Mvpn-igmp scope hlasi jinou ocekavanou roli nez Internet/multicast
+    """Mvpn scope hlasi jinou ocekavanou roli nez Internet/multicast
     (od 2026-09-07 i fyzicke/ae/irb, lo0 porad ne)."""
-    scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
+    scope = _scope("irb.2", "IPVPN", "mvpn", ["RI"])
     routes = {"10.12.12.1,239.1.1.1": _route(upstream="lo0.0", downstream=["irb.2"])}
     pair = (("10.12.12.1", "239.1.1.1"),)
     findings = MulticastForwardingStatusCheck().run(
@@ -263,7 +263,7 @@ def test_forwarding_mvpn_upstream_must_be_lsi_or_vt():
     """Mutant kill (2026-09-03, overeno spustenim, spolu s
     test_forwarding_internet_upstream_must_be_transit): '_upstream_ok'
     vraci True vzdy."""
-    scope = _scope("irb.2", "IPVPN", "mvpn-igmp", ["RI"])
+    scope = _scope("irb.2", "IPVPN", "mvpn", ["RI"])
     ok = {"10.12.12.1,239.1.1.1": _route(upstream="lsi.1048576", downstream=["irb.2"])}
     bad = {"10.12.12.1,239.1.1.1": _route(upstream="lo0.0", downstream=["irb.2"])}
     pair = (("10.12.12.1", "239.1.1.1"),)
@@ -492,7 +492,7 @@ TUNNEL = "RSVP-TE P2MP:150.0.0.13, 24209,150.0.0.13"
 
 
 def _mvpn_scope(iface="irb.2"):
-    return _scope(iface, "IPVPN", "mvpn-igmp", [RI])
+    return _scope(iface, "IPVPN", "mvpn", [RI])
 
 
 def _entry(tunnel=TUNNEL, pe="150.0.0.13", source=f"{MSG[0]}/32", group=f"{MSG[1]}/32"):
@@ -578,7 +578,7 @@ def test_mvpn_asm_report_matches_by_group_only():
     assert _by_label(findings, sg_label(None, MSG[1]))["C-Multicast status"].outcome is Outcome.OK
 
 
-def test_mvpn_check_applies_only_to_mvpn_igmp():
+def test_mvpn_check_applies_only_to_mvpn():
     check = MvpnCmulticastStatusCheck()
     assert check.applies_to(_mvpn_scope())
     assert not check.applies_to(_scope())
@@ -602,7 +602,7 @@ def test_igmp_report_only_link_local_is_no_report():
 
 
 def test_forwarding_mvpn_upstream_accepts_physical_and_irb():
-    scope = _scope(interface="irb.2", service_type="IPVPN", subtype="mvpn-igmp")
+    scope = _scope(interface="irb.2", service_type="IPVPN", subtype="mvpn")
     for upstream in ("xe-0/0/1.0", "ge-0/0/1.0", "et-0/0/1.0", "ae3.0", "irb.100", "lsi.1048576", "vt-0/0/0.1"):
         routes = {"10.12.12.1,239.1.1.1": _route(upstream=upstream, downstream=["irb.2"])}
         facts = {**_igmp("irb.2", ("10.12.12.1", "239.1.1.1")), "multicast_route": {"VRF": routes}}

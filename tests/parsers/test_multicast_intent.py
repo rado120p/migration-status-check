@@ -1,8 +1,8 @@
-"""IGMP zamer a multicast subtypy (spec 2026-09-02).
+"""IGMP zamer a multicast subtypy (spec 2026-09-02, rozsireno 2026-09-07).
 
-Internet + igmp -> subtype "multicast"; IPVPN + igmp + protocols mvpn v
-instanci -> "mvpn-igmp"; IPVPN s igmp bez mvpn zustava None. Oba parsery
-se meni v zamku.
+Internet + igmp -> subtype "multicast"; IPVPN + (igmp nebo pim) zamer na
+rozhrani + protocols mvpn v instanci -> "mvpn"; IPVPN s igmp bez mvpn
+zustava None. Oba parsery se meni v zamku.
 """
 
 from __future__ import annotations
@@ -47,6 +47,14 @@ CONFIG = """
         <name>3</name>
         <family><inet><address><name>10.13.11.254/24</name></address></inet></family>
       </unit>
+      <unit>
+        <name>10</name>
+        <family><inet><address><name>10.100.11.1/30</name></address></inet></family>
+      </unit>
+      <unit>
+        <name>11</name>
+        <family><inet><address><name>10.100.12.1/30</name></address></inet></family>
+      </unit>
     </interface>
   </interfaces>
   <protocols>
@@ -75,6 +83,16 @@ CONFIG = """
         <igmp><interface><name>irb.3</name></interface></igmp>
       </protocols>
     </instance>
+    <instance>
+      <name>NGMVPN-PIM-RECEIVER</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>irb.10</name></interface>
+      <interface><name>irb.11</name></interface>
+      <protocols>
+        <mvpn><receiver-site/></mvpn>
+        <pim><interface><name>irb.10</name><mode>sparse</mode></interface></pim>
+      </protocols>
+    </instance>
   </routing-instances>
 </configuration>
 """
@@ -101,18 +119,42 @@ def test_internet_without_igmp_keeps_none_subtype(parser_class):
 
 
 @pytest.mark.parametrize("parser_class", PARSERS)
-def test_ipvpn_with_igmp_and_mvpn_gets_mvpn_igmp_subtype(parser_class):
+def test_ipvpn_with_igmp_and_mvpn_gets_mvpn_subtype(parser_class):
     service = _services(parser_class)["irb.2"]
     assert service.service_type == "IPVPN"
-    assert service.service_subtype == "mvpn-igmp"
+    assert service.service_subtype == "mvpn"
     assert "igmp" in service.protocol
     assert "mvpn" in service.protocol
 
 
 @pytest.mark.parametrize("parser_class", PARSERS)
+def test_ipvpn_with_pim_only_and_mvpn_gets_mvpn_subtype(parser_class):
+    service = _services(parser_class)["irb.10"]
+    assert service.service_subtype == "mvpn"
+    assert "pim" in service.protocol
+    assert "igmp" not in service.protocol
+    assert "protocols pim" in " ".join(service.detection_reason)
+
+
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_ipvpn_interface_without_per_interface_pim_stays_plain(parser_class):
+    """irb.11 je v MVPN instanci, ale neni pod `pim interface` ani `igmp
+    interface` - instance-level "pim" v protocol seznamu subtype nedava."""
+    service = _services(parser_class)["irb.11"]
+    assert service.service_type == "IPVPN"
+    assert service.service_subtype is None
+
+
+@pytest.mark.parametrize("parser_class", PARSERS)
+def test_detection_reason_names_both_intents(parser_class):
+    reasons = " ".join(_services(parser_class)["irb.2"].detection_reason)
+    assert "protocols igmp a pim" in reasons
+
+
+@pytest.mark.parametrize("parser_class", PARSERS)
 def test_ipvpn_with_ri_igmp_but_no_mvpn_stays_plain(parser_class):
     """RI-scoped protocols igmp se pocita jako zamer, ale bez mvpn to neni
-    MVPN-IGMP sluzba (rozhodnuti 2026-09-02)."""
+    MVPN sluzba (rozhodnuti 2026-09-02)."""
     service = _services(parser_class)["irb.3"]
     assert service.service_type == "IPVPN"
     assert service.service_subtype is None

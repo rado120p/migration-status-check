@@ -728,7 +728,7 @@ interfaces:
 - interface: irb.2
   description: MUX1 receivers POP1
   service_type: IPVPN
-  service_subtype: mvpn-igmp
+  service_subtype: mvpn
   ipv4_address:
   - 10.12.11.2/30
   ipv6_address: []
@@ -751,7 +751,8 @@ interfaces:
   - '12'
   l2_interface:
   - ge-0/0/2.12
-  mvpn_site: []
+  mvpn_site:
+  - receiver
   lag_members: []
   static_route: []
   bfd: []

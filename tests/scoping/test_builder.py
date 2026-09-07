@@ -279,7 +279,7 @@ def test_mvpn_site_protece_do_selektoru():
 
 def test_l2_interface_protece_do_selektoru():
     entry = ServiceEntry(
-        interface="irb.2", service_type="IPVPN", service_subtype="mvpn-igmp",
+        interface="irb.2", service_type="IPVPN", service_subtype="mvpn",
         routing_instance="MULTICAST-STREAM-B-MUX1-RECEIVER", l2_interface=["ge-0/0/2.12"],
     )
     (scope,) = build_scopes(Inventory(device="x", entries=[entry]))
