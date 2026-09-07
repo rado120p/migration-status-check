@@ -11,7 +11,6 @@ from migration_validator.checks.multicast import (
     NO_PAIRS_SKIP,
     NO_REPORT,
     NO_REPORT_PIM_INFO,
-    NO_REPORT_SKIP,
     RATE_UNAVAILABLE,
     RECEIVER,
     SENDER,

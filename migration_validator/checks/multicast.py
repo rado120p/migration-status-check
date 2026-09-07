@@ -37,7 +37,6 @@ LINK_LOCAL_GROUPS = ipaddress.ip_network("224.0.0.0/24")
 
 NO_REPORT = "Receiver neposila zadny IGMP membership report"
 NO_REPORT_PIM_INFO = "bez IGMP reportu, o streamy se hlasi PIM join"
-NO_REPORT_SKIP = "bez IGMP reportu"
 NO_PAIRS_SKIP = "bez IGMP reportu ani PIM join"
 NO_JOIN = "Zadny PIM join"
 NO_JOIN_IGMP_INFO = "bez PIM join, o streamy se hlasi IGMP"

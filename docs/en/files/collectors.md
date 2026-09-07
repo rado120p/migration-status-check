@@ -503,10 +503,11 @@ fabricating nothing extra). `pim-instance` carries a `PIM.` prefix that gets str
 (`PIM.master` → `master`, `PIM.NGMVPN-PIM-SOURCE` → `NGMVPN-PIM-SOURCE`).
 
 `upstream_interface` and `upstream_neighbor` are kept verbatim — `"Through BGP"`,
-`"Through MVPN"` stay as text, role assignment is left to the check. `downstream_
-interfaces` collects, from each `downstream-interface`, both `pim-interface-name` and
-`pim-pseudo-downstream-interface-name` (both, if present), deduplicated, in listing
-order — an Internet/multicast join in the master instance carries downstream
+`"Through MVPN"` stay as text, role assignment is left to the check.
+`downstream_interfaces` collects, from each `downstream-interface`, both
+`pim-interface-name` and `pim-pseudo-downstream-interface-name` (both, if present),
+deduplicated, in listing order — an Internet/multicast join in the master instance
+carries downstream
 `Pseudo-GMP` with the real interface name only in
 `pim-pseudo-downstream-interface-name`. `uptime_seconds` comes from the `junos:seconds`
 attribute on the `uptime` element (`_seconds_attr`). An instance with no `join-group`
