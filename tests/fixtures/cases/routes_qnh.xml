@@ -1,0 +1,44 @@
+<route-information>
+  <!-- keepalive -->
+  <route-table>
+    <table-name>inet.2</table-name>
+    <destination-count>12</destination-count>
+    <total-route-count>13</total-route-count>
+    <active-route-count>12</active-route-count>
+    <holddown-route-count>0</holddown-route-count>
+    <hidden-route-count>0</hidden-route-count>
+    <rt style="brief">
+      <rt-destination>10.11.11.1/32</rt-destination>
+      <rt-entry>
+        <active-tag>*</active-tag>
+        <current-active/>
+        <last-active/>
+        <protocol-name>Static</protocol-name>
+        <preference>5</preference>
+        <age seconds="5183">01:26:23</age>
+        <metric2>0</metric2>
+        <nh>
+          <selected-next-hop/>
+          <to>10.1.2.0</to>
+          <via>ge-0/0/0.0</via>
+        </nh>
+      </rt-entry>
+      <rt-entry>
+        <active-tag> </active-tag>
+        <protocol-name>Static</protocol-name>
+        <preference>7</preference>
+        <age seconds="820">00:13:40</age>
+        <metric2>120</metric2>
+        <nh>
+          <to>10.1.2.0</to>
+          <via>ge-0/0/0.0</via>
+        </nh>
+        <nh>
+          <selected-next-hop/>
+          <to>10.1.0.5</to>
+          <via>ge-0/0/1.0</via>
+        </nh>
+      </rt-entry>
+    </rt>
+  </route-table>
+</route-information>

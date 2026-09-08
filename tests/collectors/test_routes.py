@@ -9,6 +9,8 @@ migraci deaktivovane). Prave tenhle rozpor ma check chytat.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from lxml import etree
 
@@ -232,3 +234,29 @@ def test_collect_selhani_druheho_pruchodu_je_chyba_celeho_collectoru():
     })
     with pytest.raises(CollectorError, match=r"protocol=aggregate.*timeout"):
         RoutesCollector().collect(device, "junos-evo")
+
+
+CASES = Path(__file__).resolve().parents[1] / "fixtures" / "cases"
+
+
+def test_two_rt_entries_of_one_prefix_are_merged():
+    """next-hop + qualified-next-hop = dva rt-entry pod jednim prefixem
+    (MX1-POP1 2026-09-08). Posledni zaznam nesmi prepsat aktivni.
+    Nahravka lezi mimo rpc/<platform>/, kde test_conformance kazdy soubor
+    paruje s collectorem."""
+    xml = etree.parse(str(CASES / "routes_qnh.xml")).getroot()
+    result = RoutesCollector().parse(xml, "junos")
+
+    route = result["inet.2"]["10.11.11.1/32"]
+    assert route["active"] is True
+    assert route["via"] == ["ge-0/0/0.0", "ge-0/0/1.0"]
+    assert route["next_hop"] == ["10.1.2.0", "10.1.0.5"]
+    assert route["protocol"] == "static"
+
+
+def test_single_entry_route_shape_is_unchanged(rpc_fixture):
+    result = RoutesCollector().parse(rpc_fixture("junos", "routes"), "junos")
+    for prefixes in result.values():
+        for data in prefixes.values():
+            assert set(data) == {"next_hop", "via", "active", "protocol"}
+            assert len(data["via"]) == len(set(data["via"]))

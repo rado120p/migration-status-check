@@ -17,6 +17,9 @@ legitimni update.
 Overeno proti laborce (routes.2.xml): agregatni zaznam nema zadny <nh> -
 <nh-type> (Discard/Reject) sedi primo pod <rt-entry>, takze next_hop i via
 jsou pro nej vzdy prazdne. protocol-name nese presne "Aggregate".
+
+Prefix muze mit vic rt-entry (next-hop + qualified-next-hop s jinou
+preferenci) - slucuji se, active = aspon jeden aktivni.
 """
 
 from __future__ import annotations
@@ -33,6 +36,26 @@ STATIC = "static"
 AGGREGATE = "aggregate"
 PROTOCOLS = (STATIC, AGGREGATE)
 ACTIVE_TAG = "*"
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    return [v for v in values if not (v in seen or seen.add(v))]
+
+
+def _merge_entries(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """next-hop + qualified-next-hop s jinou preferenci = dva <rt-entry>
+    pod jednim prefixem (MX1-POP1 2026-09-08, routes_qnh.xml). Drive
+    posledni zaznam prepsal prvni, takze aktivni routa vysla jako
+    neaktivni a upstream check videl jen hopy neaktivniho zaznamu.
+    Aktivni zaznam jde prvni, aby poradi hopu odpovidalo forwardingu."""
+    ordered = sorted(entries, key=lambda e: not e["active"])
+    return {
+        "next_hop": _unique([hop for e in ordered for hop in e["next_hop"]]),
+        "via": _unique([via for e in ordered for via in e["via"]]),
+        "active": any(e["active"] for e in ordered),
+        "protocol": ordered[0]["protocol"],
+    }
 
 
 def _texts(node: etree._Element, tag: str) -> list[str]:
@@ -136,6 +159,7 @@ class RoutesCollector(Collector):
                 if not prefix:
                     continue
 
+                entries: list[dict[str, Any]] = []
                 for entry in route.iter("rt-entry"):
                     # Filtr na protokol uz je v RPC, tohle je pojistka:
                     # nasazeni s jinym filtrem (nebo neocekavana odpoved)
@@ -143,13 +167,14 @@ class RoutesCollector(Collector):
                     protocol = (_text(entry, "protocol-name") or "").lower()
                     if protocol not in PROTOCOLS:
                         continue
-
-                    prefixes[prefix] = {
+                    entries.append({
                         "next_hop": _texts(entry, "to"),
                         "via": _texts(entry, "via"),
                         "active": _text(entry, "active-tag") == ACTIVE_TAG,
                         "protocol": protocol,
-                    }
+                    })
+                if entries:
+                    prefixes[prefix] = _merge_entries(entries)
 
             # RPC vraci pres dvacet tabulek, vetsina prazdna. Ukladat je
             # znamena nafouknout kazdy snimek o rady, ktere nic nerikaji.
