@@ -1,7 +1,7 @@
-from migration_validator.checks.base import CheckContext
+from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.optics import OpticalAlarmsCheck, OpticalLevelsCheck
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome
+from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
@@ -15,8 +15,16 @@ def _ctx(subject, baseline=None, port="ae0", members=()):
                   key=ScopeKey(f"L1;{port}", "Layer1", "physical-port"),
                   selectors=Selectors(interfaces=[port],
                                       lag_members=list(members)))
-    return CheckContext(scope=scope, subject=subject, baseline=baseline,
-                        config=default_config(), failed_collectors={})
+    return CheckContext(
+        scope=scope, subject=subject, baseline=baseline,
+        config=default_config(), failed_collectors={},
+        # Pozitivni dukaz, ze baseline oblast byla zmerena (ctx.baseline_measured)
+        # - bez nej by UNCHANGED nemohl vzniknout ani u testu, ktere baseline
+        # predavaji.
+        baseline_collectors=(
+            {area: {"status": "ok"} for area in baseline} if baseline is not None else {}
+        ),
+    )
 
 
 def test_levels_bez_baseline_informativni():
@@ -103,8 +111,6 @@ def test_levels_nekonecny_rx_je_broken_s_inf_tokenem():
 
 
 def test_levels_nekonecno_je_fail_i_pres_run_check():
-    from migration_validator.checks.base import run_check
-    from migration_validator.models.result import Status
     lane = _lane(rx=float("-inf"), tx=float("-inf"))
     results = run_check(OpticalLevelsCheck(),
                         _ctx({"optics": {"ae0": {"lanes": [lane]}}}))
@@ -135,6 +141,30 @@ def test_skip_bez_optiky_nese_jmeno_rozhrani_v_labelu():
         port="ae0", members=["et-0/0/5"]))
     alarm_skip = next(f for f in alarm_findings if f.outcome is Outcome.SKIP)
     assert alarm_skip.label == "Interface optical alarms (ae0)"
+
+
+def test_levels_dark_in_both_is_unchanged():
+    """Shodne nekonecno v subjektu i zmerene baseline je PASS se znackou."""
+    lane = _lane(rx=float("-inf"))
+    ctx = _ctx({"optics": {"ae0": {"lanes": [lane]}}}, baseline={"optics": {"ae0": {"lanes": [lane]}}})
+    [row] = run_check(OpticalLevelsCheck(), ctx)
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+
+
+def test_levels_missing_baseline_lane_row_is_not_compared():
+    """Baseline lane chybi (jina inventory lanes) - radek se z definice
+    neporovnava, ZMENA sloupec zustava prazdny, ne 'bez baseline'."""
+    ctx = _ctx({"optics": {"ae0": {"lanes": [_lane()]}}}, baseline={"optics": {}})
+    [row] = run_check(OpticalLevelsCheck(), ctx)
+    assert row.details[NOT_COMPARED] is False
+
+
+def test_alarm_raised_in_both_is_unchanged():
+    """Shodne zvedly alarm v subjektu i zmerene baseline je PASS se znackou."""
+    lane = _lane(alarms={"rx-loss-of-signal": True})
+    ctx = _ctx({"optics": {"ae0": {"lanes": [lane]}}}, baseline={"optics": {"ae0": {"lanes": [lane]}}})
+    [row] = run_check(OpticalAlarmsCheck(), ctx)
+    assert row.status is Status.PASS and row.value == "rx-loss-of-signal" == row.baseline_value
 
 
 # Check.applies_to() pousti device scope na VSECHNY checky bez ohledu na

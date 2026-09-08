@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.bgp import ESTABLISHED, NOT_IN_SERVICE, peer_family
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -22,6 +23,11 @@ from migration_validator.models.result import Finding, Outcome, Severity
 NO_SESSION = "bez session"
 BGP_NOT_UP = "BGP neni Established"
 PARSER_MISSED = "parser nenasel konfiguraci"
+# Collector placeholder pro chybejici XML element ("state" v zaznamu session).
+# "unknown" v obou snapshotech neni dukaz shodneho stavu, jen dukaz, ze ani
+# jeden snapshot stav nezmeril - stav se nefabuluje (Task 10 konsoliduje
+# tuto konstantu do checks/baseline.py).
+UNKNOWN = "unknown"
 
 # NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni,
 # a to jde rict jen v service scope. Peer, ktereho uz tato sluzba nenarokuje,
@@ -83,6 +89,7 @@ class BfdSessionStateCheck(Check):
                     baseline=baseline_sessions.get(peer),
                     bgp_state=str((bgp.get(peer) or {}).get("state", "")),
                     is_device=ctx.scope.is_device,
+                    ctx=ctx,
                 )
             )
         return findings
@@ -95,33 +102,47 @@ class BfdSessionStateCheck(Check):
         baseline: dict[str, Any] | None,
         bgp_state: str,
         is_device: bool,
+        ctx: CheckContext,
     ) -> Finding:
         label = f"{self.label} ({peer})"
         family = peer_family(peer)
-        was = str(baseline.get("state")) if baseline else None
+        # Stejna funkce pro subjekt i baseline (se stejnym configured/is_device
+        # subjektu), takze baseline_value mluvi slovnikem radku (R-5).
+        was = _session_value(baseline, configured, is_device, bgp_state) if ctx.has_baseline else None
 
         if session is not None:
-            state = str(session.get("state", "unknown"))
+            # Surovy stav ze session, ne slovnik `value` - hlaska "existuje
+            # (Up)" ma mluvit o skutecnem stavu i ve vetvi PARSER_MISSED,
+            # kde _session_value uz vraci znacku, ne stav.
+            raw_state = str(session.get("state", UNKNOWN))
+            state = _session_value(session, configured, is_device, bgp_state)
 
             # Bez inventory neni zamer znam, takze se nehlasi, ze
             # konfigurace chybi (AR-17).
             if not configured and not is_device:
                 return Finding(
                     Outcome.DEGRADED,
-                    f"{peer}: BFD session existuje ({state}), ale parser ji nenasel "
+                    f"{peer}: BFD session existuje ({raw_state}), ale parser ji nenasel "
                     "v konfiguraci sluzby",
                     label=label,
                     family=family,
-                    value=PARSER_MISSED,
+                    value=state,
                     baseline_value=was,
                     subject=session,
                 )
 
             outcome = Outcome.OK if state == "Up" else Outcome.BROKEN
+            if outcome is Outcome.BROKEN:
+                same = (
+                    state != UNKNOWN
+                    and baseline is not None
+                    and str(baseline.get("state")) == state
+                )
+                outcome = unchanged_or(outcome, ctx, "bfd", same=same)
             message = (
                 f"{peer}: session {state}"
                 if outcome is Outcome.OK
-                else f"{peer}: session {state}, ocekavano Up"
+                else f"{peer}: session {state}, ocekavano Up{suffix(outcome)}"
             )
             return Finding(
                 outcome,
@@ -137,7 +158,8 @@ class BfdSessionStateCheck(Check):
         if not configured:
             if is_device:
                 # Bez inventory se netvrdi, ze konfigurace chybi (AR-17) -
-                # jen ze session, ktera v baseline byla, uz neexistuje.
+                # jen ze session, ktera v baseline byla, uz neexistuje. Tato
+                # vetev je z definice "v baseline byla" - nikdy UNCHANGED.
                 return Finding(
                     Outcome.BROKEN,
                     f"{peer}: session byla v baseline ({was}), v subjektu neexistuje",
@@ -156,6 +178,8 @@ class BfdSessionStateCheck(Check):
             # formulace je pravdiva v obou pripadech, ktere sem spadaji
             # (BFD ze zarizeni zmizelo i BFD preslo pod jinou sluzbu).
             # Migrace nema tise shodit ze stolu ochranu, ktera tam byla.
+            # Tato vetev je take z definice "v baseline byla" - nikdy
+            # UNCHANGED.
             return Finding(
                 Outcome.BROKEN,
                 f"{peer}: v baseline patril k teto sluzbe, v subjektu uz ne",
@@ -176,11 +200,34 @@ class BfdSessionStateCheck(Check):
                 baseline_value=was,
             )
 
+        outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=baseline is None)
         return Finding(
-            Outcome.BROKEN,
-            f"{peer}: BFD nakonfigurovano, BGP bezi, ale session neexistuje",
+            outcome,
+            f"{peer}: BFD nakonfigurovano, BGP bezi, ale session neexistuje{suffix(outcome)}",
             label=label,
             family=family,
             value=NO_SESSION,
             baseline_value=was,
         )
+
+
+def _session_value(
+    session: dict[str, Any] | None,
+    configured: bool,
+    is_device: bool,
+    bgp_state: str,
+) -> str:
+    """Vraci presne to, co dnes konci ve `value` prislusne vetve `_finding`.
+    Pouziva se pro subjekt i pro baseline session (se stejnym configured/
+    is_device subjektu), takze baseline_value mluvi stejnym slovnikem jako
+    value (R-5)."""
+    if session is not None:
+        state = str(session.get("state", UNKNOWN))
+        if not configured and not is_device:
+            return PARSER_MISSED
+        return state
+    if not configured:
+        return SESSION_GONE if is_device else NOT_IN_SERVICE
+    if bgp_state != ESTABLISHED:
+        return BGP_NOT_UP
+    return NO_SESSION

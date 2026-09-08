@@ -18,6 +18,7 @@ import math
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -98,6 +99,7 @@ class OpticalLevelsCheck(Check):
                         lane,
                         baseline_lanes.get(lane["lane"]),
                         tolerance,
+                        ctx,
                     )
                 )
         return findings
@@ -118,6 +120,7 @@ def _level_finding(
     lane: dict[str, Any],
     baseline_lane: dict[str, Any] | None,
     tolerance: float,
+    ctx: CheckContext,
 ) -> Finding:
     value = f"RX {_fmt(lane['rx_power_dbm'])} / TX {_fmt(lane['tx_power_dbm'])}"
     dark = _dark_sides(lane)
@@ -130,6 +133,9 @@ def _level_finding(
                 else f"{name}: {value}"
             ),
             label=label, value=value,
+            # Baseline nema tuto lane (jina inventory, jiny pocet lanes) -
+            # radek se z definice neporovnava, ne "bez baseline" (R-4).
+            compared=False,
             subject={"rx_power_dbm": lane["rx_power_dbm"],
                      "tx_power_dbm": lane["tx_power_dbm"]},
         )
@@ -154,8 +160,10 @@ def _level_finding(
         f" / TX {_fmt(baseline_lane['tx_power_dbm'])}"
     )
     if dark:
-        outcome = Outcome.BROKEN
-        message = f"{name}: {'/'.join(dark)} bez svetla ({value})"
+        outcome = unchanged_or(
+            Outcome.BROKEN, ctx, "optics", same=_dark_sides(baseline_lane) == dark
+        )
+        message = f"{name}: {'/'.join(dark)} bez svetla ({value}){suffix(outcome)}"
     elif degraded:
         outcome = Outcome.DEGRADED
         message = (
@@ -176,12 +184,29 @@ def _level_finding(
     )
 
 
+def _raised(data: dict[str, Any] | None) -> list[tuple[int | None, str, Outcome]]:
+    """Zvednute alarmy/warningy jedne strany (subjekt nebo baseline)."""
+    result: list[tuple[int | None, str, Outcome]] = []
+    if data is None:
+        return result
+    for lane in data["lanes"]:
+        for tag, is_on in lane["alarms"].items():
+            if is_on:
+                result.append((lane["lane"], tag, Outcome.BROKEN))
+        for tag, is_on in lane["warnings"].items():
+            if is_on:
+                result.append((lane["lane"], tag, Outcome.DEGRADED))
+    return result
+
+
 @register
 class OpticalAlarmsCheck(Check):
     id = "interface_optics_alarms"
     title = "Opticke alarmy"
     label = "Interface optical alarms"
-    mode = Mode.STATE
+    # BOTH: shodny zvedly alarm v subjektu i zmerene baseline je PASS se
+    # znackou (Outcome.UNCHANGED), ne tiche FAIL/WARN.
+    mode = Mode.BOTH
     requires = ("optics",)
     service_types = frozenset()
     layer1 = True
@@ -189,6 +214,7 @@ class OpticalAlarmsCheck(Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         optics: dict[str, Any] = ctx.subject.get("optics", {})
+        baseline_optics: dict[str, Any] = (ctx.baseline or {}).get("optics", {})
         port = _port(ctx)
 
         findings: list[Finding] = []
@@ -207,31 +233,43 @@ class OpticalAlarmsCheck(Check):
                     )
                 )
                 continue
-            raised: list[tuple[int | None, str, Outcome]] = []
-            for lane in data["lanes"]:
-                for tag, is_on in lane["alarms"].items():
-                    if is_on:
-                        raised.append((lane["lane"], tag, Outcome.BROKEN))
-                for tag, is_on in lane["warnings"].items():
-                    if is_on:
-                        raised.append((lane["lane"], tag, Outcome.DEGRADED))
+            raised = _raised(data)
+            baseline_data = baseline_optics.get(name)
+            baseline_raised = _raised(baseline_data)
             if not raised:
+                # Renderer tiskne "bez baseline" u kazdeho ne-SKIP radku BOTH
+                # checku s baseline_value=None, kdyz baseline beh existuje -
+                # OK radek proto musi nest baseline_value, kdyz baseline pro
+                # tento port opticka data ma (i kdyz byla bez alarmu).
+                baseline_value = (
+                    "bez alarmu" if baseline_data is not None and not baseline_raised
+                    else (
+                        ", ".join(tag for _, tag, _ in baseline_raised)
+                        if baseline_data is not None
+                        else None
+                    )
+                )
                 findings.append(
                     Finding(
                         Outcome.OK,
                         f"{name}: bez optickych alarmu",
                         label=_optics_label(self.label, name, None, port),
                         value="bez alarmu",
+                        baseline_value=baseline_value,
                     )
                 )
                 continue
+            baseline_pairs = {(lane_no, tag) for lane_no, tag, _ in baseline_raised}
             for lane_no, tag, outcome in raised:
+                same = (lane_no, tag) in baseline_pairs
+                outcome = unchanged_or(outcome, ctx, "optics", same=same)
                 findings.append(
                     Finding(
                         outcome,
-                        f"{name}: {tag} je aktivni",
+                        f"{name}: {tag} je aktivni{suffix(outcome)}",
                         label=_optics_label(self.label, name, lane_no, port),
                         value=tag,
+                        baseline_value=tag if same else None,
                     )
                 )
         return findings

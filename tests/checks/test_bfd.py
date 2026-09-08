@@ -7,11 +7,11 @@ ale bez session (BGP Idle), a par peeru bez BFD vubec.
 
 from __future__ import annotations
 
-from migration_validator.checks.base import CheckContext
+from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bfd import BfdSessionStateCheck
 from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome
+from migration_validator.models.result import Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 INTENT = [{"peer": "198.11.13.2", "minimum_interval": 3000, "multiplier": 3, "source": "neighbor"}]
@@ -30,13 +30,20 @@ def _scope(bfd_peers=None, bgp_neighbors=("198.11.13.2",)) -> Scope:
 
 
 def _ctx(sessions, bgp_state="Established", baseline_sessions=None, scope=None):
+    baseline = (
+        {"bfd": baseline_sessions, "bgp": {}} if baseline_sessions is not None else None
+    )
     return CheckContext(
         scope=scope or _scope(),
         subject={"bfd": sessions, "bgp": {"198.11.13.2": {"state": bgp_state}}},
-        baseline=(
-            {"bfd": baseline_sessions, "bgp": {}} if baseline_sessions is not None else None
-        ),
+        baseline=baseline,
         config=default_config(),
+        # Pozitivni dukaz, ze baseline oblast byla zmerena (ctx.baseline_measured)
+        # - bez nej by UNCHANGED nemohl vzniknout ani u testu, ktere baseline
+        # predavaji.
+        baseline_collectors=(
+            {area: {"status": "ok"} for area in baseline} if baseline is not None else {}
+        ),
     )
 
 
@@ -111,7 +118,13 @@ def test_bfd_removed_since_baseline_is_broken():
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
     assert findings[0].message == "198.11.13.2: v baseline patril k teto sluzbe, v subjektu uz ne"
-    assert findings[0].baseline_value == "Up"
+    # R-5: baseline_value ted pochazi ze stejne _session_value() jako value,
+    # se STEJNYM configured/is_device jako ma subjekt (bfd_peers=[] =>
+    # configured=False). Peer neni ve sluzbe (service scope, ne device), takze
+    # se na baseline session aplikuje stejna PARSER_MISSED hlidka jako by
+    # session prisla v subjektu - baseline_value uz nerika "Up", ale mluvi
+    # slovnikem radku (i kdyz to na NOT_IN_SERVICE radku pusobi nezvykle).
+    assert findings[0].baseline_value == "parser nenasel konfiguraci"
     assert findings[0].family == 4
 
 
@@ -127,6 +140,10 @@ def test_peer_only_in_baseline_value_is_full_sentence():
     )[0]
 
     assert f.value == "v baseline patril k teto sluzbe, v subjektu uz ne"
+    # Stejny duvod jako v test_bfd_removed_since_baseline_is_broken - R-5
+    # sjednocuje baseline_value pres _session_value() s configured/is_device
+    # subjektu.
+    assert f.baseline_value == "parser nenasel konfiguraci"
 
 
 def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():
@@ -285,6 +302,29 @@ def test_check_reads_the_area_named_by_its_collector():
         "check nevidi oblast, kterou BfdCollector vydava - klic se rozesel "
         "mezi collectorem a checkem"
     )
+
+
+def test_session_down_in_both_is_unchanged():
+    """Shodny spatny stav v subjektu i zmerene baseline je PASS se znackou."""
+    down = {"198.11.13.2": {"state": "Down"}}
+    [row] = run_check(BfdSessionStateCheck(), _ctx(down, baseline_sessions=down))
+    assert row.status is Status.PASS and row.value == "Down" == row.baseline_value
+
+
+def test_missing_session_in_both_with_established_bgp_is_unchanged():
+    """Peer bez session ted i v baseline (BGP up v obou) je take UNCHANGED."""
+    [row] = run_check(BfdSessionStateCheck(), _ctx({}, baseline_sessions={}))
+    assert row.status is Status.PASS and row.baseline_value == "bez session"
+
+
+def test_unconfigured_session_baseline_value_is_same_sentinel():
+    """PARSER_MISSED zustava nalez (WARN), ne UNCHANGED - mimo zamer se
+    porovnavat nema, i kdyz baseline i subjekt maji stejnou session."""
+    session = {"10.0.0.9": {"state": "Up"}}
+    [row] = run_check(BfdSessionStateCheck(), _ctx(session, baseline_sessions=session,
+                                                   scope=_scope(bfd_peers=[])))
+    assert row.status is Status.WARN                      # zustava (mimo zamer = nalez)
+    assert row.baseline_value == "parser nenasel konfiguraci"
 
 
 def test_device_scope_reports_state_without_intent():

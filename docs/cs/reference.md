@@ -16,7 +16,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 | `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní**, jeden nález na směr |
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, žádná tmavá strana, posun proti baseline v mezích `tolerance_db` |
-| `interface_optics_alarms` | state | critical | layer1 | žádný zvednutý alarm (FAIL) ani warning (WARN) na žádné lane |
+| `interface_optics_alarms` | both | critical | layer1 | žádný zvednutý alarm (FAIL) ani warning (WARN) na žádné lane; shodný zvednutý alarm v obou = PASS se značkou (R-3) |
 | `arp_present` | both | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
 | `nd_present` | both | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
 | `ping_reachability` | both | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture`; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
