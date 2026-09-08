@@ -15,6 +15,7 @@ import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.registry import register
 from migration_validator.collectors.multicast import route_key
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -261,9 +262,11 @@ class IgmpMembershipReportCheck(Check):
                     Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
                     label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
                 )]
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "igmp_group", same=was == [])
             return [Finding(
-                Outcome.BROKEN, "receiver neposila zadny IGMP membership report",
-                label=self.label, value=NO_REPORT, baseline_value=was_value,
+                outcome, f"receiver neposila zadny IGMP membership report{suffix(outcome)}",
+                label=self.label, value=NO_REPORT,
+                baseline_value=NO_REPORT if outcome is Outcome.UNCHANGED else was_value,
             )]
         if was and set(was) != set(now):
             return [Finding(
@@ -322,9 +325,11 @@ class PimJoinCheck(Check):
                     Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
                     label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
                 )]
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "pim_join", same=ctx.has_baseline and not was)
             return [Finding(
-                Outcome.BROKEN, "zadny PIM join na servisnim rozhrani",
-                label=self.label, value=NO_JOIN, baseline_value=was_value,
+                outcome, f"zadny PIM join na servisnim rozhrani{suffix(outcome)}",
+                label=self.label, value=NO_JOIN,
+                baseline_value=NO_JOIN if outcome is Outcome.UNCHANGED else was_value,
             )]
         # Role se neporovnavaji - migraci se nemeni, pri rozdilu by slo
         # o jiny stream. Porovnava se jen mnozina (S,G).

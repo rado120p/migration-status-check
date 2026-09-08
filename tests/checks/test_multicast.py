@@ -4,7 +4,7 @@ se IGMP mnozina baseline cte pres ctx.baseline_scope."""
 
 from __future__ import annotations
 
-from migration_validator.checks.base import CheckContext
+from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.multicast import (
     NO_JOIN,
     NO_JOIN_IGMP_INFO,
@@ -30,7 +30,7 @@ from migration_validator.checks.multicast import (
     stream_rows,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome
+from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 POST = "et-0/0/8.11"
@@ -51,11 +51,17 @@ def _scope(interface=POST, service_type="Internet", subtype="multicast", instanc
     )
 
 
-def _ctx(subject, baseline=None, scope=None, baseline_scope=None, failed_collectors=None):
+def _ctx(subject, baseline=None, scope=None, baseline_scope=None, failed_collectors=None,
+         baseline_collectors=None):
     return CheckContext(
         scope=scope or _scope(), subject=subject, baseline=baseline,
         config=default_config(), baseline_scope=baseline_scope,
         failed_collectors=failed_collectors or {},
+        baseline_collectors=(
+            baseline_collectors
+            if baseline_collectors is not None
+            else ({area: {"status": "ok"} for area in baseline} if baseline is not None else {})
+        ),
     )
 
 
@@ -251,6 +257,23 @@ def test_igmp_report_missing_on_receiver_or_both_site_is_fail():
         scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
         (finding,) = IgmpMembershipReportCheck().run(_ctx({"igmp_group": {}}, scope=scope))
         assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_REPORT), site
+
+
+def test_igmp_no_report_in_both_is_unchanged_with_sentinel():
+    subject = {**_igmp(POST), **_pim()}
+    baseline = {**_igmp(PRE), **_pim()}
+    ctx = _ctx(subject, baseline=baseline, scope=_scope(POST), baseline_scope=_scope(PRE))
+    [row] = run_check(IgmpMembershipReportCheck(), ctx)
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == NO_REPORT == row.baseline_value
+
+
+def test_igmp_no_report_now_but_report_before_is_fail():
+    subject = {**_igmp(POST), **_pim()}
+    baseline = {**_igmp(PRE, SG), **_pim()}
+    ctx = _ctx(subject, baseline=baseline, scope=_scope(POST), baseline_scope=_scope(PRE))
+    [row] = run_check(IgmpMembershipReportCheck(), ctx)
+    assert row.status is Status.FAIL and row.baseline_value == "(10.11.11.1, 232.1.1.1)"
 
 
 def test_igmp_report_silent_without_igmp_intent():
@@ -853,6 +876,13 @@ def test_pim_join_missing_on_receiver_or_both_site_is_fail():
         scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=site)
         (finding,) = PimJoinCheck().run(_ctx({"pim_join": {}}, scope=scope))
         assert (finding.outcome, finding.value) == (Outcome.BROKEN, NO_JOIN), site
+
+
+def test_pim_join_none_in_both_is_unchanged():
+    subject = {**_igmp(POST), **_pim()}
+    ctx = _ctx(subject, baseline={**_igmp(PRE), **_pim()}, scope=_scope(POST), baseline_scope=_scope(PRE))
+    [row] = run_check(PimJoinCheck(), ctx)
+    assert row.status is Status.PASS and row.value == NO_JOIN == row.baseline_value
 
 
 def test_pim_join_missing_with_failed_igmp_is_skip():
