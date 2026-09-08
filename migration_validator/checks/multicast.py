@@ -241,9 +241,15 @@ class IgmpMembershipReportCheck(Check):
             return []
         now = igmp_pairs(ctx.subject, ctx.scope)
         was = _baseline_pairs(ctx)
-        # Baseline bez skupin = neni s cim porovnat (no-baseline pravidlo),
-        # ne "bylo prazdno".
-        was_value = pairs_text(was) if was else None
+        # Zmerena prazdna baseline (was == []) neni "bez baseline" (was is
+        # None) - stejny sentinel jako v BROKEN vetvi, jinak report tiskne
+        # "bez baseline" misto viditelneho zlepseni.
+        if was:
+            was_value = pairs_text(was)
+        elif ctx.has_baseline:
+            was_value = NO_REPORT
+        else:
+            was_value = None
         if not now:
             if pim_pairs(ctx.subject, ctx.scope):
                 # Rozhrani s obema zamery: streamy nese PIM join, IGMP mlci
@@ -274,8 +280,7 @@ class IgmpMembershipReportCheck(Check):
             outcome = unchanged_or(Outcome.BROKEN, ctx, "igmp_group", same=was == [])
             return [Finding(
                 outcome, f"receiver neposila zadny IGMP membership report{suffix(outcome)}",
-                label=self.label, value=NO_REPORT,
-                baseline_value=NO_REPORT if outcome is Outcome.UNCHANGED else was_value,
+                label=self.label, value=NO_REPORT, baseline_value=was_value,
             )]
         if was and set(was) != set(now):
             return [Finding(
@@ -310,7 +315,14 @@ class PimJoinCheck(Check):
             return []
         now = pim_pairs(ctx.subject, ctx.scope)
         was = pim_pairs(ctx.baseline, ctx.baseline_scope or ctx.scope) if ctx.has_baseline else []
-        was_value = role_pairs_text(was) if was else None
+        # Symetricky k igmp_membership_report: zmerena prazdna baseline neni
+        # "bez baseline".
+        if was:
+            was_value = role_pairs_text(was)
+        elif ctx.has_baseline:
+            was_value = NO_JOIN
+        else:
+            was_value = None
         if not now:
             if igmp_pairs(ctx.subject, ctx.scope):
                 return [Finding(
@@ -337,8 +349,7 @@ class PimJoinCheck(Check):
             outcome = unchanged_or(Outcome.BROKEN, ctx, "pim_join", same=ctx.has_baseline and not was)
             return [Finding(
                 outcome, f"zadny PIM join na servisnim rozhrani{suffix(outcome)}",
-                label=self.label, value=NO_JOIN,
-                baseline_value=NO_JOIN if outcome is Outcome.UNCHANGED else was_value,
+                label=self.label, value=NO_JOIN, baseline_value=was_value,
             )]
         # Role se neporovnavaji - migraci se nemeni, pri rozdilu by slo
         # o jiny stream. Porovnava se jen mnozina (S,G).

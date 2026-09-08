@@ -204,11 +204,18 @@ def test_igmp_report_changed_set_is_warn():
     assert row.baseline_value == "(10.11.11.1, 232.1.1.1), (10.11.11.2, 232.1.1.2)"
 
 
-def test_igmp_report_baseline_without_groups_is_not_compared():
+def test_igmp_report_baseline_without_groups_is_ok_with_sentinel():
+    """Zmerena prazdna baseline (collector bezel, tabulka prazdna) neni
+    "bez baseline" - report ma tisknout viditelne zlepseni, ne mlceni."""
     (row,) = IgmpMembershipReportCheck().run(_ctx(
         _igmp(POST, SG), baseline={"igmp_group": {}}, baseline_scope=_scope(PRE),
     ))
     assert row.outcome is Outcome.OK
+    assert row.baseline_value == NO_REPORT
+
+
+def test_igmp_report_without_any_baseline_is_none():
+    (row,) = IgmpMembershipReportCheck().run(_ctx(_igmp(POST, SG)))
     assert row.baseline_value is None
 
 
@@ -982,6 +989,15 @@ def test_pim_join_same_set_different_role_is_pass():
     was = _pim("master", _join("Through BGP", [PRE]))
     (finding,) = PimJoinCheck().run(_ctx(now, baseline=was, baseline_scope=_scope(PRE)))
     assert finding.outcome is Outcome.OK
+
+
+def test_pim_join_baseline_without_joins_is_ok_with_sentinel():
+    """Symetricky k IGMP: zmerena prazdna baseline neni "bez baseline"."""
+    now = _pim("master", _join("Through BGP", [POST]))
+    was = _pim("master")
+    (finding,) = PimJoinCheck().run(_ctx(now, baseline=was, baseline_scope=_scope(PRE)))
+    assert finding.outcome is Outcome.OK
+    assert finding.baseline_value == NO_JOIN
 
 
 def test_pim_join_missing_with_igmp_is_info():
