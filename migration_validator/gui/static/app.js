@@ -122,6 +122,8 @@ class App {
       run: null,
       selectedSnapshot: null,
       openResults: {},
+      openPairings: {},
+      serviceTypeFilter: "All",
       activeCaptureId: null,
       captureForm: null,
       captureSubmitError: null,
@@ -163,6 +165,7 @@ class App {
     };
     this.capturePollTimer = null;
     this.groupPollTimer = null;
+    this.pendingFocus = null;
 
     this.profileNameEl = document.getElementById("profile-name");
     this.comboEl = document.getElementById("run-combo");
@@ -388,7 +391,7 @@ class App {
       this.cache.detail = null;
       this.cache.evaluation = null;
       this.state.selectedSnapshot = null;
-      this.state.openResults = {};
+      this.resetResultState();
       if (this.cache.runs.length === 0) {
         this.state.view = "empty";
         this.render();
@@ -741,6 +744,34 @@ class App {
     this.render();
   }
 
+  resetResultState() {
+    this.state.openResults = {};
+    this.state.openPairings = {};
+    this.state.serviceTypeFilter = MigRunResults.ALL_TYPES;
+  }
+
+  togglePairing(key) {
+    this.state.openPairings[key] = !this.isPairingOpen(key);
+    this.pendingFocus = `pair:${key}`;
+    this.render();
+  }
+
+  isPairingOpen(key, defaultOpen = false) {
+    const explicit = this.state.openPairings[key];
+    return explicit === undefined ? defaultOpen : explicit;
+  }
+
+  setAllPairings(groups, open) {
+    for (const group of groups) this.state.openPairings[group.key] = open;
+    this.render();
+  }
+
+  setServiceTypeFilter(type) {
+    this.state.serviceTypeFilter = type;
+    this.pendingFocus = `chip:${type}`;
+    this.render();
+  }
+
   collectServiceEntries(evaluations, prefix = "res") {
     const entries = [];
     for (const evaluation of evaluations) {
@@ -784,26 +815,39 @@ class App {
             el("span", { className: "port-cell", text: oldPort }),
             el("span", { className: "port-cell", text: newPort }),
           ];
-      table.appendChild(
-        el("div", {
-          className: "results-row" + mode + tint,
-          onClick: () => this.toggleResult(entry.key),
-          children: [
+      const rowEl = el("div", {
+        className: "results-row" + mode + tint,
+        onClick: () => this.toggleResult(entry.key),
+        attrs: { tabindex: "0", role: "button", "aria-expanded": open ? "true" : "false" },
+        children: [
             el("span", { className: "status-token " + sClass, text: view.status }),
             el("span", { className: "svc-name", text: view.description }),
-            el("span", { className: "svc-cell", text: view.service_type }),
+            el("span", {
+              className: "svc-cell",
+              children: [
+                document.createTextNode(view.service_type),
+                entry.contextTag ? el("span", { className: "ctx-tag", text: entry.contextTag }) : null,
+              ],
+            }),
             ...portCells,
             el("span", { className: "port-cell", text: view.routing_instance || "-" }),
             el("span", { className: "find-cell", text: view.worst_message }),
             el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
           ],
-        })
-      );
+      });
+      rowEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          this.toggleResult(entry.key);
+        }
+      });
+      table.appendChild(rowEl);
       if (open) {
+        const detailView = entry.linkNoteOverride ? { ...view, link_note: entry.linkNoteOverride } : view;
         table.appendChild(
           el("div", {
             className: "detail-cell",
-            children: [this.buildDetailPanel(view, entry.hasBaseline)],
+            children: [this.buildDetailPanel(detailView, entry.hasBaseline)],
           })
         );
       }
@@ -924,7 +968,7 @@ class App {
     this.state.run = name;
     this.state.view = "run";
     this.state.selectedSnapshot = null;
-    this.state.openResults = {};
+    this.resetResultState();
     // Capture tracking is global state (controller ruling: one in-flight
     // capture at a time, tracked across the whole app) - a run switch must
     // not orphan it. activeCaptureId/captureProgress/polling survive; the
@@ -1961,6 +2005,11 @@ class App {
     const noRuns = this.cache.runs.length === 0;
     this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
     document.getElementById("btn-new-capture").disabled = noRuns || this.state.view === "group";
+    if (!this.pendingFocus) {
+      const active = document.activeElement;
+      const key = active && active.dataset ? active.dataset.focusKey : null;
+      if (key && this.mainEl.contains(active)) this.pendingFocus = key;
+    }
     switch (this.state.view) {
       case "empty":
         this.renderEmptyState();
@@ -1986,6 +2035,12 @@ class App {
       default:
         this.renderRunOverview();
         break;
+    }
+    if (this.pendingFocus) {
+      const key = this.pendingFocus;
+      this.pendingFocus = null;
+      const target = this.mainEl.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
+      if (target) target.focus();
     }
     this.syncCapturePolling();
     this.syncGroupPolling();
@@ -2089,7 +2144,7 @@ class App {
     return (detail.snapshots || []).find((s) => s.file === file) || null;
   }
 
-  buildCountsStrip(services, checks, matchedLine, passUnchanged = 0) {
+  buildCountsStrip(services, checks, matchedLine, passUnchanged = 0, title = null) {
     const order = ["pass", "recv", "warn", "fail", "skip", "info"];
     const group = (label, counts, keys) =>
       el("div", {
@@ -2114,6 +2169,7 @@ class App {
         group("Checky:", checks, order),
       ],
     });
+    if (title) strip.insertBefore(el("span", { className: "counts-title", text: title }), strip.firstChild);
     if (passUnchanged) {
       // Stejny radek jako v textovem reportu (R-3): bez nej by zdedene
       // chyby zmizely v "PASS 42" a nikdo by je nevidel.
@@ -3221,7 +3277,7 @@ class App {
         this.state.run = runName;
         this.state.view = "run";
         this.state.selectedSnapshot = null;
-        this.state.openResults = {};
+        this.resetResultState();
         await this.loadRun();
         this.render();
         return;
