@@ -108,7 +108,11 @@ class BfdSessionStateCheck(Check):
         family = peer_family(peer)
         # Stejna funkce pro subjekt i baseline (se stejnym configured/is_device
         # subjektu), takze baseline_value mluvi slovnikem radku (R-5).
-        was = _session_value(baseline, configured, is_device, bgp_state) if ctx.has_baseline else None
+        was = (
+            _session_value(baseline, configured, is_device, bgp_state)
+            if ctx.has_baseline
+            else None
+        )
 
         if session is not None:
             # Surovy stav ze session, ne slovnik `value` - hlaska "existuje
