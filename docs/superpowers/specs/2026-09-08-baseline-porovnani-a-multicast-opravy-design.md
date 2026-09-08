@@ -264,3 +264,20 @@ zapsala jako otevřený nález (`task-10-report.md`) — Task 6 mu doplnil
 Zbývající výskyty jsou přesně očekávané kategorie (multicast řádky vlny 3
 + nové ARP/ND/EVPN neighbor adresy od baseline). Žádné jiné „bez baseline"
 výskyty nalezeny nebyly.
+
+### Vlna 3 ověřena v laborce 2026-09-08 (čerstvá inventory, MX1-POP1 + PTX1-POP1, pre/post na témže boxu)
+
+- MX1-POP1: 188 PASS / 12 WARN / 0 FAIL, `pass_unchanged` 3; PTX1-POP1: 425 PASS / 4 WARN / 0 FAIL,
+  `pass_unchanged` 177 (virtuální optika s alarmy na všech lanech v obou snímcích).
+- **Žádný řádek „bez baseline"** na žádném z boxů; žádné „bylo (S,G)".
+- Core lo0.0 (MX): stream 232.1.1.1 v laborce v tu chvíli neexistoval — souhrn i řádek
+  „Neexistuje S,G" jsou PASS `beze zmeny (chyba uz v baseline)` (UNCHANGED včetně souhrnu).
+- PTX: Internet multicast (et-0/0/8.11) i obě MVPN instance — IGMP report, PIM join, Stream,
+  Upstream, Forwarding-rate, C-Multicast status, Provider tunnel `... (PE 150.0.0.13)` vše PASS
+  s prázdným ZMENA; Core inet.2: `Existuje S,G` hodnota `(10.11.11.1, 232.1.1.1)`, upstream
+  et-0/0/0.0 PASS, rate `6 pps`.
+- WARN jen deaktivace (MX má služby CPE13 a multicast receivery v konfiguraci deaktivované —
+  potvrzeno čerstvou inventory, není to zastaralý soubor) a pokles provozu na dvou tranzitech.
+- Zbývající šum „bylo …": ping (RTT se liší při každém měření) a LDP `Up for …` (uptime roste)
+  — řeší fix wave vlny 3 (`compared=False`, když je ztráta / stav shodný).
+- PTX NETCONF na portu 830 odmítal spojení (SSH 22 v pořádku) — capture přes `--ssh-port 22`.
