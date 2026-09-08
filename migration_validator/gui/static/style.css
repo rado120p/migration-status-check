@@ -178,7 +178,10 @@ a:hover { color: #0e3fa9; }
 /* Body grid: sidebar + main + guide */
 .body-grid {
   display: grid;
-  grid-template-columns: 232px 1fr 280px;
+  /* minmax(0,…) misto 1fr: bez nej je automaticke minimum toho sloupce
+     min-content (results-table ma min-width 860px), body-grid pretece .shell
+     a ten ma overflow:hidden - obsah se orizne uz kolem 1500px. */
+  grid-template-columns: 232px minmax(0, 1fr) 280px;
   min-height: 620px;
 }
 
