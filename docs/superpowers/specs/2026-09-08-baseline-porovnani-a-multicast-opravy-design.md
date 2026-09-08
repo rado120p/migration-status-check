@@ -91,7 +91,11 @@ session chyběla, `baseline_value` je tentýž sentinel, ne stav.
 `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`,
 `igmp_group` a o pole `interface` v záznamech `arp`, `nd`, `bfd`,
 `evpn_esi`. Tohle byl původní důvod mappingu; bez toho R-3 na migraci
-starý → nový box nikdy nenajde baseline záznam. `pim_join` a
+starý → nový box nikdy nenajde baseline záznam. Stejně tak
+`evpn_instance`: jméno rozhraní zanořené v
+`local_interfaces.entries[].name` a `irb_interfaces.entries[].name`
+(klíč instance se nemění, přejmenovává se jen vnořený název — a jen
+tam, kde klíč `name` v záznamu vůbec je, stav se nefabrikuje). `pim_join` a
 `multicast_route` nesou jména rozhraní jen v hodnotách, které se
 neporovnávají — nemění se.
 

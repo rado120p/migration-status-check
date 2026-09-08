@@ -260,6 +260,67 @@ def test_aligned_baseline_renames_evpn_mac_interface_keys():
     assert set(data["evpn_mac"]["EVPN-X"]["interfaces"]) == {"et-0/0/8.313"}
 
 
+def test_aligned_baseline_renames_evpn_instance_nested_entry_names():
+    """R-6: evpn_instance nese jmeno rozhrani zanorene v
+    local_interfaces.entries[].name a irb_interfaces.entries[].name, ne
+    v klici slovniku - preklicovani proto potrebuje vlastni vetev.
+
+    Zaznam bez jmena v rename mape (irb.10) zustava beze zmeny - stav se
+    nefabuluje.
+    """
+    baseline_scope = Scope(
+        id="svc:EVPN-X:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-X", "E-LAN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/1.0"],
+            routing_instances=["EVPN-X"],
+        ),
+    )
+    subject_scope = Scope(
+        id="svc:EVPN-X:E-LAN",
+        kind="service",
+        key=ScopeKey("EVPN-X", "E-LAN", None),
+        selectors=Selectors(
+            interfaces=["et-0/0/1.0"],
+            routing_instances=["EVPN-X"],
+        ),
+    )
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
+        facts={
+            "evpn_instance": {
+                "EVPN-X": {
+                    "local_interfaces": {
+                        "total": 1,
+                        "up": 1,
+                        "entries": [{"name": "ge-0/0/1.0", "status": "Up"}],
+                    },
+                    "irb_interfaces": {
+                        "total": 1,
+                        "up": 1,
+                        "entries": [
+                            {"name": "irb.10", "status": "Up", "l3_context": "default"}
+                        ],
+                    },
+                }
+            }
+        },
+        scopes=[baseline_scope],
+    )
+
+    data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
+
+    instance = data["evpn_instance"]["EVPN-X"]
+    assert instance["local_interfaces"]["entries"] == [
+        {"name": "et-0/0/1.0", "status": "Up"}
+    ]
+    assert instance["irb_interfaces"]["entries"] == [
+        {"name": "irb.10", "status": "Up", "l3_context": "default"}
+    ]
+
+
 def test_aligned_baseline_renames_optics_keys_including_lag_members():
     """Optika je klicovana fyzickym portem (i clenem LAGu) - preklicovani
     z Tasku 11 musi platit i pro ni, jinak by po migraci na jiny hardware

@@ -98,10 +98,13 @@ def _aligned_baseline_data(
     klice slovniku isis_adjacency, isis_interface, ldp_neighbor,
     pim_neighbor, mpls_interface, igmp_group a pole interface v zaznamech
     arp, nd, bfd (klicovano peerem) a evpn_esi (klicovano ESI) se preslovnuji
-    stejnym pozicnim mappingem. Oblasti pim_join a multicast_route se
-    zamerne nepreslovnuji - jmeno rozhrani je tam jen v hodnote zaznamu,
-    ktera se s baseline neporovnava (nejde o klic ani o pole pouzivane pri
-    parovani), takze by rename byl bez efektu.
+    stejnym pozicnim mappingem. Stejne tak evpn_instance: jmeno v
+    local_interfaces.entries[].name a irb_interfaces.entries[].name (klic
+    instance zustava, preslovnuje se jen zanoreny nazev rozhrani). Oblasti
+    pim_join a multicast_route se zamerne nepreslovnuji - jmeno rozhrani je
+    tam jen v hodnote zaznamu, ktera se s baseline neporovnava (nejde o
+    klic ani o pole pouzivane pri parovani), takze by rename byl bez
+    efektu.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
     selectors = baseline_scope.selectors
@@ -133,6 +136,45 @@ def _aligned_baseline_data(
         data["optics"] = {
             rename.get(name, name): optics_data
             for name, optics_data in data["optics"].items()
+        }
+    if rename and data.get("evpn_instance"):
+        # Stejny pozicni princip: local_interfaces a irb_interfaces nesou
+        # jmeno rozhrani ve vnorenych zaznamech entries[].name, ne v klici
+        # slovniku, takze potrebuji vlastni vetev mimo _RENAMED_KEY_AREAS.
+        def _renamed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [
+                {**entry, "name": rename.get(entry["name"], entry["name"])}
+                if "name" in entry else entry
+                for entry in entries
+            ]
+
+        data["evpn_instance"] = {
+            instance: {
+                **instance_data,
+                **(
+                    {
+                        "local_interfaces": {
+                            **instance_data["local_interfaces"],
+                            "entries": _renamed_entries(
+                                instance_data["local_interfaces"].get("entries", [])
+                            ),
+                        },
+                    }
+                    if instance_data.get("local_interfaces") else {}
+                ),
+                **(
+                    {
+                        "irb_interfaces": {
+                            **instance_data["irb_interfaces"],
+                            "entries": _renamed_entries(
+                                instance_data["irb_interfaces"].get("entries", [])
+                            ),
+                        },
+                    }
+                    if instance_data.get("irb_interfaces") else {}
+                ),
+            }
+            for instance, instance_data in data["evpn_instance"].items()
         }
     if rename:
         # R-6 (spec 2026-09-08): puvodni duvod mappingu. Bez toho R-3
