@@ -589,9 +589,14 @@ class CoreMulticastForwardingCheck(Check):
             was = baseline_assigned.get(prefix, []) if baseline_assigned else []
             was_value = _labels_of(was) if was else None
             if not streams:
+                outcome = unchanged_or(
+                    Outcome.BROKEN, ctx, "multicast_route",
+                    same=baseline_assigned is not None and not was,
+                )
                 findings.append(Finding(
-                    Outcome.BROKEN, f"neexistuje S,G se zdrojem v {prefix}",
-                    label=self.label, value=f"Neexistuje S,G pro {prefix}", baseline_value=was_value,
+                    outcome, f"neexistuje S,G se zdrojem v {prefix}{suffix(outcome)}",
+                    label=self.label, value="Neexistuje S,G",
+                    baseline_value=("Neexistuje S,G" if outcome is Outcome.UNCHANGED else was_value),
                 ))
                 continue
             changed = bool(was) and {k for k, _ in was} != {k for k, _ in streams}
@@ -599,33 +604,46 @@ class CoreMulticastForwardingCheck(Check):
                 Outcome.DEGRADED if changed else Outcome.OK,
                 f"existuje S,G se zdrojem v {prefix}: {_labels_of(streams)}"
                 + (" (mnozina se lisi od baseline)" if changed else ""),
-                label=self.label, value=f"Existuje S,G pro {prefix}", baseline_value=was_value,
+                label=self.label, value=_labels_of(streams), baseline_value=was_value,
             ))
             measured = inet2.get(prefix)
             vias = list(measured.get("via") or []) if measured else None
+            baseline_by_key = dict(was)
             for key, route in streams:
                 sg = sg_label(*key.split(",", 1))
-                findings.extend(self._stream(sg, route, vias))
+                findings.extend(self._stream(sg, route, vias, baseline_by_key.get(key)))
         missing = [p for p in prefixes if not assigned.get(p)]
+        missing_before = [
+            p for p in missing
+            if baseline_assigned is not None and not baseline_assigned.get(p)
+        ]
+        outcome = unchanged_or(
+            Outcome.BROKEN if missing else Outcome.OK, ctx, "multicast_route",
+            same=bool(missing) and missing == missing_before,
+        )
         findings.insert(0, Finding(
-            Outcome.BROKEN if missing else Outcome.OK,
-            f"{len(missing)} z {len(prefixes)} inet.2 prefixu bez streamu" if missing
-            else f"{len(prefixes)} inet.2 prefixu se streamem",
+            outcome,
+            (f"{len(missing)} z {len(prefixes)} inet.2 prefixu bez streamu{suffix(outcome)}"
+             if missing else f"{len(prefixes)} inet.2 prefixu se streamem"),
             label=self.label,
-            value=f"{len(missing)}/{len(prefixes)} bez streamu" if missing
-            else f"{len(prefixes)} inet.2 prefixu",
+            value=(f"{len(missing)}/{len(prefixes)} bez streamu" if missing
+                   else f"{len(prefixes)} inet.2 prefixu"),
+            compared=False,
         ))
         return findings
 
     @staticmethod
-    def _stream(sg: str, route: dict[str, Any], vias: list[str] | None) -> list[Finding]:
+    def _stream(
+        sg: str, route: dict[str, Any], vias: list[str] | None,
+        baseline_route: dict[str, Any] | None = None,
+    ) -> list[Finding]:
         upstream = route.get("upstream_interface")
         if vias is None:
             # FAIL za chybejici inet.2 routu nese static_route_status -
             # tady by byl druhy FAIL za tutez pricinu.
             upstream_row = Finding(
                 Outcome.SKIP, f"{sg}: inet.2 routa neni v tabulce, upstream nelze overit",
-                label="Upstream interface", group=sg, value="routa neni v tabulce",
+                label="Upstream interface", group=sg, value="routa neni v tabulce", compared=False,
             )
         else:
             ok = bool(upstream) and upstream in vias
@@ -633,7 +651,7 @@ class CoreMulticastForwardingCheck(Check):
                 Outcome.OK if ok else Outcome.BROKEN,
                 f"{sg}: upstream {upstream or '-'}"
                 + ("" if ok else f" neni mezi via inet.2 routy ({', '.join(vias) or '-'})"),
-                label="Upstream interface", group=sg, value=upstream or "-",
+                label="Upstream interface", group=sg, value=upstream or "-", compared=False,
             )
         downstream = route.get("downstream_interfaces") or []
         downstream_row = Finding(
@@ -641,8 +659,12 @@ class CoreMulticastForwardingCheck(Check):
             f"{sg}: downstream {', '.join(downstream) or 'zadne'}",
             label="Downstream interfaces", group=sg,
             value=", ".join(downstream) if downstream else "Zadne downstream interfacy",
+            compared=False,
         )
-        return [upstream_row, downstream_row, *stream_rows(sg, route, rate_label="Forwarding rate packets")]
+        return [
+            upstream_row, downstream_row,
+            *stream_rows(sg, route, rate_label="Forwarding rate packets", baseline_route=baseline_route),
+        ]
 
 
 # --- mvpn_cmulticast_status --------------------------------------------------

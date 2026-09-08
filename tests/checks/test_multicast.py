@@ -619,7 +619,7 @@ def test_core_pass_block_shape():
     assert findings[0].message == "1 inet.2 prefixu se streamem"
     assert findings[0].value == "1 inet.2 prefixu"
     assert findings[1].outcome is Outcome.OK
-    assert findings[1].value == f"Existuje S,G pro {PREFIX}"
+    assert findings[1].value == sg_label(*SG)
     rows = _by_label(findings, sg_label(*SG))
     assert [f.label for f in findings[2:]] == [
         "Upstream interface", "Downstream interfaces", "Forwarding rate packets", "Route uptime"]
@@ -639,7 +639,7 @@ def test_core_no_stream_for_prefix_fails_without_filler_skips():
     assert findings[0].message == "1 z 1 inet.2 prefixu bez streamu"
     assert findings[0].value == "1/1 bez streamu"
     assert findings[1].outcome is Outcome.BROKEN
-    assert findings[1].value == f"Neexistuje S,G pro {PREFIX}"
+    assert findings[1].value == "Neexistuje S,G"
     assert len(findings) == 2
 
 
@@ -736,6 +736,48 @@ def test_core_missing_rate_is_skip():
     rate_row = _by_label(findings, sg_label(*SG))["Forwarding rate packets"]
     assert rate_row.outcome is Outcome.SKIP
     assert rate_row.value == RATE_UNAVAILABLE
+
+
+def test_core_exists_row_values_use_same_labels_so_zmena_is_blank():
+    facts = _core_facts()
+    rows = run_check(CoreMulticastForwardingCheck(), _ctx(facts, baseline=facts, scope=_core_scope()))
+    exists = [r for r in rows if r.value.startswith("(10.11.11.1")][0]
+    assert exists.value == "(10.11.11.1, 232.1.1.1)" == exists.baseline_value
+    assert rows[0].details[NOT_COMPARED] is False
+
+
+def test_core_upstream_downstream_uptime_not_compared_and_rate_has_baseline():
+    subject = _core_facts(routes={KEY: _route(pps=9)})
+    baseline = _core_facts(routes={KEY: _route(pps=6)})
+    rows = run_check(CoreMulticastForwardingCheck(), _ctx(subject, baseline=baseline, scope=_core_scope()))
+    by = _by_label(rows, sg_label(*SG))
+    for label in ("Upstream interface", "Downstream interfaces", "Route uptime"):
+        assert by[label].details[NOT_COMPARED] is False, label
+    assert by["Forwarding rate packets"].baseline_value == "6 pps"
+
+
+def test_core_rate_without_baseline_pps_is_not_compared():
+    subject = _core_facts(routes={KEY: _route(pps=9)})
+    baseline = _core_facts(routes={KEY: _route(pps=None)})
+    rows = run_check(CoreMulticastForwardingCheck(), _ctx(subject, baseline=baseline, scope=_core_scope()))
+    assert _by_label(rows, sg_label(*SG))["Forwarding rate packets"].details[NOT_COMPARED] is False
+
+
+def test_core_missing_sg_in_both_is_unchanged_including_summary():
+    facts = _core_facts(routes={})
+    rows = run_check(CoreMulticastForwardingCheck(), _ctx(facts, baseline=facts, scope=_core_scope()))
+    summary = rows[0]
+    missing = [r for r in rows if r.value == "Neexistuje S,G"][0]
+    assert missing.status is Status.PASS and missing.baseline_value == "Neexistuje S,G"
+    assert summary.status is Status.PASS and summary.details[UNCHANGED_SINCE_BASELINE] is True
+
+
+def test_core_upstream_among_two_vias_passes():
+    """inet.2 statika s next-hop + qualified-next-hop (MX1-POP1 2026-09-08):
+    collector od vlny 1 vraci obe via, upstream je jedno z nich."""
+    facts = _core_facts(via=("et-0/0/0.0", "et-0/0/1.0"))
+    rows = run_check(CoreMulticastForwardingCheck(), _ctx(facts, scope=_core_scope()))
+    assert _by_label(rows, sg_label(*SG))["Upstream interface"].status is Status.PASS
 
 
 # --- mvpn_cmulticast_status -------------------------------------------------
