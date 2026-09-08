@@ -766,7 +766,7 @@ def test_mvpn_pass_rows():
     assert rows["C-Multicast status"].outcome is Outcome.OK
     assert rows["C-Multicast status"].value == "10.12.12.1/32:239.1.1.1/32"
     assert rows["Provider tunnel"].outcome is Outcome.OK
-    assert rows["Provider tunnel"].value == TUNNEL
+    assert rows["Provider tunnel"].value == f"{TUNNEL} (PE 150.0.0.13)"
 
 
 def test_mvpn_without_any_pairs_is_skip():
@@ -807,7 +807,7 @@ def test_mvpn_invalid_tunnel_is_fail():
         _mvpn_facts(entries=[_entry(tunnel="I-P-tnl:invalid", pe=None)]), scope=_mvpn_scope()))
     row = _by_label(findings, sg_label(*MSG))["Provider tunnel"]
     assert row.outcome is Outcome.BROKEN
-    assert row.value == "I-P-tnl:invalid"
+    assert row.value == "I-P-tnl:invalid (PE -)"
     assert "bez provider tunelu" in row.message
 
 
@@ -819,7 +819,7 @@ def test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not():
         _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=resignaled)]),
         scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
     assert _by_label(same_pe, sg_label(*MSG))["Provider tunnel"].outcome is Outcome.OK
-    assert _by_label(same_pe, sg_label(*MSG))["Provider tunnel"].baseline_value == resignaled
+    assert _by_label(same_pe, sg_label(*MSG))["Provider tunnel"].baseline_value is None
 
     other_pe = "RSVP-TE P2MP:150.0.0.11, 24209,150.0.0.11"
     moved = MvpnCmulticastStatusCheck().run(_ctx(
@@ -853,6 +853,41 @@ def test_mvpn_check_applies_only_to_mvpn():
     assert check.applies_to(_mvpn_scope())
     assert not check.applies_to(_scope())
     assert not check.applies_to(_scope("irb.3", "IPVPN", None, [RI]))
+
+
+def test_cmulticast_ok_row_has_baseline_value_in_same_shape():
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(), scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    row = _by_label(findings, sg_label(*MSG))["C-Multicast status"]
+    assert row.outcome is Outcome.OK
+    assert row.baseline_value == row.value == "10.12.12.1/32:239.1.1.1/32"
+
+
+def test_provider_tunnel_same_pe_is_not_compared_even_if_tunnel_id_changed():
+    resignaled = "RSVP-TE P2MP:150.0.0.13, 99999,150.0.0.13"
+    rows = run_check(MvpnCmulticastStatusCheck(), _ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=resignaled)]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    tunnel = _by_label(rows, sg_label(*MSG))["Provider tunnel"]
+    assert tunnel.value == f"{TUNNEL} (PE 150.0.0.13)"
+    assert tunnel.details.get(NOT_COMPARED) is False and tunnel.status is Status.PASS
+
+
+def test_provider_tunnel_changed_pe_is_warn_with_baseline_pe():
+    other_pe = "RSVP-TE P2MP:150.0.0.11, 24209,150.0.0.11"
+    rows = run_check(MvpnCmulticastStatusCheck(), _ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[_entry(tunnel=other_pe, pe="150.0.0.11")]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    tunnel = _by_label(rows, sg_label(*MSG))["Provider tunnel"]
+    assert tunnel.status is Status.WARN and tunnel.baseline_value == "PE 150.0.0.11"
+
+
+def test_cmulticast_entry_missing_in_both_is_unchanged():
+    rows = run_check(MvpnCmulticastStatusCheck(), _ctx(
+        _mvpn_facts(entries=[]), baseline=_mvpn_facts(entries=[]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
+    [row] = rows
+    assert row.status is Status.PASS and row.baseline_value == "chybi c-multicast zaznam"
 
 
 # --- opravy 2026-09-07 -------------------------------------------------------

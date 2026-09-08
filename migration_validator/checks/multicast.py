@@ -670,6 +670,10 @@ def _cmulticast_entry(
     return None
 
 
+def _entry_value(entry: dict[str, Any]) -> str:
+    return f"{entry['source_prefix']}:{entry['group_prefix']}"
+
+
 @register
 class MvpnCmulticastStatusCheck(Check):
     id = "mvpn_cmulticast_status"
@@ -699,7 +703,7 @@ class MvpnCmulticastStatusCheck(Check):
         if data is None:
             return [Finding(
                 Outcome.BROKEN, f"instance {instance} neni v mvpn vypisu",
-                label=self.label, value="instance neni v mvpn vypisu",
+                label=self.label, value="instance neni v mvpn vypisu", compared=False,
             )]
         entries = data.get("c_multicast") or []
         baseline_entries = (
@@ -709,18 +713,21 @@ class MvpnCmulticastStatusCheck(Check):
         for source, group, _roles in pairs:
             sg = sg_label(source, group)
             entry = _cmulticast_entry(entries, source, group)
+            was = _cmulticast_entry(baseline_entries, source, group) if ctx.has_baseline else None
             if entry is None:
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "mvpn_instance", same=was is None)
                 findings.append(Finding(
-                    Outcome.BROKEN, f"{sg}: chybi c-multicast zaznam",
+                    outcome, f"{sg}: chybi c-multicast zaznam{suffix(outcome)}",
                     label=self.label, group=sg, value="chybi c-multicast zaznam",
+                    baseline_value=("chybi c-multicast zaznam" if outcome is Outcome.UNCHANGED
+                                    else _entry_value(was) if was else None),
                 ))
                 continue
             findings.append(Finding(
-                Outcome.OK, f"{sg}: c-multicast {entry['source_prefix']}:{entry['group_prefix']}",
-                label=self.label, group=sg,
-                value=f"{entry['source_prefix']}:{entry['group_prefix']}",
+                Outcome.OK, f"{sg}: c-multicast {_entry_value(entry)}",
+                label=self.label, group=sg, value=_entry_value(entry),
+                baseline_value=_entry_value(was) if was else None,
             ))
-            was = _cmulticast_entry(baseline_entries, source, group) if ctx.has_baseline else None
             findings.append(self._tunnel_row(sg, entry, was))
         return findings
 
@@ -728,17 +735,24 @@ class MvpnCmulticastStatusCheck(Check):
     def _tunnel_row(sg: str, entry: dict[str, Any], was: dict[str, Any] | None) -> Finding:
         tunnel = entry.get("provider_tunnel_id") or "-"
         pe = entry.get("sender_pe")
-        was_tunnel = was.get("provider_tunnel_id") if was else None
         was_pe = was.get("sender_pe") if was else None
+        value = f"{tunnel} (PE {pe or '-'})"
         if not pe:
-            outcome, note = Outcome.BROKEN, " - bez provider tunelu"
-        elif was_pe and was_pe != pe:
+            return Finding(
+                Outcome.BROKEN, f"{sg}: provider tunnel {tunnel} - bez provider tunelu",
+                label="Provider tunnel", group=sg, value=value, compared=False,
+            )
+        if was_pe and was_pe != pe:
             # Jen sender PE, ne cely retezec: tunnel id se pri re-signalizaci
             # LSP zmeni bez zmeny sluzby (rozhodnuti 2026-09-02).
-            outcome, note = Outcome.DEGRADED, f" - sender PE se zmenil {was_pe} -> {pe}"
-        else:
-            outcome, note = Outcome.OK, ""
+            return Finding(
+                Outcome.DEGRADED,
+                f"{sg}: provider tunnel {tunnel} - sender PE se zmenil {was_pe} -> {pe}",
+                label="Provider tunnel", group=sg, value=value, baseline_value=f"PE {was_pe}",
+            )
+        # Tunnel id se pri re-signalizaci LSP meni bez zmeny sluzby
+        # (rozhodnuti 2026-09-02) - porovnava se jen sender PE, a ten sedi.
         return Finding(
-            outcome, f"{sg}: provider tunnel {tunnel}{note}",
-            label="Provider tunnel", group=sg, value=tunnel, baseline_value=was_tunnel,
+            Outcome.OK, f"{sg}: provider tunnel {tunnel}",
+            label="Provider tunnel", group=sg, value=value, compared=False,
         )
