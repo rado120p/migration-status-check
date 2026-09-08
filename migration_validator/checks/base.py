@@ -47,19 +47,26 @@ class CheckContext:
     # scopu nejde porovnat "deaktivovano i drive" proti "deaktivovano az ted".
     baseline_scope: Scope | None = None
     link: dict[str, Any] | None = None
-    # Collectory, ktere v BASELINE selhaly. Bez toho by "chybi v obou"
-    # nesel odlisit od "baseline to nezmerila" a UNCHANGED (R-3) by
-    # schoval chybu migrace za selhany collector stare krabice.
-    baseline_failed_collectors: dict[str, str] = field(default_factory=dict)
+    # Cely capture.collectors baseline snapshotu (collector -> {status,
+    # message}). Bez toho by "chybi v obou" nesel odlisit od "baseline to
+    # nezmerila" a UNCHANGED (R-3) by schoval chybu migrace za selhany
+    # collector stare krabice.
+    baseline_collectors: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def has_baseline(self) -> bool:
         return self.baseline is not None
 
     def baseline_measured(self, area: str) -> bool:
-        """Baseline existuje a collector oblasti v ni probehl. Jedina
-        brana pro Outcome.UNCHANGED - stav se nefabuluje."""
-        return self.has_baseline and area not in self.baseline_failed_collectors
+        """Baseline existuje a oblast v ni byla ZMERENA - pozitivni dukaz
+        (status ok), ne pouha absence chyby: baseline bez zaznamu
+        collectoru (stary snapshot, --collectors vyber) nesmi vypadat jako
+        zmerena. Ping nema collector - dukazem jsou probe zaznamy scopu."""
+        if not self.has_baseline:
+            return False
+        if area == "ping":
+            return bool((self.baseline or {}).get("ping"))
+        return self.baseline_collectors.get(area, {}).get("status") == "ok"
 
     def options(self, check_id: str) -> dict[str, Any]:
         return self.config.options(check_id)

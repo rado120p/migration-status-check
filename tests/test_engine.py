@@ -1410,7 +1410,7 @@ def test_summary_counts_unchanged_rows(monkeypatch):
     assert result.summary["pass"] == 1
 
 
-def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
+def test_engine_passes_baseline_collectors_to_checks(monkeypatch):
     seen = {}
 
     class Probe(check_base.Check):
@@ -1420,16 +1420,22 @@ def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
         mode = check_base.Mode.BOTH
 
         def run(self, ctx):
-            seen["failed"] = dict(ctx.baseline_failed_collectors)
-            seen["measured"] = ctx.baseline_measured("arp")
+            seen["collectors"] = dict(ctx.baseline_collectors)
+            seen["measured_arp"] = ctx.baseline_measured("arp")
+            seen["measured_nd"] = ctx.baseline_measured("nd")
             return [Finding(Outcome.OK, "x", value="v", baseline_value="v")]
 
     monkeypatch.setattr("migration_validator.engine.all_checks", lambda: [Probe()])
     baseline = _old()
     baseline.capture.collectors["arp"] = {"status": "error", "message": "RpcError: timeout"}
+    baseline.capture.collectors["nd"] = {"status": "ok"}
     api.evaluate(_new(), baseline=baseline, now=NOW)
-    assert seen["failed"] == {"arp": "RpcError: timeout"}
-    assert seen["measured"] is False
+    assert seen["collectors"]["arp"] == {"status": "error", "message": "RpcError: timeout"}
+    assert seen["collectors"]["nd"] == {"status": "ok"}
+    # selhany collector v baseline - neni to dukaz zmereni
+    assert seen["measured_arp"] is False
+    # zaznam se statusem ok - pozitivni dukaz zmereni
+    assert seen["measured_nd"] is True
 
 
 def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatch):

@@ -413,9 +413,21 @@ def test_uncompared_finding_carries_marker_and_ok_finding_does_not():
 def test_baseline_measured_requires_baseline_and_ok_collector():
     assert _ctx(baseline=None).baseline_measured("ldp_neighbor") is False
     ctx = _ctx(baseline={"ldp_neighbor": {}},
-               baseline_failed_collectors={"ldp_neighbor": "RpcError"})
+               baseline_collectors={"ldp_neighbor": {"status": "error",
+                                                       "message": "RpcError"}})
     assert ctx.baseline_measured("ldp_neighbor") is False
-    assert ctx.baseline_measured("pim_neighbor") is True
+    # zadny zaznam collectoru (stary snapshot, --collectors vyber) -
+    # absence chyby neni dukaz zmereni
+    assert ctx.baseline_measured("pim_neighbor") is False
+    ctx_ok = _ctx(baseline={"pim_neighbor": {}},
+                  baseline_collectors={"pim_neighbor": {"status": "ok"}})
+    assert ctx_ok.baseline_measured("pim_neighbor") is True
+
+
+def test_baseline_measured_ping_has_no_collector_record():
+    # ping bezi mimo smycku collectoru - dukazem jsou probe zaznamy scopu
+    assert _ctx(baseline={"ping": []}).baseline_measured("ping") is False
+    assert _ctx(baseline={"ping": [{"target": "1.1.1.1"}]}).baseline_measured("ping") is True
 
 
 def test_check_with_excluded_subtypes_skips_that_subtype():
