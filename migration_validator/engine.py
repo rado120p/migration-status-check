@@ -144,13 +144,17 @@ def _aligned_baseline_data(
         for area in _RENAMED_FIELD_LIST_AREAS:
             if data.get(area):
                 data[area] = [
-                    {**entry, "interface": rename.get(entry.get("interface"), entry.get("interface"))}
+                    {**entry, "interface": rename.get(entry["interface"], entry["interface"])}
+                    if "interface" in entry else entry
                     for entry in data[area]
                 ]
         for area in _RENAMED_FIELD_DICT_AREAS:
             if data.get(area):
                 data[area] = {
-                    key: {**entry, "interface": rename.get(entry.get("interface"), entry.get("interface"))}
+                    key: (
+                        {**entry, "interface": rename.get(entry["interface"], entry["interface"])}
+                        if "interface" in entry else entry
+                    )
                     for key, entry in data[area].items()
                 }
     return data

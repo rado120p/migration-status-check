@@ -1432,9 +1432,7 @@ def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
     assert seen["measured"] is False
 
 
-def test_aligned_baseline_renames_protocol_areas_and_interface_fields():
-    from migration_validator.engine import _aligned_baseline_data
-
+def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatch):
     old = _scope("svc:CORE:Core", "CORE", "Core", "ge-0/0/1.0")
     new = _scope("svc:CORE:Core", "CORE", "Core", "et-0/0/1.0")
     baseline = _snapshot("172.20.20.4", "ge-0/0/1.0", [old])
@@ -1453,6 +1451,19 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields():
          "ldp_neighbor", "pim_neighbor", "mpls_interface", "igmp_group", "bfd", "evpn_esi")}
     )
 
+    # Scope.select() filtruje arp/nd/bfd/evpn_esi podle shody rozhrani, takze
+    # zaznam bez klice "interface" by pres nej nikdy neprosel - domonkeypatchujeme
+    # select() tak, aby takovy zaznam vratil, a overime, ze rename blok v
+    # _aligned_baseline_data ho nechava beze zmeny (interface se nedofabrikuje).
+    original_select = old.select
+
+    def _select_with_bare_arp_entry(facts, probes=None):
+        data = original_select(facts, probes)
+        data["arp"] = data["arp"] + [{"ip": "198.11.13.9", "no_interface_here": True}]
+        return data
+
+    monkeypatch.setattr(old, "select", _select_with_bare_arp_entry)
+
     data = _aligned_baseline_data(old, new, baseline)
 
     for area in ("isis_adjacency", "isis_interface", "ldp_neighbor",
@@ -1461,3 +1472,6 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields():
     assert data["arp"][0]["interface"] == "et-0/0/1.0"
     assert data["nd"][0]["interface"] == "et-0/0/1.0"
     assert data["evpn_esi"]["00:11"]["interface"] == "et-0/0/1.0"
+    # entry bez klice "interface" zustane beze zmeny, "interface" se nedofabrikuje
+    assert data["arp"][1] == {"ip": "198.11.13.9", "no_interface_here": True}
+    assert "interface" not in data["arp"][1]
