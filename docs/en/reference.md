@@ -11,21 +11,21 @@ Matches the output of `mig-validate checks` (as of 2026-09-07, 31 checks):
 
 | id | mode | severity | service types | what it verifies |
 |---|---|---|---|---|
-| `interface_state` | state | critical | all | both `admin_status` and `oper_status` are `up` — one finding for each, separately |
+| `interface_state` | both | critical | all | both `admin_status` and `oper_status` are `up` — one finding for each, separately; down in both subject and baseline = PASS with the marker (UNCHANGED) |
 | `interface_errors` | both | advisory | all | zero `input/output/framing` errors, with a baseline only growth — **transit interfaces only** |
 | `interface_traffic` | both | advisory | all | `input_pps`/`output_pps` > 0; with a baseline, also the drop against tolerance — **transit interfaces only**, one finding per direction |
 | `traffic_ceased` | compare | advisory | all | traffic on the old interface went quiet after the migration — **disabled by default** |
 | `interface_optics_levels` | both | critical | layer1 | RX/TX per lane, no dark side, shift vs baseline within `tolerance_db` |
-| `interface_optics_alarms` | state | critical | layer1 | no raised alarm (FAIL) or warning (WARN) on any lane |
-| `arp_present` | state | critical | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address |
-| `nd_present` | state | critical | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address |
-| `ping_reachability` | state | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture` |
+| `interface_optics_alarms` | both | critical | layer1 | no raised alarm (FAIL) or warning (WARN) on any lane; the same raised alarm in both = PASS with the marker (R-3) |
+| `arp_present` | both | critical | Internet, IPVPN | at least one IPv4 ARP entry on the service's interfaces; `SKIP` if the service has no IPv4 address; not on the multicast/mvpn subtypes; empty table in both = PASS with the marker (R-3) |
+| `nd_present` | both | critical | Internet, IPVPN | at least one usable IPv6 ND entry on the service's interfaces; `SKIP` if the service has no IPv6 address; not on the multicast/mvpn subtypes; empty table in both = PASS with the marker (R-3) |
+| `ping_reachability` | both | advisory | Internet, IPVPN | responses from the targets (IPv4 and IPv6) resolved during `capture`; not on the multicast/mvpn subtypes; empty table in both = PASS with the marker (R-3); against the baseline only packet loss is compared, not RTT (jitter never yields `ZMENA`) |
 | `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | state is `Established`; with a baseline it also reports a state change — on Core it runs only on the loopback scope (iBGP on lo0.0), transit has no peers |
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active against tolerance — **per RIB**; on Core it runs only on the loopback scope |
-| `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived |
-| `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF |
-| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration) |
-| `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance |
+| `evpn_vpws_status` | both | critical | E-Line | the instance's interface status is `Up` and a remote SID arrived; the same unresolved state (local iface Down, missing/unresolved remote peer) as the baseline = PASS with the marker (R-3); interface status values carry only the state, not the IFL name (the name is in the label) |
+| `evpn_esi_status` | both | critical | E-LAN | the local interface status in the ESI is `Up`, reports the DF; the same unresolved state (Unresolved, Down, DF not elected) as the baseline = PASS with the marker (R-3); the local interface value carries only the state, not the IFL name (the name is in the block's ESI header) |
+| `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 and all up; IRB up (if any IRBs exist); EVPN neighbors > 0; ESI "resolved"; with a baseline: EVPN neighbors below baseline = WARN, local/IRB interface counts are not compared for equality (the difference shows in the CHANGE column — consolidation into one mac-vrf instance changes them on every migration); the same unresolved state (Down interface/IRB, missing unit, unresolved ESI, zero neighbors) as the baseline = PASS with the marker (R-3); EVPN/IRB interface row values carry only the state, the IFL name is in the label (`EVPN interface (name)` / `IRB interface (name)`; with several instances in the scope the instance name joins the same parenthesis: `EVPN interface (name, instance)`) |
+| `evpn_mac_count` | both | advisory | E-LAN | MAC counts from the `count` output per VLAN and per interface; > 0 and, with a baseline, the drop against tolerance; a zero count equal to the baseline = PASS with the marker (R-3) |
 | `static_route_status` | both | critical | all | a configured static route is in the routing table and its next hop has not changed |
 | `aggregate_route_status` | both | critical | all | a configured aggregate route is in the table and active |
 | `bfd_session_state` | both | critical | all | the BFD session of a configured peer is `Up`; `SKIP` until BGP is `Established`; **does not run on any Core scope at all** — transit is measured by `bfd_transit_state`, and iBGP BFD on the loopback is a deliberately deferred decision (2026-08-26) |
@@ -33,14 +33,14 @@ Matches the output of `mig-validate checks` (as of 2026-09-07, 31 checks):
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency is `Up`, neighbor and addresses match the baseline; interface missing from output = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 configured, level 1 not; passive flag is role-aware (loopback requires it, transit forbids it) |
 | `isis_overview` | state | advisory | Core (loopback) | the router's overload bit is not set |
-| `ldp_neighbor_state` | both | critical | Core (transit) | an LDP neighbor is always expected; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, address checked against baseline |
+| `ldp_neighbor_state` | both | critical | Core (transit) | an LDP neighbor is always expected; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, address checked against baseline; against the baseline only Up/Down is compared, not the exact uptime (jitter never yields `ZMENA`) |
 | `pim_neighbor_state` | both | critical | Core (transit) | only where the interface is under `protocols pim` (otherwise no finding at all, not SKIP); otherwise same as LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS on the interface is `Up`; interface missing from output = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | a BFD session bound to the interface (not a peer address) is always expected and `Up` |
 | `igmp_membership_report` | both | critical | Internet (multicast), IPVPN (mvpn) | the receiver sends an IGMP membership report; the (S,G) set against baseline — a different set is WARN; no report but a PIM join = INFO |
 | `pim_join` | both | critical | Internet (multicast), IPVPN (mvpn) | only where the interface is under `protocols pim` (otherwise no finding); (S,G) from the PIM join table with role `[receiver]` (interface among downstream) / `[sender]` (interface is upstream); set against baseline = WARN; no join: INFO when IGMP reports the streams, WARN on a sender-only site, otherwise FAIL |
-| `multicast_forwarding_status` | state | critical | Internet (multicast), IPVPN (mvpn) | a single SKIP with no IGMP report and no PIM join; pairs = union of IGMP + PIM join; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); sender role: upstream == service interface, downstream non-empty; IGMP groups in 224.0.0.0/24 are ignored |
-| `core_multicast_forwarding` | both | critical | Core (loopback) | driven by the global `inet.2` statics, not IGMP; no rows at all without inet.2 statics; upstream against the `via` of the inet.2 route |
+| `multicast_forwarding_status` | both | critical | Internet (multicast), IPVPN (mvpn) | a single SKIP with no IGMP report and no PIM join; pairs = union of IGMP + PIM join; otherwise per-(S,G) Stream/Upstream/Forwarding-rate/Route uptime — upstream is role-aware (transit prefix vs. `lsi.`/`vt-`/transit/`irb`); sender role: upstream == service interface, downstream non-empty; IGMP groups in 224.0.0.0/24 are ignored; S,G not in the table = WARN; sender without downstream = WARN; receiver without a stream = FAIL; only soft failures ⇒ summary WARN, the same as the baseline ⇒ UNCHANGED (PASS with the marker); Stream/Upstream/Route uptime are not compared against the baseline, Forwarding-rate carries a `baseline_value` only when the baseline route carries one |
+| `core_multicast_forwarding` | both | critical | Core (loopback) | driven by the global `inet.2` statics, not IGMP; no rows at all without inet.2 statics; upstream against the `via` of the inet.2 route; against the baseline only the (S,G) set is compared, upstream/downstream/uptime are not (empty ZMENA), rate shows "bylo N pps" |
 | `mvpn_cmulticast_status` | both | critical | IPVPN (mvpn) | the c-multicast entry and provider tunnel exist; pairs = union of IGMP + PIM join; against baseline only the tunnel's sender PE is compared, not the full tunnel id |
 
 `mode` semantics:
@@ -61,6 +61,28 @@ Per-check behaviour: [files/checks.md](files/checks.md).
   Established.** `Idle -> Established` is PASS — an improvement rather than a breakage, and an
   orange row on a healthy service is a false alarm (decision R-2). The message and the `ZMENA`
   column still say that the state moved.
+- **The same broken state in both baseline and subject is PASS with the marker `, stejne jako
+  v baseline` (decision R-3), but only when the baseline actually MEASURED that area.**
+  `unchanged_or()` (`checks/baseline.py`) is the only gate to `Outcome.UNCHANGED` — a check
+  passes it the candidate outcome (only `BROKEN`/`DEGRADED` qualify) and `same: bool`; the
+  function returns `UNCHANGED` only when `same` holds AND `ctx.baseline_measured(area)` does.
+  That condition demands positive evidence, not the mere absence of an error:
+  `baseline_collectors[area]["status"] == "ok"` (the whole `capture.collectors` of the
+  baseline snapshot), and for `ping` (no collector of its own) the presence of probe records
+  in the scope. An old baseline snapshot with no collector record (a `--collectors`
+  selection, an older version) or a baseline with a failed collector therefore never hides a
+  migration defect behind "same as the baseline" — state is never fabricated. A second stop:
+  collectors substitute the literal `"unknown"` when an XML element is missing (e.g. the
+  `state` of a session that never showed up) — `"unknown" == "unknown"` across snapshots is
+  NOT evidence of the same state, only evidence that neither snapshot measured it, so `same`
+  must always also verify `<value> != "unknown"` (the `UNKNOWN` constant in
+  `checks/baseline.py`). Three exceptions that never go through `unchanged_or()` at all:
+  deactivation (`deactivation.py` has its own `deactivation_outcome()`, a deactivated service
+  never gets a FAIL, let alone UNCHANGED), `traffic_ceased` (it measures the traffic drop on
+  the old interface after the migration against the baseline traffic — a different question
+  from "is the state the same", so the UNCHANGED mechanism does not apply) and a multicast
+  sender site without a remote receiver (`igmp_membership_report`/`pim_join` —
+  `SENDER_NO_RECEIVER`, always `DEGRADED` regardless of the baseline).
 - **`evpn_vpws_status` does not require local and remote SIDs to match.** Each side advertises
   its own service ID; equality is not an invariant. It FAILs when no remote SID arrives at all.
 - **`arp_present`/`nd_present` return nothing at all when the service has no address in
@@ -83,6 +105,11 @@ Per-check behaviour: [files/checks.md](files/checks.md).
   That is how it surfaces a route that is in the configuration but never made it into the
   table (`neni v tabulce`) — for example when its next hop became unreachable after an
   interface was deactivated.
+- **A baseline captured before 2026-09-08 (before the routes collector started merging
+  `rt-entry`, R-8) may show a false RECV or "next hop changed" on prefixes with a
+  qualified-next-hop.** The old baseline snapshot carries only one `rt-entry` per prefix
+  instead of the union over all of them; recapture the baseline or ignore the result on those
+  prefixes.
 - **`bfd_session_state` waits for BGP.** While the peer is not `Established` it returns
   `SKIP` with the value `BGP neni Established` instead of a FAIL. BFD cannot come up without
   BGP, and two red rows for one cause are why operators learn to skim past listings.
@@ -547,7 +574,13 @@ Properties:
   not one summary across RIBs.
 - Status list: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (rank order between PASS and
   SKIP, worst-wins). `RECV` — measurement is healthy now and was not in the baseline
-  (recovered); does not affect exit code.
+  (recovered); does not affect exit code. `PASS` with the `unchanged_since_baseline` marker =
+  the same failure was already in the baseline (R-3, spec 2026-09-08); `summary` carries
+  `pass_unchanged`. `details.new_since_baseline: true` = an ARP/ND/ping row for an address or
+  target the measured baseline did not have; the renderer prints `novy zaznam (v baseline
+  nebyl)` instead of `bez baseline`. Without positive evidence of measurement (a failed
+  baseline collector, ping without probe records) the marker is absent and `bez baseline`
+  stays — it is true.
 - **Improvements** (`Outcome.RECOVERED` → `Status.RECV`, always RECV regardless of severity)
   are reported instead of silently folded into `PASS`, so an operator can see what got fixed
   rather than just that nothing is broken. It is used in: `isis_adjacency_state` (adjacency
