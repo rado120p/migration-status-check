@@ -195,3 +195,33 @@ nebo doplnit): `bgp.py:337-345`, `core_protocols.py:229-233`, `:236-241`,
 - Použitá inventory `runs/mig01-mx1-pop1/inventory_MX1-POP1_all.yml` je
   zastaralá (hlásí rozhraní deaktivovaná, stream přitom běží) — pro vlnu 3
   přegenerovat přes `--parse-services`.
+
+### Vlna 2 ověřena na uložených bězích 2026-09-08
+
+Přehráno `evaluate --detail --no-color` nad oběma uloženými pre/post páry
+(Task 10). Produkční pre/post snapshoty z 2026-09-08 k dispozici nebyly.
+
+- `runs/mig01-mx1-pop1` (`snapshot_pre_MX1-POP1_all.json` →
+  `snapshot_post_MX1-POP1_all.json`): `pass_unchanged = 0` (řádek „z toho N
+  PASS beze zmeny" se nevytiskl vůbec — souhrn ho tiskne jen při nenulové
+  hodnotě). Sparováno 17 služeb, 0 nesparovaných v baseline, 0 nesparovaných
+  v subjektu.
+- `runs/mig01-ptx1-pop1` (`snapshot_pre_PTX1-POP1_all.json` →
+  `snapshot_post_PTX1-POP1_all.json`): `pass_unchanged = 182`. Sparováno 19
+  služeb, 0 nesparovaných v baseline, 0 nesparovaných v subjektu.
+
+„bez baseline" v ZMĚNA sloupci (`grep " bez baseline$"` na oba výstupy),
+obě sady služeb byly plně sparované, takže žádný výskyt nepatří
+nesparované službě:
+
+- `mig01-mx1-pop1`: 1 výskyt — `Multicast forwarding status` (Core lo0.0
+  blok), stejný nález jako u vlny 1, řeší vlna 3.
+- `mig01-ptx1-pop1`: 4 výskyty — 1× `Multicast forwarding status` (stejná
+  příčina jako výše, vlna 3) a 3× `Interface errors / traffic` s hodnotou
+  `mereno na L2 (...) - viz blok(y) nize` (INFO řádek u L3 části vázané
+  služby, viz `docs/cs/reference.md` bod o vazbě L2+L3). Tenhle INFO řádek
+  z definice nikdy baseline_value nenese (skutečné porovnání jede na L2
+  bloku), takže „bez baseline" tiskne i u plně sparované služby — chování
+  je předchozí (nezavedla ho vlna 2) a mimo očekávaný výčet výjimek z
+  Tasku 10 briefu (multicast řádky vlny 3 + nesparované služby); zapsáno
+  jako nález v `task-10-report.md`, neopravováno v rámci Tasku 10.

@@ -120,6 +120,50 @@ samostatný modul **kvůli cyklickému importu**: `checks/ifaces.py` importuje `
 takže `checks/__init__.py` nesmí importovat `ifaces`. `load_all()` je idempotentní no-op —
 práci udělal import.
 
+## `baseline.py` — jediná brána pro `Outcome.UNCHANGED` (rozhodnutí R-3, spec 2026-09-08)
+
+Checky sem volají `unchanged_or(outcome, ctx, area, same)` místo přímého `Outcome.UNCHANGED`,
+aby podmínka žila na jednom místě, ne rozeseta po každém checku zvlášť.
+
+```python
+def unchanged_or(outcome, ctx, area, same):
+    if outcome not in (Outcome.BROKEN, Outcome.DEGRADED):
+        return outcome
+    if same and ctx.baseline_measured(area):
+        return Outcome.UNCHANGED
+    return outcome
+```
+
+`outcome` musí být kandidát na nález (`BROKEN`/`DEGRADED`) — cokoliv jiného projde beze
+změny. `same` nese logiku „je stav v subjektu stejný jako stav v baseline" — tu si počítá
+volající check, `unchanged_or` ji nezná. Teprve `ctx.baseline_measured(area)`
+(`checks/base.py`) rozhoduje, jestli má `same` váhu: vyžaduje pozitivní důkaz, že baseline
+oblast `area` skutečně změřila — `baseline_collectors[area]["status"] == "ok"` (celý
+`capture.collectors` baseline snapshotu, ne pouhá jeho absence), pro `ping` (bez vlastního
+collectoru) přítomnost probe záznamů. Bez tohohle gatu by starý baseline snapshot bez
+záznamu collectoru (výběr `--collectors`, snapshot z doby před collectorem) nebo baseline se
+selhaným collectorem schoval chybu migrace za tvrzení „stejné jako v baseline" — stav se
+nikdy nefabuluje.
+
+Druhá stopka patří volajícím checkům, ne `unchanged_or` samotné: collectory dosazují literál
+`"unknown"` (konstanta `UNKNOWN` v tomhle modulu, dřív duplikovaná v `evpn.py`/`bfd.py`),
+když jim v XML chybí element. Shoda `"unknown" == "unknown"` mezi subjektem a baseline NENÍ
+důkaz shodného stavu — je to jen důkaz, že ani jeden snapshot stav nezměřil. Každý check,
+který porovnává syrový stav se defaultem `"unknown"` (`bgp.py` stav session, `ifaces.py`
+admin/oper stav, `core_protocols.py` IS-IS adjacency/MPLS/BFD transit), proto do `same`
+přidává `and <hodnota> != UNKNOWN`; kde se stav před porovnáním normalizuje (MPLS mapuje
+každé ne-`"Up"` na `"Down"`), guard sviti na syrovém stavu, ne na normalizované hodnotě —
+jinak by dvě `"unknown"` splynuly pod stejné `"Down"`.
+
+`suffix(outcome)` vrací `", stejne jako v baseline"` pro `Outcome.UNCHANGED`, jinak prázdný
+řetězec — checky ho lepí na konec zprávy nálezu.
+
+Tři mechanismy v katalogu přes `unchanged_or()` vůbec neprochází, protože měří jinou otázku
+než „je stav stejný": deaktivace (`deactivation.py` má vlastní `deactivation_outcome()`),
+`traffic_ceased` (měří pokles provozu na starém rozhraní po migraci, ne shodu stavu) a
+multicast sender site bez vzdáleného receiveru (`igmp_membership_report`/`pim_join` vrací
+`DEGRADED` bezpodmínečně).
+
 ---
 
 ## `ifaces.py` — rozhraní

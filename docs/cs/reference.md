@@ -59,6 +59,26 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
   Změna `Idle -> Established` je PASS — je to zlepšení, ne rozbití, a oranžový řádek na zdravé
   službě je falešný poplach (rozhodnutí R-2). Že se stav změnil, řekne zpráva a sloupec
   `ZMENA`.
+- **Shodný rozbitý stav v baseline i subjektu je PASS se značkou `, stejne jako v baseline`
+  (rozhodnutí R-3), ale jen když baseline tu oblast opravdu ZMĚŘILA.** `unchanged_or()`
+  (`checks/baseline.py`) je jediná brána pro `Outcome.UNCHANGED` — check jí předá kandidátní
+  outcome (jen `BROKEN`/`DEGRADED` má šanci) a `same: bool`; funkce vrátí `UNCHANGED` jen
+  když `same` platí ZÁROVEŇ s `ctx.baseline_measured(area)`. Ta podmínka vyžaduje pozitivní
+  důkaz, ne pouhou absenci chyby: `baseline_collectors[area]["status"] == "ok"` (celý
+  `capture.collectors` baseline snapshotu), pro `ping` (bez vlastního collectoru) přítomnost
+  probe záznamů ve scope. Starý baseline snapshot bez záznamu collectoru (výběr
+  `--collectors`, stará verze) nebo baseline se selhaným collectorem tak nikdy neschová
+  chybu migrace za „stejné jako v baseline" — stav se nikdy nefabuluje. Druhá stopka:
+  collectory dosazují literál `"unknown"`, když jim v XML chybí element (např. `state`
+  session, která se nikdy nezobrazila) — shoda `"unknown" == "unknown"` mezi snapshoty NENÍ
+  důkaz shodného stavu, jen důkaz, že ani jeden snapshot stav nezměřil, takže `same` musí
+  vždy zároveň ověřit `<hodnota> != "unknown"` (konstanta `UNKNOWN` v `checks/baseline.py`).
+  Tři výjimky, které přes `unchanged_or()` vůbec neprochází: deaktivace (`deactivation.py`
+  má vlastní `deactivation_outcome()`, deaktivovaná služba nikdy nedostane FAIL, natož
+  UNCHANGED), `traffic_ceased` (měří pokles provozu na starém rozhraní po migraci proti
+  baseline provozu — jiná otázka než „je stav stejný", takže mechanismus UNCHANGED se ho
+  netýká) a multicast sender site bez vzdáleného receiveru (`igmp_membership_report`/
+  `pim_join` — `SENDER_NO_RECEIVER`, vždy `DEGRADED` bez ohledu na baseline).
 - **`evpn_vpws_status` nevyžaduje shodu local a remote SID.** Každá strana inzeruje svoje
   service ID; rovnost není invariant. FAIL nastane, když remote SID vůbec nepřijde.
 - **`arp_present`/`nd_present` nevrátí vůbec nic, když služba nemá adresu dané rodiny.**
