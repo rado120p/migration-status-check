@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -101,10 +102,16 @@ def _l3_link_without_transit(ctx: CheckContext) -> dict[str, Any] | None:
 
 @register
 class InterfaceStateCheck(Check):
+    """Stav rozhrani (admin/oper).
+
+    BOTH od 2026-09-08 (R-3): down v obou = PASS se znackou; bez baseline
+    zaznamu (nesparovane rozhrani) chova se jako drive.
+    """
+
     id = "interface_state"
     title = "Stav rozhrani"
     label = "Interface status"
-    mode = Mode.STATE
+    mode = Mode.BOTH
     requires = ("interfaces",)
     default_severity = Severity.CRITICAL
     layer1 = True
@@ -122,22 +129,29 @@ class InterfaceStateCheck(Check):
 
         names = scope_interfaces(ctx)
         layer1_scope = ctx.scope.kind == "layer1"
+        baseline_ifaces = (ctx.baseline or {}).get("interfaces", {})
 
         findings = []
         for name in names:
             data = interfaces[name]
+            was = baseline_ifaces.get(name)
             for label, key in (
                 ("Interface admin status", "admin_status"),
                 ("Interface operational status", "oper_status"),
             ):
                 state = str(data.get(key, "unknown"))
+                was_state = str(was.get(key, "unknown")) if was is not None else None
                 ok = state == "up"
+                outcome = Outcome.OK if ok else unchanged_or(
+                    Outcome.BROKEN, ctx, "interfaces", same=was_state == state,
+                )
                 findings.append(
                     Finding(
-                        Outcome.OK if ok else Outcome.BROKEN,
-                        f"{name}: {key} {state}",
+                        outcome,
+                        f"{name}: {key} {state}{suffix(outcome)}",
                         label=label if layer1_scope else qualified(label, name),
                         value=state.capitalize(),
+                        baseline_value=was_state.capitalize() if was_state is not None else None,
                         subject={key: state},
                     )
                 )
@@ -214,6 +228,7 @@ class InterfaceErrorsCheck(Check):
                         f"{name}: chybove countery nebyly zmereny (rozhrani nevraci error countery)",
                         label=label,
                         value="nezmereno",
+                        compared=False,
                     )
                 )
                 continue

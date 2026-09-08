@@ -11,7 +11,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 
 | id | mode | severity | typy služeb | co ověřuje |
 |---|---|---|---|---|
-| `interface_state` | state | critical | všechny | `admin_status` i `oper_status` je `up` — jeden nález na každé z obou zvlášť |
+| `interface_state` | both | critical | všechny | `admin_status` i `oper_status` je `up` — jeden nález na každé z obou zvlášť; down v subjektu i baseline = PASS se značkou (UNCHANGED) |
 | `interface_errors` | both | advisory | všechny | nulové `input/output/framing` chyby, s baseline jen přírůstek — **jen tranzitní rozhraní** |
 | `interface_traffic` | both | advisory | všechny | `input_pps`/`output_pps` > 0; s baseline navíc pokles proti toleranci — **jen tranzitní rozhraní**, jeden nález na směr |
 | `traffic_ceased` | compare | advisory | všechny | na starém rozhraní provoz po migraci utichl — **výchozí stav: vypnuto** |

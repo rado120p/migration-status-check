@@ -9,7 +9,12 @@ from migration_validator.checks.ifaces import (
     percent_change,
 )
 from migration_validator.config import CheckConfig, default_config
-from migration_validator.models.result import Outcome, Status
+from migration_validator.models.result import (
+    NOT_COMPARED,
+    UNCHANGED_SINCE_BASELINE,
+    Outcome,
+    Status,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -46,8 +51,17 @@ def _ctx(subject, baseline=None, interfaces=("ge-0/0/2.113",), config=None, link
         baseline=baseline,
         config=config or default_config(),
         failed_collectors={},
+        baseline_collectors=_baseline_collectors(baseline),
         link=link,
     )
+
+
+def _baseline_collectors(baseline):
+    """ctx.baseline_measured() je pozitivni evidence - bez ni by baseline
+    hodnota tise vypadla pod status collectoru, ktery vubec nebezel."""
+    if baseline is None:
+        return {}
+    return {area: {"status": "ok"} for area in baseline}
 
 
 def _service_ctx(subject, physical_interfaces, baseline=None, config=None, link=None):
@@ -68,6 +82,7 @@ def _service_ctx(subject, physical_interfaces, baseline=None, config=None, link=
         baseline=baseline,
         config=config or default_config(),
         failed_collectors={},
+        baseline_collectors=_baseline_collectors(baseline),
         link=link,
     )
 
@@ -86,6 +101,7 @@ def _layer1_ctx(subject, baseline=None, config=None, link=None):
         baseline=baseline,
         config=config or default_config(),
         failed_collectors={},
+        baseline_collectors=_baseline_collectors(baseline),
         link=link,
     )
 
@@ -166,6 +182,42 @@ def test_interface_state_down_fails():
 def test_interface_state_without_data_skips():
     results = run_check(InterfaceStateCheck(), _ctx({"interfaces": {}}))
     assert results[0].status is Status.SKIP
+
+
+def _iface(admin="up", oper="up"):
+    return {"interfaces": {"ge-0/0/2.113": {"admin_status": admin, "oper_status": oper,
+                                            "input_pps": 1, "output_pps": 1}}}
+
+
+def test_interface_state_down_in_both_is_unchanged_pass():
+    rows = run_check(InterfaceStateCheck(), _ctx(_iface(oper="down"), baseline=_iface(oper="down")))
+    oper = [r for r in rows if r.label.startswith("Interface operational")][0]
+    assert oper.status is Status.PASS
+    assert oper.details[UNCHANGED_SINCE_BASELINE] is True
+    assert oper.value == "Down" == oper.baseline_value
+
+
+def test_interface_state_down_now_up_before_is_fail_with_bylo():
+    rows = run_check(InterfaceStateCheck(), _ctx(_iface(oper="down"), baseline=_iface()))
+    oper = [r for r in rows if r.label.startswith("Interface operational")][0]
+    assert oper.status is Status.FAIL and oper.baseline_value == "Up"
+
+
+def test_interface_state_up_rows_carry_baseline_value_so_zmena_is_blank():
+    rows = run_check(InterfaceStateCheck(), _ctx(_iface(), baseline=_iface()))
+    assert all(r.baseline_value == r.value for r in rows)
+
+
+def test_interface_state_without_baseline_record_has_no_baseline_value():
+    rows = run_check(InterfaceStateCheck(), _ctx(_iface(oper="down"), baseline={"interfaces": {}}))
+    assert all(r.baseline_value is None for r in rows)
+    assert rows[1].status is Status.FAIL
+
+
+def test_errors_unmeasured_row_is_not_compared():
+    subject = {"interfaces": {"ge-0/0/2": {"input_pps": 1, "output_pps": 1}}}
+    rows = run_check(InterfaceErrorsCheck(), _layer1_ctx(subject, baseline=subject))
+    assert rows[0].value == "nezmereno" and rows[0].details[NOT_COMPARED] is False
 
 
 def test_errors_skipped_on_internal_interface():
