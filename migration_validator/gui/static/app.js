@@ -59,6 +59,7 @@ const GUIDE_TEXT = {
     title: "Run overview",
     body: [
       "Tenhle screen porovnává služby mezi pre a post snímky namapovaných portů.",
+      "Two-device run s mapováním: každé párování starý → nový port má vlastní blok s captures, port checky, službami a Nespárováno. Filtr typu služby jen zužuje zobrazení spárovaných výsledků — nic nepřepočítává; horní souhrn je vždy za celý run.",
       "Single device run porovnává post (nebo rollback) snímek boxu s jeho vlastním pre snímkem — tabulka má jeden sloupec Device a žádné mapování portů.",
       "Kliknutím na řádek v Results rozbalíš detail checků včetně změn proti baseline.",
       "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
