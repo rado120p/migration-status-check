@@ -19,7 +19,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 | `interface_optics_alarms` | both | critical | layer1 | žádný zvednutý alarm (FAIL) ani warning (WARN) na žádné lane; shodný zvednutý alarm v obou = PASS se značkou (R-3) |
 | `arp_present` | both | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 IPv4 ARP záznam; `SKIP`, když služba nemá IPv4 adresu; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
 | `nd_present` | both | critical | Internet, IPVPN | na rozhraní služby existuje ≥ 1 použitelný IPv6 ND záznam; `SKIP`, když služba nemá IPv6 adresu; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
-| `ping_reachability` | both | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture`; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3) |
+| `ping_reachability` | both | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture`; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3); proti baseline se porovnává ztrátovost, ne RTT (jitter nedá `ZMENA`) |
 | `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | stav je `Established`; s baseline navíc hlásí změnu stavu — na Core běží jen na loopback scope (iBGP na lo0.0), transit žádné peery nemá |
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť**; na Core běží jen na loopback scope |
 | `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID; shodný nevyřešený stav (local iface Down, chybějící/nevyřešený remote peer) s baseline = PASS se značkou (R-3); hodnoty stavů rozhraní nesou jen stav, ne jméno IFL (jméno je v labelu) |
@@ -33,7 +33,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 | `isis_adjacency_state` | both | critical | Core (transit) | IS-IS adjacency je `Up`, soused a adresy sedí proti baseline; chybějící rozhraní v outputu = FAIL |
 | `isis_interface_info` | state | critical | Core (transit, loopback) | level 2 nakonfigurován, level 1 ne; Passive flag role-aware (loopback ho vyžaduje, transit ne) |
 | `isis_overview` | state | advisory | Core (loopback) | overload bit routeru není nastaven |
-| `ldp_neighbor_state` | both | critical | Core (transit) | LDP soused je vždy očekávaný; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, adresa proti baseline |
+| `ldp_neighbor_state` | both | critical | Core (transit) | LDP soused je vždy očekávaný; `uptime_seconds > 0`, `None` = WARN `uptime nezmereno`, adresa proti baseline; proti baseline se porovnává jen Up/Down, ne přesný uptime (jitter nedá `ZMENA`) |
 | `pim_neighbor_state` | both | critical | Core (transit) | jen tam, kde je rozhraní pod `protocols pim` (jinak žádný nález, ne SKIP); jinak stejně jako LDP |
 | `mpls_interface_state` | both | critical | Core (transit) | MPLS na rozhraní je `Up`; chybějící rozhraní v outputu = FAIL |
 | `bfd_transit_state` | both | critical | Core (transit) | BFD session vázaná na rozhraní (ne na peer adresu) je vždy očekávaná a `Up` |

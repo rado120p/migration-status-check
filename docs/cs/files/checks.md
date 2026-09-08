@@ -604,7 +604,9 @@ Zrcadlí `arp_present` pro IPv6:
 nepodařilo změřit RTT), pak vždy `  <cil>` — např. `5/5  2.1 ms  10.1.1.1`. U neúspěchu
 `  <cil> neodpovedel`. `details` nese `resolved_from` (`arp` | `nd` | `subnet-fallback`) a
 `address` (`owning_prefix()`), takže je z výsledku vidět, který nakonfigurovaný rozsah cíl
-zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu.
+zastupuje a jestli byl zjištěný z ARP/ND, nebo dopočtený ze subnetu. Proti baseline se
+porovnává jen ztrátovost (`sent`/`received`), ne RTT — kolísající RTT (jitter) při stejné
+ztrátovosti dá `compared=False` a sloupec `ZMENA` zůstává prázdný.
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
@@ -923,6 +925,10 @@ takže chybějící soused je rovnou FAIL, ne tiché nic.
 Collector u LDP zahazuje záznamy pro `lo0.*` už při parsování (LDP na loopbacku nemá
 smysl měřit tímhle checkem) — viz `collectors.md`.
 
+Proti baseline se u stavového řádku porovnává jen Up/Down, ne přesná hodnota uptime —
+kolísající uptime při stejném stavu dá `compared=False` a sloupec `ZMENA` zůstává
+prázdný, ne "bylo Up for ...".
+
 ### `pim_neighbor_state` (transit, critical) — gate na záměr
 
 `service_types={"Core"}`, `service_subtypes={"transit"}`. Vyžaduje `pim_neighbor`.
@@ -1066,7 +1072,9 @@ nebo streamy nese PIM join, který se právě nezměřil. Žádné skupiny ani P
 IGMP membership report`. Proti baseline: shodná množina → `OK`; jiná množina →
 `DEGRADED`, `value` je aktuální množina, `baseline_value` ta stará; baseline bez
 skupin → bez porovnání (no-baseline pravidlo — `baseline_value` `None`, ne "bylo
-prázdno").
+prázdno"). INFO, SKIP a DEGRADED (sender bez receiveru) řádky nesou `compared=False` —
+i když `baseline_value` neseou (jen pro JSON), sloupec `ZMENA` zůstává v reportu
+prázdný, ne "bylo ...".
 
 Mutant kill (2026-09-03, ověřeno spuštěním): `Outcome.DEGRADED` → `Outcome.OK` ve
 větvi „množina se liší" nechá padnout `test_igmp_report_changed_set_is_warn`.
@@ -1097,7 +1105,8 @@ join zaznamenán z obou stran zároveň.
 
 Bez PIM párů, žádné IGMP páry a `igmp_group` collector v daném běhu selhal
 (`"igmp_group" in ctx.failed_collectors`) → `SKIP | PIM join : IGMP report nezmereno`
-— symetricky k `igmp_membership_report`.
+— symetricky k `igmp_membership_report`. Stejně jako tam nesou INFO, SKIP a DEGRADED
+(sender bez receiveru) řádky `compared=False`, takže `ZMENA` zůstává prázdná.
 
 Mutant kill: viz `tests/checks/test_multicast.py` (řádek `pim_join`, tabulka outcomes,
 gate bez `"pim"`).
