@@ -6,7 +6,7 @@ from migration_validator.checks.bgp import (
     peer_family,
 )
 from migration_validator.config import CheckConfig, default_config
-from migration_validator.models.result import Outcome, Status
+from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -31,12 +31,18 @@ def _ctx(
     bgp_neighbors_inactive=None,
     baseline_neighbors=None,
     baseline_neighbors_inactive=None,
+    baseline_collectors=None,
 ):
     """Baseline ZAMER se predava sem, ne prirazenim po konstrukci.
 
     CheckContext neni frozen, takze `ctx.baseline_scope = ...` by proslo, ale
     test, ktery si context prestavuje az po sestaveni, obchazi tvar, ktery
     engine skutecne stavi.
+
+    `baseline_collectors` je pozitivni dukaz, ze baseline oblast byla
+    zmerena (ctx.baseline_measured) - bez nej by UNCHANGED nemohl vzniknout
+    ani u testu, ktere baseline predavaji. Test o selhanem collectoru si
+    dodava vlastni slovnik.
     """
     scope = _scope_of(
         ["198.11.13.2"] if bgp_neighbors is None else bgp_neighbors,
@@ -54,6 +60,11 @@ def _ctx(
         baseline_scope=baseline_scope,
         config=config or default_config(),
         failed_collectors={},
+        baseline_collectors=(
+            baseline_collectors
+            if baseline_collectors is not None
+            else ({area: {"status": "ok"} for area in baseline} if baseline is not None else {})
+        ),
     )
 
 
@@ -343,6 +354,10 @@ def test_peer_active_now_deactivated_in_baseline_without_session_gets_no_deactiv
     kdyby se deactivation_outcome() volalo i pro takove peery s
     subject_off=False, dostal by druhy WARN radek navic k tomu, ktery uz
     vydava vetev 'bez session'.
+
+    Status vysel PASS/UNCHANGED, ne FAIL: baseline peera vubec nemela (byl
+    deaktivovan), takze 'bez session' je stejny stav jako v subjektu ted -
+    presne pripad, pro ktery unchanged_or() existuje (R-3).
     """
     ctx = _ctx(
         {"bgp": {}},
@@ -356,7 +371,8 @@ def test_peer_active_now_deactivated_in_baseline_without_session_gets_no_deactiv
     results = run_check(BgpSessionStateCheck(), ctx)
 
     assert len(results) == 1
-    assert results[0].status is Status.FAIL
+    assert results[0].status is Status.PASS
+    assert results[0].details[UNCHANGED_SINCE_BASELINE] is True
     assert "deaktivovan" not in results[0].message
 
 
@@ -867,3 +883,43 @@ def test_bgp_status_label_carries_the_peer():
         "BGP status (198.11.13.6)",
     }
     assert {r.group for r in results} == {None}
+
+
+def test_active_state_in_both_is_unchanged_pass():
+    peer = {"198.11.13.2": _peer(state="Active")}
+    ctx = _ctx({"bgp": peer}, baseline={"bgp": peer})
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+    assert row.status is Status.PASS
+    assert row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == "Active" == row.baseline_value
+
+
+def test_configured_peer_without_session_in_both_is_unchanged():
+    ctx = _ctx({"bgp": {}}, baseline={"bgp": {}})
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+    assert row.status is Status.PASS
+    assert row.value == "bez session" == row.baseline_value
+
+
+def test_peer_without_session_now_but_established_before_is_fail_with_bylo():
+    ctx = _ctx({"bgp": {}}, baseline={"bgp": {"198.11.13.2": _peer(state="Established")}})
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+    assert row.status is Status.FAIL and row.baseline_value == "Established"
+
+
+def test_deactivated_peer_baseline_value_uses_same_vocabulary():
+    ctx = _ctx({"bgp": {}}, baseline={"bgp": {}}, bgp_neighbors=[],
+               bgp_neighbors_inactive=["198.11.13.2"],
+               baseline_neighbors=[], baseline_neighbors_inactive=["198.11.13.2"])
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+    assert row.status is Status.WARN            # deaktivace zustava WARN (vyjimka R-3)
+    assert row.baseline_value == "deaktivovan"
+
+
+def test_prefix_counts_missing_rib_carries_baseline_value():
+    subject = {"198.11.13.2": _peer(rib="inet.0")}
+    baseline_peer = _peer(rib="inet.0")
+    baseline_peer["ribs"]["inet6.0"] = dict(_peer(rib="inet6.0")["ribs"]["inet6.0"])
+    rows = run_check(BgpPrefixCountsCheck(), _ctx({"bgp": subject}, baseline={"bgp": {"198.11.13.2": baseline_peer}}))
+    missing = _by_label(rows, "BGP prefixy (inet6.0)")
+    assert missing.value == "chybi" and missing.baseline_value == "v tabulce"

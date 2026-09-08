@@ -21,6 +21,7 @@ import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.deactivation import deactivation_outcome
 from migration_validator.checks.ifaces import percent_change
 from migration_validator.checks.registry import register
@@ -39,6 +40,10 @@ NOT_IN_SERVICE = "v baseline patril k teto sluzbe, v subjektu uz ne"
 # pokles zlepseni, ne regrese. Collector ho sbira dal, aby snapshot
 # zustal vernym zaznamem zarizeni.
 PREFIX_KEYS = ("active", "received", "accepted", "advertised")
+# Zrcadli routes.IN_TABLE (stejny retezec), ale bez cross-modul importu -
+# je to jen hodnota slovniku baseline_value pro "RIB v baseline byla, v
+# subjektu chybi", ne sdileny konstrukt mezi checky.
+IN_TABLE = "v tabulce"
 
 
 def peer_family(peer: str) -> int | None:
@@ -143,10 +148,11 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             )
 
             if state != ESTABLISHED:
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "bgp", same=baseline_state == state)
                 findings.append(
                     Finding(
-                        Outcome.BROKEN,
-                        f"{peer}: stav {state}, ocekavano {ESTABLISHED}",
+                        outcome,
+                        f"{peer}: stav {state}, ocekavano {ESTABLISHED}{suffix(outcome)}",
                         label=f"BGP status ({peer})",
                         family=peer_family(peer),
                         value=state,
@@ -223,7 +229,8 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     family=peer_family(peer),
                     value="deaktivovan",
                     baseline_value=(
-                        str(baseline_peers[peer].get("state", "unknown"))
+                        "deaktivovan" if baseline_off
+                        else str(baseline_peers[peer].get("state", "unknown"))
                         if peer in baseline_peers
                         else None
                     ),
@@ -238,25 +245,30 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
         without_session = universe - set(peers) - set(ctx.scope.selectors.bgp_neighbors_inactive)
         for peer in sorted(without_session):
             in_config = peer in configured
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "bgp", same=peer not in baseline_peers)
+            value = "bez session" if in_config else NOT_IN_SERVICE
             findings.append(
                 Finding(
-                    Outcome.BROKEN,
-                    # Tvrzeni o CLENSTVI, ne o existenci. Peer, ktereho
-                    # nenarokuje zadny subjektovy scope, muze mit na
-                    # zarizeni zivou session - engine.py:_unassigned_bgp_peers
-                    # ji ukaze v NEZARAZENO. Hlaska "v subjektu neni" tam
-                    # tedy lhala. Nova formulace je pravdiva v obou
-                    # pripadech, ktere sem spadnou (peer ze zarizeni zmizel
-                    # i peer presel pod jinou sluzbu), takze se check nemusi
-                    # ptat na nefiltrovana fakta, ktera nema.
-                    f"{peer}: nakonfigurovan, ale session neexistuje"
-                    if in_config
-                    else f"{peer}: {NOT_IN_SERVICE}",
+                    outcome,
+                    (
+                        # Tvrzeni o CLENSTVI, ne o existenci. Peer, ktereho
+                        # nenarokuje zadny subjektovy scope, muze mit na
+                        # zarizeni zivou session - engine.py:_unassigned_bgp_peers
+                        # ji ukaze v NEZARAZENO. Hlaska "v subjektu neni" tam
+                        # tedy lhala. Nova formulace je pravdiva v obou
+                        # pripadech, ktere sem spadnou (peer ze zarizeni zmizel
+                        # i peer presel pod jinou sluzbu), takze se check nemusi
+                        # ptat na nefiltrovana fakta, ktera nema.
+                        f"{peer}: nakonfigurovan, ale session neexistuje"
+                        if in_config
+                        else f"{peer}: {NOT_IN_SERVICE}"
+                    ) + suffix(outcome),
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
-                    value="bez session" if in_config else NOT_IN_SERVICE,
+                    value=value,
                     baseline_value=(
-                        str(baseline_peers[peer].get("state", "unknown"))
+                        value if outcome is Outcome.UNCHANGED
+                        else str(baseline_peers[peer].get("state", "unknown"))
                         if peer in baseline_peers
                         else None
                     ),
@@ -341,6 +353,7 @@ class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
                         label=f"{self.label} ({rib_name})",
                         family=family,
                         value="chybi",
+                        baseline_value=IN_TABLE,
                     )
                 )
         return findings
