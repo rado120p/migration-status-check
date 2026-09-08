@@ -4,11 +4,14 @@
 
 const FAMILY_ORDER = [null, 4, 6];
 const NO_BASELINE = "bez baseline";
+const UNCHANGED_TEXT = "beze zmeny (chyba uz v baseline)";
 const MERGED_LABEL = "Ostatni checky";
 
 function changeText(row, hasBaseline) {
   if (!hasBaseline) return "";
   if (row.mode === "state") return "";
+  if (row.unchanged) return UNCHANGED_TEXT;
+  if (row.compared === false) return "";
   if (row.baseline_value == null) {
     return row.status === "SKIP" ? "" : NO_BASELINE;
   }
@@ -48,6 +51,8 @@ function checkRow(check, qualify) {
     baseline_value: check.baseline_value != null ? check.baseline_value : null,
     delta: check.delta != null ? check.delta : null,
     mode: check.mode,
+    unchanged: !!((check.details || {}).unchanged_since_baseline),
+    compared: (check.details || {}).compared !== false,
   };
 }
 

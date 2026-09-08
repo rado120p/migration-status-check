@@ -354,3 +354,26 @@ test("comboLabel: group view, grouped run with back link, plain run, empty", () 
   assert.deepStrictEqual(MigView.comboLabel("run", null, null, [], null), { text: "—", group: null });
   assert.deepStrictEqual(MigView.comboLabel("run", null, null, [], "boom"), { text: "(nelze nacist runy)", group: null });
 });
+
+test("changeText: unchanged marker prints text even when values equal", () => {
+  const row = { mode: "both", status: "PASS", value: "Down", baseline_value: "Down",
+    delta: null, unchanged: true, compared: true };
+  assert.strictEqual(MigView.changeText(row, true), "beze zmeny (chyba uz v baseline)");
+  assert.strictEqual(MigView.changeText(row, false), "");
+});
+
+test("changeText: uncompared row is blank, not 'bez baseline'", () => {
+  const row = { mode: "both", status: "PASS", value: "1d", baseline_value: null,
+    delta: null, unchanged: false, compared: false };
+  assert.strictEqual(MigView.changeText(row, true), "");
+});
+
+test("checkRow: carries unchanged and compared from details", () => {
+  const row = MigView.checkRow({ id: "x", mode: "both", status: "PASS", value: "v",
+    details: { unchanged_since_baseline: true, compared: false } }, false);
+  assert.strictEqual(row.unchanged, true);
+  assert.strictEqual(row.compared, false);
+  const plain = MigView.checkRow({ id: "y", mode: "both", status: "PASS", value: "v" }, false);
+  assert.strictEqual(plain.unchanged, false);
+  assert.strictEqual(plain.compared, true);
+});

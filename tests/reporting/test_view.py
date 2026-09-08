@@ -524,3 +524,30 @@ def test_no_link_leaves_view_unchanged():
     view = build_view(_scope([_check("interface_state")]))
     assert view.link_role is None
     assert view.link_note is None
+
+
+from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE
+from migration_validator.reporting.view import UNCHANGED_TEXT, _row
+
+
+def _row_of(**details):
+    check = _check("x", mode="both", value="Down", baseline_value="Down")
+    check.details.update(details)
+    return _row(check, qualify=False)
+
+
+def test_change_text_unchanged_marker_prints_text_even_when_values_equal():
+    row = _row_of(**{UNCHANGED_SINCE_BASELINE: True})
+    assert change_text(row, True) == UNCHANGED_TEXT
+    assert change_text(row, False) == ""
+
+
+def test_change_text_uncompared_row_is_blank_not_bez_baseline():
+    check = _check("x", mode="both", value="1d 00:00:00", baseline_value=None)
+    check.details[NOT_COMPARED] = False
+    assert change_text(_row(check, qualify=False), True) == ""
+
+
+def test_change_text_missing_baseline_without_marker_still_says_bez_baseline():
+    check = _check("x", mode="both", value="v", baseline_value=None, status=Status.WARN)
+    assert change_text(_row(check, qualify=False), True) == "bez baseline"

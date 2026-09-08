@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 
 from migration_validator.models.result import (
     CheckResult,
+    NOT_COMPARED,
     ScopeResult,
     Severity,
     SKIPPED_BECAUSE,
     SKIP_DEACTIVATED,
     Status,
+    UNCHANGED_SINCE_BASELINE,
 )
 
 # Poradi sekci. None jsou radky, ktere na rodine nezavisi (stav rozhrani) -
@@ -27,6 +29,7 @@ FAMILY_ORDER = (None, 4, 6)
 _STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.RECV, Status.PASS)
 
 NO_BASELINE = "bez baseline"
+UNCHANGED_TEXT = "beze zmeny (chyba uz v baseline)"
 
 
 @dataclass
@@ -37,6 +40,8 @@ class Row:
     baseline_value: str | None
     delta: str | None
     mode: str
+    unchanged: bool = False
+    compared: bool = True
 
 
 @dataclass
@@ -94,6 +99,12 @@ def change_text(row: Row, has_baseline: bool) -> str:
     if not has_baseline:
         return ""
     if row.mode == "state":
+        return ""
+    if row.unchanged:
+        # Hodnoty se rovnaji, ale prazdno by radek splynulo se zdravym PASS.
+        return UNCHANGED_TEXT
+    if not row.compared:
+        # Namereno, ale z definice neporovnavano (R-4) - ne "bez baseline".
         return ""
     if row.baseline_value is None:
         # SKIP uz duvod nese ve vlastni hlasce ("peer neni v baseline
@@ -173,6 +184,8 @@ def _row(check: CheckResult, qualify: bool) -> Row:
         baseline_value=check.baseline_value,
         delta=check.delta,
         mode=check.mode,
+        unchanged=bool(check.details.get(UNCHANGED_SINCE_BASELINE)),
+        compared=check.details.get(NOT_COMPARED, True) is not False,
     )
 
 

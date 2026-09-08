@@ -63,6 +63,10 @@ Obsah sloupce `ZMENA`:
 - `row.mode == "state"` → `""` — stavové checky (`arp_present`, `nd_present`,
   `ping_reachability`, `interface_state`, ...) baseline hodnotu nemají z definice, takže by se
   jinak `bez baseline` vypsalo skoro všude a nikdo by tomu nevěnoval pozornost,
+- `row.unchanged` (značka `unchanged_since_baseline`) → `UNCHANGED_TEXT`
+  (`"beze zmeny (chyba uz v baseline)"`) — i když se `value` a `baseline_value` rovnají,
+- `not row.compared` (`compared=False`) → `""` — naměřeno, ale z definice neporovnáváno (R-4),
+  ne `bez baseline`,
 - `baseline_value is None` → `NO_BASELINE` (`"bez baseline"`),
 - `baseline_value == value` → `""` (beze změny),
 - jinak `f"bylo {baseline_value}   {delta}"`, nebo jen `f"bylo {baseline_value}"`, když delta
