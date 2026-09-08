@@ -2338,6 +2338,9 @@ class App {
       el("button", {
         className: "btn btn-secondary",
         text: "Export JSON",
+        attrs: { title: this.state.serviceTypeFilter !== MigRunResults.ALL_TYPES
+          ? "exports the complete evaluation response — the type filter does not narrow it"
+          : "exports the complete evaluation response" },
         onClick: () => this.exportJson(),
       }),
       el("button", {
@@ -2946,6 +2949,41 @@ class App {
       });
     }
     return section;
+  }
+
+  buildServiceTypeFilter(pairedEntries, catalogueTypes, mainModels) {
+    const R = MigRunResults;
+    const selected = this.state.serviceTypeFilter;
+    const choices = R.serviceTypeChoices(catalogueTypes, pairedEntries);
+    const bar = el("div", { className: "type-filter", attrs: { role: "group", "aria-label": "Filter paired service results" } });
+    bar.appendChild(el("span", { className: "type-filter-label", text: "Filter paired service results" }));
+    const chips = el("div", { className: "type-chips" });
+    const chip = (type, label, count, disabled) => {
+      const pressed = selected === type;
+      return el("button", {
+        className: "type-chip" + (pressed ? " active" : ""),
+        attrs: {
+          type: "button",
+          "aria-pressed": pressed ? "true" : "false",
+          "data-focus-key": `chip:${type}`,
+          ...(disabled && !pressed ? { disabled: "disabled" } : {}),
+        },
+        onClick: () => this.setServiceTypeFilter(type),
+        children: [el("span", { text: label }), el("span", { className: "chip-count mono", text: String(count) })],
+      });
+    };
+    chips.appendChild(chip(R.ALL_TYPES, "All types", pairedEntries.length, false));
+    for (const c of choices) chips.appendChild(chip(c.type, c.type, c.count, c.count === 0));
+    bar.appendChild(chips);
+    bar.appendChild(el("span", { className: "type-filter-note", text: "Port checks, unmatched findings and capture state stay visible" }));
+
+    const restricted = mainModels.map((m) => m.filtered).find((f) => f && Array.isArray(f.service_types));
+    if (restricted) {
+      const list = restricted.service_types.length ? restricted.service_types.join(", ") : "(none)";
+      bar.appendChild(el("div", { className: "type-filter-profile", text:
+        `Profile restricts evaluated service types to: ${list}. "All types" shows everything returned under that profile; change the profile to evaluate other types.` }));
+    }
+    return bar;
   }
 
   // -- snapshot evaluation (screen 2) ------------------------------------
