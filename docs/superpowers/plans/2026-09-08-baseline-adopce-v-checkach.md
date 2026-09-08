@@ -853,6 +853,7 @@ def test_pim_join_none_in_both_is_unchanged():
 
 ## Task 10: Průchod celé suite, docs, ověření na uložených bězích
 
+- [ ] **Step 0: Sweep placeholderu `"unknown"` (nález review Tasku 7).** Collectory dosazují `"unknown"`, když XML element chybí; dvě nezměřené hodnoty nesmí dát UNCHANGED (stav se nefabuluje). Projdi `checks/bgp.py` (`state = str(peers[peer].get("state", "unknown"))`), `checks/ifaces.py` (`interface_state`, `str(data.get(key, "unknown"))`), `checks/core_protocols.py` (IS-IS `state`, MPLS `state`, BFD transit `state`), `checks/bfd.py` (`state`) a všude, kde `same=` porovnává stav, doplň `and <hodnota> != "unknown"` (sdílená konstanta `UNKNOWN = "unknown"` v `checks/baseline.py`, evpn.py ji importuje místo své lokální). Pro každý modul jeden test: stav `"unknown"` v obou snímcích zůstává FAIL. Commit `fix(checks): placeholder unknown nikdy nedava UNCHANGED`.
 - [ ] **Step 1:** `pyats-venv/bin/python -m pytest -q` a `node --test tests/js/*.test.js` → zelené.
 - [ ] **Step 2:** `docs/cs/reference.md` sekce „Poznámky, kde katalog překvapí": nový odstavec **R-3** (co je UNCHANGED, podmínka změřené baseline, výjimky). `docs/cs/files/checks.md`: odstavec o `checks/baseline.py`.
 - [ ] **Step 3:** Přehraj `evaluate` nad `runs/mig01-mx1-pop1` (pre vs post) a `runs/mig01-ptx1-pop1`; do spec sekce „Ověření" zapiš počty `pass_unchanged` a zkontroluj, že žádný řádek nemá „bez baseline" kromě nesparovaných služeb. Pokud produkční pre/post snapshoty z 2026-09-08 jsou k dispozici, přehrát i ty.

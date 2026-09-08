@@ -427,6 +427,7 @@ Pozn. k prefixu v labelu: hodnota „Existuje S,G pro X" zaniká — prefix je v
 
 ## Task 4: Ověření v laborce a uzavření větve
 
+- [ ] **Step 0: IGMP/PIM `was_value` na změřené prázdné baseline (nález final review vlny 2, issue 8).** V `igmp_membership_report` (`was_value = pairs_text(was) if was else None`) a `pim_join` (`role_pairs_text(was) if was else None`) dává změřená prázdná baseline `None` → OK/DEGRADED řádek tiskne „bez baseline", zatímco FAIL větev tutéž prázdnotu čte jako sentinel `NO_REPORT`/`NO_JOIN`. Sjednoť: když baseline existuje a `was` je prázdné, `was_value = NO_REPORT` (resp. `NO_JOIN`); `None` jen bez baseline. Test: baseline bez páru, subjekt s párem → OK řádek `baseline_value == NO_REPORT` (report ZMENA „bylo Receiver neposila...", tj. zlepšení viditelné). Commit `fix(multicast): zmerena prazdna baseline neni "bez baseline"`.
 - [ ] **Step 1:** `pyats-venv/bin/python -m pytest -q` a `node --test tests/js/*.test.js` zelené.
 - [ ] **Step 2:** Laborka (`eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"`): capture pre+post na MX1-POP1 (`172.20.20.4`) a PTX1-POP1 (`172.20.20.5`), `evaluate` s `--detail`. Zkontroluj: Core lo0.0 blok bez „bez baseline" a bez „bylo (S,G)"; `Upstream interface` PASS s dvěma via; Internet multicast blok bez ARP/ND/Ping; MVPN blok c-multicast bez „bez baseline"; souhrn vypíše `pass_unchanged` řádek jen když existují zděděné chyby.
 - [ ] **Step 3:** Zapiš do spec sekce „Ověření" (datum, co sedělo, co ne). Commit `docs(spec): overeni vlny 3 v laborce`.
