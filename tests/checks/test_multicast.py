@@ -30,12 +30,13 @@ from migration_validator.checks.multicast import (
     stream_rows,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
+from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 POST = "et-0/0/8.11"
 PRE = "ge-0/0/2.11"
 SG = ("10.11.11.1", "232.1.1.1")
+KEY = f"{SG[0]},{SG[1]}"
 
 
 def _scope(interface=POST, service_type="Internet", subtype="multicast", instances=(),
@@ -368,11 +369,13 @@ def test_forwarding_sender_upstream_must_be_service_interface():
 
 
 def test_forwarding_sender_without_downstream_fails_stream_row():
+    # Rozhodnuti 2026-09-08: sender bez downstreamu je mekke selhani (WARN),
+    # ne tvrdy FAIL - jen receiver bez streamu zustava BROKEN.
     findings = MulticastForwardingStatusCheck().run(_ctx(_sender_facts(downstream=()), scope=_sender_scope()))
     rows = _by_label(findings, sg_label("10.10.10.1", "232.10.10.1"))
-    assert rows["Stream"].outcome is Outcome.BROKEN
+    assert rows["Stream"].outcome is Outcome.DEGRADED
     assert rows["Stream"].value == "S,G je v tabulce ale nema zadny downstream"
-    assert findings[0].outcome is Outcome.BROKEN
+    assert findings[0].outcome is Outcome.DEGRADED
 
 
 def test_forwarding_both_roles_passes_when_either_role_matches():
@@ -404,9 +407,11 @@ def test_forwarding_both_roles_neither_matching_fails_with_receiver_texts():
 
 
 def test_forwarding_sg_missing_from_table():
+    # Rozhodnuti 2026-09-08: chybejici S,G v multicast tabulce je mekke
+    # selhani (WARN), ne tvrdy FAIL.
     findings = MulticastForwardingStatusCheck().run(_ctx(_facts(routes={})))
-    assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "1/1 S,G nefunguje"
+    assert findings[0].outcome is Outcome.DEGRADED
+    assert findings[0].value == "1/1 S,G bez streamu"
     assert len(findings) == 2
     assert findings[1].label == "Stream"
     assert findings[1].value == "S,G neni v multicast tabulce"
@@ -529,6 +534,49 @@ def test_forwarding_missing_rate_is_skip_not_failure():
     rate_row = _by_label(findings, sg_label(*SG))["Forwarding-rate"]
     assert rate_row.outcome is Outcome.SKIP
     assert rate_row.value == RATE_UNAVAILABLE
+
+
+def test_sg_missing_from_table_is_warn_and_summary_is_soft():
+    rows = run_check(MulticastForwardingStatusCheck(), _ctx({**_facts(routes={}), **_pim()}))
+    summary, stream = rows[0], rows[1]
+    assert stream.status is Status.WARN and stream.value == "S,G neni v multicast tabulce"
+    assert summary.status is Status.WARN and summary.value == "1/1 S,G bez streamu"
+
+
+def test_sg_missing_in_both_is_unchanged_pass():
+    subject = {**_facts(routes={}), **_pim()}
+    baseline = {**_facts(iface=PRE, routes={}), **_pim()}
+    rows = run_check(MulticastForwardingStatusCheck(),
+                     _ctx(subject, baseline=baseline, scope=_scope(POST), baseline_scope=_scope(PRE)))
+    summary, stream = rows[0], rows[1]
+    assert stream.status is Status.PASS and stream.details[UNCHANGED_SINCE_BASELINE] is True
+    assert stream.baseline_value == stream.value
+    assert summary.status is Status.PASS
+
+
+def test_sender_without_downstream_is_warn():
+    subject = {**_pim("master", _join(upstream=POST, downstream=[])),
+               "igmp_group": {}, "multicast_route": {"master": {KEY: _route(upstream=POST, downstream=[])}}}
+    rows = run_check(MulticastForwardingStatusCheck(), _ctx(subject, scope=_scope(POST, protocols=("pim",))))
+    assert _by_label(rows, sg_label(*SG))["Stream"].status is Status.WARN
+    assert rows[0].status is Status.WARN and rows[0].value == "1/1 S,G bez streamu"
+
+
+def test_receiver_stream_not_forwarded_is_still_fail():
+    subject = {**_facts(routes={KEY: _route(downstream=["other.0"])}), **_pim()}
+    rows = run_check(MulticastForwardingStatusCheck(), _ctx(subject))
+    assert rows[0].status is Status.FAIL and rows[0].value == "1/1 S,G nefunguje"
+
+
+def test_forwarding_rows_are_not_compared_except_rate_with_baseline():
+    subject = {**_facts(routes={KEY: _route(pps=9)}), **_pim()}
+    baseline = {**_facts(iface=PRE, routes={KEY: _route(downstream=[PRE], pps=6)}), **_pim()}
+    rows = run_check(MulticastForwardingStatusCheck(),
+                     _ctx(subject, baseline=baseline, scope=_scope(POST), baseline_scope=_scope(PRE)))
+    uncompared = {r.label for r in rows if r.details.get(NOT_COMPARED) is False}
+    assert uncompared == {"Multicast forwarding status", "Stream", "Upstream interface", "Route uptime"}
+    rate = _by_label(rows, sg_label(*SG))["Forwarding-rate"]
+    assert rate.baseline_value == "6 pps" and NOT_COMPARED not in rate.details
 
 
 # --- core_multicast_forwarding ----------------------------------------------

@@ -172,19 +172,27 @@ def format_uptime_hms(seconds: int | None) -> str:
     return f"{days}d {clock}" if days else clock
 
 
-def stream_rows(sg: str, route: dict[str, Any], *, rate_label: str) -> list[Finding]:
+def stream_rows(
+    sg: str, route: dict[str, Any], *, rate_label: str,
+    baseline_route: dict[str, Any] | None = None,
+) -> list[Finding]:
     """Forwarding rate (> 0) a uptime (INFO) - spolecne pro vsechny tri
-    forwarding checky. Bez porovnani proti baseline.
+    forwarding checky. Uptime se proti baseline neporovnava nikdy (meni
+    se migraci z definice). Rate take ne - krome baseline_value, kterou
+    pouziva Task 3 pro inet.2 blok, kdyz baseline routa nese pps hodnotu.
 
     forwarding_rate_pps muze byt None (junos-evo statistics-timed-out) -
     to je SKIP, ne BROKEN 0 pps: nemereno neni totez jako nula."""
     raw_pps = route.get("forwarding_rate_pps")
+    was_pps = (baseline_route or {}).get("forwarding_rate_pps")
+    rate_baseline_value = f"{int(was_pps)} pps" if was_pps is not None else None
     if raw_pps is None:
         rate_row = Finding(
             Outcome.SKIP,
             f"{sg}: forwarding statistiky nejsou ve vypisu "
             "(multicast-statistics-timed-out)",
             label=rate_label, group=sg, value=RATE_UNAVAILABLE,
+            baseline_value=rate_baseline_value, compared=rate_baseline_value is not None,
         )
     else:
         pps = int(raw_pps)
@@ -192,6 +200,7 @@ def stream_rows(sg: str, route: dict[str, Any], *, rate_label: str) -> list[Find
             Outcome.OK if pps > 0 else Outcome.BROKEN,
             f"{sg}: forwarding rate {pps} pps",
             label=rate_label, group=sg, value=f"{pps} pps",
+            baseline_value=rate_baseline_value, compared=rate_baseline_value is not None,
         )
     return [
         rate_row,
@@ -199,7 +208,7 @@ def stream_rows(sg: str, route: dict[str, Any], *, rate_label: str) -> list[Find
             Outcome.INFO,
             f"{sg}: route uptime {format_uptime_hms(route.get('uptime_seconds'))}",
             label="Route uptime", group=sg,
-            value=format_uptime_hms(route.get("uptime_seconds")),
+            value=format_uptime_hms(route.get("uptime_seconds")), compared=False,
         ),
     ]
 
@@ -357,13 +366,23 @@ def _upstream_problem(subtype: str | None, upstream: str | None) -> str | None:
     return f" neni z ocekavane role (ocekavano {'/'.join(prefixes)})"
 
 
-def _summary(label: str, total: int, failed: int) -> Finding:
-    if failed:
+def _summary(ctx: CheckContext, label: str, total: int, hard: int, soft: int, soft_unchanged: int) -> Finding:
+    """Tvrde selhani (stream se na receiver neposila, upstream ze spatne
+    role) = BROKEN. Jen mekke (S,G neni v tabulce, sender bez receiveru,
+    rozhodnuti 2026-09-08) = DEGRADED; kdyz vsechna mekka byla i v baseline,
+    je souhrn UNCHANGED jako jeho radky."""
+    if hard:
         return Finding(
-            Outcome.BROKEN, f"{failed} z {total} S,G nefunguje",
-            label=label, value=f"{failed}/{total} S,G nefunguje",
+            Outcome.BROKEN, f"{hard} z {total} S,G nefunguje",
+            label=label, value=f"{hard}/{total} S,G nefunguje", compared=False,
         )
-    return Finding(Outcome.OK, f"{total} S,G funguje", label=label, value=f"{total} S,G")
+    if soft:
+        outcome = unchanged_or(Outcome.DEGRADED, ctx, "multicast_route", same=soft == soft_unchanged)
+        return Finding(
+            outcome, f"{soft} z {total} S,G bez streamu{suffix(outcome)}",
+            label=label, value=f"{soft}/{total} S,G bez streamu", compared=False,
+        )
+    return Finding(Outcome.OK, f"{total} S,G funguje", label=label, value=f"{total} S,G", compared=False)
 
 
 @register
@@ -372,7 +391,7 @@ class MulticastForwardingStatusCheck(Check):
     order = 12
     title = "Multicast forwarding na servisnim rozhrani"
     label = "Multicast forwarding status"
-    mode = Mode.STATE
+    mode = Mode.BOTH
     requires = ("igmp_group", "multicast_route", "pim_join")
     requires_inventory = True
     service_types = MULTICAST_TYPES
@@ -388,35 +407,52 @@ class MulticastForwardingStatusCheck(Check):
                 value=NO_PAIRS_SKIP,
             )]
         table = multicast_table(ctx.subject)
+        baseline_table = multicast_table(ctx.baseline) if ctx.has_baseline else {}
         iface = ctx.scope.selectors.interfaces[0]
         rows: list[Finding] = []
-        failed = 0
+        hard = soft = soft_unchanged = 0
         for source, group, roles in pairs:
             matches = routes_for(table, source, group)
             if not matches:
                 sg = sg_label(source, group)
+                was = routes_for(baseline_table, source, group)
+                # Rozhodnuti 2026-09-08: chybejici S,G v tabulce je mekke
+                # selhani (WARN), ne tvrdy FAIL.
+                outcome = unchanged_or(Outcome.DEGRADED, ctx, "multicast_route", same=not was)
                 rows.append(Finding(
-                    Outcome.BROKEN, f"{sg}: S,G neni v multicast tabulce",
+                    outcome, f"{sg}: S,G neni v multicast tabulce{suffix(outcome)}",
                     label="Stream", group=sg, value="S,G neni v multicast tabulce",
+                    baseline_value=("S,G neni v multicast tabulce" if outcome is Outcome.UNCHANGED
+                                    else (_labels_of(was) or None)),
+                    compared=False,
                 ))
-                failed += 1
+                soft += 1
+                soft_unchanged += outcome is Outcome.UNCHANGED
                 continue
-            pair_failed = False
+            pair_hard = pair_soft = pair_unchanged = False
             for key, route in matches:
                 # Skupina nese realny zdroj z tabulky - u ASM zaznamu (*, G)
                 # je to jediny zpusob, jak streamy rozlisit.
                 sg = sg_label(key.split(",", 1)[0], group)
-                stream = self._stream(sg, iface, ctx.scope.service_subtype, route, roles)
-                if any(f.outcome is Outcome.BROKEN for f in stream):
-                    pair_failed = True
+                stream = self._stream(
+                    ctx, sg, iface, ctx.scope.service_subtype, route, roles, baseline_table.get(key)
+                )
+                outcomes = {f.outcome for f in stream}
+                pair_hard |= Outcome.BROKEN in outcomes
+                pair_soft |= Outcome.DEGRADED in outcomes
+                pair_unchanged |= Outcome.UNCHANGED in outcomes
                 rows.extend(stream)
-            if pair_failed:
-                failed += 1
-        return [_summary(self.label, len(pairs), failed), *rows]
+            if pair_hard:
+                hard += 1
+            elif pair_soft or pair_unchanged:
+                soft += 1
+                soft_unchanged += pair_unchanged and not pair_soft
+        return [_summary(ctx, self.label, len(pairs), hard, soft, soft_unchanged), *rows]
 
     @staticmethod
     def _stream(
-        sg: str, iface: str, subtype: str | None, route: dict[str, Any], roles: frozenset[str]
+        ctx: CheckContext, sg: str, iface: str, subtype: str | None,
+        route: dict[str, Any], roles: frozenset[str], baseline_route: dict[str, Any] | None,
     ) -> list[Finding]:
         downstream = route.get("downstream_interfaces") or []
         upstream = route.get("upstream_interface")
@@ -426,39 +462,57 @@ class MulticastForwardingStatusCheck(Check):
         # jejiz Stream prosel (obe prosle -> receiver). Zadna prosla ->
         # receiver texty (rozhodnuti 2026-09-07).
         as_sender = (sender_ok and not receiver_ok) or roles == frozenset({SENDER})
+        was_iface = (ctx.baseline_scope or ctx.scope).selectors.interfaces[0]
+        was_down = (baseline_route or {}).get("downstream_interfaces") or []
         if as_sender:
+            # Rozhodnuti 2026-09-08: sender bez downstreamu je mekke
+            # selhani (WARN), ne tvrdy FAIL.
+            stream_outcome = Outcome.OK if sender_ok else unchanged_or(
+                Outcome.DEGRADED, ctx, "multicast_route",
+                same=baseline_route is not None and not was_down,
+            )
             stream_row = Finding(
-                Outcome.OK if sender_ok else Outcome.BROKEN,
+                stream_outcome,
                 f"{sg}: stream " + (f"odchazi na {', '.join(downstream)}" if sender_ok
-                                    else "nema zadny downstream"),
+                                    else f"nema zadny downstream{suffix(stream_outcome)}"),
                 label="Stream", group=sg,
                 value=(f"Stream odchazi na {', '.join(downstream)}" if sender_ok
                        else "S,G je v tabulce ale nema zadny downstream"),
+                compared=False,
             )
             upstream_ok = upstream == iface
             upstream_row = Finding(
                 Outcome.OK if upstream_ok else Outcome.BROKEN,
                 f"{sg}: upstream {upstream or '-'}"
                 + ("" if upstream_ok else f" neni servisni rozhrani {iface}"),
-                label="Upstream interface", group=sg, value=upstream or "-",
+                label="Upstream interface", group=sg, value=upstream or "-", compared=False,
             )
         else:
             problem = _upstream_problem(subtype, upstream)
+            stream_outcome = Outcome.OK if receiver_ok else unchanged_or(
+                Outcome.BROKEN, ctx, "multicast_route",
+                same=baseline_route is not None and was_iface not in was_down,
+            )
             stream_row = Finding(
-                Outcome.OK if receiver_ok else Outcome.BROKEN,
-                f"{sg}: stream se na {iface} " + ("posila" if receiver_ok else "neposila"),
+                stream_outcome,
+                f"{sg}: stream se na {iface} "
+                + ("posila" if receiver_ok else f"neposila{suffix(stream_outcome)}"),
                 label="Stream", group=sg,
                 value=(
                     f"Stream se na {iface} posila" if receiver_ok
                     else f"S,G je v tabulce ale stream se na {iface} neposila"
                 ),
+                compared=False,
             )
             upstream_row = Finding(
                 Outcome.OK if problem is None else Outcome.BROKEN,
                 f"{sg}: upstream {upstream or '-'}{problem or ''}",
-                label="Upstream interface", group=sg, value=upstream or "-",
+                label="Upstream interface", group=sg, value=upstream or "-", compared=False,
             )
-        return [stream_row, upstream_row, *stream_rows(sg, route, rate_label="Forwarding-rate")]
+        return [
+            stream_row, upstream_row,
+            *stream_rows(sg, route, rate_label="Forwarding-rate", baseline_route=baseline_route),
+        ]
 
 
 # --- core_multicast_forwarding -----------------------------------------------
