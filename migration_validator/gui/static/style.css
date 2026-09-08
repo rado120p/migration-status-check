@@ -306,7 +306,8 @@ a:hover { color: #0e3fa9; }
   border-radius: 6px;
   padding: 7px 14px;
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 4px 14px;
   font-size: 13px;
 }
 
@@ -1059,12 +1060,15 @@ a:hover { color: #0e3fa9; }
    which is out of bounds for guide copy). */
 
 /* Safety-net sections */
-.safety-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow: hidden; }
+.safety-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 8px; overflow-x: auto; overflow-y: hidden; }
 .safety-card.nonempty { border-color: #fde68a; }
 
 .safety-row {
   display: grid;
   grid-template-columns: 110px 1.6fr 130px 2fr;
+  /* Stejne jako .table-scroll: v uzkem sloupci nesmi radek roztahnout kartu,
+     misto toho karta scrolluje vodorovne. */
+  min-width: 560px;
   gap: 0 12px;
   padding: 8px 16px;
   border-bottom: 1px solid #f1f3f6;
