@@ -246,6 +246,36 @@ def test_baseline_state_down_before_up_now_is_recovered():
     assert state_row.baseline_value == "Down"
 
 
+def test_baseline_state_unknown_up_now_stays_ok_not_recovered():
+    """Baseline placeholder 'unknown' neni zlepseni - jen nezmereny stav,
+    takze subjekt Up + baseline unknown zustava tiche OK, ne RECOVERED."""
+    findings = IsisAdjacencyStateCheck().run(
+        _ctx(
+            {
+                IFACE: {
+                    "system_name": "P1",
+                    "state": "Up",
+                    "ip_address": "10.0.0.1",
+                    "ipv6_address": "2001:db8::1",
+                }
+            },
+            baseline_adj={
+                IFACE: {
+                    "system_name": "P1",
+                    "state": "unknown",
+                    "ip_address": "10.0.0.1",
+                    "ipv6_address": "2001:db8::1",
+                }
+            },
+        )
+    )
+
+    state_row = findings[1]
+    assert state_row.outcome is Outcome.OK
+    assert state_row.value == "Up"
+    assert state_row.baseline_value == "unknown"
+
+
 def test_baseline_different_ip_address_is_warn():
     findings = IsisAdjacencyStateCheck().run(
         _ctx(
@@ -806,6 +836,22 @@ def test_mpls_up_after_down_baseline_is_recovered():
     assert findings[0].baseline_value == "Down"
 
 
+def test_mpls_up_after_unknown_baseline_stays_ok_not_recovered():
+    """Baseline placeholder 'unknown' neni zlepseni proti baseline - jen
+    nezmereny stav. Subjekt Up + baseline unknown zustava OK, baseline_value
+    se nefabrikuje na 'Down'."""
+    findings = MplsInterfaceStateCheck().run(
+        _ctx_area(
+            "mpls_interface",
+            {IFACE: {"state": "Up"}},
+            baseline_value={IFACE: {"state": "unknown"}},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].baseline_value is None
+
+
 def test_mpls_up_after_up_baseline_stays_ok():
     findings = MplsInterfaceStateCheck().run(
         _ctx_area(
@@ -1189,9 +1235,32 @@ def test_mpls_state_unknown_in_both_stays_fail():
     assert UNCHANGED_SINCE_BASELINE not in row.details
 
 
+def test_mpls_down_subject_unknown_baseline_stays_fail_no_fabricated_value():
+    # was_value se drive normalizoval na "Down" i pro placeholder "unknown"
+    # baseline, takze subjekt Down + baseline unknown vysel jako UNCHANGED s
+    # vymyslenym baseline_value="Down". Baseline, ktery nezmeril, nesmi
+    # projit do same= podminky (stav se nefaburuje) ani do baseline_value.
+    [row] = run_check(
+        MplsInterfaceStateCheck(),
+        _both("mpls_interface", {IFACE: {"state": "Dn"}}, {IFACE: {"state": "unknown"}}),
+    )
+    assert row.status is Status.FAIL
+    assert row.baseline_value is None
+    assert UNCHANGED_SINCE_BASELINE not in row.details
+
+
 def test_bfd_transit_no_session_in_both_is_unchanged():
     [row] = run_check(BfdTransitStateCheck(), _both("bfd", {}, {}))
     assert row.status is Status.PASS and row.baseline_value == "Down"
+
+
+def test_bfd_transit_up_after_unknown_baseline_stays_ok_not_recovered():
+    # baseline placeholder "unknown" neni zlepseni - jen nezmereny stav.
+    entry_subject = {"10.0.0.9": {"state": "Up", "interface": IFACE}}
+    entry_baseline = {"10.0.0.9": {"state": "unknown", "interface": IFACE}}
+    [row] = run_check(BfdTransitStateCheck(), _both("bfd", entry_subject, entry_baseline))
+    assert row.status is Status.PASS
+    assert row.baseline_value == "unknown"
 
 
 def test_bfd_transit_session_state_unknown_in_both_stays_fail():

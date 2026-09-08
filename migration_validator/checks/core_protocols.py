@@ -112,7 +112,7 @@ class IsisAdjacencyStateCheck(Check):
                 same=state != UNKNOWN and was_state == state,
             )
             message = f"{name}: adjacency {state}{suffix(outcome)}"
-        elif has_baseline and was_state is not None and was_state != "Up":
+        elif has_baseline and was_state is not None and was_state not in ("Up", UNKNOWN):
             # Up ted, v baseline nebyl - zlepseni proti baseline, ne tiche OK
             outcome = Outcome.RECOVERED
             message = f"{name}: adjacency Up (v baseline {was_state})"
@@ -385,7 +385,12 @@ class MplsInterfaceStateCheck(Check):
             # was_value je normalizovany stejne jako value (Up/Down) - stejny
             # slovnik (R-5); RECOVERED gate ale sviti na syrovem was_state,
             # protoze rozlisuje "v baseline nebyl Up" od "v baseline chybel".
-            was_value = None if was_raw_state is None else ("Up" if str(was_raw_state) == "Up" else "Down")
+            # was_measured rozlisuje "baseline zmerila Down" od placeholderu
+            # "unknown" (collector element v XML nenasel) - "unknown" neni
+            # mereni, takze was_value zustava None a nefabrikuje se "Down"
+            # (stav se nikdy nefabrikuje).
+            was_measured = was_raw_state is not None and str(was_raw_state) != UNKNOWN
+            was_value = ("Up" if str(was_raw_state) == "Up" else "Down") if was_measured else None
             if entry is None:
                 outcome = unchanged_or(Outcome.BROKEN, ctx, "mpls_interface", same=was is None)
                 findings.append(Finding(
@@ -399,7 +404,7 @@ class MplsInterfaceStateCheck(Check):
             state = str(entry.get("state", UNKNOWN))
             up = state == "Up"
             message = f"{name}: MPLS {state}"
-            if up and was_state not in (None, "Up"):
+            if up and was_state not in (None, "Up", UNKNOWN):
                 outcome = Outcome.RECOVERED
                 message = f"{name}: MPLS Up (v baseline {was_state})"
             elif up:
@@ -512,7 +517,7 @@ class BfdTransitStateCheck(Check):
                 was_raw_state = baseline_sessions.get(peer, {}).get("state")
                 was_state = str(was_raw_state) if was_raw_state is not None else None
                 message = f"{name}: BFD session s {peer} {state}"
-                if state == "Up" and was_state is not None and was_state != "Up":
+                if state == "Up" and was_state is not None and was_state not in ("Up", UNKNOWN):
                     outcome = Outcome.RECOVERED
                     message = f"{name}: BFD session s {peer} Up (v baseline {was_state})"
                 elif state == "Up":
