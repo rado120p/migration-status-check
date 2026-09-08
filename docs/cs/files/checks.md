@@ -182,7 +182,7 @@ Sdílené prvky:
 Klasifikace je vlastnost **checku, ne scope**: `irb.14` counter checky nedostane, ale je to
 pořád plnohodnotná Internet služba a ARP, ping i BGP checky na něm proběhnou normálně.
 
-### `interface_state` (state, critical)
+### `interface_state` (both, critical)
 
 `admin_status` i `oper_status` musí být `up`. Běží na **všech** rozhraních scope, včetně
 interních — u nich má stav smysl, na rozdíl od counterů. Bez dat vrací `SKIP`.
@@ -309,7 +309,7 @@ Za lane: RX/TX výkon v dBm. „Tmavá strana" (RX a/nebo TX nekonečné, tedy b
 | baseline je, bez tmavé strany, posun nad `tolerance_db` | `degraded` | WARN | `RX <x> / TX <y>` |
 | baseline je, bez tmavé strany, v toleranci (nebo bez baseline vůbec) | `ok` | PASS | `RX <x> / TX <y>` |
 
-### `interface_optics_alarms` (state, critical, jen layer1)
+### `interface_optics_alarms` (both, critical, jen layer1)
 
 Za port: tichý port (žádná lane nemá zvednutý žádný záznam v `alarms`/`warnings`) dostane
 jeden souhrnný řádek. Alarm i warning mají stejnou formulaci, liší se jen Outcome/status —
@@ -533,7 +533,7 @@ Sdílené pomocné funkce:
   link-local používá — pak jsou to přesně ti sousedé, se kterými služba mluví, a filtr je
   musí nechat projít. Rozhoduje konfigurace, ne heuristika.
 
-### `arp_present` (state, critical)
+### `arp_present` (both, critical)
 
 - **žádná IPv4 adresa nakonfigurovaná** (`scope.selectors.local_ipv4` prázdné) → **žádný
   Finding** — služba bez IPv4 nemá mít ARP nález vůbec, natož WARN za souseda, který nikdy
@@ -553,7 +553,7 @@ Sdílené pomocné funkce:
 | MAC záznamu je `00:00:00:00:00:00` (nerozresolvovaný) | `broken` | FAIL | `incomplete -> <ip>` |
 | záznam resolvovaný (jakýkoli jiný MAC) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
-### `nd_present` (state, critical)
+### `nd_present` (both, critical)
 
 Zrcadlí `arp_present` pro IPv6:
 
@@ -576,7 +576,7 @@ Zrcadlí `arp_present` pro IPv6:
 | stav záznamu `incomplete` nebo `unreachable` (nerozresolvovaný) | `broken` | FAIL | `<state> -> <ip>` |
 | záznam resolvovaný (jakýkoli jiný stav) | `ok` | PASS | `<mac or '?'> -> <ip>` |
 
-### `ping_reachability` (state, advisory)
+### `ping_reachability` (both, advisory)
 
 Čte hotové výsledky ze snapshotu — cíle se resolvovaly už při `capture` (ARP/ND → ping,
 `probes/ping.py`).
@@ -1120,7 +1120,7 @@ gate bez `"pim"`).
 | bez PIM párů, bez IGMP párů, `selectors.mvpn_site == ["sender"]` | `degraded` | WARN | `sender site bez vzdaleneho receiveru, neni co overit` |
 | bez PIM párů, bez IGMP párů, jinak | `broken` | FAIL | `Zadny PIM join` |
 
-### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, state, critical)
+### `multicast_forwarding_status` (Internet/multicast, IPVPN/mvpn, both, critical)
 
 Stejné dva subtype. Vyžaduje `igmp_group`, `multicast_route`, `pim_join` (od rozhodnutí
 2026-09-07 — dřív se `pim_join` četl volitelně a jeho selhání tiše zúžilo
