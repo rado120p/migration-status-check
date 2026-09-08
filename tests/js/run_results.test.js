@@ -159,3 +159,83 @@ test("buildPairingGroups: payload is not mutated", () => {
   R.buildPairingGroups({ runName: "mig01", rows, evaluations, snapshots: SNAPSHOTS });
   assert.strictEqual(JSON.stringify({ rows, evaluations, SNAPSHOTS }), before);
 });
+
+function linked(l3Id, l2Id, l3Type, l2Type) {
+  const l3 = scope(l3Id, l3Type, { link: { role: "l3", peers: [{ scope_id: l2Id, interface: "ae0.10", instance: "X" }] } });
+  const l2 = scope(l2Id, l2Type, { link: { role: "l2", peer_scope_id: l3Id, peer_interface: "irb.10", peer_instance: "X" } });
+  return [l3, l2];
+}
+const entriesOf = (scopes) => R.buildEvaluationModel(evaluation("s", "b", step("ge-0/0/4", "ae0"), scopes), 0, [], "pair").serviceEntries;
+
+test("filterServiceEntries: All keeps everything, type narrows, backend order kept", () => {
+  const entries = entriesOf([scope("A", "Internet"), scope("B", "IPVPN"), scope("C", "Internet")]);
+  const all = R.filterServiceEntries(entries, R.ALL_TYPES);
+  assert.strictEqual(all.visible.length, 3);
+  assert.strictEqual(all.matchedCount, 3);
+  const net = R.filterServiceEntries(entries, "Internet");
+  assert.deepStrictEqual(net.visible.map((v) => v.entry.scope.scope_id), ["A", "C"]);
+  assert.strictEqual(net.matchedCount, 2);
+  assert.strictEqual(net.linkedContextCount, 0);
+});
+
+test("filterServiceEntries: linked partner retained as context in both directions, counted separately", () => {
+  const [l3, l2] = linked("IRB", "VPLS", "Internet", "E-LAN");
+  const entries = entriesOf([l3, l2, scope("Z", "Core")]);
+  const byL2 = R.filterServiceEntries(entries, "E-LAN");
+  assert.deepStrictEqual(byL2.visible.map((v) => [v.entry.scope.scope_id, v.linkedContext]), [["IRB", true], ["VPLS", false]]);
+  assert.strictEqual(byL2.matchedCount, 1);
+  assert.strictEqual(byL2.linkedContextCount, 1);
+  const byL3 = R.filterServiceEntries(entries, "Internet");
+  assert.deepStrictEqual(byL3.visible.map((v) => [v.entry.scope.scope_id, v.linkedContext]), [["IRB", false], ["VPLS", true]]);
+});
+
+test("missingPartners: partner absent from the evaluation is reported, present partner is not", () => {
+  const [l3, l2] = linked("IRB", "VPLS", "Internet", "E-LAN");
+  const both = entriesOf([l3, l2]);
+  assert.deepStrictEqual(R.missingPartners(both[1], both), []);
+  const only = entriesOf([l2]);
+  assert.deepStrictEqual(R.missingPartners(only[0], only), ["IRB"]);
+});
+
+test("countByType / serviceTypeChoices: canonical order first, catalogue extras, data-only and Unknown after", () => {
+  const entries = entriesOf([scope("A", "Internet"), scope("B", "Core"), scope("C", "Core"), scope("U", null), scope("X", "Exotic")]);
+  assert.deepStrictEqual(R.countByType(entries), { Internet: 1, Core: 2, Unknown: 1, Exotic: 1 });
+  const choices = R.serviceTypeChoices(["Core", "E-LAN", "E-Line", "IPVPN", "Internet", "Zeta"], entries);
+  assert.deepStrictEqual(choices.map((c) => c.type), ["Internet", "IPVPN", "E-Line", "E-LAN", "Core", "Zeta", "Exotic", "Unknown"]);
+  assert.deepStrictEqual(choices.map((c) => c.count), [1, 0, 0, 0, 2, 0, 1, 1]);
+  // absent catalogue: choices still derive from the data
+  assert.deepStrictEqual(R.serviceTypeChoices(null, entries).map((c) => c.type), ["Internet", "IPVPN", "E-Line", "E-LAN", "Core", "Exotic", "Unknown"]);
+});
+
+test("countStatuses: all six statuses, lower-case keys", () => {
+  assert.deepStrictEqual(R.countStatuses(["PASS", "RECV", "WARN", "FAIL", "SKIP", "INFO", "PASS"]), { pass: 2, recv: 1, warn: 1, fail: 1, skip: 1, info: 1 });
+});
+
+test("groupNeedsAttention: hidden WARN/FAIL, infrastructure WARN/FAIL, unmatched findings", () => {
+  const mk = (scopes, unmatched) => {
+    const ev = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), scopes);
+    if (unmatched) ev.result.unmatched = unmatched;
+    return R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations: [ev], snapshots: SNAPSHOTS }).groups[0];
+  };
+  const hiddenFail = mk([scope("A", "Internet"), scope("B", "IPVPN", { status: "FAIL" })]);
+  assert.strictEqual(R.groupNeedsAttention(hiddenFail, R.ALL_TYPES), false);
+  assert.strictEqual(R.groupNeedsAttention(hiddenFail, "Internet"), true);
+  const infra = mk([L1("ae0"), scope("A", "Internet")]);
+  assert.strictEqual(R.groupNeedsAttention(infra, R.ALL_TYPES), false);
+  const infraWarn = mk([{ ...L1("ae0"), status: "WARN" }, scope("A", "Internet")]);
+  assert.strictEqual(R.groupNeedsAttention(infraWarn, R.ALL_TYPES), true);
+  const unmatched = mk([scope("A", "Internet")], { baseline: [{ scope_id: "B", description: "B", service_type: "IPVPN", reason: "no match" }], subject: [] });
+  assert.strictEqual(R.groupNeedsAttention(unmatched, R.ALL_TYPES), true);
+  const pending = R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations: [], snapshots: [] }).groups[0];
+  assert.strictEqual(R.groupNeedsAttention(pending, R.ALL_TYPES), false);
+});
+
+test("mainEvaluationModels: pairs + rollback + other, never same-device", () => {
+  const evaluations = [
+    evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), [scope("A", "Internet")]),
+    evaluation("rb-ge6.json", "pre-ge6.json", null, [scope("R", "Core")]),
+    { ...evaluation("post-ae0.json", "pre-ae0.json", null, [scope("S", "Core")]), same_device: true },
+  ];
+  const model = R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations, snapshots: SNAPSHOTS });
+  assert.deepStrictEqual(R.mainEvaluationModels(model).map((m) => m.evaluation.subject), ["post-ae0.json", "rb-ge6.json"]);
+});

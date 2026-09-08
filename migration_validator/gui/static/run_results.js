@@ -143,6 +143,96 @@ function buildPairingGroups({ runName, rows, evaluations, snapshots }) {
   return { groups, rollback, other, sameDevice };
 }
 
+function countStatuses(statuses) {
+  const counts = { pass: 0, recv: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+  for (const status of statuses) {
+    const key = String(status || "").toLowerCase();
+    if (key in counts) counts[key] += 1;
+  }
+  return counts;
+}
+
+function linkedIds(scope) {
+  const link = scope.link || null;
+  if (!link) return [];
+  const ids = [];
+  if (link.peer_scope_id) ids.push(link.peer_scope_id);
+  for (const peer of link.peers || []) if (peer && peer.scope_id) ids.push(peer.scope_id);
+  return ids;
+}
+
+function filterServiceEntries(entries, selectedType) {
+  if (selectedType === ALL_TYPES) {
+    return {
+      visible: entries.map((entry) => ({ entry, linkedContext: false })),
+      matchedCount: entries.length,
+      linkedContextCount: 0,
+    };
+  }
+  const ids = new Set(entries.map((e) => e.scope.scope_id));
+  const matched = new Set(
+    entries.filter((e) => e.serviceType === selectedType).map((e) => e.scope.scope_id)
+  );
+  const context = new Set();
+  for (const entry of entries) {
+    const id = entry.scope.scope_id;
+    if (matched.has(id)) {
+      for (const pid of linkedIds(entry.scope)) if (ids.has(pid) && !matched.has(pid)) context.add(pid);
+    } else if (linkedIds(entry.scope).some((pid) => matched.has(pid))) {
+      context.add(id);
+    }
+  }
+  const visible = entries
+    .filter((e) => matched.has(e.scope.scope_id) || context.has(e.scope.scope_id))
+    .map((entry) => ({ entry, linkedContext: context.has(entry.scope.scope_id) }));
+  return { visible, matchedCount: matched.size, linkedContextCount: context.size };
+}
+
+function missingPartners(entry, entries) {
+  const ids = new Set(entries.map((e) => e.scope.scope_id));
+  return linkedIds(entry.scope).filter((id) => !ids.has(id));
+}
+
+function countByType(entries) {
+  const counts = {};
+  for (const entry of entries) {
+    const type = entry.serviceType || UNKNOWN_TYPE;
+    counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
+function serviceTypeChoices(catalogueTypes, entries) {
+  const counts = countByType(entries);
+  const ordered = [];
+  const seen = new Set();
+  const push = (type) => {
+    if (seen.has(type)) return;
+    seen.add(type);
+    ordered.push({ type, count: counts[type] || 0 });
+  };
+  SERVICE_TYPE_ORDER.forEach(push);
+  (catalogueTypes || []).slice().sort().forEach(push);
+  Object.keys(counts).filter((t) => t !== UNKNOWN_TYPE).sort().forEach(push);
+  if (counts[UNKNOWN_TYPE]) push(UNKNOWN_TYPE);
+  return ordered;
+}
+
+function groupNeedsAttention(group, selectedType) {
+  const bad = (status) => status === "WARN" || status === "FAIL";
+  for (const model of group.evaluations) {
+    if (model.infrastructureEntries.some((e) => bad(e.scope.status))) return true;
+    if (model.unmatchedBaseline.length || model.unmatchedSubject.length) return true;
+    const shown = new Set(filterServiceEntries(model.serviceEntries, selectedType).visible.map((v) => v.entry));
+    if (model.serviceEntries.some((e) => !shown.has(e) && bad(e.scope.status))) return true;
+  }
+  return false;
+}
+
+function mainEvaluationModels(model) {
+  return [...model.groups.flatMap((g) => g.evaluations), ...model.rollback, ...model.other];
+}
+
 const MigRunResults = {
   SERVICE_TYPE_ORDER,
   ALL_TYPES,
@@ -154,6 +244,14 @@ const MigRunResults = {
   evaluationLabel,
   buildEvaluationModel,
   buildPairingGroups,
+  countStatuses,
+  linkedIds,
+  filterServiceEntries,
+  missingPartners,
+  countByType,
+  serviceTypeChoices,
+  groupNeedsAttention,
+  mainEvaluationModels,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigRunResults;
