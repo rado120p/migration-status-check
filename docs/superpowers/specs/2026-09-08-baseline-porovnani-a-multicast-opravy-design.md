@@ -225,3 +225,42 @@ nesparované službě:
   je předchozí (nezavedla ho vlna 2) a mimo očekávaný výčet výjimek z
   Tasku 10 briefu (multicast řádky vlny 3 + nesparované služby); zapsáno
   jako nález v `task-10-report.md`, neopravováno v rámci Tasku 10.
+
+### Vlna 2 — fix wave, replay 2026-09-08
+
+Fix wave po závěrečném review vlny 2 (MPLS `was_value` fabrikoval „Down"
+z placeholderu `unknown`, RECOVERED gate ignoroval `unknown` baseline,
+optics alarm řádky bez baseline dat portu, EVPN `same=` uznávalo dvě
+různé ne-Up hodnoty za shodné, L2-vázaný INFO řádek `interface_errors`
+neměl `compared=False`). Přehráno stejné trojici běhů jako u vlny 2
+(`evaluate --detail --no-color`):
+
+- `runs/migration-pop1` (`snapshot_pre_MX1-POP1_ge_0_0_2.json` →
+  `snapshot_post_PTX1-POP1_et_0_0_8.json`, cross-box): `pass_unchanged = 1`
+  (řádek „VL-4094 Interface … MAC count: beze zmeny (chyba uz v baseline)").
+  Sparováno 8 služeb, 0 nesparovaných v baseline, 0 nesparovaných v subjektu.
+- `runs/mig01-mx1-pop1`: `pass_unchanged = 0` (řádek se nevytiskl). Sparováno
+  17 služeb, 0/0 nesparovaných.
+- `runs/mig01-ptx1-pop1`: `pass_unchanged = 182`. Sparováno 19 služeb, 0/0
+  nesparovaných.
+
+„bez baseline" v ZMĚNA sloupci, seskupeno podle CHECK labelu:
+
+- `runs/migration-pop1`: `IGMP membership report` (1×), `EVPN neighbor`
+  (1×, nová adresa 150.0.0.11 jen v subjektu), `ARP (10.40.95.254/24)` (1×),
+  `ARP (10.40.94.254/24)` (1×) — nové ARP adresy od baseline, přijímáno.
+- `runs/mig01-mx1-pop1`: `Multicast forwarding status` (1×) — Core lo0.0
+  blok, vlna 3.
+- `runs/mig01-ptx1-pop1`: `Multicast forwarding status` (1×) — stejná
+  příčina, vlna 3.
+
+Oproti vlně 2 zmizely: `interface_optics_alarms` řádky portu, který
+baseline vůbec nezměřila (dřív by v takovém běhu tiskly „bez baseline" na
+každém alarm/OK řádku — R-4 fix z Tasku 1/3 této vlny), a 3× `Interface
+errors / traffic` L2-vázaný INFO řádek u `mig01-ptx1-pop1`, který vlna 2
+zapsala jako otevřený nález (`task-10-report.md`) — Task 6 mu doplnil
+`compared=False`, takže se v aktuálním replay už netiskne.
+
+Zbývající výskyty jsou přesně očekávané kategorie (multicast řádky vlny 3
++ nové ARP/ND/EVPN neighbor adresy od baseline). Žádné jiné „bez baseline"
+výskyty nalezeny nebyly.
