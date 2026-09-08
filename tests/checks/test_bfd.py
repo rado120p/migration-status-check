@@ -11,7 +11,7 @@ from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bfd import BfdSessionStateCheck
 from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome, Status
+from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 INTENT = [{"peer": "198.11.13.2", "minimum_interval": 3000, "multiplier": 3, "source": "neighbor"}]
@@ -308,6 +308,16 @@ def test_session_down_in_both_is_unchanged():
     down = {"198.11.13.2": {"state": "Down"}}
     [row] = run_check(BfdSessionStateCheck(), _ctx(down, baseline_sessions=down))
     assert row.status is Status.PASS and row.value == "Down" == row.baseline_value
+
+
+def test_session_state_unknown_in_both_stays_fail():
+    # collector dosazuje "unknown" jen kdyz element "state" v XML chybi -
+    # shoda "unknown" == "unknown" neni dukaz shodneho stavu, jen dukaz, ze
+    # ani jeden snapshot stav nezmeril (stav se nefabuluje).
+    unknown = {"198.11.13.2": {"state": "unknown"}}
+    [row] = run_check(BfdSessionStateCheck(), _ctx(unknown, baseline_sessions=unknown))
+    assert row.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in row.details
 
 
 def test_missing_session_in_both_with_established_bgp_is_unchanged():
