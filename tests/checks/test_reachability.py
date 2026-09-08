@@ -7,11 +7,11 @@ from migration_validator.checks.reachability import (
     PingReachabilityCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome, Severity, Status
+from migration_validator.models.result import Outcome, Severity, Status, UNCHANGED_SINCE_BASELINE
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
-def _ctx(subject, service_type="IPVPN", scope=None):
+def _ctx(subject, service_type="IPVPN", scope=None, baseline=None):
     scope = scope or Scope(
         id="svc:X:" + service_type,
         kind="service",
@@ -20,12 +20,16 @@ def _ctx(subject, service_type="IPVPN", scope=None):
             interfaces=["ge-0/0/2.113"], local_ipv4=["198.11.13.1/30"]
         ),
     )
+    baseline_collectors = (
+        {area: {"status": "ok"} for area in baseline} if baseline is not None else {}
+    )
     return CheckContext(
         scope=scope,
         subject=subject,
-        baseline=None,
+        baseline=baseline,
         config=default_config(),
         failed_collectors={},
+        baseline_collectors=baseline_collectors,
     )
 
 
@@ -709,3 +713,51 @@ def test_reachability_checks_do_not_apply_to_multicast_services(check_class, ser
                   selectors=Selectors(interfaces=["ge-0/0/2.11"], local_ipv4=["10.1.1.1/30"]))
     assert check_class().applies_to(scope) is False
     assert run_check(check_class(), _ctx({"arp": [], "nd": [], "ping": []}, scope=scope)) == []
+
+
+# --- Task 6: BOTH mod, baseline porovnani (UNCHANGED) ---
+
+
+def test_arp_empty_in_both_is_unchanged_pass():
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": []}, baseline={"arp": []}))
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == "zadny zaznam" == row.baseline_value
+
+
+def test_arp_empty_now_present_before_is_fail():
+    before = {"arp": [{"ip": "198.11.13.2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}]}
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": []}, baseline=before))
+    assert row.status is Status.FAIL and row.baseline_value == "1 zaznam"
+
+
+def test_arp_incomplete_in_both_is_unchanged():
+    entry = {"ip": "198.11.13.2", "mac": "00:00:00:00:00:00", "interface": "ge-0/0/2.113"}
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": [entry]}, baseline={"arp": [entry]}))
+    assert row.status is Status.PASS and row.value == row.baseline_value
+
+
+def test_arp_ok_row_baseline_value_is_same_entry_text():
+    entry = {"ip": "198.11.13.2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": [entry]}, baseline={"arp": [entry]}))
+    assert row.baseline_value == row.value
+
+
+def test_nd_unreachable_in_both_is_unchanged():
+    entry = {"ip": "2001:db8:11:13::2", "mac": "none", "interface": "ge-0/0/2.113", "state": "unreachable"}
+    scope = Scope(id="svc:X:IPVPN", kind="service", key=ScopeKey("X", "IPVPN", None),
+                  selectors=Selectors(interfaces=["ge-0/0/2.113"], local_ipv6=["2001:db8:11:13::1/64"]))
+    [row] = run_check(NdPresentCheck(), _ctx({"nd": [entry]}, baseline={"nd": [entry]}, scope=scope))
+    assert row.status is Status.PASS and row.value == "unreachable -> 2001:db8:11:13::2" == row.baseline_value
+
+
+def test_ping_failed_in_both_is_unchanged_warn_becomes_pass():
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 0}
+    [row] = run_check(PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [probe]}))
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.baseline_value == "0/5  198.11.13.2 neodpovedel"
+
+
+def test_ping_ok_row_baseline_value_same_shape():
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
+    [row] = run_check(PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [probe]}))
+    assert row.baseline_value == row.value
