@@ -19,7 +19,7 @@ from migration_validator.checks.core_protocols import (
     PimNeighborStateCheck,
 )
 from migration_validator.models.result import (
-    NOT_COMPARED,
+    COMPARED,
     UNCHANGED_SINCE_BASELINE,
     Outcome,
     Status,
@@ -1201,11 +1201,34 @@ def test_ldp_neighbor_up_row_carries_baseline_value_same_vocabulary():
     assert status.value == "Up for 2m 0s" == status.baseline_value
 
 
+def test_ldp_neighbor_up_in_both_with_different_uptime_is_not_compared():
+    """Kolisajici uptime (jitter) neni zmena stavu - Up/Up ma ZMENA
+    prazdnou (compared=False), ne 'bylo Up for ...'."""
+    now = {"neighbor_address": "10.0.0.1", "uptime_seconds": 700}
+    before = {"neighbor_address": "10.0.0.1", "uptime_seconds": 120}
+    rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: now}, {IFACE: before}))
+    status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
+    assert status.status is Status.PASS
+    assert status.details[COMPARED] is False
+
+
+def test_ldp_neighbor_up_now_down_before_is_compared_with_old_state_shown():
+    """Up ted, Down drive je skutecna zmena stavu - compared zustava True
+    (default) a baseline_value ukazuje 'Down'."""
+    now = {"neighbor_address": "10.0.0.1", "uptime_seconds": 120}
+    before = {"neighbor_address": "10.0.0.1", "uptime_seconds": 0}
+    rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: now}, {IFACE: before}))
+    status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
+    assert status.status is Status.PASS
+    assert COMPARED not in status.details
+    assert status.baseline_value == "Down"
+
+
 def test_ldp_uptime_unreadable_row_is_not_compared():
     entry = {"neighbor_address": "10.0.0.1", "uptime_seconds": None}
     rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: entry}, {IFACE: entry}))
     status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
-    assert status.details[NOT_COMPARED] is False
+    assert status.details[COMPARED] is False
 
 
 def test_pim_neighbor_missing_in_both_is_unchanged():

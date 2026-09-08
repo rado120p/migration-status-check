@@ -223,6 +223,17 @@ def _neighbor_value(entry: dict[str, Any] | None) -> str | None:
     return f"Up for {format_uptime(seconds)}" if seconds > 0 else "Down"
 
 
+def _neighbor_state(entry: dict[str, Any] | None) -> str | None:
+    """Stav bez uptime textu - kolisajici uptime (jitter) neni zmena stavu,
+    porovnava se jen Up/Down. None = uptime nezmereno (nelze rozhodnout)."""
+    if entry is None:
+        return "Down"
+    seconds = entry.get("uptime_seconds")
+    if seconds is None:
+        return None
+    return "Up" if seconds > 0 else "Down"
+
+
 def _neighbor_findings(
     ctx: CheckContext, *, area: str, status_label: str, address_label: str,
     names: list[str],
@@ -269,12 +280,16 @@ def _neighbor_findings(
             outcome = Outcome.OK if up else unchanged_or(
                 Outcome.BROKEN, ctx, area, same=was_value == "Down",
             )
+            # Compared podle stavu (Up/Down), ne podle uptime textu -
+            # kolisajici uptime (jitter) neni zmena stavu.
+            compared = was is None or _neighbor_state(was) != _neighbor_state(entry)
             findings.append(Finding(
                 outcome,
                 f"{name}: session {'bezi' if up else 'nebezi'}{suffix(outcome)}",
                 label=qualified(status_label, name),
                 value=value,
                 baseline_value=("Down" if outcome is Outcome.UNCHANGED else was_value),
+                compared=compared,
             ))
         address = entry.get("neighbor_address")
         was_address = was.get("neighbor_address") if was else None
