@@ -1411,9 +1411,6 @@ def test_summary_counts_unchanged_rows(monkeypatch):
 
 
 def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
-    from migration_validator.checks import base as check_base
-    from migration_validator.models.result import Finding, Outcome
-
     seen = {}
 
     class Probe(check_base.Check):

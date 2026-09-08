@@ -301,9 +301,7 @@ def _run_scope(
         baseline_scope=baseline_scope,
         link=link,
         baseline_failed_collectors=(
-            baseline.capture.failed_collectors()
-            if baseline_data is not None and baseline is not None
-            else {}
+            baseline.capture.failed_collectors() if baseline_data is not None else {}
         ),
     )
 
