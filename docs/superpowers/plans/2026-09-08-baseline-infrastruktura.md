@@ -445,6 +445,8 @@ git commit -m "feat(summary): pass_unchanged v souhrnu a radek v textovem report
 
 ## Task 5: `CheckContext.baseline_failed_collectors` a `baseline_measured()`
 
+> **Změněno po final review vlny 1 (2026-09-08):** pole je `baseline_collectors` (celý `capture.collectors` dict baseline) a `baseline_measured(area)` je pozitivní důkaz `status == "ok"`; pro `"ping"` = baseline má probe záznamy scopu. Text tasku níže je původní, implementace viz commit fix wave.
+
 **Files:**
 - Modify: `migration_validator/checks/base.py:38-56` (CheckContext), `migration_validator/engine.py:294-302` (_run_scope)
 - Test: `tests/checks/test_base.py`, `tests/test_engine.py`

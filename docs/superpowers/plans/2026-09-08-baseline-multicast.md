@@ -17,6 +17,7 @@
   - měkký souhrn: `{n}/{total} S,G bez streamu` (value), message `{n} z {total} S,G bez streamu`
   - provider tunnel value: `{tunnel} (PE {pe})`, baseline při změně PE: `PE {was_pe}`
 - Rozhodnutí 2026-09-07 (role, sender site DEGRADED, kaskáda SKIP) se nemění.
+- `ctx.baseline_measured(area)` je pozitivní důkaz (`baseline_collectors[area]["status"] == "ok"`); `_ctx` helper v `test_multicast.py` musí s baseline předávat `baseline_collectors={area: {"status": "ok"} for area in baseline}` (vlna 2 ho tak už rozšířila — ověř).
 - Suite zelená po každém tasku: `pyats-venv/bin/python -m pytest -q`.
 
 ---

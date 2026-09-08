@@ -14,6 +14,7 @@
 
 - Větev `baseline-porovnani-2026-09-08`, navazuje na vlnu 1 (`2026-09-08-baseline-infrastruktura.md`) — všech 7 tasků vlny 1 musí být hotových (`Outcome.UNCHANGED`, `Finding.compared`, `ctx.baseline_measured`, R-6 překlíčování).
 - UNCHANGED **jen** přes `unchanged_or(...)` (Task 1), nikdy přímo — helper vynucuje `ctx.baseline_measured(area)`.
+- `ctx.baseline_measured(area)` je **pozitivní důkaz** (final review vlny 1): `CheckContext.baseline_collectors[area]["status"] == "ok"`; pro `"ping"` = baseline má probe záznamy scopu. **Každý testovací helper, který předává `baseline`, musí předat i `baseline_collectors={area: {"status": "ok"} for area in baseline}`**, jinak UNCHANGED nikdy nenaskočí (test o selhaném/nezaznamenaném collectoru předá vlastní dict). Stávající `_ctx` helpery v testech (`test_bgp`, `test_ifaces`, `test_routes`, `test_reachability`, `test_evpn`, `test_bfd`, `test_optics`, `test_multicast`) o tento default rozšiř v rámci tasku, který je používá.
 - Zpráva UNCHANGED řádku = původní zpráva + `, stejne jako v baseline`. `value` zůstává (stav dál říká, co je rozbité).
 - `baseline_value` u UNCHANGED = tentýž řetězec jako `value` (vzniká stejnou funkcí, R-5).
 - Nemění se: `deactivation_state`, deaktivační větve (`deactivation_outcome`), `traffic_ceased`, `sender site bez vzdaleneho receiveru`, RECOVERED logika.
@@ -46,11 +47,13 @@ from migration_validator.models.result import Outcome
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
-def _ctx(baseline, failed=None):
+def _ctx(baseline, collectors=None):
     scope = Scope(id="svc:x:Core", kind="service", key=ScopeKey("x", "Core", "transit"),
                   selectors=Selectors(interfaces=["ge-0/0/1.0"]))
+    if collectors is None and baseline is not None:
+        collectors = {area: {"status": "ok"} for area in baseline}
     return CheckContext(scope=scope, subject={}, baseline=baseline, config=default_config(),
-                        baseline_failed_collectors=failed or {})
+                        baseline_collectors=collectors or {})
 
 
 def test_broken_with_same_measured_baseline_is_unchanged():
@@ -61,8 +64,10 @@ def test_broken_with_same_measured_baseline_is_unchanged():
 def test_not_same_or_no_baseline_or_failed_collector_keeps_outcome():
     assert unchanged_or(Outcome.BROKEN, _ctx({"ldp_neighbor": {}}), "ldp_neighbor", False) is Outcome.BROKEN
     assert unchanged_or(Outcome.BROKEN, _ctx(None), "ldp_neighbor", True) is Outcome.BROKEN
-    failed = _ctx({"ldp_neighbor": {}}, failed={"ldp_neighbor": "RpcError"})
+    failed = _ctx({"ldp_neighbor": {}}, collectors={"ldp_neighbor": {"status": "error", "message": "RpcError"}})
     assert unchanged_or(Outcome.BROKEN, failed, "ldp_neighbor", True) is Outcome.BROKEN
+    unrecorded = _ctx({"ldp_neighbor": {}}, collectors={})
+    assert unchanged_or(Outcome.BROKEN, unrecorded, "ldp_neighbor", True) is Outcome.BROKEN
 
 
 def test_ok_and_skip_pass_through():
@@ -130,10 +135,12 @@ from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Status
 from migration_validator.checks.base import run_check
 
 
-def _both(area, subject, baseline, failed=None):
+def _both(area, subject, baseline, collectors=None):
+    if collectors is None:
+        collectors = {area: {"status": "ok"}}
     return CheckContext(
         scope=_scope(), subject={area: subject}, baseline={area: baseline},
-        config=default_config(), baseline_failed_collectors=failed or {},
+        config=default_config(), baseline_collectors=collectors,
     )
 
 
@@ -146,7 +153,7 @@ def test_isis_adjacency_missing_in_both_is_unchanged_pass():
 
 
 def test_isis_adjacency_missing_in_both_but_baseline_collector_failed_stays_fail():
-    ctx = _both("isis_adjacency", {}, {}, failed={"isis_adjacency": "RpcError"})
+    ctx = _both("isis_adjacency", {}, {}, collectors={"isis_adjacency": {"status": "error", "message": "RpcError"}})
     [row] = run_check(IsisAdjacencyStateCheck(), ctx)
     assert row.status is Status.FAIL
     assert row.baseline_value is None
@@ -509,7 +516,7 @@ def test_configured_route_missing_in_both_is_unchanged_pass():
 
 def test_configured_route_missing_in_both_with_failed_baseline_collector_stays_fail():
     ctx = _ctx({}, baseline_routes={})
-    ctx.baseline_failed_collectors = {"routes": "RpcError"}
+    ctx.baseline_collectors = {"routes": {"status": "error", "message": "RpcError"}}
     [row] = run_check(StaticRouteStatusCheck(), ctx)
     assert row.status is Status.FAIL and row.baseline_value is None
 
@@ -562,7 +569,7 @@ Pozn.: `same=True` je správně — `baseline is None` tady znamená „v baseli
 **Interfaces:**
 - Produces: `_ping_findings(probes, family, prefixes, baseline_probes, ctx)`; ARP/ND baseline záznam se hledá podle `ip`, ping podle `target`.
 
-- [ ] **Step 1: Failing testy** (`_ctx(subject, service_type, scope)` existuje — přidej parametr `baseline=None` a `baseline_failed_collectors`)
+- [ ] **Step 1: Failing testy** (`_ctx(subject, service_type, scope)` existuje — přidej parametr `baseline=None`; s baseline předej `baseline_collectors={area: {"status": "ok"} for area in baseline}`)
 
 ```python
 from migration_validator.models.result import UNCHANGED_SINCE_BASELINE
