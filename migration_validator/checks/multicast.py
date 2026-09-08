@@ -246,7 +246,7 @@ class IgmpMembershipReportCheck(Check):
         # "bez baseline" misto viditelneho zlepseni.
         if was:
             was_value = pairs_text(was)
-        elif ctx.has_baseline:
+        elif ctx.baseline_measured("igmp_group"):
             was_value = NO_REPORT
         else:
             was_value = None
@@ -257,6 +257,7 @@ class IgmpMembershipReportCheck(Check):
                 return [Finding(
                     Outcome.INFO, "receiver neposila IGMP report, o streamy se hlasi PIM join",
                     label=self.label, value=NO_REPORT_PIM_INFO, baseline_value=was_value,
+                    compared=False,
                 )]
             if "pim_join" in ctx.failed_collectors:
                 # Bez IGMP reportu a bez funkcniho pim_join collectoru nelze
@@ -266,6 +267,7 @@ class IgmpMembershipReportCheck(Check):
                     Outcome.SKIP,
                     "bez IGMP reportu a pim_join collector selhal, nelze rozhodnout",
                     label=self.label, value="PIM join nezmereno", baseline_value=was_value,
+                    compared=False,
                 )]
             if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
                 # Sender-only site nikdy neposila IGMP membership report sam
@@ -276,6 +278,7 @@ class IgmpMembershipReportCheck(Check):
                 return [Finding(
                     Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
                     label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
+                    compared=False,
                 )]
             outcome = unchanged_or(Outcome.BROKEN, ctx, "igmp_group", same=was == [])
             return [Finding(
@@ -319,7 +322,7 @@ class PimJoinCheck(Check):
         # "bez baseline".
         if was:
             was_value = role_pairs_text(was)
-        elif ctx.has_baseline:
+        elif ctx.baseline_measured("pim_join"):
             was_value = NO_JOIN
         else:
             was_value = None
@@ -329,6 +332,7 @@ class PimJoinCheck(Check):
                     Outcome.INFO,
                     "zadny PIM join na servisnim rozhrani, o streamy se hlasi IGMP",
                     label=self.label, value=NO_JOIN_IGMP_INFO, baseline_value=was_value,
+                    compared=False,
                 )]
             if "igmp_group" in ctx.failed_collectors:
                 # Symetricky k igmp_membership_report: bez PIM join a bez
@@ -337,6 +341,7 @@ class PimJoinCheck(Check):
                     Outcome.SKIP,
                     "bez PIM join a igmp_group collector selhal, nelze rozhodnout",
                     label=self.label, value="IGMP report nezmereno", baseline_value=was_value,
+                    compared=False,
                 )]
             if list(ctx.scope.selectors.mvpn_site) == [SENDER]:
                 # Sender-only site bez vzdaleneho receiveru nema zadny join
@@ -345,6 +350,7 @@ class PimJoinCheck(Check):
                 return [Finding(
                     Outcome.DEGRADED, "sender site bez vzdaleneho receiveru",
                     label=self.label, value=SENDER_NO_RECEIVER, baseline_value=was_value,
+                    compared=False,
                 )]
             outcome = unchanged_or(Outcome.BROKEN, ctx, "pim_join", same=ctx.has_baseline and not was)
             return [Finding(
@@ -433,6 +439,7 @@ class MulticastForwardingStatusCheck(Check):
                 rows.append(Finding(
                     outcome, f"{sg}: S,G neni v multicast tabulce{suffix(outcome)}",
                     label="Stream", group=sg, value="S,G neni v multicast tabulce",
+                    # hodnota jen pro JSON, ZMENA se z definice neporovnava (R-9)
                     baseline_value=("S,G neni v multicast tabulce" if outcome is Outcome.UNCHANGED
                                     else (_labels_of(was) or None)),
                     compared=False,
@@ -473,6 +480,9 @@ class MulticastForwardingStatusCheck(Check):
         # jejiz Stream prosel (obe prosle -> receiver). Zadna prosla ->
         # receiver texty (rozhodnuti 2026-09-07).
         as_sender = (sender_ok and not receiver_ok) or roles == frozenset({SENDER})
+        # Zamerne baseline jmeno rozhrani (ne subject) - multicast_route se
+        # nepreslovnuje (engine.py), takze baseline tabulka porad nese stare
+        # jmeno.
         was_iface = (ctx.baseline_scope or ctx.scope).selectors.interfaces[0]
         was_down = (baseline_route or {}).get("downstream_interfaces") or []
         if as_sender:
@@ -598,7 +608,9 @@ class CoreMulticastForwardingCheck(Check):
         for prefix in prefixes:
             streams = assigned.get(prefix, [])
             was = baseline_assigned.get(prefix, []) if baseline_assigned else []
-            was_value = _labels_of(was) if was else None
+            was_value = _labels_of(was) if was else (
+                "Neexistuje S,G" if ctx.baseline_measured("multicast_route") else None
+            )
             if not streams:
                 outcome = unchanged_or(
                     Outcome.BROKEN, ctx, "multicast_route",
@@ -739,16 +751,20 @@ class MvpnCmulticastStatusCheck(Check):
                 label=self.label, value="instance neni v mvpn vypisu", compared=False,
             )]
         entries = data.get("c_multicast") or []
-        baseline_entries = (
-            ((ctx.baseline or {}).get("mvpn_instance") or {}).get(instance) or {}
-        ).get("c_multicast") or []
+        # Bind zvlast: instance chybejici v baseline mvpn vypisu uplne (was_data
+        # is None) neni totez jako instance pritomna s nulou zaznamu - jinak by
+        # unchanged_or schoval chybu migrace za baseline, ktera oblast nezmerila.
+        was_data = ((ctx.baseline or {}).get("mvpn_instance") or {}).get(instance)
+        baseline_entries = (was_data or {}).get("c_multicast") or []
         findings: list[Finding] = []
         for source, group, _roles in pairs:
             sg = sg_label(source, group)
             entry = _cmulticast_entry(entries, source, group)
             was = _cmulticast_entry(baseline_entries, source, group) if ctx.has_baseline else None
             if entry is None:
-                outcome = unchanged_or(Outcome.BROKEN, ctx, "mvpn_instance", same=was is None)
+                outcome = unchanged_or(
+                    Outcome.BROKEN, ctx, "mvpn_instance", same=was is None and was_data is not None,
+                )
                 findings.append(Finding(
                     outcome, f"{sg}: chybi c-multicast zaznam{suffix(outcome)}",
                     label=self.label, group=sg, value="chybi c-multicast zaznam",
@@ -759,7 +775,9 @@ class MvpnCmulticastStatusCheck(Check):
             findings.append(Finding(
                 Outcome.OK, f"{sg}: c-multicast {_entry_value(entry)}",
                 label=self.label, group=sg, value=_entry_value(entry),
-                baseline_value=_entry_value(was) if was else None,
+                baseline_value=(_entry_value(was) if was
+                                 else ("chybi c-multicast zaznam"
+                                       if ctx.baseline_measured("mvpn_instance") else None)),
             ))
             findings.append(self._tunnel_row(sg, entry, was))
         return findings

@@ -101,10 +101,9 @@ def _aligned_baseline_data(
     stejnym pozicnim mappingem. Stejne tak evpn_instance: jmeno v
     local_interfaces.entries[].name a irb_interfaces.entries[].name (klic
     instance zustava, preslovnuje se jen zanoreny nazev rozhrani). Oblasti
-    pim_join a multicast_route se zamerne nepreslovnuji - jmeno rozhrani je
-    tam jen v hodnote zaznamu, ktera se s baseline neporovnava (nejde o
-    klic ani o pole pouzivane pri parovani), takze by rename byl bez
-    efektu.
+    pim_join a multicast_route se zamerne nepreslovnuji - checks/multicast.py
+    schvalne porovnava jmeno rozhrani na baseline strane (was_iface z
+    ctx.baseline_scope), takze by rename tohle porovnani rozbil.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
     selectors = baseline_scope.selectors

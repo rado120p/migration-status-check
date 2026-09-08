@@ -30,7 +30,7 @@ from migration_validator.checks.multicast import (
     stream_rows,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
+from migration_validator.models.result import COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 POST = "et-0/0/8.11"
@@ -133,6 +133,19 @@ def test_stream_rows_skip_when_rate_missing():
     assert rate_row.value == "0 pps"
 
 
+def test_stream_rows_skip_carries_baseline_rate_when_subject_unmeasurable():
+    """Subjekt bez rate (SKIP), ale baseline routa mela pps - radek ma
+    nest baseline_value, aby se nezahodilo viditelne zhorseni (rozhodnuti
+    2026-09-08, Task 3)."""
+    rate_row, _ = stream_rows(
+        "(*, 232.1.1.1)", {"forwarding_rate_pps": None}, rate_label="Upstream",
+        baseline_route={"forwarding_rate_pps": 6},
+    )
+    assert rate_row.outcome is Outcome.SKIP
+    assert rate_row.baseline_value == "6 pps"
+    assert rate_row.compared is True
+
+
 def test_pim_pairs_role_from_upstream_or_downstream():
     facts = _pim("master",
                  _join("Through BGP", [POST]),                       # receiver
@@ -219,6 +232,30 @@ def test_igmp_report_without_any_baseline_is_none():
     assert row.baseline_value is None
 
 
+def test_igmp_report_baseline_collector_failed_is_no_sentinel():
+    """Selhany igmp_group collector na stare krabici (status != ok) neni
+    zmerena prazdna baseline - was_value nesmi tvrdit NO_REPORT, ktery
+    zadne mereni nedokazuje (stav se nefabuluje)."""
+    (row,) = IgmpMembershipReportCheck().run(_ctx(
+        _igmp(POST, SG), baseline={"igmp_group": {}}, baseline_scope=_scope(PRE),
+        baseline_collectors={"igmp_group": {"status": "error", "message": "RpcError"}},
+    ))
+    assert row.outcome is Outcome.OK
+    assert row.baseline_value is None
+
+
+def test_pim_join_baseline_collector_failed_is_no_sentinel():
+    """Symetricky k IGMP: selhany pim_join collector na stare krabici
+    nesmi vyrobit sentinel NO_JOIN z nezmereneho stavu."""
+    (row,) = PimJoinCheck().run(_ctx(
+        _pim("master", _join("Through BGP", [POST])), baseline={"pim_join": {}},
+        baseline_scope=_scope(PRE),
+        baseline_collectors={"pim_join": {"status": "error", "message": "RpcError"}},
+    ))
+    assert row.outcome is Outcome.OK
+    assert row.baseline_value is None
+
+
 def test_igmp_check_applies_only_to_multicast_subtypes():
     check = IgmpMembershipReportCheck()
     assert check.applies_to(_scope())
@@ -232,6 +269,16 @@ def test_igmp_report_missing_with_pim_join_is_info():
     facts = {**_igmp(POST), **_pim("master", _join("Through BGP", [POST]))}
     (finding,) = IgmpMembershipReportCheck().run(_ctx(facts))
     assert (finding.outcome, finding.value) == (Outcome.INFO, NO_REPORT_PIM_INFO)
+
+
+def test_igmp_report_info_row_with_empty_baseline_is_not_compared():
+    """Sentinel INFO radek (receiver mlci, streamy nese PIM join) tiskl
+    'bylo Receiver neposila...' i kdyz baseline sentinel jen zopakuje
+    stejny text - compared=False necha ZMENA prazdnou (rozhodnuti R-4)."""
+    facts = {**_igmp(POST), **_pim("master", _join("Through BGP", [POST]))}
+    ctx = _ctx(facts, baseline={"igmp_group": {}}, baseline_scope=_scope(PRE))
+    [row] = run_check(IgmpMembershipReportCheck(), ctx)
+    assert row.details[COMPARED] is False
 
 
 def test_igmp_report_missing_without_pim_area_stays_fail():
@@ -580,10 +627,10 @@ def test_forwarding_rows_are_not_compared_except_rate_with_baseline():
     baseline = {**_facts(iface=PRE, routes={KEY: _route(downstream=[PRE], pps=6)}), **_pim()}
     rows = run_check(MulticastForwardingStatusCheck(),
                      _ctx(subject, baseline=baseline, scope=_scope(POST), baseline_scope=_scope(PRE)))
-    uncompared = {r.label for r in rows if r.details.get(NOT_COMPARED) is False}
+    uncompared = {r.label for r in rows if r.details.get(COMPARED) is False}
     assert uncompared == {"Multicast forwarding status", "Stream", "Upstream interface", "Route uptime"}
     rate = _by_label(rows, sg_label(*SG))["Forwarding-rate"]
-    assert rate.baseline_value == "6 pps" and NOT_COMPARED not in rate.details
+    assert rate.baseline_value == "6 pps" and COMPARED not in rate.details
 
 
 # --- core_multicast_forwarding ----------------------------------------------
@@ -726,6 +773,17 @@ def test_core_sg_set_compared_against_baseline():
     assert same[1].baseline_value == "(10.11.11.1, 232.1.1.1)"
 
 
+def test_core_exists_row_baseline_value_has_sentinel_for_measured_empty_baseline():
+    """Zmerena prazdna baseline (multicast_route collector bezel, zadna
+    routa pro prefix) neni "bez baseline" - Existuje S,G radek ma tisknout
+    viditelne zlepseni 'bylo Neexistuje S,G', ne prazdny sloupec."""
+    findings = CoreMulticastForwardingCheck().run(_ctx(
+        _core_facts(), baseline=_core_facts(routes={}), scope=_core_scope(), baseline_scope=_core_scope(),
+    ))
+    assert findings[1].outcome is Outcome.OK
+    assert findings[1].baseline_value == "Neexistuje S,G"
+
+
 def test_core_check_applies_only_to_loopback():
     check = CoreMulticastForwardingCheck()
     assert check.applies_to(_core_scope())
@@ -750,7 +808,7 @@ def test_core_exists_row_values_use_same_labels_so_zmena_is_blank():
     rows = run_check(CoreMulticastForwardingCheck(), _ctx(facts, baseline=facts, scope=_core_scope()))
     exists = [r for r in rows if r.value.startswith("(10.11.11.1")][0]
     assert exists.value == "(10.11.11.1, 232.1.1.1)" == exists.baseline_value
-    assert rows[0].details[NOT_COMPARED] is False
+    assert rows[0].details[COMPARED] is False
 
 
 def test_core_upstream_downstream_uptime_not_compared_and_rate_has_baseline():
@@ -759,7 +817,7 @@ def test_core_upstream_downstream_uptime_not_compared_and_rate_has_baseline():
     rows = run_check(CoreMulticastForwardingCheck(), _ctx(subject, baseline=baseline, scope=_core_scope()))
     by = _by_label(rows, sg_label(*SG))
     for label in ("Upstream interface", "Downstream interfaces", "Route uptime"):
-        assert by[label].details[NOT_COMPARED] is False, label
+        assert by[label].details[COMPARED] is False, label
     assert by["Forwarding rate packets"].baseline_value == "6 pps"
 
 
@@ -767,7 +825,7 @@ def test_core_rate_without_baseline_pps_is_not_compared():
     subject = _core_facts(routes={KEY: _route(pps=9)})
     baseline = _core_facts(routes={KEY: _route(pps=None)})
     rows = run_check(CoreMulticastForwardingCheck(), _ctx(subject, baseline=baseline, scope=_core_scope()))
-    assert _by_label(rows, sg_label(*SG))["Forwarding rate packets"].details[NOT_COMPARED] is False
+    assert _by_label(rows, sg_label(*SG))["Forwarding rate packets"].details[COMPARED] is False
 
 
 def test_core_missing_sg_in_both_is_unchanged_including_summary():
@@ -851,6 +909,35 @@ def test_mvpn_missing_cmulticast_entry_is_fail():
         (Outcome.BROKEN, "C-Multicast status", "chybi c-multicast zaznam", sg_label(*MSG))]
 
 
+def test_mvpn_ok_row_baseline_value_has_sentinel_for_measured_empty_baseline():
+    """Zmerena prazdna baseline (mvpn_instance collector bezel, c_multicast
+    prazdny seznam) neni "bez baseline" - C-Multicast status OK radek ma
+    tisknout viditelne zlepseni 'bylo chybi c-multicast zaznam'."""
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(), baseline=_mvpn_facts(entries=[]),
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope(),
+    ))
+    row = _by_label(findings, sg_label(*MSG))["C-Multicast status"]
+    assert row.outcome is Outcome.OK
+    assert row.baseline_value == "chybi c-multicast zaznam"
+
+
+def test_mvpn_instance_absent_from_baseline_is_fail_not_unchanged():
+    """Instance chybejici v baseline mvpn vypisu uplne (napr. baseline
+    RPC nikdy tuhle RI nevratil) neni totez jako instance pritomna s
+    nulou c-multicast zaznamu - unchanged_or by jinak schoval chybu
+    migrace za baseline, ktera tuhle oblast vubec nezmerila."""
+    baseline = _mvpn_facts()
+    baseline["mvpn_instance"] = {}
+    findings = MvpnCmulticastStatusCheck().run(_ctx(
+        _mvpn_facts(entries=[]), baseline=baseline,
+        scope=_mvpn_scope(), baseline_scope=_mvpn_scope(),
+    ))
+    row = _by_label(findings, sg_label(*MSG))["C-Multicast status"]
+    assert row.outcome is Outcome.BROKEN
+    assert row.baseline_value is None
+
+
 def test_mvpn_invalid_tunnel_is_fail():
     findings = MvpnCmulticastStatusCheck().run(_ctx(
         _mvpn_facts(entries=[_entry(tunnel="I-P-tnl:invalid", pe=None)]), scope=_mvpn_scope()))
@@ -919,7 +1006,7 @@ def test_provider_tunnel_same_pe_is_not_compared_even_if_tunnel_id_changed():
         scope=_mvpn_scope(), baseline_scope=_mvpn_scope()))
     tunnel = _by_label(rows, sg_label(*MSG))["Provider tunnel"]
     assert tunnel.value == f"{TUNNEL} (PE 150.0.0.13)"
-    assert tunnel.details.get(NOT_COMPARED) is False and tunnel.status is Status.PASS
+    assert tunnel.details.get(COMPARED) is False and tunnel.status is Status.PASS
 
 
 def test_provider_tunnel_changed_pe_is_warn_with_baseline_pe():
@@ -1004,6 +1091,15 @@ def test_pim_join_missing_with_igmp_is_info():
     facts = {**_igmp(POST, SG), "pim_join": {}}
     (finding,) = PimJoinCheck().run(_ctx(facts))
     assert (finding.outcome, finding.value) == (Outcome.INFO, NO_JOIN_IGMP_INFO)
+
+
+def test_pim_join_info_row_with_empty_baseline_is_not_compared():
+    """Symetricky k IGMP sentinel INFO radku: PIM join mlci, IGMP nese
+    streamy - compared=False necha ZMENA prazdnou (rozhodnuti R-4)."""
+    facts = {**_igmp(POST, SG), "pim_join": {}}
+    ctx = _ctx(facts, baseline={"pim_join": {}}, baseline_scope=_scope(PRE))
+    [row] = run_check(PimJoinCheck(), ctx)
+    assert row.details[COMPARED] is False
 
 
 def test_pim_join_missing_on_sender_only_site_is_warn():
