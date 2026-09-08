@@ -316,6 +316,7 @@ a:hover { color: #0e3fa9; }
 .count-skip { color: #6b7280; }
 .count-info { color: #2563eb; }
 .counts-note { font-size: 12px; color: #6b7280; }
+.counts-note.count-unchanged { color: #b45309; }
 
 /* Notice (422 missing snapshots etc) */
 .notice {

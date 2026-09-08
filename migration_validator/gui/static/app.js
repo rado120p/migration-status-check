@@ -2089,7 +2089,7 @@ class App {
     return (detail.snapshots || []).find((s) => s.file === file) || null;
   }
 
-  buildCountsStrip(services, checks, matchedLine) {
+  buildCountsStrip(services, checks, matchedLine, passUnchanged = 0) {
     const order = ["pass", "recv", "warn", "fail", "skip", "info"];
     const group = (label, counts, keys) =>
       el("div", {
@@ -2114,6 +2114,14 @@ class App {
         group("Checky:", checks, order),
       ],
     });
+    if (passUnchanged) {
+      // Stejny radek jako v textovem reportu (R-3): bez nej by zdedene
+      // chyby zmizely v "PASS 42" a nikdo by je nevidel.
+      strip.appendChild(el("span", {
+        className: "counts-note count-unchanged",
+        text: `z toho ${passUnchanged} PASS beze zmeny proti baseline (chyba uz pred migraci)`,
+      }));
+    }
     if (matchedLine) strip.appendChild(el("span", { className: "counts-note", text: matchedLine }));
     return strip;
   }
@@ -2217,10 +2225,11 @@ class App {
       results.flatMap((r) => (r.scopes || []).map((s) => s.status))
     );
     const checks = { pass: 0, recv: 0, warn: 0, fail: 0, skip: 0, info: 0 };
-    let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0;
+    let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0, passUnchanged = 0;
     for (const result of results) {
       const summary = result.summary || {};
       for (const key of Object.keys(checks)) checks[key] += summary[key] || 0;
+      passUnchanged += summary.pass_unchanged || 0;
       matched += summary.scopes_matched || 0;
       unmatchedBaseline += summary.unmatched_baseline || 0;
       unmatchedSubject += summary.unmatched_subject || 0;
@@ -2228,7 +2237,7 @@ class App {
     const matchedLine = results.length
       ? `Spárováno ${matched} služeb, ${unmatchedBaseline} nespárováno v baseline, ${unmatchedSubject} v subject`
       : null;
-    this.mainEl.appendChild(this.buildCountsStrip(services, checks, matchedLine));
+    this.mainEl.appendChild(this.buildCountsStrip(services, checks, matchedLine, passUnchanged));
 
     const allRows = detail.rows || [];
     const mappingRows = allRows.filter((r) => r.old && r.new);
@@ -2595,7 +2604,8 @@ class App {
     );
 
     const services = MigView.countStatuses((result.scopes || []).map((s) => s.status));
-    this.mainEl.appendChild(this.buildCountsStrip(services, result.summary || {}, null));
+    const summary = result.summary || {};
+    this.mainEl.appendChild(this.buildCountsStrip(services, summary, null, summary.pass_unchanged || 0));
 
     const entries = (result.scopes || []).map((scope) => ({
       key: `snap|${this.state.selectedSnapshot}|${scope.scope_id}`,
