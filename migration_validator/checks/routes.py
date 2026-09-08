@@ -34,6 +34,7 @@ from dataclasses import replace
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.deactivation import deactivation_outcome
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -113,6 +114,7 @@ def _presence_finding(
     group: str,
     value_ok: str,
     baseline_value: str | None,
+    ctx: CheckContext,
 ) -> Finding:
     """Vetve sdilene StaticRouteStatusCheck a AggregateRouteStatusCheck.
 
@@ -180,17 +182,25 @@ def _presence_finding(
         if baseline is not None:
             value = MISSING_ENTIRELY
             message = f"{rib} {prefix}: v baseline byla, v subjektu neni"
+            outcome = Outcome.BROKEN
         else:
             value = MISSING_FROM_TABLE
-            message = f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
+            # same=True: `baseline is None` tady znamena "v baseline
+            # tabulce nebyla" - unchanged_or sam odmitne UNCHANGED, kdyz
+            # baseline chybi nebo collector routes selhal.
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "routes", same=True)
+            message = (
+                f"{rib} {prefix}: nakonfigurovana, ale neni v routovaci tabulce"
+                f"{suffix(outcome)}"
+            )
         return Finding(
-            Outcome.BROKEN,
+            outcome,
             message,
             label=label,
             group=group,
             family=family,
             value=value,
-            baseline_value=was,
+            baseline_value=(MISSING_FROM_TABLE if outcome is Outcome.UNCHANGED else was),
             baseline=baseline,
         )
 
@@ -373,6 +383,7 @@ class StaticRouteStatusCheck(Check):
                     ),
                     hops=hops_by_identity.get(identity, ()),
                     baseline_hops=baseline_hops_by_identity.get(identity, ()),
+                    ctx=ctx,
                 )
             )
         return findings
@@ -386,6 +397,7 @@ class StaticRouteStatusCheck(Check):
         baseline_deactivated: bool | None,
         hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
         baseline_hops: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+        ctx: CheckContext,
     ) -> Finding:
         rib, prefix = identity
         label = f"{rib} {prefix}"
@@ -466,6 +478,7 @@ class StaticRouteStatusCheck(Check):
             group=group,
             value_ok=now or "",
             baseline_value=was,
+            ctx=ctx,
         )
 
         if not reached_active_table:
@@ -599,6 +612,7 @@ class AggregateRouteStatusCheck(Check):
                 group="Agregatni routy",
                 value_ok=IN_TABLE,
                 baseline_value=_presence_text(baseline.get(identity)),
+                ctx=ctx,
             )
             for identity in sorted(configured | set(subject) | set(baseline))
         ]

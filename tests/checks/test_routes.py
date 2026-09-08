@@ -6,14 +6,18 @@ Check na XML nesaha - fakta se skladaji rucne, protoze prave kombinace
 
 from __future__ import annotations
 
-from migration_validator.checks.base import CheckContext
+from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.routes import (
     NOT_ACTIVE,
     AggregateRouteStatusCheck,
     StaticRouteStatusCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome
+from migration_validator.models.result import (
+    UNCHANGED_SINCE_BASELINE,
+    Outcome,
+    Status,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 CONFIGURED = [
@@ -72,12 +76,19 @@ def _scope(static_routes=None) -> Scope:
 def _ctx(
     subject_routes, baseline_routes=None, scope=None, baseline_scope=None
 ) -> CheckContext:
+    """`baseline_collectors` je pozitivni dukaz, ze baseline oblast byla
+    zmerena (ctx.baseline_measured) - bez nej by UNCHANGED nemohl vzniknout
+    ani u testu, ktere baseline predavaji. Test o selhanem collectoru si
+    dodava vlastni slovnik po konstrukci."""
     return CheckContext(
         scope=scope or _scope(CONFIGURED),
         subject={"routes": subject_routes},
         baseline={"routes": baseline_routes} if baseline_routes is not None else None,
         baseline_scope=baseline_scope,
         config=default_config(),
+        baseline_collectors=(
+            {"routes": {"status": "ok"}} if baseline_routes is not None else {}
+        ),
     )
 
 
@@ -219,6 +230,28 @@ def test_configured_but_not_installed_is_broken():
     assert findings[0].value == "chybi"
     assert findings[0].message == "inet.0 198.62.1.0/29: v baseline byla, v subjektu neni"
     assert findings[0].baseline_value == "152.11.13.2"
+
+
+def test_configured_route_missing_in_both_is_unchanged_pass():
+    """Routa chybi v tabulce a chybela uz v baselinu - stejny stav, ne nalez."""
+    [row] = run_check(StaticRouteStatusCheck(), _ctx({}, baseline_routes={}))
+    assert row.status is Status.PASS
+    assert row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == "neni v tabulce" == row.baseline_value
+
+
+def test_configured_route_missing_in_both_with_failed_baseline_collector_stays_fail():
+    """Selhany baseline collector nesmi z chyby migrace udelat UNCHANGED."""
+    ctx = _ctx({}, baseline_routes={})
+    ctx.baseline_collectors = {"routes": {"status": "error", "message": "RpcError"}}
+    [row] = run_check(StaticRouteStatusCheck(), ctx)
+    assert row.status is Status.FAIL and row.baseline_value is None
+
+
+def test_route_present_in_baseline_missing_now_is_still_fail():
+    """Routa v baselinu byla, ted chybi - to je skutecny rozpor, ne UNCHANGED."""
+    [row] = run_check(StaticRouteStatusCheck(), _ctx({}, baseline_routes=_installed()))
+    assert row.status is Status.FAIL and row.value == "chybi"
 
 
 def test_changed_next_hop_is_degraded_and_carries_the_old_value():
