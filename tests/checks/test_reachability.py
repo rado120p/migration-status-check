@@ -761,3 +761,23 @@ def test_ping_ok_row_baseline_value_same_shape():
     probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
     [row] = run_check(PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [probe]}))
     assert row.baseline_value == row.value
+
+
+def test_nd_baseline_link_local_only_filtered_same_as_subject_is_unchanged():
+    """Baseline i subjekt musi projit stejnym link-local filtrem - jinak
+    link-local-only baseline na scopu bez link-local vypada jako "1 zaznam"
+    misto "zadny zaznam" a UNCHANGED se netrefi (review finding)."""
+    baseline_entry = {
+        "ip": "fe80::1", "mac": "0c:00:00:00:00:01",
+        "interface": "ge-0/0/2.113", "state": "reachable",
+    }
+    scope = Scope(
+        id="svc:X:IPVPN", kind="service", key=ScopeKey("X", "IPVPN", None),
+        selectors=Selectors(interfaces=["ge-0/0/2.113"], local_ipv6=["2001:db8:11:13::1/64"]),
+    )
+    [row] = run_check(
+        NdPresentCheck(),
+        _ctx({"nd": []}, baseline={"nd": [baseline_entry]}, scope=scope),
+    )
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == "zadny zaznam" == row.baseline_value

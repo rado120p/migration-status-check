@@ -89,6 +89,22 @@ def _nd_value(entry: dict[str, Any]) -> str:
     return _entry_value(entry)
 
 
+def _usable_nd_entries(entries: list[dict[str, Any]], keep_link_local: bool) -> list[dict[str, Any]]:
+    """ND zaznamy s IP, filtrovane podle link-local pravidla scopu.
+
+    Sdileno mezi subjektem a baseline - kdyby kazda strana filtrovala
+    jinak (napr. baseline bez filtru), "prazdno v obou" by srovnavalo
+    neporovnatelne mnoziny a UNCHANGED by se netrefil (link-local-only
+    baseline vs prazdny subjekt na scopu bez link-local).
+    """
+    return [
+        entry
+        for entry in entries
+        if entry.get("ip")
+        and (keep_link_local or not is_link_local(str(entry["ip"])))
+    ]
+
+
 def _family_not_configured() -> list[Finding]:
     """Rodina, kterou sluzba nema nakonfigurovanou, se nehlasi nijak.
 
@@ -211,15 +227,10 @@ class NdPresentCheck(Check):
             return _family_not_configured()
 
         keep_link_local = link_local_is_configured(ctx.scope)
-        entries = [
-            entry
-            for entry in ctx.subject.get("nd", [])
-            if entry.get("ip")
-            and (keep_link_local or not is_link_local(str(entry["ip"])))
-        ]
+        entries = _usable_nd_entries(ctx.subject.get("nd", []), keep_link_local)
 
         baseline_entries = (
-            [e for e in (ctx.baseline or {}).get("nd", []) if e.get("ip")]
+            _usable_nd_entries((ctx.baseline or {}).get("nd", []), keep_link_local)
             if ctx.has_baseline
             else None
         )
