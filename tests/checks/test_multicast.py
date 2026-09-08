@@ -296,6 +296,7 @@ def test_igmp_report_missing_with_failed_pim_join_is_skip():
     )
     assert (finding.outcome, finding.value) == (
         Outcome.SKIP, "PIM join nezmereno")
+    assert finding.compared is False
 
 
 def test_igmp_report_missing_on_sender_only_site_is_warn():
@@ -305,6 +306,7 @@ def test_igmp_report_missing_on_sender_only_site_is_warn():
     scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=["sender"])
     (finding,) = IgmpMembershipReportCheck().run(_ctx({"igmp_group": {}}, scope=scope))
     assert (finding.outcome, finding.value) == (Outcome.DEGRADED, SENDER_NO_RECEIVER)
+    assert finding.compared is False
 
 
 def test_igmp_report_missing_on_receiver_or_both_site_is_fail():
@@ -1106,6 +1108,7 @@ def test_pim_join_missing_on_sender_only_site_is_warn():
     scope = _scope("irb.10", "IPVPN", "mvpn", ["RI"], mvpn_site=["sender"])
     (finding,) = PimJoinCheck().run(_ctx({"pim_join": {}}, scope=scope))
     assert (finding.outcome, finding.value) == (Outcome.DEGRADED, SENDER_NO_RECEIVER)
+    assert finding.compared is False
 
 
 def test_pim_join_missing_on_receiver_or_both_site_is_fail():
@@ -1130,6 +1133,7 @@ def test_pim_join_missing_with_failed_igmp_is_skip():
     )
     assert (finding.outcome, finding.value) == (
         Outcome.SKIP, "IGMP report nezmereno")
+    assert finding.compared is False
 
 
 def test_pim_join_silent_without_pim_intent():

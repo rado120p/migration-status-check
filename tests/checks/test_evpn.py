@@ -268,6 +268,45 @@ def test_vpws_missing_remote_peer_borrows_baseline_from_first_peer():
     assert status.baseline_value == "Resolved"
 
 
+def test_vpws_missing_remote_peer_without_baseline_iface_is_broken_without_baseline_value():
+    # Baseline instance ma mene rozhrani (pozicni parovani nenajde protejsek):
+    # chybejici remote peer je BROKEN, ne UNCHANGED, a baseline_value None -
+    # o baseline se nic nevi, "Neznamy peer" jako baseline by byl fabulat.
+    subject = _vpws_subject(remote_peers=())
+    baseline = {"evpn_vpws": {"EVPN-VPWS-X": {"interfaces": []}}}
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    pe = _by_label(rows, "EVPN VPWS SID remote PE")
+    status = _by_label(rows, "EVPN VPWS SID remote status")
+    assert pe.status is Status.FAIL and pe.details.get(UNCHANGED_SINCE_BASELINE) is None
+    assert pe.value == "Neznamy peer" and pe.baseline_value is None
+    assert status.value == "Unresolved / Chybi" and status.baseline_value is None
+
+
+def test_vpws_missing_remote_peer_baseline_peer_without_status_falls_back_to_sentinel():
+    # Baseline peer bez "status" elementu: PE se pujci, status ne - misto
+    # "bylo None" nese sentinel Unresolved / Chybi.
+    baseline_peer = {k: v for k, v in PEER_OK.items() if k != "status"}
+    baseline = _vpws_subject(remote_peers=[baseline_peer])
+    subject = _vpws_subject(remote_peers=[])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    assert _by_label(findings, "EVPN VPWS SID remote PE").baseline_value == "150.0.0.14"
+    assert _by_label(findings, "EVPN VPWS SID remote status").baseline_value == "Unresolved / Chybi"
+
+
+def test_vpws_local_no_peer_is_info_and_ignores_baseline_that_had_peers():
+    # Local strana bez multi-homing peeru je ocekavany stav single-homed
+    # (INFO), a kdyz baseline local peery MELA, jde o jiny tvar radku -
+    # baseline_value zustava None, srovnani modu by nedavalo smysl.
+    baseline = _vpws_subject(mode="all-active", local_peers=[PEER_OK], remote_peers=[PEER_OK])
+    subject = _vpws_subject(mode="single-homed", local_peers=[], remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    row = _by_label(findings, "EVPN VPWS SID local mode")
+    assert row.outcome is Outcome.INFO
+    assert row.value == "single-homed (multi-homing peer ve vypisu nenalezen)"
+    assert row.baseline_value is None
+    assert not any(f.label == "EVPN VPWS SID local peer PE" for f in findings)
+
+
 def test_vpws_missing_remote_peer_in_both_is_unchanged_with_sentinel_baseline():
     subject = _vpws_subject(remote_peers=())
     rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
