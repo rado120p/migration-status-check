@@ -16,7 +16,7 @@ from typing import Any
 from lxml import etree
 
 from migration_validator.addressing import is_link_local, link_local_is_configured
-from migration_validator.models.scope import Scope
+from migration_validator.models.scope import MULTICAST_SUBTYPES, Scope
 
 PING_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 DEFAULT_COUNT = 5
@@ -222,7 +222,13 @@ def resolve_targets(
     targets: list[PingTarget] = []
 
     for scope in scopes:
-        if scope.is_device or scope.service_type not in PING_SERVICE_TYPES:
+        if (
+            scope.is_device
+            or scope.service_type not in PING_SERVICE_TYPES
+            or scope.service_subtype in MULTICAST_SUBTYPES
+        ):
+            # multicast sluzba ping nema (R-7) - jinak by capture palil
+            # session na mereni, ktere check necte.
             continue
 
         instance = (

@@ -416,3 +416,19 @@ def test_baseline_measured_requires_baseline_and_ok_collector():
                baseline_failed_collectors={"ldp_neighbor": "RpcError"})
     assert ctx.baseline_measured("ldp_neighbor") is False
     assert ctx.baseline_measured("pim_neighbor") is True
+
+
+def test_check_with_excluded_subtypes_skips_that_subtype():
+    class NoMulticast(DummyCheck):
+        service_types = frozenset({"Internet", "IPVPN"})
+        excluded_subtypes = frozenset({"multicast", "mvpn"})
+
+    def _typed(service_type, subtype):
+        return Scope(id="svc:x", kind="service", key=ScopeKey("x", service_type, subtype),
+                     selectors=Selectors(interfaces=["ge-0/0/1.0"]))
+
+    check = NoMulticast()
+    assert check.applies_to(_typed("Internet", None)) is True
+    assert check.applies_to(_typed("Internet", "multicast")) is False
+    assert check.applies_to(_typed("IPVPN", "mvpn")) is False
+    assert check.describe()["excluded_subtypes"] == ["multicast", "mvpn"]

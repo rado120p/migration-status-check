@@ -957,3 +957,10 @@ def test_run_ping_never_sets_source():
     assert device.rpc.kwargs["host"] == "198.11.13.2"
     assert device.rpc.kwargs["routing_instance"] == "L3VPN-CPE13-NNI"
     assert "source" not in record
+
+
+def test_resolve_targets_skips_multicast_subtypes():
+    scope = _scope()
+    scope.key = ScopeKey("X", "Internet", "multicast")
+    arp = [{"ip": "198.11.13.2", "interface": "ge-0/0/2.113"}]
+    assert resolve_targets([scope], arp) == []

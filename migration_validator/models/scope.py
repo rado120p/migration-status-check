@@ -63,6 +63,12 @@ class ScopeKey:
         )
 
 
+# Subtypy sluzeb Internet/IPVPN, ktere nesou multicast stream. Sdili je
+# checks/multicast.py (kde se checky zapinaji) a checks/reachability.py +
+# probes/ping.py (kde se ping/ARP/ND vypinaji, rozhodnuti 2026-09-08).
+MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn"})
+
+
 @dataclass
 class Selectors:
     interfaces: list[str] = field(default_factory=list)

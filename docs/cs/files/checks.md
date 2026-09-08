@@ -46,6 +46,7 @@ class Check(ABC):
     requires_inventory: bool
     service_types: frozenset[str] | None    # None = všechny
     service_subtypes: frozenset[str] | None # AND ke service_types, None = nefiltruje
+    excluded_subtypes: frozenset[str] | None # NAND ke service_types, None = nefiltruje
     default_severity: Severity
 
     def run(self, ctx) -> list[Finding]
@@ -57,6 +58,15 @@ je to AND, ne alternativa). Slouží k rozlišení rolí v rámci jednoho `servi
 Core **transit** vs. Core **loopback** (vlna 2026-08-26): `service_types={"Core"}` samo
 o sobě obě role nerozliší, `service_subtypes={"transit"}` je odstřihne od `isis_overview`,
 který patří jen na lo0.0.
+
+`excluded_subtypes` je opačná brána: je-li nastaven a `service_subtype` scope v něm je,
+check se **nepoužije**, i když `service_types`/`service_subtypes` sedí. Slouží k vyřazení
+podmnožiny subtypů z checku, který jinak na celý `service_type` patří — `arp_present`,
+`nd_present` a `ping_reachability` mají `excluded_subtypes = MULTICAST_SUBTYPES`
+(`{"multicast", "mvpn"}`, `models/scope.py`), protože ping/ARP/ND na multicast službě
+nic neměří a jen by pálily NETCONF session v produkci (rozhodnutí 2026-09-08). Stejnou
+konstantu importuje `probes/ping.py` v `resolve_targets`, aby cíle pro multicast scope
+vůbec nevznikly.
 
 `label` je **povinný** a není to `title`: `title` je věta o checku („Stav BGP session"),
 `label` je popisek sloupce `CHECK` v reportu („BGP status"). Použije se pro řádky, které
@@ -453,8 +463,11 @@ Iteruje instance a v nich domény (klíčované VLAN id, u vlan-based `"-"`). La
 
 Tři checky, `arp_present`, `nd_present` a `ping_reachability` — ARP je IPv4 varianta, ND
 IPv6 protějšek. Všechny mají `requires_inventory = True` (na device scope tedy vrací `SKIP`)
-a běží jen na `Internet` a `IPVPN`. Všechny jsou vědomě **best-effort** — CPE může být
-vypnuté nebo blokovat ICMP — proto default severity `advisory`.
+a běží jen na `Internet` a `IPVPN`, **mimo subtypy multicast a mvpn**
+(`excluded_subtypes = MULTICAST_SUBTYPES`, rozhodnutí 2026-09-08) — na multicast službě
+ping/ARP/ND nic neměří a jen by pálily NETCONF session v produkci. Všechny jsou vědomě
+**best-effort** — CPE může být vypnuté nebo blokovat ICMP — proto default severity
+`advisory`.
 
 **Každý check vrací jeden `Finding` na záznam** (ARP/ND) resp. **na cíl** (ping) — report
 tiskne řádky jednotlivě, ne jako souhrnnou větu.

@@ -63,6 +63,9 @@ Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
 - **přeskočí device scope a všechny typy služeb kromě `Internet` a `IPVPN`.** `Core`,
   `E-Line` ani `E-LAN` ping nedostanou — `lo0.0` je díky kategorizaci `Core`, takže odpadá
   automaticky;
+- **přeskočí i subtypy `multicast`/`mvpn`** (`MULTICAST_SUBTYPES` z `models/scope.py`) —
+  multicast služba ping nemá (R-7, rozhodnutí 2026-09-08): jinak by capture pálil session
+  na měření, které žádný check nečte;
 - `routing_instance` se do pingu předá **jen u `IPVPN`** (`ping <ip> routing-instance <RI>`);
   `Internet` jede v default `inet.0`;
 - **IPv4**: vezme všechny ARP adresy naučené na rozhraních scope;

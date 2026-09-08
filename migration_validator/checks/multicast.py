@@ -18,10 +18,9 @@ from migration_validator.checks.base import Check, CheckContext, Mode
 from migration_validator.checks.registry import register
 from migration_validator.collectors.multicast import route_key
 from migration_validator.models.result import Finding, Outcome, Severity
-from migration_validator.models.scope import Scope
+from migration_validator.models.scope import MULTICAST_SUBTYPES, Scope
 
 MULTICAST_TYPES = frozenset({"Internet", "IPVPN"})
-MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn"})
 MVPN_SUBTYPE = "mvpn"
 
 # Internet/multicast prijima stream primo z fyzickeho/agregovaneho transit

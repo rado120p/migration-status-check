@@ -25,6 +25,7 @@ def _check_entry(described: dict[str, Any]) -> dict[str, Any]:
         "title": described["title"],
         "group": requires[0] if requires else "general",
         "default_severity": described["default_severity"],
+        "excluded_subtypes": described.get("excluded_subtypes"),
         "default_enabled": bool(defaults.get("enabled", True)),
         "options": {
             name: {"type": option_type(value), "default": value}

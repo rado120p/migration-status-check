@@ -81,6 +81,9 @@ class Check(ABC):
     # AND ke service_types - kdyz je nastaveny, musi sedet i subtype
     # (napr. Core transit vs. Core loopback). Vychozi None nic nefiltruje.
     service_subtypes: ClassVar[frozenset[str] | None] = None
+    # Subtypy, ktere check NEdostane, i kdyz service_types sedi. Ping/ARP/ND
+    # na multicast sluzbe nic nemeri (rozhodnuti 2026-09-08).
+    excluded_subtypes: ClassVar[frozenset[str] | None] = None
     default_severity: ClassVar[Severity] = Severity.ADVISORY
     # Bezi check i na Layer1 scopu (fyzicky port)? Vychozi ne - vetsina
     # checku meri sluzbu, ne port, a SKIP radky by L1 blok jen zaplevelily.
@@ -103,6 +106,9 @@ class Check(ABC):
         if self.service_subtypes is not None:
             if scope.service_subtype not in self.service_subtypes:
                 return False
+        if self.excluded_subtypes is not None:
+            if scope.service_subtype in self.excluded_subtypes:
+                return False
         return True
 
     @abstractmethod
@@ -121,6 +127,9 @@ class Check(ABC):
             ),
             "service_subtypes": (
                 sorted(self.service_subtypes) if self.service_subtypes else None
+            ),
+            "excluded_subtypes": (
+                sorted(self.excluded_subtypes) if self.excluded_subtypes else None
             ),
             "default_severity": self.default_severity.value,
             "order": self.order,

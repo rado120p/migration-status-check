@@ -699,3 +699,13 @@ def test_arp_empty_table_is_fail():
 
     assert result.status is Status.FAIL
     assert result.severity is Severity.CRITICAL
+
+
+@pytest.mark.parametrize("check_class", [ArpPresentCheck, NdPresentCheck, PingReachabilityCheck])
+@pytest.mark.parametrize("service_type,subtype", [("Internet", "multicast"), ("IPVPN", "mvpn")])
+def test_reachability_checks_do_not_apply_to_multicast_services(check_class, service_type, subtype):
+    scope = Scope(id="svc:M:" + service_type, kind="service",
+                  key=ScopeKey("M", service_type, subtype),
+                  selectors=Selectors(interfaces=["ge-0/0/2.11"], local_ipv4=["10.1.1.1/30"]))
+    assert check_class().applies_to(scope) is False
+    assert run_check(check_class(), _ctx({"arp": [], "nd": [], "ping": []}, scope=scope)) == []

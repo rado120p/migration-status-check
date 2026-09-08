@@ -17,6 +17,7 @@ from migration_validator.addressing import is_link_local, link_local_is_configur
 from migration_validator.checks.base import Check, CheckContext, Mode
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
+from migration_validator.models.scope import MULTICAST_SUBTYPES
 from migration_validator.probes.ping import (
     IPV4_FALLBACK_MIN_PREFIX,
     IPV6_FALLBACK_MIN_PREFIX,
@@ -86,6 +87,7 @@ class ArpPresentCheck(Check):
     requires = ("arp",)
     requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
+    excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
@@ -157,6 +159,7 @@ class NdPresentCheck(Check):
     requires = ("nd",)
     requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
+    excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
@@ -236,6 +239,7 @@ class PingReachabilityCheck(Check):
     requires = ("ping",)
     requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
+    excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.ADVISORY
 
     def run(self, ctx: CheckContext) -> list[Finding]:
