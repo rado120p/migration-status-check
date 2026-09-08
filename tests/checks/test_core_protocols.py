@@ -6,7 +6,7 @@ interfaces, CheckContext, primy run() checku.
 
 from __future__ import annotations
 
-from migration_validator.checks.base import CheckContext
+from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bfd import BfdSessionStateCheck
 from migration_validator.checks.core_protocols import (
     MISSING,
@@ -18,7 +18,12 @@ from migration_validator.checks.core_protocols import (
     MplsInterfaceStateCheck,
     PimNeighborStateCheck,
 )
-from migration_validator.models.result import Outcome
+from migration_validator.models.result import (
+    NOT_COMPARED,
+    UNCHANGED_SINCE_BASELINE,
+    Outcome,
+    Status,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 IFACE = "ge-0/0/1.0"
@@ -34,7 +39,7 @@ def _scope(interfaces=(IFACE,), service_subtype="transit", protocols=()) -> Scop
     )
 
 
-def _ctx(subject_adj, baseline_adj=None, scope=None):
+def _ctx(subject_adj, baseline_adj=None, scope=None, baseline_collectors=None):
     return CheckContext(
         scope=scope or _scope(),
         subject={"isis_adjacency": subject_adj},
@@ -42,6 +47,11 @@ def _ctx(subject_adj, baseline_adj=None, scope=None):
         config=__import__(
             "migration_validator.config", fromlist=["default_config"]
         ).default_config(),
+        baseline_collectors=(
+            baseline_collectors
+            if baseline_collectors is not None
+            else ({"isis_adjacency": {"status": "ok"}} if baseline_adj is not None else {})
+        ),
     )
 
 
@@ -598,7 +608,7 @@ def test_isis_overview_does_not_apply_to_transit_scope():
 # --- LdpNeighborStateCheck / PimNeighborStateCheck / MplsInterfaceStateCheck --
 
 
-def _ctx_area(area, subject_value, baseline_value=None, scope=None):
+def _ctx_area(area, subject_value, baseline_value=None, scope=None, baseline_collectors=None):
     """CheckContext s obecnou fact oblasti a volitelnym baselinem."""
     return CheckContext(
         scope=scope or _scope(),
@@ -607,6 +617,27 @@ def _ctx_area(area, subject_value, baseline_value=None, scope=None):
         config=__import__(
             "migration_validator.config", fromlist=["default_config"]
         ).default_config(),
+        baseline_collectors=(
+            baseline_collectors
+            if baseline_collectors is not None
+            else ({area: {"status": "ok"}} if baseline_value is not None else {})
+        ),
+    )
+
+
+def _both(area, subject, baseline, collectors=None, scope=None):
+    """Kontext pro par 'subject == baseline' - baseline collector se
+    povazuje za uspesny (status ok), pokud test netvrdi jinak (R-6)."""
+    if collectors is None:
+        collectors = {area: {"status": "ok"}}
+    return CheckContext(
+        scope=scope or _scope(),
+        subject={area: subject},
+        baseline={area: baseline},
+        config=__import__(
+            "migration_validator.config", fromlist=["default_config"]
+        ).default_config(),
+        baseline_collectors=collectors,
     )
 
 
@@ -1058,3 +1089,84 @@ def test_ldp_neighbor_present_without_uptime_is_not_down():
     assert status_row.value == "uptime nezmereno"
     assert "nebezi" not in status_row.message
     assert "Down" not in status_row.message
+
+
+# --- Outcome.UNCHANGED - shodny spatny stav v subjektu i baseline (R-3) ---
+
+
+def test_isis_adjacency_missing_in_both_is_unchanged_pass():
+    [row] = run_check(IsisAdjacencyStateCheck(), _both("isis_adjacency", {}, {}))
+    assert row.status is Status.PASS
+    assert row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.value == MISSING and row.baseline_value == MISSING
+    assert row.message.endswith(", stejne jako v baseline")
+
+
+def test_isis_adjacency_missing_in_both_but_baseline_collector_failed_stays_fail():
+    ctx = _both(
+        "isis_adjacency", {}, {},
+        collectors={"isis_adjacency": {"status": "error", "message": "RpcError"}},
+    )
+    [row] = run_check(IsisAdjacencyStateCheck(), ctx)
+    assert row.status is Status.FAIL
+    assert row.baseline_value is None
+
+
+def test_isis_address_missing_in_both_is_unchanged():
+    adj = {"system_name": "P1", "state": "Up", "ip_address": None, "ipv6_address": None}
+    rows = run_check(IsisAdjacencyStateCheck(), _both("isis_adjacency", {IFACE: adj}, {IFACE: adj}))
+    v4 = [r for r in rows if r.label.startswith("IS-IS neighbor IPv4")][0]
+    assert v4.status is Status.PASS and v4.details[UNCHANGED_SINCE_BASELINE] is True
+    assert v4.baseline_value == MISSING
+
+
+def test_isis_adjacency_down_in_both_is_unchanged():
+    adj = {"system_name": "P1", "state": "Down", "ip_address": "10.0.0.1", "ipv6_address": None}
+    rows = run_check(IsisAdjacencyStateCheck(), _both("isis_adjacency", {IFACE: adj}, {IFACE: adj}))
+    state = [r for r in rows if r.label.startswith("IS-IS adjacency state")][0]
+    assert state.status is Status.PASS and state.value == "Down" == state.baseline_value
+
+
+def test_ldp_neighbor_missing_in_both_is_unchanged_and_down_row_has_baseline_value():
+    [missing] = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {}, {}))
+    assert missing.status is Status.PASS and missing.baseline_value == "Down"
+
+    down = {"neighbor_address": "10.0.0.1", "uptime_seconds": 0}
+    rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: down}, {IFACE: down}))
+    status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
+    assert status.status is Status.PASS and status.value == "Down" == status.baseline_value
+
+
+def test_ldp_neighbor_up_row_carries_baseline_value_same_vocabulary():
+    up = {"neighbor_address": "10.0.0.1", "uptime_seconds": 120}
+    rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: up}, {IFACE: up}))
+    status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
+    assert status.value == "Up for 2m 0s" == status.baseline_value
+
+
+def test_ldp_uptime_unreadable_row_is_not_compared():
+    entry = {"neighbor_address": "10.0.0.1", "uptime_seconds": None}
+    rows = run_check(LdpNeighborStateCheck(), _both("ldp_neighbor", {IFACE: entry}, {IFACE: entry}))
+    status = [r for r in rows if r.label.startswith("LDP neighbor status")][0]
+    assert status.details[NOT_COMPARED] is False
+
+
+def test_pim_neighbor_missing_in_both_is_unchanged():
+    scope = _scope(protocols=("pim",))
+    [row] = run_check(
+        PimNeighborStateCheck(), _both("pim_neighbor", {}, {}, scope=scope)
+    )
+    assert row.status is Status.PASS
+    assert row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.baseline_value == "Down"
+
+
+def test_mpls_down_in_both_is_unchanged_with_normalized_baseline_value():
+    entry = {"state": "down"}
+    [row] = run_check(MplsInterfaceStateCheck(), _both("mpls_interface", {IFACE: entry}, {IFACE: entry}))
+    assert row.status is Status.PASS and row.value == "Down" == row.baseline_value
+
+
+def test_bfd_transit_no_session_in_both_is_unchanged():
+    [row] = run_check(BfdTransitStateCheck(), _both("bfd", {}, {}))
+    assert row.status is Status.PASS and row.baseline_value == "Down"

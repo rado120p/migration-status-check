@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.ifaces import is_transit, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -61,18 +62,23 @@ class IsisAdjacencyStateCheck(Check):
                 # existuje (baseline zaznam bez klice "state") - stringifikace
                 # bez tehle stopky by tam nechala doslovny retezec "None".
                 was_state = (was or {}).get("state")
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "isis_adjacency", same=was is None)
                 findings.append(Finding(
-                    Outcome.BROKEN,
-                    f"{name}: rozhrani neni v IS-IS adjacency vypisu",
+                    outcome,
+                    f"{name}: rozhrani neni v IS-IS adjacency vypisu{suffix(outcome)}",
                     label=qualified(self.label, name),
                     value=MISSING,
-                    baseline_value=str(was_state) if was_state is not None else None,
+                    baseline_value=(
+                        MISSING if outcome is Outcome.UNCHANGED
+                        else str(was_state) if was_state is not None else None
+                    ),
                 ))
                 continue
-            findings.extend(self._rows(name, adj, was, ctx.has_baseline))
+            findings.extend(self._rows(ctx, name, adj, was))
         return findings
 
-    def _rows(self, name, adj, was, has_baseline):
+    def _rows(self, ctx, name, adj, was):
+        has_baseline = ctx.has_baseline
         rows = []
         # system/was_system muzou byt pritomne, ale None (klic "system_name"
         # bez hodnoty) - str(None) by do sloupce hodnot poslalo doslovny
@@ -101,7 +107,8 @@ class IsisAdjacencyStateCheck(Check):
         was_state = str(was_raw_state) if was_raw_state is not None else None
         message = f"{name}: adjacency {state}"
         if state != "Up":
-            outcome = Outcome.BROKEN
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "isis_adjacency", same=was_state == state)
+            message = f"{name}: adjacency {state}{suffix(outcome)}"
         elif has_baseline and was_state is not None and was_state != "Up":
             # Up ted, v baseline nebyl - zlepseni proti baseline, ne tiche OK
             outcome = Outcome.RECOVERED
@@ -122,14 +129,22 @@ class IsisAdjacencyStateCheck(Check):
             was_value = was.get(key) if was else None
             if has_baseline and was is not None and value != was_value:
                 outcome = Outcome.DEGRADED
+            elif value is not None:
+                outcome = Outcome.OK
             else:
-                outcome = Outcome.OK if value is not None else Outcome.BROKEN
+                outcome = unchanged_or(
+                    Outcome.BROKEN, ctx, "isis_adjacency",
+                    same=was is not None and was_value is None,
+                )
             rows.append(Finding(
                 outcome,
-                f"{name}: {label} {value or 'chybi'}",
+                f"{name}: {label} {value or 'chybi'}{suffix(outcome)}",
                 label=qualified(label, name),
                 value=str(value) if value else MISSING,
-                baseline_value=str(was_value) if was_value else None,
+                baseline_value=(
+                    MISSING if outcome is Outcome.UNCHANGED
+                    else str(was_value) if was_value else None
+                ),
             ))
         return rows
 
@@ -195,6 +210,16 @@ class IsisInterfaceInfoCheck(Check):
         return findings
 
 
+def _neighbor_value(entry: dict[str, Any] | None) -> str | None:
+    """Stejny slovnik pro subject i baseline (R-5). None = uptime nezmereno."""
+    if entry is None:
+        return "Down"
+    seconds = entry.get("uptime_seconds")
+    if seconds is None:
+        return None
+    return f"Up for {format_uptime(seconds)}" if seconds > 0 else "Down"
+
+
 def _neighbor_findings(
     ctx: CheckContext, *, area: str, status_label: str, address_label: str,
     names: list[str],
@@ -212,32 +237,41 @@ def _neighbor_findings(
             # (uptime_seconds > 0), ne z pouhe pritomnosti zaznamu - baseline
             # se seconds=0 by jinak tvrdil "Up", coz stav nemeril (stav se
             # nikdy nefabuluje).
-            baseline_value = None
-            if was is not None:
-                baseline_value = "Up" if was.get("uptime_seconds") else "Down"
+            was_value = _neighbor_value(was)  # "Down" i kdyz was is None
+            outcome = unchanged_or(Outcome.BROKEN, ctx, area, same=was_value == "Down")
             findings.append(Finding(
-                Outcome.BROKEN, f"{name}: soused ve vypisu neni",
+                outcome, f"{name}: soused ve vypisu neni{suffix(outcome)}",
                 label=qualified(status_label, name), value="Down",
-                baseline_value=baseline_value,
+                baseline_value=(
+                    was_value if was is not None or outcome is Outcome.UNCHANGED else None
+                ),
             ))
             continue
         seconds = entry.get("uptime_seconds")
         if seconds is None:
             # Soused ve vypisu je, jen uptime collector neprecetl (nezname
             # format). 'Down' by byl vymysleny stav - stav se nikdy
-            # nefabuluje; radek rika presne to, co se zmerilo.
+            # nefabuluje; radek rika presne to, co se zmerilo. Neni co
+            # porovnat proti baseline (nezname stav) - compared=False.
             findings.append(Finding(
                 Outcome.DEGRADED,
                 f"{name}: soused ve vypisu je, uptime se nepodarilo precist",
                 label=qualified(status_label, name), value="uptime nezmereno",
+                compared=False,
             ))
         else:
+            value = _neighbor_value(entry)
+            was_value = _neighbor_value(was) if was is not None else None
             up = seconds > 0
+            outcome = Outcome.OK if up else unchanged_or(
+                Outcome.BROKEN, ctx, area, same=was_value == "Down",
+            )
             findings.append(Finding(
-                Outcome.OK if up else Outcome.BROKEN,
-                f"{name}: session {'bezi' if up else 'nebezi'}",
+                outcome,
+                f"{name}: session {'bezi' if up else 'nebezi'}{suffix(outcome)}",
                 label=qualified(status_label, name),
-                value=f"Up for {format_uptime(seconds)}" if up else "Down",
+                value=value,
+                baseline_value=("Down" if outcome is Outcome.UNCHANGED else was_value),
             ))
         address = entry.get("neighbor_address")
         was_address = was.get("neighbor_address") if was else None
@@ -248,7 +282,10 @@ def _neighbor_findings(
         # "adresa chybi", ne pouhe INFO); zmena proti baseline zustava
         # DEGRADED - je to porovnani, ne absence.
         if address is None and not changed:
-            outcome = Outcome.BROKEN
+            outcome = unchanged_or(
+                Outcome.BROKEN, ctx, area,
+                same=was is not None and was_address is None,
+            )
         elif changed:
             outcome = Outcome.DEGRADED
         else:
@@ -257,12 +294,15 @@ def _neighbor_findings(
             f"{name}: adresa souseda chybi"
             if address is None
             else f"{name}: adresa souseda {address}"
-        )
+        ) + suffix(outcome)
         findings.append(Finding(
             outcome, message,
             label=qualified(address_label, name),
             value=str(address) if address is not None else MISSING,
-            baseline_value=str(was_address) if was_address is not None else None,
+            baseline_value=(
+                MISSING if outcome is Outcome.UNCHANGED
+                else str(was_address) if was_address is not None else None
+            ),
         ))
     return findings
 
@@ -339,12 +379,18 @@ class MplsInterfaceStateCheck(Check):
             # jako u isis_adjacency_state._rows).
             was_raw_state = (was or {}).get("state")
             was_state = str(was_raw_state) if was_raw_state is not None else None
+            # was_value je normalizovany stejne jako value (Up/Down) - stejny
+            # slovnik (R-5); RECOVERED gate ale sviti na syrovem was_state,
+            # protoze rozlisuje "v baseline nebyl Up" od "v baseline chybel".
+            was_value = None if was_raw_state is None else ("Up" if str(was_raw_state) == "Up" else "Down")
             if entry is None:
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "mpls_interface", same=was is None)
                 findings.append(Finding(
-                    Outcome.BROKEN,
-                    f"{name}: rozhrani neni pod protocols mpls",
+                    outcome,
+                    f"{name}: rozhrani neni pod protocols mpls{suffix(outcome)}",
                     label=qualified(self.label, name),
-                    value=MISSING, baseline_value=was_state,
+                    value=MISSING,
+                    baseline_value=MISSING if outcome is Outcome.UNCHANGED else was_value,
                 ))
                 continue
             state = str(entry.get("state", "unknown"))
@@ -353,13 +399,16 @@ class MplsInterfaceStateCheck(Check):
             if up and was_state not in (None, "Up"):
                 outcome = Outcome.RECOVERED
                 message = f"{name}: MPLS Up (v baseline {was_state})"
+            elif up:
+                outcome = Outcome.OK
             else:
-                outcome = Outcome.OK if up else Outcome.BROKEN
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "mpls_interface", same=was_value == "Down")
+                message = f"{name}: MPLS {state}{suffix(outcome)}"
             findings.append(Finding(
                 outcome, message,
                 label=qualified(self.label, name),
                 value="Up" if up else "Down",
-                baseline_value=was_state,
+                baseline_value=was_value,
             ))
         return findings
 
@@ -435,11 +484,14 @@ class BfdTransitStateCheck(Check):
                     baseline_value = str(
                         baseline_entries[first_peer].get("state", "unknown")
                     )
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=not baseline_entries)
                 findings.append(Finding(
-                    Outcome.BROKEN,
-                    f"{name}: zadna BFD session",
+                    outcome,
+                    f"{name}: zadna BFD session{suffix(outcome)}",
                     label=qualified(self.label, name), value="Down",
-                    baseline_value=baseline_value,
+                    baseline_value=(
+                        "Down" if outcome is Outcome.UNCHANGED else baseline_value
+                    ),
                 ))
                 continue
             for peer, data in sorted(entries):
@@ -454,8 +506,11 @@ class BfdTransitStateCheck(Check):
                 if state == "Up" and was_state is not None and was_state != "Up":
                     outcome = Outcome.RECOVERED
                     message = f"{name}: BFD session s {peer} Up (v baseline {was_state})"
+                elif state == "Up":
+                    outcome = Outcome.OK
                 else:
-                    outcome = Outcome.OK if state == "Up" else Outcome.BROKEN
+                    outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=was_state == state)
+                    message = f"{name}: BFD session s {peer} {state}{suffix(outcome)}"
                 findings.append(Finding(
                     outcome, message,
                     label=qualified(self.label, name),
