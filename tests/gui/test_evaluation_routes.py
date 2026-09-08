@@ -294,3 +294,90 @@ def test_run_s_profilem_pouzije_jeho_checky(run_se_snimky_client, tmp_path):
     assert "interface_state" not in ids
     assert "interface_traffic" in ids
     assert payload["evaluations"][0]["result"]["profile"] == "bez-state.yml"
+
+
+def _write_multi_snapshot(store, phase, node, port, address, services):
+    """Snapshot s vice sluzbami: services = [(description, service_type, interface)]."""
+    scopes = [
+        Scope(
+            id=f"svc:{desc}:{stype}",
+            kind="service",
+            key=ScopeKey(desc, stype, None),
+            selectors=Selectors(interfaces=[iface]),
+        )
+        for desc, stype, iface in services
+    ]
+    facts = {
+        "interfaces": {
+            iface: {
+                "admin_status": "up", "oper_status": "up",
+                "input_pps": 400, "output_pps": 400,
+                "input_errors": 0, "output_errors": 0,
+            }
+            for _, _, iface in services
+        }
+    }
+    snapshot = Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(
+            started_at=NOW, finished_at=NOW, phase=phase,
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts=facts, probes={"ping": []}, scopes=scopes, inventory=[],
+    )
+    path = store.snapshot_path(phase, node, port)
+    save_snapshot(snapshot, path)
+    return path
+
+
+def test_run_evaluation_sdileny_cil_dve_baseline(tmp_path):
+    """Dva stare porty na jeden LAG: kazdy krok dostane jen sve sluzby,
+    cizi sluzba na sdilenem portu jde do excluded_services."""
+    store = RunStore(tmp_path, "mig02")
+    manifest = RunManifest(
+        devices={
+            "MX1": RunDevice(host="10.0.0.1", platform="junos", role="old"),
+            "PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="new"),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1", port="ge-0/0/4"),
+                new=MappingEndpoint(node="PTX1", port="ae0"),
+            ),
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1", port="ge-0/0/5"),
+                new=MappingEndpoint(node="PTX1", port="ae0"),
+            ),
+        ],
+    )
+    pre4 = _write_multi_snapshot(store, "pre", "MX1", "ge-0/0/4", "10.0.0.1",
+                                 [("A", "Internet", "ge-0/0/4.100")])
+    pre5 = _write_multi_snapshot(store, "pre", "MX1", "ge-0/0/5", "10.0.0.1",
+                                 [("B", "IPVPN", "ge-0/0/5.200")])
+    post = _write_multi_snapshot(store, "post", "PTX1", "ae0", "10.0.0.2",
+                                 [("A", "Internet", "ae0.100"), ("B", "IPVPN", "ae0.200")])
+    manifest.record_capture(CaptureRecord("pre", "MX1", "ge-0/0/4", pre4.name, NOW))
+    manifest.record_capture(CaptureRecord("pre", "MX1", "ge-0/0/5", pre5.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1", "ae0", post.name, NOW))
+    store.save(manifest)
+
+    client = TestClient(create_app(run_root=tmp_path))
+    data = client.get("/api/runs/mig02/evaluation").json()
+    steps = [ev for ev in data["evaluations"] if ev["step"] is not None]
+    assert [ev["step"]["old"]["port"] for ev in steps] == ["ge-0/0/4", "ge-0/0/5"]
+    assert all(ev["step"]["new"]["port"] == "ae0" for ev in steps)
+    assert all(ev["subject"] == post.name for ev in steps)
+    assert [ev["baseline"] for ev in steps] == [pre4.name, pre5.name]
+
+    def services(ev):
+        return sorted(
+            s["identity"]["description"] for s in ev["result"]["scopes"]
+            if s["scope_id"] != "device" and s["identity"].get("service_type") != "Layer1"
+        )
+
+    assert services(steps[0]) == ["A"]
+    assert services(steps[1]) == ["B"]
+    assert [x["description"] for x in steps[0]["result"]["excluded_services"]] == ["B"]
+    assert [x["description"] for x in steps[1]["result"]["excluded_services"]] == ["A"]
+    assert steps[0]["result"]["unmatched"]["subject"] == []
+    assert not any(ev["same_device"] for ev in data["evaluations"])
