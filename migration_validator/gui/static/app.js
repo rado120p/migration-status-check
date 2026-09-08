@@ -558,6 +558,7 @@ class App {
   }
 
   async loadRun() {
+    this.loadCatalogue();
     this.cache.detail = null;
     this.cache.detailError = null;
     try {
@@ -2273,6 +2274,83 @@ class App {
     }
 
     const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];
+    const allRows = detail.rows || [];
+    const mappingRows = allRows.filter((r) => r.old && r.new);
+    const wholeRows = allRows.filter((r) => !r.old || !r.new);
+    const mapped = !single && mappingRows.length > 0;
+
+    if (mapped) {
+      this.renderPairedResults(detail, evaluations, wholeRows);
+    } else {
+      this.renderFlatResults(detail, evaluations, single, allRows, wholeRows, mappingRows);
+    }
+
+    // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
+    // first-ever capture on a mapping-less run) has nothing to attach to
+    // above - surface its live progress standalone so it isn't silent.
+    // Gated on task.run === this.state.run: a capture tracked while viewing
+    // another run must not bleed its progress into this one.
+    const task = this.cache.captureProgress;
+    if (task && task.run === this.state.run && !allRows.some((r) => this.rowMatchesCapture(r, task))) {
+      if (task.state === "running") {
+        const parts = this.buildCaptureStepsLine(task);
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-indigo",
+            children: [
+              el("span", { className: "capturing-pill", text: "capturing…" }),
+              document.createTextNode(` ${task.device}:${task.port || "all"} (${task.phase}) `),
+              ...(parts.length ? parts : [el("span", { text: "starting…" })]),
+            ],
+          })
+        );
+      } else if (task.state === "failed") {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-fail",
+            text: `${task.device}:${task.port || "all"} (${task.phase}) failed — ${task.error || ""}`,
+          })
+        );
+      } else if (task.state === "done" && this.hasCaptureIssues(task)) {
+        this.mainEl.appendChild(
+          el("div", {
+            className: "notice notice-warn",
+            children: [
+              document.createTextNode(`${task.device}:${task.port || "all"} (${task.phase}) done with issues — `),
+              ...this.buildCaptureIssueLines(task),
+            ],
+          })
+        );
+      }
+    }
+
+    const footerButtons = [];
+    if (!single) {
+      footerButtons.push(
+        el("button", {
+          className: "btn btn-secondary",
+          text: "Edit mapping",
+          onClick: () => this.openEditMapping(),
+        })
+      );
+    }
+    footerButtons.push(
+      el("button", {
+        className: "btn btn-secondary",
+        text: "Export JSON",
+        onClick: () => this.exportJson(),
+      }),
+      el("button", {
+        className: "btn btn-primary-green",
+        text: "Evaluate run",
+        onClick: () => this.evaluateRun(),
+      })
+    );
+    const footer = el("div", { className: "footer-actions", children: footerButtons });
+    this.mainEl.appendChild(footer);
+  }
+
+  renderFlatResults(detail, evaluations, single, allRows, wholeRows, mappingRows) {
     // Single run: every evaluation (post vs own pre, rollback vs own pre) is
     // the main result set; there is no separate same-device section.
     const pairEvaluations = single ? evaluations : evaluations.filter((ev) => !ev.same_device);
@@ -2295,9 +2373,6 @@ class App {
       : null;
     this.mainEl.appendChild(this.buildCountsStrip(services, checks, matchedLine, passUnchanged));
 
-    const allRows = detail.rows || [];
-    const mappingRows = allRows.filter((r) => r.old && r.new);
-    const wholeRows = allRows.filter((r) => !r.old || !r.new);
     if (single) {
       if (allRows.length > 0) {
         this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Captures" }));
@@ -2375,70 +2450,6 @@ class App {
       );
       this.mainEl.appendChild(this.buildUnassignedSection(unassignedAgg));
     }
-
-    // A capture on a not-yet-existing row (e.g. "all" on a mapped run, or the
-    // first-ever capture on a mapping-less run) has nothing to attach to
-    // above - surface its live progress standalone so it isn't silent.
-    // Gated on task.run === this.state.run: a capture tracked while viewing
-    // another run must not bleed its progress into this one.
-    const task = this.cache.captureProgress;
-    if (task && task.run === this.state.run && !allRows.some((r) => this.rowMatchesCapture(r, task))) {
-      if (task.state === "running") {
-        const parts = this.buildCaptureStepsLine(task);
-        this.mainEl.appendChild(
-          el("div", {
-            className: "notice notice-indigo",
-            children: [
-              el("span", { className: "capturing-pill", text: "capturing…" }),
-              document.createTextNode(` ${task.device}:${task.port || "all"} (${task.phase}) `),
-              ...(parts.length ? parts : [el("span", { text: "starting…" })]),
-            ],
-          })
-        );
-      } else if (task.state === "failed") {
-        this.mainEl.appendChild(
-          el("div", {
-            className: "notice notice-fail",
-            text: `${task.device}:${task.port || "all"} (${task.phase}) failed — ${task.error || ""}`,
-          })
-        );
-      } else if (task.state === "done" && this.hasCaptureIssues(task)) {
-        this.mainEl.appendChild(
-          el("div", {
-            className: "notice notice-warn",
-            children: [
-              document.createTextNode(`${task.device}:${task.port || "all"} (${task.phase}) done with issues — `),
-              ...this.buildCaptureIssueLines(task),
-            ],
-          })
-        );
-      }
-    }
-
-    const footerButtons = [];
-    if (!single) {
-      footerButtons.push(
-        el("button", {
-          className: "btn btn-secondary",
-          text: "Edit mapping",
-          onClick: () => this.openEditMapping(),
-        })
-      );
-    }
-    footerButtons.push(
-      el("button", {
-        className: "btn btn-secondary",
-        text: "Export JSON",
-        onClick: () => this.exportJson(),
-      }),
-      el("button", {
-        className: "btn btn-primary-green",
-        text: "Evaluate run",
-        onClick: () => this.evaluateRun(),
-      })
-    );
-    const footer = el("div", { className: "footer-actions", children: footerButtons });
-    this.mainEl.appendChild(footer);
   }
 
   buildFlagCell(row, phaseKey, task) {
@@ -2583,6 +2594,351 @@ class App {
         resultsTable,
       ],
     });
+  }
+
+  // -- mapped migration: results grouped by port pairing ------------------
+
+  renderPairedResults(detail, evaluations, wholeRows) {
+    const R = MigRunResults;
+    const model = R.buildPairingGroups({
+      runName: detail.name,
+      rows: detail.rows || [],
+      evaluations,
+      snapshots: detail.snapshots || [],
+    });
+    const mainModels = R.mainEvaluationModels(model);
+    const filterType = this.state.serviceTypeFilter;
+    const evaluationFailed = !!this.cache.evaluationError;
+
+    // Top summary: unfiltered, main population, service rows exclude device/L1.
+    const services = R.countStatuses(mainModels.flatMap((m) => m.serviceEntries.map((e) => e.scope.status)));
+    const checks = { pass: 0, recv: 0, warn: 0, fail: 0, skip: 0, info: 0 };
+    let matched = 0, unmatchedBaseline = 0, unmatchedSubject = 0, passUnchanged = 0;
+    for (const m of mainModels) {
+      const summary = (m.evaluation.result || {}).summary || {};
+      for (const key of Object.keys(checks)) checks[key] += summary[key] || 0;
+      passUnchanged += summary.pass_unchanged || 0;
+      matched += summary.scopes_matched || 0;
+      unmatchedBaseline += summary.unmatched_baseline || 0;
+      unmatchedSubject += summary.unmatched_subject || 0;
+    }
+    const matchedLine = mainModels.length
+      ? `Spárováno ${matched} služeb, ${unmatchedBaseline} nespárováno v baseline, ${unmatchedSubject} v subject`
+      : null;
+    this.mainEl.appendChild(
+      this.buildCountsStrip(services, checks, matchedLine, passUnchanged, "Full run (current profile)")
+    );
+
+    // Filter over paired service results only.
+    const pairedEntries = model.groups.flatMap((g) => g.evaluations).flatMap((m) => m.serviceEntries);
+    const catalogueTypes = this.cache.catalogue ? this.cache.catalogue.service_types : null;
+    this.mainEl.appendChild(this.buildServiceTypeFilter(pairedEntries, catalogueTypes, mainModels));
+
+    const shown = R.filterServiceEntries(pairedEntries, filterType);
+    const head = el("div", {
+      className: "section-head",
+      children: [
+        el("div", { className: "subsection-title", text: "Port pairings" }),
+        el("span", {
+          className: "section-note",
+          text: `${shown.matchedCount} of ${pairedEntries.length} service results shown`
+            + (shown.linkedContextCount ? ` + ${shown.linkedContextCount} linked context rows` : ""),
+        }),
+        el("span", { className: "section-spacer" }),
+        el("button", { className: "link-btn", text: "Expand all", attrs: { type: "button" },
+          onClick: () => this.setAllPairings(model.groups, true) }),
+        el("button", { className: "link-btn", text: "Collapse all", attrs: { type: "button" },
+          onClick: () => this.setAllPairings(model.groups, false) }),
+      ],
+    });
+    this.mainEl.appendChild(head);
+    for (const group of model.groups) {
+      this.mainEl.appendChild(this.buildPairingGroup(group, filterType, evaluationFailed));
+    }
+
+    if (wholeRows.length > 0) {
+      this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Other captures" }));
+      this.mainEl.appendChild(this.buildPairingTable(wholeRows));
+    }
+    if (model.rollback.length) {
+      this.mainEl.appendChild(this.buildAuxiliarySection("Rollback — original device", model.rollback, { singlePort: true }));
+    }
+    if (model.other.length) {
+      this.mainEl.appendChild(this.buildAuxiliarySection("Other evaluations", model.other, { singlePort: false }));
+    }
+    const sameDevice = this.buildSameDeviceSection();
+    if (sameDevice) {
+      this.mainEl.appendChild(sameDevice);
+      const items = model.sameDevice.flatMap((m) => this.unmatchedItems(m, `same-device ${m.evaluation.subject}`));
+      if (items.length) {
+        sameDevice.appendChild(el("div", { className: "subsection-title", text: `Nespárováno — ${items.length}` }));
+        sameDevice.appendChild(this.buildUnmatchedSection(items));
+      }
+    }
+    if (this.cache.evaluation) {
+      const found = R.collectUnassigned([...mainModels, ...model.sameDevice]);
+      this.mainEl.appendChild(this.buildUnassignedBySubject(found));
+    }
+  }
+
+  unmatchedItems(model, pairLabel = null) {
+    const items = [];
+    for (const [side, list] of [["baseline", model.unmatchedBaseline], ["subject", model.unmatchedSubject]]) {
+      for (const item of list) {
+        items.push({
+          side,
+          label: item.description || item.scope_id,
+          serviceType: item.service_type || "-",
+          reason: item.reason,
+          pairLabel,
+        });
+      }
+    }
+    return items;
+  }
+
+  resultEntries(entries, opts) {
+    const all = (opts && opts.all) || entries;
+    const contextKeys = (opts && opts.contextKeys) || new Set();
+    return entries.map((entry) => {
+      const view = MigView.buildView(entry.scope, {});
+      const missing = MigRunResults.missingPartners(entry, all);
+      return {
+        key: entry.key,
+        view,
+        hasBaseline: !!(opts && opts.hasBaseline),
+        scope: entry.scope,
+        contextTag: contextKeys.has(entry.key) ? "Linked context" : null,
+        linkNoteOverride: missing.length ? "Related context unavailable in this evaluation" : null,
+      };
+    });
+  }
+
+  buildPairingGroup(group, filterType, evaluationFailed) {
+    const open = this.isPairingOpen(group.key, !group.pending);
+    const panelId = `pair-panel-${btoa(group.key).replace(/[^a-z0-9]/gi, "")}`;
+    const wrap = el("section", { className: "pairing-group" + (open ? " open" : "") });
+    wrap.appendChild(this.buildPairingHeader(group, filterType, evaluationFailed, open, panelId));
+    if (open) {
+      const body = el("div", { className: "pairing-body", attrs: { id: panelId } });
+      if (group.pending) {
+        body.appendChild(el("div", { className: "pairing-notice", text: this.pendingExplanation(group, evaluationFailed) }));
+      } else {
+        group.evaluations.forEach((m, i) => {
+          if (group.evaluations.length > 1) {
+            body.appendChild(el("div", { className: "eval-subgroup-title", text: `Evaluation ${i + 1}: ${m.evaluation.subject} vs ${m.evaluation.baseline || "(no baseline)"}` }));
+          }
+          body.appendChild(this.buildEvaluationPanel(m, filterType, group));
+        });
+      }
+      wrap.appendChild(body);
+    }
+    return wrap;
+  }
+
+  pendingLabel(group, evaluationFailed) {
+    const row = group.captureRow || {};
+    if (evaluationFailed) return "Evaluation unavailable";
+    if (row.post) return "Awaiting evaluation";
+    if (row.pre) return "Awaiting post";
+    return "Awaiting captures";
+  }
+
+  pendingExplanation(group, evaluationFailed) {
+    const row = group.captureRow || {};
+    const oldEp = `${group.old.node}:${group.old.port}`;
+    const newEp = `${group.new.node}:${group.new.port}`;
+    if (evaluationFailed) return `The evaluation request failed, so this pairing has no results to show. Captures: pre ${row.pre ? "yes" : "no"}, post ${row.post ? "yes" : "no"}.`;
+    if (row.post) return `A post capture of ${newEp} exists but no evaluation was returned for this pairing. Run Evaluate run.`;
+    if (row.pre) return `Pre-migration baseline of ${oldEp} captured. Capture the new port ${newEp} (post) to evaluate this pairing.`;
+    return `No captures yet. Capture ${oldEp} (pre) before the migration and ${newEp} (post) after it.`;
+  }
+
+  buildPairingHeader(group, filterType, evaluationFailed, open, panelId) {
+    const R = MigRunResults;
+    const task = this.cache.captureProgress;
+    const row = group.captureRow || { old: group.old, new: group.new, pre: false, post: false, rollback: false };
+    const fullLabel = `${group.old.node}:${group.old.port} → ${group.new.node}:${group.new.port}`;
+
+    const toggle = el("button", {
+      className: "pairing-toggle",
+      attrs: {
+        type: "button",
+        "aria-expanded": open ? "true" : "false",
+        "aria-controls": panelId,
+        "aria-label": `${open ? "Collapse" : "Expand"} pairing ${fullLabel}`,
+        "data-focus-key": `pair:${group.key}`,
+      },
+      onClick: () => this.togglePairing(group.key),
+      children: [
+        el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
+        el("span", { className: "port-cell mono", text: group.old.port }),
+        el("span", { className: "arrow", text: "→" }),
+        el("span", { className: "port-cell mono", text: group.new.port }),
+      ],
+    });
+
+    const flags = el("div", { className: "pairing-flags", children: [
+      this.buildFlagCell(row, "pre", task), el("span", { className: "flag-label", text: "Pre" }),
+      this.buildFlagCell(row, "post", task), el("span", { className: "flag-label", text: "Post" }),
+      this.buildFlagCell(row, "rollback", task), el("span", { className: "flag-label", text: "Rollback" }),
+    ] });
+    if (group.sharedDestination) flags.appendChild(el("span", { className: "badge-pill neutral", text: "Shared destination" }));
+
+    const badges = el("div", { className: "pairing-badges" });
+    if (group.pending) {
+      badges.appendChild(el("span", { className: "badge-pill neutral", text: this.pendingLabel(group, evaluationFailed) }));
+    } else {
+      const entries = group.evaluations.flatMap((m) => m.serviceEntries);
+      const shown = R.filterServiceEntries(entries, filterType);
+      const filtering = filterType !== R.ALL_TYPES;
+      const countText = filtering
+        ? `${shown.matchedCount} / ${entries.length} service results`
+        : `${entries.length} service results`;
+      badges.appendChild(el("span", { className: "pair-count", text: countText,
+        attrs: { title: filtering ? "visible results under the current type filter" : "" } }));
+      const counts = R.countStatuses(shown.visible.map((v) => v.entry.scope.status));
+      for (const key of R.STATUS_KEYS) {
+        if (!counts[key]) continue;
+        badges.appendChild(el("span", {
+          className: `badge-pill ${key}`,
+          text: `${key.toUpperCase()} ${counts[key]}`,
+          attrs: { title: filtering ? `${key.toUpperCase()} among visible results` : "" },
+        }));
+      }
+      const unmatched = group.evaluations.reduce((n, m) => n + m.unmatchedBaseline.length + m.unmatchedSubject.length, 0);
+      if (unmatched) badges.appendChild(el("span", { className: "badge-pill unmatched", text: `${unmatched} unmatched` }));
+    }
+
+    // Notices that must survive collapse and filtering.
+    const notices = el("div", { className: "pairing-notices" });
+    const notice = (cls, text) => notices.appendChild(el("span", { className: "badge-pill " + cls, text }));
+    if (group.metadataMismatch) notice("warn", "Not in run mapping");
+    for (const m of group.evaluations) {
+      if (!m.hasBaseline) notice("warn", "No baseline — service ownership unverified");
+      else if (m.wholeDeviceBaseline) notice("warn", "Whole-device baseline");
+      else if (m.baselineMetaMissing) notice("warn", "Baseline metadata unavailable");
+      if (m.infrastructureEntries.some((e) => e.scope.status === "WARN" || e.scope.status === "FAIL")) notice("warn", "Port checks need attention");
+    }
+    if (filterType !== R.ALL_TYPES && R.groupNeedsAttention(group, filterType)) {
+      const hiddenBad = group.evaluations.some((m) => {
+        const shown = new Set(R.filterServiceEntries(m.serviceEntries, filterType).visible.map((v) => v.entry));
+        return m.serviceEntries.some((e) => !shown.has(e) && (e.scope.status === "WARN" || e.scope.status === "FAIL"));
+      });
+      if (hiddenBad) notice("warn", "Hidden WARN/FAIL");
+    }
+
+    const head = el("div", { className: "pairing-head", children: [
+      el("div", { className: "pairing-head-main", children: [toggle, flags] }),
+      el("div", { className: "pairing-head-side", children: [notices, badges] }),
+    ] });
+
+    // Live capture progress / failure / warnings for this pairing (shared
+    // LAG: every pairing with that new endpoint matches).
+    if (this.rowMatchesCapture(row, task)) {
+      if (task.state === "running") {
+        const parts = this.buildCaptureStepsLine(task);
+        head.appendChild(el("div", { className: "row-note", children: parts.length ? parts : [el("span", { text: "starting…" })] }));
+      } else if (task.state === "failed") {
+        head.appendChild(el("div", { className: "row-note row-note-fail", text: task.error || "capture selhal" }));
+      } else if (task.state === "done" && this.hasCaptureIssues(task)) {
+        head.appendChild(el("div", { className: "row-note row-note-warn", children: this.buildCaptureIssueLines(task) }));
+      }
+    }
+    return head;
+  }
+
+  buildEvaluationPanel(model, filterType, group) {
+    const R = MigRunResults;
+    const panel = el("div", { className: "eval-panel" });
+    const ev = model.evaluation;
+
+    if (model.warning) panel.appendChild(el("div", { className: "notice notice-warn", text: model.warning }));
+    if (!model.hasBaseline) {
+      panel.appendChild(el("div", { className: "pairing-notice", text: "No baseline — service ownership unverified. Results below are standalone state checks of the new port, not a comparison." }));
+    } else if (model.wholeDeviceBaseline) {
+      panel.appendChild(el("div", { className: "notice notice-warn", text: "This comparison uses a whole-device baseline. Its services may span several old ports and are not guaranteed to belong only to this pairing." }));
+    } else if (model.baselineMetaMissing) {
+      panel.appendChild(el("div", { className: "notice notice-warn", text: `Baseline ${ev.baseline} is not listed in the run's snapshots — service ownership unavailable.` }));
+    }
+    if (group.metadataMismatch) {
+      panel.appendChild(el("div", { className: "notice notice-warn", text: "This pairing is not in the current run mapping (metadata mismatch, reload to refresh)." }));
+    }
+    panel.appendChild(el("div", { className: "eval-refs mono", text: `subject ${ev.subject} · baseline ${ev.baseline || "—"}` }));
+
+    if (model.infrastructureEntries.length) {
+      panel.appendChild(el("div", { className: "eval-subtitle", text: "Port checks" }));
+      panel.appendChild(el("div", { className: "table-scroll", children: [
+        this.buildResultsTable(this.resultEntries(model.infrastructureEntries, { hasBaseline: model.hasBaseline }), { singlePort: false }),
+      ] }));
+    }
+
+    const shown = R.filterServiceEntries(model.serviceEntries, filterType);
+    if (model.serviceEntries.length === 0) {
+      panel.appendChild(el("div", { className: "pairing-notice", text: "No service results in this evaluation" }));
+    } else if (shown.visible.length === 0) {
+      panel.appendChild(el("div", { className: "pairing-notice", text: `No ${filterType} services in this pairing` }));
+    } else {
+      const contextKeys = new Set(shown.visible.filter((v) => v.linkedContext).map((v) => v.entry.key));
+      const entries = this.resultEntries(shown.visible.map((v) => v.entry), {
+        all: model.serviceEntries, contextKeys, hasBaseline: model.hasBaseline,
+      });
+      panel.appendChild(el("div", { className: "table-scroll", children: [this.buildResultsTable(entries, { singlePort: false })] }));
+    }
+
+    const items = this.unmatchedItems(model);
+    if (items.length) {
+      panel.appendChild(el("div", { className: "eval-subtitle", text: `Nespárováno — ${items.length}` }));
+      panel.appendChild(this.buildUnmatchedSection(items));
+    }
+    if (model.excludedCount) {
+      panel.appendChild(el("div", { className: "eval-note", text: `${model.excludedCount} other services on ${group.new.port} outside this comparison` }));
+    }
+    return panel;
+  }
+
+  buildAuxiliarySection(title, models, opts) {
+    const section = el("div", { className: "aux-section" });
+    section.appendChild(el("div", { className: "subsection-title", text: title }));
+    for (const m of models) {
+      const rec = m.subjectRecord;
+      const label = rec ? `${rec.device}:${rec.port || "all"} (${rec.phase})` : `${m.evaluation.subject} — metadata unavailable`;
+      section.appendChild(el("div", { className: "eval-refs mono", text: `${label} · subject ${m.evaluation.subject} · baseline ${m.evaluation.baseline || "—"}` }));
+      if (m.warning) section.appendChild(el("div", { className: "notice notice-warn", text: m.warning }));
+      const entries = this.resultEntries([...m.infrastructureEntries, ...m.serviceEntries], { hasBaseline: m.hasBaseline });
+      if (entries.length) {
+        section.appendChild(el("div", { className: "table-scroll", children: [this.buildResultsTable(entries, { singlePort: !!opts.singlePort })] }));
+      } else {
+        section.appendChild(el("div", { className: "pairing-notice", text: "No service results in this evaluation" }));
+      }
+      const items = this.unmatchedItems(m);
+      if (items.length) {
+        section.appendChild(el("div", { className: "eval-subtitle", text: `Nespárováno — ${items.length}` }));
+        section.appendChild(this.buildUnmatchedSection(items));
+      }
+    }
+    return section;
+  }
+
+  buildUnassignedBySubject(found) {
+    const section = el("div", { className: "aux-section" });
+    const total = found.reduce((n, f) => n + f.variants.reduce((k, v) =>
+      k + Object.values(v.payload || {}).reduce((c, list) => c + (Array.isArray(list) ? list.length : 0), 0), 0), 0);
+    section.appendChild(el("div", { className: "subsection-title", text: `Unassigned — subject snapshot (Nezařazeno) — ${total}` }));
+    if (found.length === 0) {
+      section.appendChild(this.buildUnassignedSection({}));
+      return section;
+    }
+    for (const f of found) {
+      const rec = f.record;
+      const label = rec ? `${rec.device}:${rec.port || "all"} (${rec.phase}) · ${f.subject}` : `${f.subject} — metadata unavailable`;
+      f.variants.forEach((v, i) => {
+        const suffix = f.variants.length > 1 ? ` · variant ${i + 1} (${v.labels.join(", ")})` : "";
+        section.appendChild(el("div", { className: "eval-refs mono", text: label + suffix }));
+        section.appendChild(this.buildUnassignedSection(v.payload));
+      });
+    }
+    return section;
   }
 
   // -- snapshot evaluation (screen 2) ------------------------------------
