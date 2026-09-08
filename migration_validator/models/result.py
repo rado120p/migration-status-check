@@ -112,7 +112,7 @@ UNCHANGED_SINCE_BASELINE = "unchanged_since_baseline"
 # Znacka radku, ktery hodnotu meri, ale proti baseline ji z definice
 # neporovnava (multicast upstream, uptime, souhrnne radky). Hodnota False
 # rika rendereru "ZMENA prazdna", ne "bez baseline" (R-4).
-NOT_COMPARED = "compared"
+COMPARED = "compared"
 
 
 def count_unchanged(checks: Iterable["CheckResult"]) -> int:

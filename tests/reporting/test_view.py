@@ -1,13 +1,15 @@
 from migration_validator.models.result import (
     CheckResult,
+    COMPARED,
     MatchInfo,
     ScopeResult,
     Severity,
     SKIPPED_BECAUSE,
     SKIP_DEACTIVATED,
     Status,
+    UNCHANGED_SINCE_BASELINE,
 )
-from migration_validator.reporting.view import build_view, change_text
+from migration_validator.reporting.view import build_view, change_text, UNCHANGED_TEXT, _row
 
 
 def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
@@ -526,10 +528,6 @@ def test_no_link_leaves_view_unchanged():
     assert view.link_note is None
 
 
-from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE
-from migration_validator.reporting.view import UNCHANGED_TEXT, _row
-
-
 def _row_of(**details):
     check = _check("x", mode="both", value="Down", baseline_value="Down")
     check.details.update(details)
@@ -544,7 +542,7 @@ def test_change_text_unchanged_marker_prints_text_even_when_values_equal():
 
 def test_change_text_uncompared_row_is_blank_not_bez_baseline():
     check = _check("x", mode="both", value="1d 00:00:00", baseline_value=None)
-    check.details[NOT_COMPARED] = False
+    check.details[COMPARED] = False
     assert change_text(_row(check, qualify=False), True) == ""
 
 

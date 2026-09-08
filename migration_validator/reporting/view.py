@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from migration_validator.models.result import (
     CheckResult,
-    NOT_COMPARED,
+    COMPARED,
     ScopeResult,
     Severity,
     SKIPPED_BECAUSE,
@@ -191,7 +191,7 @@ def _row(check: CheckResult, qualify: bool) -> Row:
         delta=check.delta,
         mode=check.mode,
         unchanged=bool(check.details.get(UNCHANGED_SINCE_BASELINE)),
-        compared=check.details.get(NOT_COMPARED, True) is not False,
+        compared=check.details.get(COMPARED, True) is not False,
     )
 
 

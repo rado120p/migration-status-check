@@ -19,7 +19,7 @@ from migration_validator.config import CheckConfig
 from migration_validator.models.result import (
     CheckResult,
     Finding,
-    NOT_COMPARED,
+    COMPARED,
     Outcome,
     Severity,
     SKIPPED_BECAUSE,
@@ -190,7 +190,7 @@ def _details(finding: Finding) -> dict[str, Any]:
     if finding.outcome is Outcome.UNCHANGED:
         details[UNCHANGED_SINCE_BASELINE] = True
     if not finding.compared:
-        details[NOT_COMPARED] = False
+        details[COMPARED] = False
     return details
 
 

@@ -3,7 +3,14 @@ import pytest
 from migration_validator.config import CheckConfig, default_config
 from migration_validator.checks.base import Check, CheckContext, Mode, run_check
 from migration_validator.checks.ifaces import InterfaceStateCheck
-from migration_validator.models.result import Finding, Outcome, Severity, Status
+from migration_validator.models.result import (
+    COMPARED,
+    Finding,
+    Outcome,
+    Severity,
+    Status,
+    UNCHANGED_SINCE_BASELINE,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
@@ -381,9 +388,6 @@ def test_registry_orders_by_order_then_id():
     assert ids.index("traffic_ceased") < ids.index("igmp_membership_report")
 
 
-from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE
-
-
 def test_unchanged_finding_is_pass_with_marker():
     class Unchanged(DummyCheck):
         def run(self, ctx):
@@ -405,8 +409,8 @@ def test_uncompared_finding_carries_marker_and_ok_finding_does_not():
             ]
 
     uncompared, compared = run_check(Mixed(), _ctx(baseline={"interfaces": {}}))
-    assert uncompared.details[NOT_COMPARED] is False
-    assert NOT_COMPARED not in compared.details
+    assert uncompared.details[COMPARED] is False
+    assert COMPARED not in compared.details
     assert UNCHANGED_SINCE_BASELINE not in compared.details
 
 

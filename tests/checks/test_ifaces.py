@@ -10,7 +10,7 @@ from migration_validator.checks.ifaces import (
 )
 from migration_validator.config import CheckConfig, default_config
 from migration_validator.models.result import (
-    NOT_COMPARED,
+    COMPARED,
     UNCHANGED_SINCE_BASELINE,
     Outcome,
     Status,
@@ -228,7 +228,7 @@ def test_interface_state_without_baseline_record_has_no_baseline_value():
 def test_errors_unmeasured_row_is_not_compared():
     subject = {"interfaces": {"ge-0/0/2": {"input_pps": 1, "output_pps": 1}}}
     rows = run_check(InterfaceErrorsCheck(), _layer1_ctx(subject, baseline=subject))
-    assert rows[0].value == "nezmereno" and rows[0].details[NOT_COMPARED] is False
+    assert rows[0].value == "nezmereno" and rows[0].details[COMPARED] is False
 
 
 def test_errors_skipped_on_internal_interface():

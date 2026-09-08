@@ -1,7 +1,7 @@
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.optics import OpticalAlarmsCheck, OpticalLevelsCheck
 from migration_validator.config import default_config
-from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
+from migration_validator.models.result import COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
@@ -100,7 +100,7 @@ def test_alarms_bez_alarmu_port_chybi_v_baseline_je_nesrovnano():
     )
     [row] = run_check(OpticalAlarmsCheck(), ctx)
     assert row.status is Status.PASS
-    assert row.details[NOT_COMPARED] is False
+    assert row.details[COMPARED] is False
 
 
 def test_flag_off_se_nevypisuje():
@@ -169,7 +169,7 @@ def test_levels_missing_baseline_lane_row_is_not_compared():
     neporovnava, ZMENA sloupec zustava prazdny, ne 'bez baseline'."""
     ctx = _ctx({"optics": {"ae0": {"lanes": [_lane()]}}}, baseline={"optics": {}})
     [row] = run_check(OpticalLevelsCheck(), ctx)
-    assert row.details[NOT_COMPARED] is False
+    assert row.details[COMPARED] is False
 
 
 def test_alarm_raised_in_both_is_unchanged():
