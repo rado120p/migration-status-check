@@ -321,6 +321,43 @@ def test_aligned_baseline_renames_evpn_instance_nested_entry_names():
     ]
 
 
+def test_aligned_baseline_renames_bfd_session_interface_field():
+    """R-6: BFD session na Core transit scopu se vybira podle rozhrani
+    (Scope.select), ne podle peeru - preklicovani musi prejmenovat pole
+    "interface" v zaznamu session, jinak by check po migraci na jiny
+    hardware session nenasel pod jmenem subjektu.
+    """
+    baseline_scope = Scope(
+        id="core:Core:transit",
+        kind="service",
+        key=ScopeKey("Core", "Core", "transit"),
+        selectors=Selectors(interfaces=["ge-0/0/1.0"]),
+    )
+    subject_scope = Scope(
+        id="core:Core:transit",
+        kind="service",
+        key=ScopeKey("Core", "Core", "transit"),
+        selectors=Selectors(interfaces=["et-0/0/1.0"]),
+    )
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
+        facts={
+            "bfd": {
+                "198.11.13.2": {
+                    "state": "Up",
+                    "interface": "ge-0/0/1.0",
+                }
+            }
+        },
+        scopes=[baseline_scope],
+    )
+
+    data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
+
+    assert data["bfd"]["198.11.13.2"]["interface"] == "et-0/0/1.0"
+
+
 def test_aligned_baseline_renames_optics_keys_including_lag_members():
     """Optika je klicovana fyzickym portem (i clenem LAGu) - preklicovani
     z Tasku 11 musi platit i pro ni, jinak by po migraci na jiny hardware
