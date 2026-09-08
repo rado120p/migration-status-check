@@ -281,3 +281,11 @@ výskyty nalezeny nebyly.
 - Zbývající šum „bylo …": ping (RTT se liší při každém měření) a LDP `Up for …` (uptime roste)
   — řeší fix wave vlny 3 (`compared=False`, když je ztráta / stav shodný).
 - PTX NETCONF na portu 830 odmítal spojení (SSH 22 v pořádku) — capture přes `--ssh-port 22`.
+
+### Po fix wave vlny 3 (tytéž snímky, 2026-09-08 večer)
+
+- MX1-POP1 i PTX1-POP1: **0 řádků „bez baseline"**, souhrny beze změny (188/12/0 a 425/4/0,
+  `pass_unchanged` 3 a 177).
+- Jediné zbývající „bylo …" jsou `Interface traffic in/out` s reálnou deltou v procentech
+  (záměr od vlny 5). Ping (RTT) a LDP/PIM (`Up for …`) už ZMENA netisknou — porovnává se
+  ztrátovost, resp. stav Up/Down (`compared=False` při shodě).
