@@ -14,7 +14,12 @@ import os
 import sys
 from dataclasses import replace
 
-from migration_validator.models.result import RunResult, Status, count_statuses
+from migration_validator.models.result import (
+    RunResult,
+    Status,
+    count_statuses,
+    count_unchanged,
+)
 from migration_validator.models.scope import LAYER1_SERVICE_TYPE
 from migration_validator.reporting.view import (
     Group,
@@ -179,6 +184,7 @@ def filter_result(
     summary = {
         **result.summary,
         **count_statuses(check.status for scope in scopes for check in scope.checks),
+        "pass_unchanged": count_unchanged(check for scope in scopes for check in scope.checks),
     }
     # Zaklad je existujici marker z evaluate (service_types/profile) - CLI
     # filtr ho DOPLNUJE, ne prepisuje. scopes_shown/scopes_total od CLI
@@ -487,6 +493,12 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
     # odvodit neda bez toho, aby renderer zacal scitat checky.
     services = count_statuses(scope.status for scope in result.scopes)
     lines.extend(_counts_lines(services, summary, color))
+    unchanged = int(summary.get("pass_unchanged", 0))
+    if unchanged:
+        # Bez zdedenych chyb v "PASS 42" by jinak nikdo nevidel (R-3).
+        lines.append(
+            f"  z toho {unchanged} PASS beze zmeny proti baseline (chyba uz pred migraci)"
+        )
     lines.append(
         f"  Sparovano {summary['scopes_matched']} sluzeb, "
         f"{summary['unmatched_baseline']} nesparovana v baseline, "

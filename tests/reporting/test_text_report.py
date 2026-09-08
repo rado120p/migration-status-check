@@ -4,6 +4,7 @@ import re
 from dataclasses import replace
 
 from migration_validator.models.result import (
+    UNCHANGED_SINCE_BASELINE,
     CheckResult,
     MatchInfo,
     RunResult,
@@ -1634,3 +1635,13 @@ def test_filter_result_preserves_step_and_excluded():
     shown = filter_result(result, text=None, statuses=None)
     assert shown.step == STEP
     assert shown.excluded_services == EXCLUDED
+
+
+def test_unchanged_line_printed_only_when_nonzero():
+    result = _legacy_result()
+    assert "beze zmeny proti baseline" not in render(result)
+
+    result.summary["pass_unchanged"] = 2
+    result.scopes[0].checks[0].details[UNCHANGED_SINCE_BASELINE] = True
+    output = render(result)
+    assert "  z toho 2 PASS beze zmeny proti baseline (chyba uz pred migraci)" in output

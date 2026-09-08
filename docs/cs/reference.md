@@ -536,7 +536,8 @@ Vlastnosti:
   souhrn napříč RIB.
 - Seznam statusů: `PASS`, `RECV`, `SKIP`, `WARN`, `FAIL`, `INFO` (pořadí mezi PASS a SKIP,
   počítá se nejhorší). `RECV` — měření je teď zdravé a v baseline zdravé nebylo (zlepšení
-  proti baseline); na exit code nemá vliv.
+  proti baseline); na exit code nemá vliv. `PASS` se značkou `unchanged_since_baseline` =
+  stejná chyba byla už v baseline (R-3, spec 2026-09-08); souhrn nese `pass_unchanged`.
 - **Zlepšení** (`Outcome.RECOVERED` → `Status.RECV`, vždy RECV bez ohledu na severity) se
   hlásí místo tichého sloučení do `PASS`, aby operátor viděl, co se opravilo, ne jen že nic
   není rozbité. Používá se v: `isis_adjacency_state` (adjacency teď `Up`, baseline ne-`Up`),

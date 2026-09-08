@@ -20,6 +20,7 @@ from migration_validator.models.result import (
     ScopeResult,
     Status,
     count_statuses,
+    count_unchanged,
 )
 from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope, device_scope
 from migration_validator.models.snapshot import Snapshot
@@ -579,10 +580,10 @@ def evaluate_snapshots(
 
     scope_results = _group_by_layer1(_reorder_linked(scope_results))
 
+    all_checks_results = [check for scope_result in scope_results for check in scope_result.checks]
     summary = {
-        **count_statuses(
-            check.status for scope_result in scope_results for check in scope_result.checks
-        ),
+        **count_statuses(check.status for check in all_checks_results),
+        "pass_unchanged": count_unchanged(all_checks_results),
         "scopes_matched": matched_count,
         "unmatched_baseline": len(unmatched["baseline"]),
         "unmatched_subject": len(unmatched["subject"]),

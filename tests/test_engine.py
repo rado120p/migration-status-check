@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from migration_validator import api
+from migration_validator.checks import base as check_base
 from migration_validator.engine import (
     _aligned_baseline_data,
     _group_by_layer1,
@@ -11,7 +12,7 @@ from migration_validator.engine import (
     _unassigned_bgp_peers,
     evaluate_snapshots,
 )
-from migration_validator.models.result import ScopeResult, Status
+from migration_validator.models.result import Finding, Outcome, ScopeResult, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 
@@ -1391,3 +1392,19 @@ def test_step_without_baseline_has_no_excluded_services():
     payload = result.to_dict()
     assert "step" in payload
     assert "excluded_services" not in payload
+
+
+def test_summary_counts_unchanged_rows(monkeypatch):
+    class Unchanged(check_base.Check):
+        id = "unchanged_dummy"
+        title = "t"
+        label = "Dummy"
+        mode = check_base.Mode.BOTH
+
+        def run(self, ctx):
+            return [Finding(Outcome.UNCHANGED, "x", value="Down", baseline_value="Down")]
+
+    monkeypatch.setattr("migration_validator.engine.all_checks", lambda: [Unchanged()])
+    result = api.evaluate(_new(), baseline=_old(), now=NOW)
+    assert result.summary["pass_unchanged"] == 1
+    assert result.summary["pass"] == 1
