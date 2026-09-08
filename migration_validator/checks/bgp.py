@@ -233,7 +233,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     value="deaktivovan",
                     baseline_value=(
                         "deaktivovan" if baseline_off
-                        else str(baseline_peers[peer].get("state", "unknown"))
+                        else str(baseline_peers[peer].get("state", UNKNOWN))
                         if peer in baseline_peers
                         else None
                     ),
@@ -271,7 +271,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     value=value,
                     baseline_value=(
                         value if outcome is Outcome.UNCHANGED
-                        else str(baseline_peers[peer].get("state", "unknown"))
+                        else str(baseline_peers[peer].get("state", UNKNOWN))
                         if peer in baseline_peers
                         else None
                     ),

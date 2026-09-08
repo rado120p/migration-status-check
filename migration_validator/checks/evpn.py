@@ -104,9 +104,9 @@ class EvpnVpwsStatusCheck(Check):
             return qualified(text, iface["name"]) if qualify else text
 
         findings = []
-        status = str(iface.get("status", "unknown"))
+        status = str(iface.get("status", UNKNOWN))
         baseline_status = (
-            str(baseline_iface.get("status", "unknown"))
+            str(baseline_iface.get("status", UNKNOWN))
             if baseline_iface is not None
             else None
         )
@@ -185,7 +185,7 @@ class EvpnVpwsStatusCheck(Check):
                         label=label(f"{prefix} PE"),
                         value="Neznamy peer",
                         baseline_value=(
-                            "Neznamy peer" if same
+                            "Neznamy peer" if outcome is Outcome.UNCHANGED
                             else (
                                 str(first_baseline_peer.get("ipaddr") or "?")
                                 if first_baseline_peer
@@ -201,7 +201,7 @@ class EvpnVpwsStatusCheck(Check):
                         label=label(f"{prefix} status"),
                         value="Unresolved / Chybi",
                         baseline_value=(
-                            "Unresolved / Chybi" if same
+                            "Unresolved / Chybi" if outcome is Outcome.UNCHANGED
                             else (
                                 str(first_baseline_peer.get("status") or "Unresolved / Chybi")
                                 if first_baseline_peer
@@ -216,7 +216,7 @@ class EvpnVpwsStatusCheck(Check):
                 # kdyz ma stejny tvar radku (taky bez local peeru) -
                 # kdyz baseline peery MELA, jde o jiny tvar hlasky a
                 # srovnani by nedavalo smysl, baseline_value zustava None.
-                subject_mode = iface.get("mode") or "unknown"
+                subject_mode = iface.get("mode") or UNKNOWN
                 value = f"{subject_mode} (multi-homing peer ve vypisu nenalezen)"
                 baseline_local_mode = None
                 if (
@@ -224,7 +224,7 @@ class EvpnVpwsStatusCheck(Check):
                     and baseline_sid is not None
                     and not baseline_peers
                 ):
-                    baseline_mode = baseline_iface.get("mode") or "unknown"
+                    baseline_mode = baseline_iface.get("mode") or UNKNOWN
                     # Pri shode modu jde do baseline_value cela hodnota
                     # radku, aby change_text poznal rovnost a nechal ZMENU
                     # prazdnou. Pri rozdilu jde jen cisty mod - zavorka o
@@ -398,12 +398,9 @@ class EvpnEsiStatusCheck(Check):
         status = str(data.get("status", UNKNOWN))
         up = _is_up(status)
         baseline_status = baseline.get("status")
-        same = (
-            status != UNKNOWN
-            and bool(baseline_status)
-            and str(baseline_status) != UNKNOWN
-            and not _is_up(str(baseline_status))
-        )
+        # Presna shoda stavu, ne jen "oba nejsou Up" - dve ruzne ne-Up
+        # hodnoty (napr. Down vs Detached) nejsou "stejny stav".
+        same = status != UNKNOWN and str(baseline_status) == status
         outcome = (
             Outcome.OK if up
             else unchanged_or(Outcome.BROKEN, ctx, "evpn_esi", same=same)
@@ -651,11 +648,12 @@ class EvpnInstanceStatusCheck(Check):
             status = str(entry["status"])
             up = _is_up(status)
             baseline_entry = baseline_local_by_name.get(entry["name"])
+            # Presna shoda stavu, ne jen "oba nejsou Up" - dve ruzne ne-Up
+            # hodnoty (napr. Down vs Detached) nejsou "stejny stav".
             same = (
                 status != UNKNOWN
                 and baseline_entry is not None
-                and str(baseline_entry["status"]) != UNKNOWN
-                and not _is_up(str(baseline_entry["status"]))
+                and str(baseline_entry["status"]) == status
             )
             outcome = (
                 Outcome.OK if up
@@ -720,11 +718,16 @@ class EvpnInstanceStatusCheck(Check):
                 value += f" ({context})"
             up = _is_up(status)
             baseline_entry = baseline_irb_by_name.get(entry["name"])
+            # Presna shoda stavu (ne jen "oba nejsou Up") a shoda l3
+            # kontextu - IRB Down v jinem l3_context (napr. presunuta
+            # migraci do jineho RI) neni "stejny stav", i kdyz status text
+            # sedi.
             same = (
                 status != UNKNOWN
                 and baseline_entry is not None
-                and str(baseline_entry["status"]) != UNKNOWN
-                and not _is_up(str(baseline_entry["status"]))
+                and str(baseline_entry["status"]) == status
+                and (entry.get("l3_context") or None)
+                == (baseline_entry.get("l3_context") or None)
             )
             outcome = (
                 Outcome.OK if up

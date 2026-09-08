@@ -333,6 +333,19 @@ def test_esi_unresolved_and_df_not_elected_in_both_are_unchanged():
     assert _by_label(rows, "ESI DF").status is Status.PASS
 
 
+def test_esi_local_iface_down_vs_detached_neni_unchanged():
+    # Down vs Detached jsou dva ruzne ne-Up stavy - drive same= porovnaval
+    # jen "oba nejsou Up", takze se schovaly za UNCHANGED.
+    ctx = _ctx(
+        {"evpn_esi": {"00:11": _esi_entry(status="Down")}},
+        baseline={"evpn_esi": {"00:11": _esi_entry(status="Detached")}},
+    )
+    results = run_check(EvpnEsiStatusCheck(), ctx)
+    local = next(r for r in results if r.label == "ESI Local interface status")
+    assert local.status is Status.FAIL
+    assert local.baseline_value == "Detached"
+
+
 def test_esi_down_interface_fails():
     ctx = _ctx({"evpn_esi": {"00:11": _esi_entry(status="Down")}})
     results = run_check(EvpnEsiStatusCheck(), ctx)
@@ -811,12 +824,52 @@ def test_evpn_interface_down_je_broken():
     assert rows[0].outcome is Outcome.BROKEN
 
 
+def test_evpn_interface_down_vs_detached_neni_unchanged():
+    # Dve ruzne ne-Up hodnoty (Down/Detached) nejsou "stejny stav" - drive
+    # same= porovnaval jen "oba nejsou Up", takze Down vs Detached vysel
+    # jako UNCHANGED s hodnotou baseline "Detached" schovanou za znacku.
+    subject = _aware_subject()
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"][1][
+        "status"] = "Down"
+    baseline = _aware_subject()
+    baseline["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"][1][
+        "status"] = "Detached"
+    ctx = _vlan_aware_ctx(subject)
+    ctx.baseline = baseline
+    ctx.baseline_collectors = {"evpn_instance": {"status": "ok"}}
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    rows = [f for f in findings if f.label == "EVPN interface (ae0.14)"]
+    assert rows[0].outcome is Outcome.BROKEN
+    assert rows[0].baseline_value == "Detached"
+
+
 def test_irb_radek_jen_linkovany_unit():
     findings = EvpnInstanceStatusCheck().run(
         _vlan_aware_ctx(_aware_subject(), link=LINK_L2))
     rows = [f for f in findings if f.label == "IRB interface (irb.14)"]
     assert [r.value for r in rows] == ["Up (master)"]
     assert rows[0].outcome is Outcome.OK
+
+
+def test_irb_down_v_obou_ale_jiny_l3_context_neni_unchanged():
+    # same drive porovnaval jen status, ne l3_context - IRB Down v obou
+    # snimcich s jinym l3 kontextem (napr. migrace mezi RI) tak vysel jako
+    # UNCHANGED, i kdyz kontext, ve kterem IRB zije, se realne zmenil.
+    subject = _aware_subject()
+    subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"][0][
+        "status"] = "Down"
+    baseline = _aware_subject()
+    baseline["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"][0][
+        "status"] = "Down"
+    baseline["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["irb_interfaces"]["entries"][0][
+        "l3_context"] = "L3VPN-CPE14"
+    ctx = _vlan_aware_ctx(subject, link=LINK_L2)
+    ctx.baseline = baseline
+    ctx.baseline_collectors = {"evpn_instance": {"status": "ok"}}
+    findings = EvpnInstanceStatusCheck().run(ctx)
+    row = _by_label(findings, "IRB interface (irb.14)")
+    assert row.outcome is Outcome.BROKEN
+    assert row.baseline_value == "Down (L3VPN-CPE14)"
 
 
 def test_irb_down_je_broken():
