@@ -467,6 +467,13 @@ def _ping_findings(
         sent = int(probe.get("sent", 0))
         received = int(probe.get("received", 0))
         was = by_target.get(target)
+        # Porovnava se ztratovost, ne RTT - kolisajici RTT (jitter) neni
+        # zmena stavu. same_loss=False i bez baseline zaznamu (was is None),
+        # aby compared zustalo True (nezmeneno) tam, kde se dosud nemenilo.
+        same_loss = (
+            was is not None
+            and (int(was.get("sent", 0)), int(was.get("received", 0))) == (sent, received)
+        )
 
         details = {
             "resolved_from": probe.get("resolved_from"),
@@ -486,6 +493,7 @@ def _ping_findings(
                     baseline_value=_ping_value(was) if was else None,
                     subject={"target": target, "sent": 0, "received": received},
                     details=details,
+                    compared=not same_loss,
                 )
             )
         elif received:
@@ -499,6 +507,7 @@ def _ping_findings(
                     baseline_value=_ping_value(was) if was else None,
                     subject={"target": target, "sent": sent, "received": received},
                     details=details,
+                    compared=not same_loss,
                 )
             )
         else:
@@ -518,6 +527,7 @@ def _ping_findings(
                     baseline_value=_ping_value(was) if was else None,
                     subject={"target": target, "sent": sent, "received": 0},
                     details=details,
+                    compared=not same_loss,
                 )
             )
     return findings

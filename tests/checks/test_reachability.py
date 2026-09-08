@@ -7,7 +7,13 @@ from migration_validator.checks.reachability import (
     PingReachabilityCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome, Severity, Status, UNCHANGED_SINCE_BASELINE
+from migration_validator.models.result import (
+    COMPARED,
+    Outcome,
+    Severity,
+    Status,
+    UNCHANGED_SINCE_BASELINE,
+)
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 
 
@@ -761,6 +767,46 @@ def test_ping_ok_row_baseline_value_same_shape():
     probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
     [row] = run_check(PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [probe]}))
     assert row.baseline_value == row.value
+
+
+def test_ping_ok_same_loss_but_different_rtt_is_not_compared():
+    """Kolisajici RTT (jitter) neni zmena stavu - porovnava se ztratovost
+    (sent/received), ne RTT. Stejna ztratovost s jinym RTT ma ZMENA
+    prazdnou (compared=False), ne 'bylo <stary RTT>'."""
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 3.0}
+    baseline_probe = dict(probe, rtt_avg_ms=1.0)
+    [row] = run_check(
+        PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [baseline_probe]}),
+    )
+    assert row.status is Status.PASS
+    assert row.details[COMPARED] is False
+
+
+def test_ping_ok_now_loss_before_is_compared_with_old_loss_shown():
+    """OK ted, ztrata drive (jina ztratovost) je skutecna zmena stavu -
+    compared zustava True (default) a baseline_value ukazuje stary
+    stav (ztratu)."""
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
+    baseline_probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 0}
+    [row] = run_check(
+        PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [baseline_probe]}),
+    )
+    assert row.status is Status.PASS
+    assert COMPARED not in row.details
+    assert row.baseline_value == "0/5  198.11.13.2 neodpovedel"
+
+
+def test_ping_ok_without_baseline_counterpart_stays_compared():
+    """Bez zaznamu v baseline (jiny cil) zustava chovani nezmeneno -
+    compared True (default), baseline_value None."""
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
+    other_baseline_probe = dict(probe, target="198.11.13.9")
+    [row] = run_check(
+        PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [other_baseline_probe]}),
+    )
+    assert row.status is Status.PASS
+    assert COMPARED not in row.details
+    assert row.baseline_value is None
 
 
 def test_nd_baseline_link_local_only_filtered_same_as_subject_is_unchanged():
