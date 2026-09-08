@@ -11,17 +11,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.baseline import suffix, unchanged_or
+from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
 from migration_validator.checks.ifaces import percent_change, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 UP = "Up"
-# Collector placeholder pro chybejici XML element (collectors/evpn.py:
-# _text(...) or "unknown") - "unknown" v obou snapshotech neni dukaz
-# shodneho stavu, jen dukaz, ze ani jeden snapshot stav nezmeril. Stav se
-# nefabuluje, takze "unknown" nesmi projit do same= podminky UNCHANGED.
-UNKNOWN = "unknown"
 
 
 def _is_up(status: str) -> bool:

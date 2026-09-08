@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.baseline import suffix, unchanged_or
+from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -139,11 +139,12 @@ class InterfaceStateCheck(Check):
                 ("Interface admin status", "admin_status"),
                 ("Interface operational status", "oper_status"),
             ):
-                state = str(data.get(key, "unknown"))
-                was_state = str(was.get(key, "unknown")) if was is not None else None
+                state = str(data.get(key, UNKNOWN))
+                was_state = str(was.get(key, UNKNOWN)) if was is not None else None
                 ok = state == "up"
                 outcome = Outcome.OK if ok else unchanged_or(
-                    Outcome.BROKEN, ctx, "interfaces", same=was_state == state,
+                    Outcome.BROKEN, ctx, "interfaces",
+                    same=state != UNKNOWN and was_state == state,
                 )
                 findings.append(
                     Finding(

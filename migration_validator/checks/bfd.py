@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.baseline import suffix, unchanged_or
+from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
 from migration_validator.checks.bgp import ESTABLISHED, NOT_IN_SERVICE, peer_family
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -23,11 +23,6 @@ from migration_validator.models.result import Finding, Outcome, Severity
 NO_SESSION = "bez session"
 BGP_NOT_UP = "BGP neni Established"
 PARSER_MISSED = "parser nenasel konfiguraci"
-# Collector placeholder pro chybejici XML element ("state" v zaznamu session).
-# "unknown" v obou snapshotech neni dukaz shodneho stavu, jen dukaz, ze ani
-# jeden snapshot stav nezmeril - stav se nefabuluje (Task 10 konsoliduje
-# tuto konstantu do checks/baseline.py).
-UNKNOWN = "unknown"
 
 # NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni,
 # a to jde rict jen v service scope. Peer, ktereho uz tato sluzba nenarokuje,

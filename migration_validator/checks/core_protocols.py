@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.baseline import suffix, unchanged_or
+from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
 from migration_validator.checks.ifaces import is_transit, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -102,12 +102,15 @@ class IsisAdjacencyStateCheck(Check):
                 baseline_value=was_system_value,
             ))
 
-        state = str(adj.get("state", "unknown"))
+        state = str(adj.get("state", UNKNOWN))
         was_raw_state = was.get("state") if was else None
         was_state = str(was_raw_state) if was_raw_state is not None else None
         message = f"{name}: adjacency {state}"
         if state != "Up":
-            outcome = unchanged_or(Outcome.BROKEN, ctx, "isis_adjacency", same=was_state == state)
+            outcome = unchanged_or(
+                Outcome.BROKEN, ctx, "isis_adjacency",
+                same=state != UNKNOWN and was_state == state,
+            )
             message = f"{name}: adjacency {state}{suffix(outcome)}"
         elif has_baseline and was_state is not None and was_state != "Up":
             # Up ted, v baseline nebyl - zlepseni proti baseline, ne tiche OK
@@ -393,7 +396,7 @@ class MplsInterfaceStateCheck(Check):
                     baseline_value=MISSING if outcome is Outcome.UNCHANGED else was_value,
                 ))
                 continue
-            state = str(entry.get("state", "unknown"))
+            state = str(entry.get("state", UNKNOWN))
             up = state == "Up"
             message = f"{name}: MPLS {state}"
             if up and was_state not in (None, "Up"):
@@ -402,7 +405,13 @@ class MplsInterfaceStateCheck(Check):
             elif up:
                 outcome = Outcome.OK
             else:
-                outcome = unchanged_or(Outcome.BROKEN, ctx, "mpls_interface", same=was_value == "Down")
+                # same porovnava syrovy stav (state != UNKNOWN), ne
+                # normalizovanou was_value/"Down" - ta by dve "unknown"
+                # schovala pod stejne "Down" (stav se nefabuluje).
+                outcome = unchanged_or(
+                    Outcome.BROKEN, ctx, "mpls_interface",
+                    same=state != UNKNOWN and was_value == "Down",
+                )
                 message = f"{name}: MPLS {state}{suffix(outcome)}"
             findings.append(Finding(
                 outcome, message,
@@ -482,7 +491,7 @@ class BfdTransitStateCheck(Check):
                 if baseline_entries:
                     first_peer = sorted(baseline_entries)[0]
                     baseline_value = str(
-                        baseline_entries[first_peer].get("state", "unknown")
+                        baseline_entries[first_peer].get("state", UNKNOWN)
                     )
                 outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=not baseline_entries)
                 findings.append(Finding(
@@ -495,7 +504,7 @@ class BfdTransitStateCheck(Check):
                 ))
                 continue
             for peer, data in sorted(entries):
-                state = str(data.get("state", "unknown"))
+                state = str(data.get("state", UNKNOWN))
                 # Baseline session se hleda podle peera, ne podle rozhrani -
                 # tranzitni port se pri migraci bezne prejmenuje (napr.
                 # ge-0/0/1.0 -> et-0/0/1.0), takze baseline_by_interface by
@@ -509,7 +518,10 @@ class BfdTransitStateCheck(Check):
                 elif state == "Up":
                     outcome = Outcome.OK
                 else:
-                    outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=was_state == state)
+                    outcome = unchanged_or(
+                        Outcome.BROKEN, ctx, "bfd",
+                        same=state != UNKNOWN and was_state == state,
+                    )
                     message = f"{name}: BFD session s {peer} {state}{suffix(outcome)}"
                 findings.append(Finding(
                     outcome, message,

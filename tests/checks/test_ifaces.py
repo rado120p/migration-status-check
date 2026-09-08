@@ -197,6 +197,17 @@ def test_interface_state_down_in_both_is_unchanged_pass():
     assert oper.value == "Down" == oper.baseline_value
 
 
+def test_interface_state_unknown_in_both_stays_fail():
+    # collector dosazuje "unknown" jen kdyz admin_status/oper_status v
+    # datech chybi - shoda "unknown" == "unknown" neni dukaz shodneho
+    # stavu, jen dukaz, ze ani jeden snapshot stav nezmeril.
+    subject = {"interfaces": {"ge-0/0/2.113": {}}}
+    rows = run_check(InterfaceStateCheck(), _ctx(subject, baseline=subject))
+    oper = [r for r in rows if r.label.startswith("Interface operational")][0]
+    assert oper.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in oper.details
+
+
 def test_interface_state_down_now_up_before_is_fail_with_bylo():
     rows = run_check(InterfaceStateCheck(), _ctx(_iface(oper="down"), baseline=_iface()))
     oper = [r for r in rows if r.label.startswith("Interface operational")][0]

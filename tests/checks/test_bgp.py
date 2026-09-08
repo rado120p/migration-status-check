@@ -894,6 +894,17 @@ def test_active_state_in_both_is_unchanged_pass():
     assert row.value == "Active" == row.baseline_value
 
 
+def test_state_unknown_in_both_stays_fail():
+    # collectory dosazuji "state": "unknown" jen kdyz XML element chybi -
+    # shoda "unknown" == "unknown" neni dukaz shodneho stavu, jen dukaz, ze
+    # ani jeden snapshot stav nezmeril (stav se nefabuluje).
+    peer = {"198.11.13.2": _peer(state="unknown")}
+    ctx = _ctx({"bgp": peer}, baseline={"bgp": peer})
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+    assert row.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in row.details
+
+
 def test_configured_peer_without_session_in_both_is_unchanged():
     ctx = _ctx({"bgp": {}}, baseline={"bgp": {}})
     [row] = run_check(BgpSessionStateCheck(), ctx)

@@ -21,7 +21,7 @@ import ipaddress
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
-from migration_validator.checks.baseline import suffix, unchanged_or
+from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
 from migration_validator.checks.deactivation import deactivation_outcome
 from migration_validator.checks.ifaces import percent_change
 from migration_validator.checks.registry import register
@@ -134,7 +134,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
 
         findings = []
         for peer in sorted(peers):
-            state = str(peers[peer].get("state", "unknown"))
+            state = str(peers[peer].get("state", UNKNOWN))
             subject = {"state": state}
 
             # Dohledava se pred vetvenim, ne uvnitr vetve pro Established:
@@ -142,13 +142,16 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             # vznikl, a kdyz se baseline hledal az za jejim continue, report
             # u ni psal 'bez baseline', prestoze check predchozi stav znal.
             baseline_state = (
-                str(baseline_peers[peer].get("state", "unknown"))
+                str(baseline_peers[peer].get("state", UNKNOWN))
                 if peer in baseline_peers
                 else None
             )
 
             if state != ESTABLISHED:
-                outcome = unchanged_or(Outcome.BROKEN, ctx, "bgp", same=baseline_state == state)
+                outcome = unchanged_or(
+                    Outcome.BROKEN, ctx, "bgp",
+                    same=state != UNKNOWN and baseline_state == state,
+                )
                 findings.append(
                     Finding(
                         outcome,
