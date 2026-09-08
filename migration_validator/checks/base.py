@@ -47,10 +47,19 @@ class CheckContext:
     # scopu nejde porovnat "deaktivovano i drive" proti "deaktivovano az ted".
     baseline_scope: Scope | None = None
     link: dict[str, Any] | None = None
+    # Collectory, ktere v BASELINE selhaly. Bez toho by "chybi v obou"
+    # nesel odlisit od "baseline to nezmerila" a UNCHANGED (R-3) by
+    # schoval chybu migrace za selhany collector stare krabice.
+    baseline_failed_collectors: dict[str, str] = field(default_factory=dict)
 
     @property
     def has_baseline(self) -> bool:
         return self.baseline is not None
+
+    def baseline_measured(self, area: str) -> bool:
+        """Baseline existuje a collector oblasti v ni probehl. Jedina
+        brana pro Outcome.UNCHANGED - stav se nefabuluje."""
+        return self.has_baseline and area not in self.baseline_failed_collectors
 
     def options(self, check_id: str) -> dict[str, Any]:
         return self.config.options(check_id)

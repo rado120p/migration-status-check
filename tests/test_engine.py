@@ -1408,3 +1408,28 @@ def test_summary_counts_unchanged_rows(monkeypatch):
     result = api.evaluate(_new(), baseline=_old(), now=NOW)
     assert result.summary["pass_unchanged"] == 1
     assert result.summary["pass"] == 1
+
+
+def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
+    from migration_validator.checks import base as check_base
+    from migration_validator.models.result import Finding, Outcome
+
+    seen = {}
+
+    class Probe(check_base.Check):
+        id = "probe_dummy"
+        title = "t"
+        label = "Probe"
+        mode = check_base.Mode.BOTH
+
+        def run(self, ctx):
+            seen["failed"] = dict(ctx.baseline_failed_collectors)
+            seen["measured"] = ctx.baseline_measured("arp")
+            return [Finding(Outcome.OK, "x", value="v", baseline_value="v")]
+
+    monkeypatch.setattr("migration_validator.engine.all_checks", lambda: [Probe()])
+    baseline = _old()
+    baseline.capture.collectors["arp"] = {"status": "error", "message": "RpcError: timeout"}
+    api.evaluate(_new(), baseline=baseline, now=NOW)
+    assert seen["failed"] == {"arp": "RpcError: timeout"}
+    assert seen["measured"] is False

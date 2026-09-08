@@ -408,3 +408,11 @@ def test_uncompared_finding_carries_marker_and_ok_finding_does_not():
     assert uncompared.details[NOT_COMPARED] is False
     assert NOT_COMPARED not in compared.details
     assert UNCHANGED_SINCE_BASELINE not in compared.details
+
+
+def test_baseline_measured_requires_baseline_and_ok_collector():
+    assert _ctx(baseline=None).baseline_measured("ldp_neighbor") is False
+    ctx = _ctx(baseline={"ldp_neighbor": {}},
+               baseline_failed_collectors={"ldp_neighbor": "RpcError"})
+    assert ctx.baseline_measured("ldp_neighbor") is False
+    assert ctx.baseline_measured("pim_neighbor") is True

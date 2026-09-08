@@ -300,6 +300,11 @@ def _run_scope(
         failed_collectors=subject.capture.failed_collectors(),
         baseline_scope=baseline_scope,
         link=link,
+        baseline_failed_collectors=(
+            baseline.capture.failed_collectors()
+            if baseline_data is not None and baseline is not None
+            else {}
+        ),
     )
 
     results = []
