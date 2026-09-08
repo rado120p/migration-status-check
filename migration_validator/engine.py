@@ -29,6 +29,14 @@ from migration_validator.scoping.mapping import Mapping, empty_mapping
 from migration_validator.scoping.matcher import MatchedPair, match_scopes
 
 
+_RENAMED_KEY_AREAS = (
+    "isis_adjacency", "isis_interface", "ldp_neighbor", "pim_neighbor",
+    "mpls_interface", "igmp_group",
+)
+_RENAMED_FIELD_LIST_AREAS = ("arp", "nd")
+_RENAMED_FIELD_DICT_AREAS = ("bfd", "evpn_esi")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -85,6 +93,15 @@ def _aligned_baseline_data(
     (lag_members) - proto se do rename pozicne pricitaji i cleny, ne jen
     physical_interfaces. Bez toho by port v LAGu po migraci na jiny hardware
     nikdy nenasel svou baseline optiku.
+
+    R-6 rozsiruje stejny princip na vsechny ostatni per-interface oblasti:
+    klice slovniku isis_adjacency, isis_interface, ldp_neighbor,
+    pim_neighbor, mpls_interface, igmp_group a pole interface v zaznamech
+    arp, nd, bfd (klicovano peerem) a evpn_esi (klicovano ESI) se preslovnuji
+    stejnym pozicnim mappingem. Oblasti pim_join a multicast_route se
+    zamerne nepreslovnuji - jmeno rozhrani je tam jen v hodnote zaznamu,
+    ktera se s baseline neporovnava (nejde o klic ani o pole pouzivane pri
+    parovani), takze by rename byl bez efektu.
     """
     data = baseline_scope.select(baseline.facts, baseline.probes)
     selectors = baseline_scope.selectors
@@ -117,6 +134,25 @@ def _aligned_baseline_data(
             rename.get(name, name): optics_data
             for name, optics_data in data["optics"].items()
         }
+    if rename:
+        # R-6 (spec 2026-09-08): puvodni duvod mappingu. Bez toho R-3
+        # (UNCHANGED) na migraci stary -> novy box nikdy nenajde baseline
+        # zaznam a LDP/PIM/IS-IS radky sviti "bez baseline".
+        for area in _RENAMED_KEY_AREAS:
+            if data.get(area):
+                data[area] = {rename.get(k, k): v for k, v in data[area].items()}
+        for area in _RENAMED_FIELD_LIST_AREAS:
+            if data.get(area):
+                data[area] = [
+                    {**entry, "interface": rename.get(entry.get("interface"), entry.get("interface"))}
+                    for entry in data[area]
+                ]
+        for area in _RENAMED_FIELD_DICT_AREAS:
+            if data.get(area):
+                data[area] = {
+                    key: {**entry, "interface": rename.get(entry.get("interface"), entry.get("interface"))}
+                    for key, entry in data[area].items()
+                }
     return data
 
 

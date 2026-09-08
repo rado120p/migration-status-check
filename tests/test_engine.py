@@ -1430,3 +1430,34 @@ def test_engine_passes_baseline_failed_collectors_to_checks(monkeypatch):
     api.evaluate(_new(), baseline=baseline, now=NOW)
     assert seen["failed"] == {"arp": "RpcError: timeout"}
     assert seen["measured"] is False
+
+
+def test_aligned_baseline_renames_protocol_areas_and_interface_fields():
+    from migration_validator.engine import _aligned_baseline_data
+
+    old = _scope("svc:CORE:Core", "CORE", "Core", "ge-0/0/1.0")
+    new = _scope("svc:CORE:Core", "CORE", "Core", "et-0/0/1.0")
+    baseline = _snapshot("172.20.20.4", "ge-0/0/1.0", [old])
+    baseline.facts.update({
+        "isis_adjacency": {"ge-0/0/1.0": {"state": "Up"}},
+        "isis_interface": {"ge-0/0/1.0": {"levels": {}}},
+        "ldp_neighbor": {"ge-0/0/1.0": {"uptime_seconds": 5}},
+        "pim_neighbor": {"ge-0/0/1.0": {"uptime_seconds": 5}},
+        "mpls_interface": {"ge-0/0/1.0": {"state": "Up"}},
+        "igmp_group": {"ge-0/0/1.0": [{"source": "10.0.0.1", "group": "232.1.1.1"}]},
+        "bfd": {"10.1.0.5": {"state": "Up", "interface": "ge-0/0/1.0"}},
+        "evpn_esi": {"00:11": {"interface": "ge-0/0/1.0", "status": "Resolved"}},
+    })
+    baseline.capture.collectors.update(
+        {name: {"status": "ok"} for name in ("isis_adjacency", "isis_interface",
+         "ldp_neighbor", "pim_neighbor", "mpls_interface", "igmp_group", "bfd", "evpn_esi")}
+    )
+
+    data = _aligned_baseline_data(old, new, baseline)
+
+    for area in ("isis_adjacency", "isis_interface", "ldp_neighbor",
+                 "pim_neighbor", "mpls_interface", "igmp_group"):
+        assert list(data[area]) == ["et-0/0/1.0"], area
+    assert data["arp"][0]["interface"] == "et-0/0/1.0"
+    assert data["nd"][0]["interface"] == "et-0/0/1.0"
+    assert data["evpn_esi"]["00:11"]["interface"] == "et-0/0/1.0"

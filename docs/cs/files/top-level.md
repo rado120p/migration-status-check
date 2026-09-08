@@ -161,6 +161,12 @@ Dvě netriviální funkce:
 
 - **`_aligned_baseline_data()`** přejmenuje klíče baseline rozhraní na názvy subjektu
   (`ge-0/0/2.113` → `et-0/0/8.113`), aby `interface_traffic` našel s čím porovnávat.
+  Stejným pozičním mappingem (R-6) se přejmenovávají i klíče oblastí
+  `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`,
+  `mpls_interface`, `igmp_group` a pole `interface` v záznamech `arp`, `nd`,
+  `bfd` (klíčováno peerem) a `evpn_esi` (klíčováno ESI). Oblasti `pim_join` a
+  `multicast_route` se záměrně nepřejmenovávají — jméno rozhraní je tam jen
+  v hodnotě, ne v klíči ani poli použitém při porovnání s baseline.
   Podrobně v [../architecture.md](../architecture.md), sekce „Zarovnání názvů rozhraní při
   porovnání".
 - **Status scope** = `Status.worst()` přes checky, ale **jen přes ty, které nevrátily
