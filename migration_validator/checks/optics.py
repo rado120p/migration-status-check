@@ -250,6 +250,12 @@ class OpticalAlarmsCheck(Check):
                     else None
                 )
             )
+            # Baseline optics nema tenhle port vubec (jina inventory, jiny
+            # beh) - radky se z definice neporovnavaji, ne "bez baseline"
+            # (R-4, mirror _level_finding); baseline_value zustava tam, kde
+            # port skutecne zmereny byl (baseline_summary je None jen kdyz
+            # baseline_data is None, coz uz kompared=False pokryva).
+            port_compared = baseline_data is not None
             if not raised:
                 findings.append(
                     Finding(
@@ -258,6 +264,7 @@ class OpticalAlarmsCheck(Check):
                         label=_optics_label(self.label, name, None, port),
                         value="bez alarmu",
                         baseline_value=baseline_summary,
+                        compared=port_compared,
                     )
                 )
                 continue
@@ -275,6 +282,7 @@ class OpticalAlarmsCheck(Check):
                         label=_optics_label(self.label, name, lane_no, port),
                         value=tag,
                         baseline_value=tag if same else baseline_summary,
+                        compared=port_compared,
                     )
                 )
         return findings

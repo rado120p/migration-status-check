@@ -90,6 +90,19 @@ def test_alarm_message_says_aktivni():
     assert f.message == "ae0: rx_los je aktivni"
 
 
+def test_alarms_bez_alarmu_port_chybi_v_baseline_je_nesrovnano():
+    # baseline optics existuje (beh probehl), ale tenhle port v nem neni -
+    # OK radek "bez alarmu" se z definice neporovnava (mirror _level_finding),
+    # ne "bez baseline" v reportu.
+    ctx = _ctx(
+        {"optics": {"ae0": {"lanes": [_lane()]}}},
+        baseline={"optics": {}},
+    )
+    [row] = run_check(OpticalAlarmsCheck(), ctx)
+    assert row.status is Status.PASS
+    assert row.details[NOT_COMPARED] is False
+
+
 def test_flag_off_se_nevypisuje():
     lane = _lane(alarms={"laser-rx-power-low-alarm": False})
     findings = OpticalAlarmsCheck().run(
