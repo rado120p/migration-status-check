@@ -233,6 +233,26 @@ function mainEvaluationModels(model) {
   return [...model.groups.flatMap((g) => g.evaluations), ...model.rollback, ...model.other];
 }
 
+function collectUnassigned(models) {
+  const bySubject = new Map();
+  for (const model of models) {
+    const payload = (model.evaluation.result || {}).unassigned || {};
+    const serialized = JSON.stringify(payload);
+    let entry = bySubject.get(model.evaluation.subject);
+    if (!entry) {
+      entry = { subject: model.evaluation.subject, record: model.subjectRecord, variants: [] };
+      bySubject.set(model.evaluation.subject, entry);
+    }
+    let variant = entry.variants.find((v) => v.serialized === serialized);
+    if (!variant) {
+      variant = { serialized, payload, labels: [] };
+      entry.variants.push(variant);
+    }
+    variant.labels.push(model.label);
+  }
+  return [...bySubject.values()];
+}
+
 const MigRunResults = {
   SERVICE_TYPE_ORDER,
   ALL_TYPES,
@@ -252,6 +272,7 @@ const MigRunResults = {
   serviceTypeChoices,
   groupNeedsAttention,
   mainEvaluationModels,
+  collectUnassigned,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigRunResults;

@@ -239,3 +239,24 @@ test("mainEvaluationModels: pairs + rollback + other, never same-device", () => 
   const model = R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations, snapshots: SNAPSHOTS });
   assert.deepStrictEqual(R.mainEvaluationModels(model).map((m) => m.evaluation.subject), ["post-ae0.json", "rb-ge6.json"]);
 });
+
+test("collectUnassigned: identical payload from one subject shown once; different subjects and differing payloads preserved", () => {
+  const peers = { bgp_peers: [{ peer: "10.0.0.1", routing_instance: "X" }], static_routes: [], bfd_sessions: [] };
+  const other = { bgp_peers: [], static_routes: [{ prefix: "10.0.0.0/8" }], bfd_sessions: [] };
+  const withU = (ev, payload) => ({ ...ev, result: { ...ev.result, unassigned: payload } });
+  const evaluations = [
+    withU(evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), []), peers),
+    withU(evaluation("post-ae0.json", "pre-ge5.json", step("ge-0/0/5", "ae0"), []), peers),
+    withU(evaluation("post-et8.json", "pre-ge6.json", step("ge-0/0/6", "et-0/0/8"), []), other),
+    withU(evaluation("post-et8.json", "pre-all.json", null, []), peers),
+  ];
+  const model = R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0"), row("ge-0/0/5", "ae0"), row("ge-0/0/6", "et-0/0/8")], evaluations, snapshots: SNAPSHOTS });
+  const found = R.collectUnassigned(R.mainEvaluationModels(model));
+  assert.deepStrictEqual(found.map((f) => f.subject), ["post-ae0.json", "post-et8.json"]);
+  assert.strictEqual(found[0].variants.length, 1);
+  assert.deepStrictEqual(found[0].variants[0].labels, ["MX1:ge-0/0/4 -> PTX1:ae0", "MX1:ge-0/0/5 -> PTX1:ae0"]);
+  assert.strictEqual(found[0].record.device, "PTX1");
+  assert.strictEqual(found[1].variants.length, 2);
+  assert.deepStrictEqual(found[1].variants[1].labels, ["post-et8.json"]);
+  assert.strictEqual(found[1].variants[0].payload, other);
+});
