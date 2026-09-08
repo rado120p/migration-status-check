@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Port pairing results — mig-validate mockup</title>
+<style>
+:root{--bg:#f7f8fa;--line:#e2e5ea;--ink:#111827;--muted:#6b7280;--blue:#1a56db;--green:#047857;--amber:#b45309;--red:#b91c1c}
+*{box-sizing:border-box}body{margin:0;background:#e8eaed;color:var(--ink);font:13px "IBM Plex Sans","Noto Sans",Arial,sans-serif}button,input{font:inherit}button,summary{cursor:pointer}button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:3px}button{color:inherit}a{color:var(--blue);text-decoration:none}.mono,code{font-family:"IBM Plex Mono","DejaVu Sans Mono",monospace;font-size:12px}.muted{color:var(--muted)}
+.presentation{max-width:1710px;margin:auto;padding:22px 24px 28px}.concept-bar{display:flex;justify-content:space-between;align-items:center;margin:0 2px 13px;color:#596373;font-size:11px}.concept-bar strong{font-weight:600;color:#374151}.shell{border:1px solid #d3d7de;border-radius:10px;overflow:hidden;background:var(--bg);box-shadow:0 8px 30px #0f172a12}.topbar{height:67px;display:flex;align-items:center;gap:22px;background:white;border-bottom:1px solid var(--line);padding:0 24px}.brand{display:flex;gap:10px;align-items:center;font-weight:650;font-size:15px}.brand-mark{background:var(--blue);color:white;border-radius:6px;width:28px;height:28px;display:grid;place-items:center;font:700 12px monospace}.run-select{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:12px}.run-select .mono{padding:0 17px 0 6px}.top-spacer{flex:1}.outline,.primary{border:1px solid #d1d5db;border-radius:6px;background:white;padding:8px 12px;font-weight:500;font-size:12px}.primary{background:var(--blue);color:white;border-color:var(--blue)}button:disabled{cursor:default;opacity:.6}.layout{display:grid;grid-template-columns:193px minmax(650px,1fr) 204px;min-height:1030px}.sidebar{padding:24px 12px;background:white;border-right:1px solid var(--line);display:flex;flex-direction:column}.eyebrow{font-size:10px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;color:#7c8492}.nav-active{background:#eef2ff;color:var(--blue);padding:11px;border-radius:6px;font-weight:600;margin-bottom:26px}.sidebar .eyebrow{padding-left:10px;margin-bottom:12px}.snapshot{padding:10px 10px;margin-bottom:5px}.snapshot>div{display:flex;align-items:center;justify-content:space-between;gap:4px}.snapshot .mono{font-size:11px}.snapshot small{display:block;font-size:10px;color:#929aa6;margin-top:5px}.phase{font:600 9px monospace;border-radius:3px;padding:2px 5px}.pre{background:#e0e7ff;color:#4338ca}.post{background:#d1fae5;color:var(--green)}.device-label{font-size:10px;color:#6b7280;margin:17px 10px 3px}.side-footer{margin-top:auto;border-top:1px solid var(--line);padding:14px 10px 0;color:var(--muted);font-size:11px;line-height:2}.side-footer span{float:right;color:var(--ink)}
+main{padding:26px 25px;min-width:0}.heading{display:flex;align-items:center;gap:12px}h1{font-size:23px;letter-spacing:-.6px;margin:0;font-weight:650}h1 .mono{font-size:22px}.kind{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:20px;padding:3px 8px;font-size:9px;letter-spacing:.05em;font-weight:650}.subtitle{color:var(--muted);font-size:12px;margin-top:9px}.profile{font-size:11px;margin-top:9px;color:var(--blue)}.summary-strip{display:flex;align-items:center;gap:24px;background:white;border:1px solid var(--line);border-radius:8px;padding:17px 20px;margin:22px 0}.summary-total{padding-right:24px;border-right:1px solid var(--line)}.summary-total strong{font-size:25px;line-height:1}.summary-total span{font-size:11px;color:var(--muted);margin-left:8px}.metric{display:flex;align-items:center;gap:7px}.metric strong{font-size:20px}.metric span{font-size:10px;letter-spacing:.04em;color:var(--muted)}.pass-text{color:var(--green)}.warn-text{color:var(--amber)}.fail-text{color:var(--red)}.summary-note{margin-left:auto;font-size:11px;color:var(--muted);text-align:right;line-height:1.7}.summary-note b{color:var(--ink);font-weight:500}.filter-panel{margin:0 0 20px}.filter-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.filter-top label{font-size:12px;font-weight:600}.filter-help{font-size:10px;color:var(--muted)}.filters{display:flex;gap:6px;flex-wrap:wrap}.chip{border:1px solid #d3d7de;background:white;border-radius:6px;padding:7px 12px;font-size:11px}.chip.active{background:#eef2ff;border-color:var(--blue);color:var(--blue);font-weight:600}.chip .count{opacity:.6;margin-left:7px}.section-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 11px}.section-heading h2{font-size:14px;margin:0;font-weight:650}.section-heading small{font-weight:400;color:var(--muted);font-size:11px;margin-left:8px}.text-button{border:0;background:none;padding:3px 0 3px 14px;color:var(--blue);font-size:11px}.pair{background:white;border:1px solid #d9dee6;border-radius:8px;overflow:hidden;margin-bottom:12px}.pair>summary{list-style:none;padding:16px;display:flex;align-items:center;gap:12px;background:#fff}.pair>summary::-webkit-details-marker,.service>summary::-webkit-details-marker{display:none}.chevron{display:inline-block;color:#7b8593;font-size:11px;transition:transform .15s}.pair[open]>summary .pair-arrow,.service[open]>summary .service-arrow{transform:rotate(90deg)}.pair-title{display:flex;align-items:center;gap:13px;font-weight:600}.pair-title .mono{font-size:13px}.direction{color:#9ca3af;font-size:17px;font-weight:400}.pair-context{display:flex;align-items:center;gap:12px;margin-top:7px;font-size:10px;color:var(--muted)}.capture-good{color:var(--green)}.pair-right{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}.pair-count{font-size:10px;color:var(--muted);margin-right:5px}.pill{font:600 10px "DejaVu Sans Mono",monospace;border-radius:4px;padding:4px 6px;white-space:nowrap}.pass{color:var(--green);background:#d1fae5}.warn{color:var(--amber);background:#fef3c7}.fail{color:var(--red);background:#fee2e2}.neutral{background:#f0f2f5;color:#737e8e}.pair-body{padding:0 16px 14px 38px;border-top:1px solid var(--line);background:#fbfcfd}.port-health{display:flex;align-items:center;gap:10px;padding:11px 0;color:#6b7280;font-size:10px}.port-health .health-label{font-weight:600;color:#475569}.port-health .mono{font-size:10px}.port-health .dot{width:5px;height:5px;background:#059669;border-radius:50%}.table{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}.grid{display:grid;grid-template-columns:49px minmax(112px,1.2fr) 57px minmax(157px,1.25fr) minmax(99px,1fr) 10px;align-items:center;gap:9px}.table-head{padding:9px 12px;background:#f4f6f8;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.055em;color:#7c8492}.service>summary{list-style:none;padding:12px;font-size:11px;border-top:1px solid #edf0f3}.service>summary:hover{background:#f8fafc}.service.warn-row>summary{background:#fffbeb}.service.fail-row>summary{background:#fff5f5}.service .status{font:600 10px monospace}.service-name{font-weight:600;font-size:11px}.service-name small{font-weight:400;color:var(--muted);display:block;font-size:9px;margin-top:3px}.interfaces{font-family:"DejaVu Sans Mono",monospace;font-size:9px;white-space:nowrap}.interfaces em{font-style:normal;color:#9ca3af;padding:0 3px}.finding{font-size:10px;color:#596373}.type{color:#596373;font-size:10px}.check-panel{padding:13px 14px 13px 61px;border-top:1px solid #f1e6c3;background:#fffdf7}.check-title{font-size:10px;font-weight:600;color:#6b7280;margin-bottom:8px}.check-grid{display:grid;grid-template-columns:1.4fr .7fr .7fr .6fr;gap:8px;padding:5px 0;font-size:10px}.check-grid.labels{font-size:9px;color:#87909c}.check-grid .mono{font-size:10px}.check-note{font-size:10px;color:var(--amber);margin:6px 0 0}.unmatched{margin-top:10px;border:1px solid #f3d7ab;background:#fffbeb;border-radius:5px;padding:9px 11px;font-size:10px;color:#926021;display:flex;gap:10px;align-items:center}.unmatched strong{font-size:10px;white-space:nowrap}.unmatched span{color:#7d6b50}.empty{padding:18px 12px;color:var(--muted);font-size:11px}.pending-body{font-size:11px;color:var(--muted);padding-top:13px}.footer-note{color:var(--muted);font-size:10px;line-height:1.7;margin:15px 0 0}.guide{border-left:1px solid var(--line);padding:29px 19px;background:#f9fafb}.guide h3{font-size:12px;margin:0 0 18px;font-weight:600}.guide-item{padding:0 0 18px;margin-bottom:18px;border-bottom:1px solid var(--line)}.guide-number{font:600 10px monospace;color:var(--blue);margin-bottom:7px}.guide-item strong{font-size:11px;display:block;margin-bottom:6px}.guide-item p{font-size:11px;color:var(--muted);line-height:1.7;margin:0}.guide-footer{font-size:10px;color:#929aa6;line-height:1.7}.prototype-note{border:1px solid #d5dce8;border-radius:6px;padding:11px;color:#6b7280;font-size:10px;line-height:1.7}.prototype-note strong{display:block;color:#475569;margin-bottom:3px}[hidden]{display:none!important}
+@media(min-width:1700px){.grid{grid-template-columns:55px minmax(145px,1.2fr) 65px minmax(175px,1.25fr) minmax(110px,1fr) 10px}.interfaces{font-size:10px}}
+@media(max-width:1300px){.layout{grid-template-columns:170px minmax(650px,1fr)}.guide{display:none}.presentation{padding:16px}.summary-strip{gap:18px}}
+@media(max-width:900px){.layout{display:block;min-height:0}.sidebar{display:none}.topbar{gap:14px;padding:0 16px}.topbar .top-extra{display:none}main{padding:22px 15px}.presentation{padding:10px}.pair-body{padding-left:12px}.table{overflow-x:auto}.grid{min-width:625px}.pair-title .mono{font-size:11px}.pair>summary{gap:8px;padding:14px 10px}.pair-right{max-width:150px}.summary-strip{gap:16px;padding:15px}.summary-note{display:none}.filter-help{display:none}.heading{flex-wrap:wrap}h1 .mono{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="presentation">
+  <div class="concept-bar"><strong>DESIGN PREVIEW <span class="muted">/ Port-paired migration results</span></strong><span>Interactive mockup · illustrative data</span></div>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">mv</div>mig-validate</div>
+      <div class="run-select"><span class="muted">Run:</span><span class="mono">migration-pop1</span><span class="muted">▾</span></div>
+      <div class="top-spacer"></div><span class="muted top-extra" style="font-size:11px">Profile: <span class="mono">default</span></span>
+      <button class="outline top-extra" disabled title="Outside this mockup">Profiles</button><button class="primary" disabled title="Outside this mockup">New capture</button>
+    </header>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="nav-active">▦ &nbsp; Run overview</div><div class="eyebrow">Snapshots</div>
+        <div class="device-label">MX1-POP1 · old device</div>
+        <div class="snapshot"><div><span class="mono">ge-0/0/4</span><span class="phase pre">PRE</span></div><small>Baseline · 08 Sep, 09:10</small></div>
+        <div class="snapshot"><div><span class="mono">ge-0/0/5</span><span class="phase pre">PRE</span></div><small>Baseline · 08 Sep, 09:12</small></div>
+        <div class="snapshot"><div><span class="mono">ge-0/0/6</span><span class="phase pre">PRE</span></div><small>Baseline · 08 Sep, 09:14</small></div>
+        <div class="snapshot"><div><span class="mono">ge-0/0/7</span><span class="phase pre">PRE</span></div><small>Baseline · 08 Sep, 09:16</small></div>
+        <div class="device-label">PTX1-POP1 · new device</div>
+        <div class="snapshot"><div><span class="mono">ae0</span><span class="phase post">POST</span></div><small>08 Sep, 10:35</small></div>
+        <div class="snapshot"><div><span class="mono">et-0/0/8</span><span class="phase post">POST</span></div><small>08 Sep, 10:42</small></div>
+        <div class="side-footer">Devices <span>2</span><br>Port pairings <span>4</span><br>Snapshots <span>6</span></div>
+      </aside>
+      <main>
+        <div class="heading"><h1>Run <span class="mono">migration-pop1</span></h1><span class="kind">TWO DEVICES</span></div>
+        <div class="subtitle"><span class="mono">MX1-POP1</span> (Junos) &nbsp;→&nbsp; <span class="mono">PTX1-POP1</span> (Junos EVO)</div>
+        <div class="profile">profile: <span class="mono">default</span></div>
+        <section class="summary-strip" aria-label="Full run summary">
+          <div class="summary-total"><strong>8</strong><span>services evaluated</span></div>
+          <div class="metric"><strong class="pass-text">6</strong><span>PASS</span></div><div class="metric"><strong class="warn-text">1</strong><span>WARN</span></div><div class="metric"><strong class="fail-text">1</strong><span>FAIL</span></div>
+          <div class="summary-note"><b>3 / 4</b> pairings evaluated<br>Full run · 1 unmatched service</div>
+        </section>
+        <section class="filter-panel" aria-label="Filter services">
+          <div class="filter-top"><label>Service type</label><span class="filter-help">Port checks and unmatched services remain visible</span></div>
+          <div id="filters" class="filters" role="group" aria-label="Service type"></div>
+        </section>
+        <div class="section-heading"><h2>Port pairings <small id="shown" aria-live="polite">8 of 8 services shown</small></h2><div><button class="text-button" id="expand">Expand all</button><button class="text-button" id="collapse">Collapse all</button></div></div>
+        <div id="pairs"></div>
+        <p class="footer-note">Service counts exclude physical-port checks. The full-run summary stays visible when a service-type filter is applied.</p>
+      </main>
+      <aside class="guide">
+        <h3>Reading this run</h3>
+        <div class="guide-item"><div class="guide-number">01 / PORT PAIRING</div><strong>One pair, one result group</strong><p>Captures, services and findings sit together under their old → new port pairing.</p></div>
+        <div class="guide-item"><div class="guide-number">02 / SHARED DESTINATION</div><strong>Same LAG, separate services</strong><p><code>ge-0/0/4</code> and <code>ge-0/0/5</code> both feed <code>ae0</code>. Each keeps its own baseline and service results.</p></div>
+        <div class="guide-item"><div class="guide-number">03 / SERVICE DETAILS</div><strong>Inspect within the pairing</strong><p>Expand a service to compare its checks. Missing baseline services are listed beneath the same pairing.</p></div>
+        <div class="prototype-note"><strong>Try the preview</strong>Select a service type, collapse a pairing, or click a service row to inspect its checks.</div>
+        <p class="guide-footer">Sample names and results are illustrative. Capture and profile actions are outside this preview.</p>
+      </aside>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+const pairs = [
+  {id:"p4",old:"ge-0/0/4",port:"ae0",shared:true,open:true,services:[
+    {id:"atlas",name:"ATLAS · Internet",ri:"INTERNET",type:"Internet",unit:"113",target:"113",status:"PASS",finding:"All checks passed"},
+    {id:"atlas-vpn",name:"ATLAS · Corporate VPN",ri:"ATLAS-VRF",type:"IPVPN",unit:"210",target:"210",status:"PASS",finding:"All checks passed"},
+    {id:"metro",name:"METRO · Ethernet",ri:"METRO-ELINE",type:"E-Line",unit:"310",target:"310",status:"PASS",finding:"All checks passed"}
+  ]},
+  {id:"p5",old:"ge-0/0/5",port:"ae0",shared:true,open:true,unmatched:{name:"NORTH · Backup VPN",type:"IPVPN"},services:[
+    {id:"north",name:"NORTH · Internet",ri:"INTERNET",type:"Internet",unit:"120",target:"120",status:"WARN",finding:"Received prefixes: −3",open:true},
+    {id:"north-vpn",name:"NORTH · Corporate VPN",ri:"NORTH-VRF",type:"IPVPN",unit:"220",target:"220",status:"FAIL",finding:"BGP session down"},
+    {id:"campus",name:"CAMPUS · LAN",ri:"CAMPUS-ELAN",type:"E-LAN",unit:"320",target:"320",status:"PASS",finding:"All checks passed"}
+  ]},
+  {id:"p6",old:"ge-0/0/6",port:"et-0/0/8",open:false,services:[
+    {id:"transit",name:"POP1 · Transit",ri:"default",type:"Core",unit:"0",target:"0",status:"PASS",finding:"All checks passed"},
+    {id:"west",name:"WEST · Internet",ri:"INTERNET",type:"Internet",unit:"130",target:"130",status:"PASS",finding:"All checks passed"}
+  ]},
+  {id:"p7",old:"ge-0/0/7",port:"et-0/0/9",open:false,pending:true,services:[]}
+];
+let selected = "All";
+const expanded = new Set(pairs.filter(p=>p.open).map(p=>p.id));
+const expandedServices = new Set(pairs.flatMap(p=>p.services.filter(s=>s.open).map(s=>p.id+":"+s.id)));
+const allServices = pairs.flatMap(p=>p.services);
+function pill(status,n){return `<span class="pill ${status.toLowerCase()}">${status}${n===undefined?"":" "+n}</span>`;}
+function renderChecks(s){
+  const rows = s.status === "WARN" ? [["Interface state","up/up","up/up","PASS"],["BGP session","Established","Established","PASS"],["Received prefixes","12","9","WARN"]] : s.status === "FAIL" ? [["Interface state","up/up","up/up","PASS"],["BGP session","Established","Idle","FAIL"]] : [["Interface state","up/up","up/up","PASS"],[s.type === "E-Line" || s.type === "E-LAN" ? "EVPN instance" : s.type === "Core" ? "IS-IS adjacency" : "BGP session","Established","Established","PASS"]];
+  return `<div class="check-panel"><div class="check-title">Checks · ${s.ri}</div><div class="check-grid labels"><span>CHECK</span><span>BASELINE</span><span>SUBJECT</span><span>STATUS</span></div>${rows.map(r=>`<div class="check-grid"><span>${r[0]}</span><span class="mono muted">${r[1]}</span><span class="mono ${r[3].toLowerCase()}-text">${r[2]}</span><span class="${r[3].toLowerCase()}-text">${r[3]}</span></div>`).join("")}${s.status === "WARN" ? '<p class="check-note">3 fewer prefixes than in this pairing’s baseline.</p>' : ""}</div>`;
+}
+function serviceRow(p,s){const key=p.id+":"+s.id;return `<details class="service ${s.status.toLowerCase()}-row" data-service="${key}" ${expandedServices.has(key)?"open":""}><summary class="grid"><span class="status ${s.status.toLowerCase()}-text">${s.status}</span><span class="service-name">${s.name}<small>${s.ri}</small></span><span class="type">${s.type}</span><span class="interfaces">${p.old}.${s.unit}<em>→</em>${p.port}.${s.target}</span><span class="finding">${s.finding}</span><span class="chevron service-arrow">›</span></summary>${renderChecks(s)}</details>`;}
+function render(){
+  document.getElementById("filters").innerHTML=["All","Internet","IPVPN","E-Line","E-LAN","Core"].map(t=>`<button class="chip ${selected===t?"active":""}" data-type="${t}" aria-pressed="${selected===t}">${t==='All'?'All types':t}<span class="count">${t==="All"?allServices.length:allServices.filter(s=>s.type===t).length}</span></button>`).join("");
+  const visible=allServices.filter(s=>selected==="All"||s.type===selected).length;
+  document.getElementById("shown").textContent=`${visible} of ${allServices.length} services shown`;
+  document.getElementById("pairs").innerHTML=pairs.map(p=>{
+    const shown=p.services.filter(s=>selected==="All"||s.type===selected);
+    const statuses=["PASS","WARN","FAIL"].map(t=>({status:t,n:shown.filter(s=>s.status===t).length})).filter(c=>c.n);
+    return `<details class="pair" data-pair="${p.id}" ${expanded.has(p.id)?"open":""}><summary><span class="chevron pair-arrow">▶</span><div><div class="pair-title"><span class="mono">${p.old}</span><span class="direction">→</span><span class="mono">${p.port}</span></div><div class="pair-context"><span class="capture-good">✓ Pre</span><span class="${p.pending?"muted":"capture-good"}">${p.pending?"—":"✓"} Post</span><span>— Rollback</span>${p.shared?'<span>Shared destination</span>':""}</div></div><div class="pair-right">${p.pending?'<span class="pill neutral">Awaiting post</span>':`<span class="pair-count">${selected==="All"?shown.length:shown.length+" / "+p.services.length} services</span>${statuses.map(c=>pill(c.status,c.n)).join("")}${p.unmatched?'<span class="pill warn">1 unmatched</span>':""}`}</div></summary><div class="pair-body">${p.pending?'<div class="pending-body">Pre-migration baseline captured. Capture the new port to evaluate this pairing.</div>':`<div class="port-health"><span class="health-label">Physical port</span><span class="dot"></span><span class="mono">${p.port}</span><span>Link up · Optics within range</span></div><div class="table"><div class="grid table-head"><span>Status</span><span>Service / RI</span><span>Type</span><span>Old → new interface</span><span>Finding</span><span></span></div>${shown.length?shown.map(s=>serviceRow(p,s)).join(""):'<div class="empty">No '+selected+' services in this pairing.</div>'}</div>${p.unmatched?`<div class="unmatched"><strong>⚠ &nbsp; Unmatched baseline · 1</strong><span>${p.unmatched.name} (${p.unmatched.type}) — no matching service on ${p.port}</span></div>`:""}`}</div></details>`;
+  }).join("");
+  document.querySelectorAll("[data-pair]").forEach(el=>el.addEventListener("toggle",()=>{if(!el.isConnected)return;el.open?expanded.add(el.dataset.pair):expanded.delete(el.dataset.pair);}));
+  document.querySelectorAll("[data-service]").forEach(el=>el.addEventListener("toggle",()=>{if(!el.isConnected)return;el.open?expandedServices.add(el.dataset.service):expandedServices.delete(el.dataset.service);}));
+}
+document.getElementById("filters").addEventListener("click",e=>{const b=e.target.closest("[data-type]");if(b){selected=b.dataset.type;render();}});
+document.getElementById("expand").addEventListener("click",()=>{pairs.forEach(p=>expanded.add(p.id));render();});
+document.getElementById("collapse").addEventListener("click",()=>{expanded.clear();render();});
+const requestedType=new URLSearchParams(location.search).get("type");
+if(["Internet","IPVPN","E-Line","E-LAN","Core"].includes(requestedType))selected=requestedType;
+render();
+</script>
+</body>
+</html>
