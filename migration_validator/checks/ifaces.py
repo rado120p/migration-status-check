@@ -181,6 +181,9 @@ class InterfaceErrorsCheck(Check):
                     message=f"errors/traffic se meri na L2 casti ({peer})",
                     label="Interface errors / traffic",
                     value=f"mereno na L2 ({peer}) - viz {blocks}",
+                    # Radek jen odkazuje na L2 blok, sam nic nemeri - z
+                    # definice se neporovnava (ne "bez baseline" v reportu).
+                    compared=False,
                 )
             ]
 

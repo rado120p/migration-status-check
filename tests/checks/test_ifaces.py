@@ -569,6 +569,19 @@ def test_errors_on_linked_l3_scope_point_to_l2_block():
     assert finding.value == "mereno na L2 (ae0.15) - viz blok nize"
 
 
+def test_errors_on_linked_l3_scope_info_row_is_not_compared():
+    # Radek jen odkazuje na L2 blok, sam nic nemeri - i kdyz baseline beh
+    # existuje, radek se z definice neporovnava (ne "bez baseline").
+    ctx = _ctx(
+        {"interfaces": {"irb.15": {"admin_status": "up", "oper_status": "up"}}},
+        baseline={"interfaces": {"irb.15": {"admin_status": "up", "oper_status": "up"}}},
+        interfaces=("irb.15",),
+        link=L3_LINK,
+    )
+    findings = InterfaceErrorsCheck().run(ctx)
+    assert findings[0].compared is False
+
+
 def test_errors_on_l3_scope_with_two_l2_peers_lists_both():
     # N L2 : 1 L3 (lab BD-4094): odkaz musi vyjmenovat vsechny L2 casti,
     # ne jen prvni - mereni bezi v kazdem z tech bloku.
