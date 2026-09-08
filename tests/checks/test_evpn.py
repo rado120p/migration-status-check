@@ -4,6 +4,7 @@ from migration_validator.checks.evpn import (
     EvpnInstanceStatusCheck,
     EvpnMacCountCheck,
     EvpnVpwsStatusCheck,
+    _mac_compare_finding,
 )
 from migration_validator.config import default_config
 from migration_validator.models.result import Outcome, Status, UNCHANGED_SINCE_BASELINE
@@ -128,6 +129,15 @@ def test_vpws_local_interface_down_in_both_is_unchanged():
     subject = _vpws_subject(status="Down", remote_peers=(PEER_OK,))
     rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
     assert _by_label(rows, "EVPN VPWS local interface status").status is Status.PASS
+
+
+def test_vpws_local_interface_unknown_in_both_stays_fail():
+    # collectors/evpn.py placeholder pro chybejici XML element je literal
+    # "unknown" - shoda "unknown" == "unknown" neni dukaz shodneho stavu,
+    # jen dukaz, ze ani jeden snapshot stav nezmeril (stav se nefabuluje).
+    subject = _vpws_subject(status="unknown", remote_peers=(PEER_OK,))
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    assert _by_label(rows, "EVPN VPWS local interface status").status is Status.FAIL
 
 
 def test_vpws_unresolved_peer_in_both_is_unchanged():
@@ -398,8 +408,6 @@ def test_mac_count_zero_vlan_fails():
 
 
 def test_mac_count_zero_in_both_is_unchanged():
-    from migration_validator.checks.evpn import _mac_compare_finding
-
     ctx = _ctx(_mac_subject(0), baseline=_mac_subject(0))
     finding = _mac_compare_finding("MAC count", 0, 0, -60.0, ctx)
     assert finding.outcome is Outcome.UNCHANGED

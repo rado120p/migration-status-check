@@ -410,8 +410,8 @@ zvoleného designated forwardera).
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| stav lokálního rozhraní `Up` | `ok` | PASS | `<interface> <status>` |
-| stav lokálního rozhraní jiný | `broken` | FAIL | `<interface> <status>` |
+| stav lokálního rozhraní `Up` | `ok` | PASS | naměřený stav |
+| stav lokálního rozhraní jiný | `broken` | FAIL | naměřený stav |
 | `df_role` obsahuje „not elected" | `broken` | FAIL | surový text `df_role` (hláška `<esi>: <df_role>`, bez zdvojeného `DF`, pokud `df_role` už jím začíná) |
 | `df_role` je `None` nebo `""` (bez záznamu o DF) | `INFO` | INFO | `-` (hláška `DF bez zaznamu`) |
 | `df_role` jinak (adresa zvoleného DF) | `ok` | PASS | surový text `df_role` |
@@ -430,10 +430,10 @@ interface, EVPN neighbor a ESI, kdykoli baseline odpovídající položku nese**
 | EVPN neighbors total > 0, ne pod baseline | `ok` | PASS | naměřený total |
 | EVPN neighbors total > 0, ale pod baseline | `degraded` | WARN | naměřený total |
 | EVPN neighbors total je 0/chybí | `broken` | FAIL | `0` |
-| lokální EVPN interface stav `Up` | `ok` | PASS | `<name> <status>` |
-| lokální EVPN interface stav jiný | `broken` | FAIL | `<name> <status>` |
-| unit očekávaný selektory, v instanci chybí | `broken` | FAIL | `<unit> chybi v instanci` |
-| IRB interface stav `Up` | `ok` | PASS | `<name> <status>` (+ `(<l3_context>)`) |
+| lokální EVPN interface stav `Up` | `ok` | PASS | naměřený stav (label nese jméno IFL: `EVPN interface (<name>)`) |
+| lokální EVPN interface stav jiný | `broken` | FAIL | naměřený stav (label nese jméno IFL) |
+| unit očekávaný selektory, v instanci chybí | `broken` | FAIL | `<unit> chybi v instanci` (label nese jméno unitu: `EVPN interface (<unit>)`) |
+| IRB interface stav `Up` | `ok` | PASS | naměřený stav (+ `(<l3_context>)`); label nese jméno IFL: `IRB interface (<name>)` |
 | IRB interface stav jiný | `broken` | FAIL | totéž, `ocekavano Up` |
 | ESI v baseline, v subjektu chybí | `broken` | FAIL | `chybi` |
 | ESI status začíná „resolved" | `ok` | PASS | naměřený status |

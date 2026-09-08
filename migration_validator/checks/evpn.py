@@ -17,6 +17,11 @@ from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 UP = "Up"
+# Collector placeholder pro chybejici XML element (collectors/evpn.py:
+# _text(...) or "unknown") - "unknown" v obou snapshotech neni dukaz
+# shodneho stavu, jen dukaz, ze ani jeden snapshot stav nezmeril. Stav se
+# nefabuluje, takze "unknown" nesmi projit do same= podminky UNCHANGED.
+UNKNOWN = "unknown"
 
 
 def _is_up(status: str) -> bool:
@@ -113,7 +118,10 @@ class EvpnVpwsStatusCheck(Check):
         up = _is_up(status)
         outcome = (
             Outcome.OK if up
-            else unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=baseline_status == status)
+            else unchanged_or(
+                Outcome.BROKEN, ctx, "evpn_vpws",
+                same=status != UNKNOWN and baseline_status == status,
+            )
         )
         findings.append(
             Finding(
@@ -391,11 +399,16 @@ class EvpnEsiStatusCheck(Check):
 
         # Hodnota nese jen stav, ne jmeno IFL - to se migraci meni, coby
         # cast hodnoty by shodny stav pred a po migraci vypadal jako
-        # zmenu (R-5). Jmeno zustava jen v subject (pro report).
-        status = str(data.get("status", "unknown"))
+        # zmena (R-5). Jmeno zustava jen v subject (pro report).
+        status = str(data.get("status", UNKNOWN))
         up = _is_up(status)
         baseline_status = baseline.get("status")
-        same = bool(baseline_status) and not _is_up(str(baseline_status))
+        same = (
+            status != UNKNOWN
+            and bool(baseline_status)
+            and str(baseline_status) != UNKNOWN
+            and not _is_up(str(baseline_status))
+        )
         outcome = (
             Outcome.OK if up
             else unchanged_or(Outcome.BROKEN, ctx, "evpn_esi", same=same)
@@ -643,7 +656,12 @@ class EvpnInstanceStatusCheck(Check):
             status = str(entry["status"])
             up = _is_up(status)
             baseline_entry = baseline_local_by_name.get(entry["name"])
-            same = baseline_entry is not None and not _is_up(str(baseline_entry["status"]))
+            same = (
+                status != UNKNOWN
+                and baseline_entry is not None
+                and str(baseline_entry["status"]) != UNKNOWN
+                and not _is_up(str(baseline_entry["status"]))
+            )
             outcome = (
                 Outcome.OK if up
                 else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
@@ -707,7 +725,12 @@ class EvpnInstanceStatusCheck(Check):
                 value += f" ({context})"
             up = _is_up(status)
             baseline_entry = baseline_irb_by_name.get(entry["name"])
-            same = baseline_entry is not None and not _is_up(str(baseline_entry["status"]))
+            same = (
+                status != UNKNOWN
+                and baseline_entry is not None
+                and str(baseline_entry["status"]) != UNKNOWN
+                and not _is_up(str(baseline_entry["status"]))
+            )
             outcome = (
                 Outcome.OK if up
                 else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
