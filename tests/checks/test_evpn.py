@@ -690,8 +690,10 @@ def test_instance_two_instances_qualify_labels():
     subject["evpn_instance"]["EVPN-B"] = subject["evpn_instance"].pop("EVPN-AWARE-CPE13")
     subject["evpn_instance"]["EVPN-A"] = _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
     findings = _instance_findings(subject)
-    assert any(f.label == "EVPN interface (ge-0/0/2.313) (EVPN-A)" for f in findings)
-    assert any(f.label == "EVPN interface (ge-0/0/2.313) (EVPN-B)" for f in findings)
+    # Jmeno IFL uz v zavorce je - instance se pripoji do teze zavorky,
+    # ne jako druha "(EVPN-A)" za ni.
+    assert any(f.label == "EVPN interface (ge-0/0/2.313, EVPN-A)" for f in findings)
+    assert any(f.label == "EVPN interface (ge-0/0/2.313, EVPN-B)" for f in findings)
 
 
 def test_instance_esi_status_text_not_compared_to_baseline():

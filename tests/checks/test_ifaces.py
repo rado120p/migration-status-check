@@ -7,6 +7,7 @@ from migration_validator.checks.ifaces import (
     InterfaceTrafficCheck,
     is_transit,
     percent_change,
+    qualified,
 )
 from migration_validator.config import CheckConfig, default_config
 from migration_validator.models.result import (
@@ -787,3 +788,14 @@ def test_errors_nonzero_without_baseline_entry_still_warns():
     results = run_check(InterfaceErrorsCheck(), _ctx(now, baseline=before))
     assert results[0].status is Status.WARN
     assert results[0].baseline_value is None
+
+
+def test_qualified_appends_interface_in_parentheses():
+    assert qualified("Interface state", "ae0.224") == "Interface state (ae0.224)"
+
+
+def test_qualified_joins_into_existing_parenthetical():
+    # Multi-instance EVPN: label uz nese jmeno IFL v zavorce, instance se
+    # pripoji do teze zavorky - "(ae0.224) (EVPN-A)" se cetlo jako dva
+    # ruzne kvalifikatory.
+    assert qualified("EVPN interface (ae0.224)", "EVPN-A") == "EVPN interface (ae0.224, EVPN-A)"

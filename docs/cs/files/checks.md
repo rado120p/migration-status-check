@@ -474,7 +474,7 @@ interface, EVPN neighbor a ESI, kdykoli baseline odpovídající položku nese**
 | EVPN neighbors total > 0, ne pod baseline | `ok` | PASS | naměřený total |
 | EVPN neighbors total > 0, ale pod baseline | `degraded` | WARN | naměřený total |
 | EVPN neighbors total je 0/chybí | `broken` | FAIL | `0` |
-| lokální EVPN interface stav `Up` | `ok` | PASS | naměřený stav (label nese jméno IFL: `EVPN interface (<name>)`) |
+| lokální EVPN interface stav `Up` | `ok` | PASS | naměřený stav (label nese jméno IFL: `EVPN interface (<name>)`; při více instancích ve scope `EVPN interface (<name>, <instance>)`) |
 | lokální EVPN interface stav jiný | `broken` | FAIL | naměřený stav (label nese jméno IFL) |
 | unit očekávaný selektory, v instanci chybí | `broken` | FAIL | `<unit> chybi v instanci` (label nese jméno unitu: `EVPN interface (<unit>)`) |
 | IRB interface stav `Up` | `ok` | PASS | naměřený stav (+ `(<l3_context>)`); label nese jméno IFL: `IRB interface (<name>)` |

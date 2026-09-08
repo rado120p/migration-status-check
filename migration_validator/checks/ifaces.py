@@ -51,7 +51,13 @@ def qualified(label: str, interface: str) -> str:
     protichudnymi sloupci ZMENA - a neni poznat, ktere rozhrani je ktere.
     Zavorka je stejny tvar, jakym AR-5b kvalifikuje adresu v ramci rodiny;
     tam resil vzacny pripad dvou rozsahu, tady ten univerzalni.
+
+    Label, ktery uz zavorku ma (multi-instance EVPN: `EVPN interface
+    (ae0.224)` + jmeno instance), dostane kvalifikator do teze zavorky -
+    `(ae0.224) (EVPN-A)` se cetlo jako dva nesouvisejici udaje.
     """
+    if label.endswith(")") and " (" in label:
+        return f"{label[:-1]}, {interface})"
     return f"{label} ({interface})"
 
 
