@@ -2652,9 +2652,9 @@ class App {
       ],
     });
     this.mainEl.appendChild(head);
-    for (const group of model.groups) {
-      this.mainEl.appendChild(this.buildPairingGroup(group, filterType, evaluationFailed));
-    }
+    model.groups.forEach((group, i) => {
+      this.mainEl.appendChild(this.buildPairingGroup(group, i, filterType, evaluationFailed));
+    });
 
     if (wholeRows.length > 0) {
       this.mainEl.appendChild(el("div", { className: "subsection-title", text: "Other captures" }));
@@ -2714,9 +2714,9 @@ class App {
     });
   }
 
-  buildPairingGroup(group, filterType, evaluationFailed) {
+  buildPairingGroup(group, index, filterType, evaluationFailed) {
     const open = this.isPairingOpen(group.key, !group.pending);
-    const panelId = `pair-panel-${btoa(group.key).replace(/[^a-z0-9]/gi, "")}`;
+    const panelId = `pair-panel-${index}`;
     const wrap = el("section", { className: "pairing-group" + (open ? " open" : "") });
     wrap.appendChild(this.buildPairingHeader(group, filterType, evaluationFailed, open, panelId));
     if (open) {
@@ -2760,15 +2760,16 @@ class App {
     const row = group.captureRow || { old: group.old, new: group.new, pre: false, post: false, rollback: false };
     const fullLabel = `${group.old.node}:${group.old.port} → ${group.new.node}:${group.new.port}`;
 
+    const toggleAttrs = {
+      type: "button",
+      "aria-expanded": open ? "true" : "false",
+      "aria-label": `${open ? "Collapse" : "Expand"} pairing ${fullLabel}`,
+      "data-focus-key": `pair:${group.key}`,
+    };
+    if (open) toggleAttrs["aria-controls"] = panelId;
     const toggle = el("button", {
       className: "pairing-toggle",
-      attrs: {
-        type: "button",
-        "aria-expanded": open ? "true" : "false",
-        "aria-controls": panelId,
-        "aria-label": `${open ? "Collapse" : "Expand"} pairing ${fullLabel}`,
-        "data-focus-key": `pair:${group.key}`,
-      },
+      attrs: toggleAttrs,
       onClick: () => this.togglePairing(group.key),
       children: [
         el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
@@ -2795,15 +2796,20 @@ class App {
       const countText = filtering
         ? `${shown.matchedCount} / ${entries.length} service results`
         : `${entries.length} service results`;
-      badges.appendChild(el("span", { className: "pair-count", text: countText,
-        attrs: { title: filtering ? "visible results under the current type filter" : "" } }));
-      const counts = R.countStatuses(shown.visible.map((v) => v.entry.scope.status));
+      const countAttrs = filtering ? { title: "visible results under the current type filter" } : {};
+      badges.appendChild(el("span", { className: "pair-count", text: countText, attrs: countAttrs }));
+      if (shown.linkedContextCount) {
+        badges.appendChild(el("span", { className: "pair-count", text: `+ ${shown.linkedContextCount} linked context` }));
+      }
+      const matchedOnly = shown.visible.filter((v) => !v.linkedContext);
+      const counts = R.countStatuses(matchedOnly.map((v) => v.entry.scope.status));
       for (const key of R.STATUS_KEYS) {
         if (!counts[key]) continue;
+        const badgeAttrs = filtering ? { title: `${key.toUpperCase()} among visible results` } : {};
         badges.appendChild(el("span", {
           className: `badge-pill ${key}`,
           text: `${key.toUpperCase()} ${counts[key]}`,
-          attrs: { title: filtering ? `${key.toUpperCase()} among visible results` : "" },
+          attrs: badgeAttrs,
         }));
       }
       const unmatched = group.evaluations.reduce((n, m) => n + m.unmatchedBaseline.length + m.unmatchedSubject.length, 0);
@@ -2812,7 +2818,12 @@ class App {
 
     // Notices that must survive collapse and filtering.
     const notices = el("div", { className: "pairing-notices" });
-    const notice = (cls, text) => notices.appendChild(el("span", { className: "badge-pill " + cls, text }));
+    const noticeSeen = new Set();
+    const notice = (cls, text) => {
+      if (noticeSeen.has(text)) return;
+      noticeSeen.add(text);
+      notices.appendChild(el("span", { className: "badge-pill " + cls, text }));
+    };
     if (group.metadataMismatch) notice("warn", "Not in run mapping");
     for (const m of group.evaluations) {
       if (!m.hasBaseline) notice("warn", "No baseline — service ownership unverified");
@@ -2820,12 +2831,8 @@ class App {
       else if (m.baselineMetaMissing) notice("warn", "Baseline metadata unavailable");
       if (m.infrastructureEntries.some((e) => e.scope.status === "WARN" || e.scope.status === "FAIL")) notice("warn", "Port checks need attention");
     }
-    if (filterType !== R.ALL_TYPES && R.groupNeedsAttention(group, filterType)) {
-      const hiddenBad = group.evaluations.some((m) => {
-        const shown = new Set(R.filterServiceEntries(m.serviceEntries, filterType).visible.map((v) => v.entry));
-        return m.serviceEntries.some((e) => !shown.has(e) && (e.scope.status === "WARN" || e.scope.status === "FAIL"));
-      });
-      if (hiddenBad) notice("warn", "Hidden WARN/FAIL");
+    if (filterType !== R.ALL_TYPES && R.hiddenBadEntries(group, filterType).length) {
+      notice("warn", "Hidden WARN/FAIL");
     }
 
     const head = el("div", { className: "pairing-head", children: [

@@ -218,14 +218,23 @@ function serviceTypeChoices(catalogueTypes, entries) {
   return ordered;
 }
 
+function hiddenBadEntries(group, selectedType) {
+  const bad = (status) => status === "WARN" || status === "FAIL";
+  const hidden = [];
+  for (const model of group.evaluations) {
+    const shown = new Set(filterServiceEntries(model.serviceEntries, selectedType).visible.map((v) => v.entry));
+    for (const entry of model.serviceEntries) if (!shown.has(entry) && bad(entry.scope.status)) hidden.push(entry);
+  }
+  return hidden;
+}
+
 function groupNeedsAttention(group, selectedType) {
   const bad = (status) => status === "WARN" || status === "FAIL";
   for (const model of group.evaluations) {
     if (model.infrastructureEntries.some((e) => bad(e.scope.status))) return true;
     if (model.unmatchedBaseline.length || model.unmatchedSubject.length) return true;
-    const shown = new Set(filterServiceEntries(model.serviceEntries, selectedType).visible.map((v) => v.entry));
-    if (model.serviceEntries.some((e) => !shown.has(e) && bad(e.scope.status))) return true;
   }
+  if (hiddenBadEntries(group, selectedType).length) return true;
   return false;
 }
 
@@ -271,6 +280,7 @@ const MigRunResults = {
   countByType,
   serviceTypeChoices,
   groupNeedsAttention,
+  hiddenBadEntries,
   mainEvaluationModels,
   collectUnassigned,
 };

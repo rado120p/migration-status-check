@@ -230,6 +230,20 @@ test("groupNeedsAttention: hidden WARN/FAIL, infrastructure WARN/FAIL, unmatched
   assert.strictEqual(R.groupNeedsAttention(pending, R.ALL_TYPES), false);
 });
 
+test("hiddenBadEntries: returns hidden WARN/FAIL entries, empty when unfiltered or pending", () => {
+  const mk = (scopes) => {
+    const ev = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), scopes);
+    return R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations: [ev], snapshots: SNAPSHOTS }).groups[0];
+  };
+  const group = mk([scope("A", "Internet"), scope("B", "IPVPN", { status: "FAIL" })]);
+  const hidden = R.hiddenBadEntries(group, "Internet");
+  assert.strictEqual(hidden.length, 1);
+  assert.strictEqual(hidden[0].scope.scope_id, "B");
+  assert.deepStrictEqual(R.hiddenBadEntries(group, R.ALL_TYPES), []);
+  const pending = R.buildPairingGroups({ runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations: [], snapshots: [] }).groups[0];
+  assert.deepStrictEqual(R.hiddenBadEntries(pending, R.ALL_TYPES), []);
+});
+
 test("mainEvaluationModels: pairs + rollback + other, never same-device", () => {
   const evaluations = [
     evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), [scope("A", "Internet")]),
