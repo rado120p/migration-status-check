@@ -64,6 +64,7 @@ class Outcome(str, Enum):
     OK = "ok"
     INFO = "info"
     RECOVERED = "recovered"
+    UNCHANGED = "unchanged"
     DEGRADED = "degraded"
     BROKEN = "broken"
     SKIP = "skip"
@@ -77,6 +78,11 @@ def derive_status(outcome: Outcome, severity: Severity) -> Status:
     neni varovani, ale ma byt videt.
     """
     if outcome is Outcome.OK:
+        return Status.PASS
+    if outcome is Outcome.UNCHANGED:
+        # Shodny spatny stav v baseline i subjektu (R-3, spec 2026-09-08):
+        # migrace nic nezhorsila, tak PASS - ale se znackou, aby se radek
+        # dal od zdraveho PASS odlisit (run_check ji zapisuje do details).
         return Status.PASS
     if outcome is Outcome.INFO:
         return Status.INFO
@@ -99,6 +105,19 @@ SKIPPED_BECAUSE = "skipped_because"
 # znacku nedostavaji, protoze kazdy z nich nese vlastni informaci.
 SKIP_DEACTIVATED = "service_deactivated"
 
+# Znacka radku, ktery je PASS jen proto, ze stejna chyba byla uz v baseline
+# (Outcome.UNCHANGED). Renderer podle ni tiskne ZMENA a souhrn ji scita.
+UNCHANGED_SINCE_BASELINE = "unchanged_since_baseline"
+
+# Znacka radku, ktery hodnotu meri, ale proti baseline ji z definice
+# neporovnava (multicast upstream, uptime, souhrnne radky). Hodnota False
+# rika rendereru "ZMENA prazdna", ne "bez baseline" (R-4).
+NOT_COMPARED = "compared"
+
+
+def count_unchanged(checks: Iterable["CheckResult"]) -> int:
+    return sum(1 for check in checks if check.details.get(UNCHANGED_SINCE_BASELINE))
+
 
 @dataclass
 class Finding:
@@ -118,6 +137,8 @@ class Finding:
     value: str | None = None
     baseline_value: str | None = None
     delta: str | None = None
+    # False = hodnota se proti baseline neporovnava, renderer necha ZMENA prazdnou
+    compared: bool = True
     baseline: dict[str, Any] | None = None
     subject: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)

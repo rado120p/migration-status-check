@@ -190,3 +190,11 @@ def test_run_result_to_dict_carries_step_and_excluded_services():
     payload = _run_result(step=step, excluded_services=[]).to_dict()
     assert payload["step"] == step
     assert payload["excluded_services"] == []
+
+
+from migration_validator.models.result import Outcome, Severity, Status, derive_status
+
+
+def test_unchanged_outcome_is_pass_for_both_severities():
+    assert derive_status(Outcome.UNCHANGED, Severity.CRITICAL) is Status.PASS
+    assert derive_status(Outcome.UNCHANGED, Severity.ADVISORY) is Status.PASS

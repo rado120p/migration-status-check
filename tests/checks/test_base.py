@@ -379,3 +379,32 @@ def test_registry_orders_by_order_then_id():
         "core_multicast_forwarding", "mvpn_cmulticast_status",
     ]
     assert ids.index("traffic_ceased") < ids.index("igmp_membership_report")
+
+
+from migration_validator.models.result import NOT_COMPARED, UNCHANGED_SINCE_BASELINE
+
+
+def test_unchanged_finding_is_pass_with_marker():
+    class Unchanged(DummyCheck):
+        def run(self, ctx):
+            return [Finding(Outcome.UNCHANGED, "down, stejne jako v baseline", value="Down",
+                            baseline_value="Down")]
+
+    [result] = run_check(Unchanged(), _ctx(baseline={"interfaces": {}}))
+    assert result.status is Status.PASS
+    assert result.details[UNCHANGED_SINCE_BASELINE] is True
+    assert result.baseline_value == "Down"
+
+
+def test_uncompared_finding_carries_marker_and_ok_finding_does_not():
+    class Mixed(DummyCheck):
+        def run(self, ctx):
+            return [
+                Finding(Outcome.OK, "uptime", value="1d", compared=False),
+                Finding(Outcome.OK, "state", value="Up", baseline_value="Up"),
+            ]
+
+    uncompared, compared = run_check(Mixed(), _ctx(baseline={"interfaces": {}}))
+    assert uncompared.details[NOT_COMPARED] is False
+    assert NOT_COMPARED not in compared.details
+    assert UNCHANGED_SINCE_BASELINE not in compared.details

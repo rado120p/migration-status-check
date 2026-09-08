@@ -19,10 +19,12 @@ from migration_validator.config import CheckConfig
 from migration_validator.models.result import (
     CheckResult,
     Finding,
+    NOT_COMPARED,
     Outcome,
     Severity,
     SKIPPED_BECAUSE,
     SKIP_DEACTIVATED,
+    UNCHANGED_SINCE_BASELINE,
     derive_status,
 )
 from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope
@@ -157,6 +159,16 @@ def _skip(
 DEACTIVATION_CHECK_ID = "deactivation_state"
 
 
+def _details(finding: Finding) -> dict[str, Any]:
+    """Strukturalni znacky pro renderer - ne text, ne status."""
+    details = dict(finding.details)
+    if finding.outcome is Outcome.UNCHANGED:
+        details[UNCHANGED_SINCE_BASELINE] = True
+    if not finding.compared:
+        details[NOT_COMPARED] = False
+    return details
+
+
 def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
     """Spusti check a prevede jeho Findings na CheckResults."""
     if not ctx.config.enabled(check.id):
@@ -225,7 +237,7 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
             delta=finding.delta,
             baseline=finding.baseline,
             subject=finding.subject,
-            details=finding.details,
+            details=_details(finding),
         )
         for finding in findings
     ]
