@@ -141,39 +141,32 @@ def _aligned_baseline_data(
         # Stejny pozicni princip: local_interfaces a irb_interfaces nesou
         # jmeno rozhrani ve vnorenych zaznamech entries[].name, ne v klici
         # slovniku, takze potrebuji vlastni vetev mimo _RENAMED_KEY_AREAS.
-        def _renamed_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-            return [
-                {**entry, "name": rename.get(entry["name"], entry["name"])}
-                if "name" in entry else entry
-                for entry in entries
-            ]
+        def _renamed_group(group: dict[str, Any] | None) -> dict[str, Any] | None:
+            # "entries" se nefabrikuje - kdyz ho zaznam nenese, group se
+            # vrati beze zmeny misto vymysleneho prazdneho seznamu.
+            if not group or "entries" not in group:
+                return group
+            return {
+                **group,
+                "entries": [
+                    {**entry, "name": rename.get(entry["name"], entry["name"])}
+                    if "name" in entry else entry
+                    for entry in group["entries"]
+                ],
+            }
+
+        def _renamed_instance(instance_data: dict[str, Any]) -> dict[str, Any]:
+            renamed = dict(instance_data)
+            # Klic se prepisuje jen kdyz uz v puvodnich datech byl -
+            # zadny novy klic se nefabrikuje.
+            if "local_interfaces" in renamed:
+                renamed["local_interfaces"] = _renamed_group(renamed["local_interfaces"])
+            if "irb_interfaces" in renamed:
+                renamed["irb_interfaces"] = _renamed_group(renamed["irb_interfaces"])
+            return renamed
 
         data["evpn_instance"] = {
-            instance: {
-                **instance_data,
-                **(
-                    {
-                        "local_interfaces": {
-                            **instance_data["local_interfaces"],
-                            "entries": _renamed_entries(
-                                instance_data["local_interfaces"].get("entries", [])
-                            ),
-                        },
-                    }
-                    if instance_data.get("local_interfaces") else {}
-                ),
-                **(
-                    {
-                        "irb_interfaces": {
-                            **instance_data["irb_interfaces"],
-                            "entries": _renamed_entries(
-                                instance_data["irb_interfaces"].get("entries", [])
-                            ),
-                        },
-                    }
-                    if instance_data.get("irb_interfaces") else {}
-                ),
-            }
+            instance: _renamed_instance(instance_data)
             for instance, instance_data in data["evpn_instance"].items()
         }
     if rename:

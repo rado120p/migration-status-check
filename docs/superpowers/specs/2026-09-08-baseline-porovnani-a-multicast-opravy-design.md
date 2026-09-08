@@ -51,12 +51,16 @@ Tři vlny v jedné větvi `baseline-porovnani-2026-09-08`:
   jen když N > 0. Bez něj by operátor v „PASS 42" šest zděděných chyb
   neviděl.
 - **Podmínka (kvůli migraci starý → nový box):** UNCHANGED smí vzniknout
-  jen když baseline **tu oblast změřila**. `CheckContext` dostane
-  `baseline_failed_collectors` (z `baseline.capture.failed_collectors()`)
+  jen když baseline **tu oblast změřila** - a to je pozitivní důkaz, ne
+  pouhá absence chyby. `CheckContext` dostane `baseline_collectors` (celý
+  `baseline.capture.collectors`, tedy `{collector: {"status", "message"}}`)
   a metodu `baseline_measured(area) -> bool`
-  (`has_baseline and area not in baseline_failed_collectors`).
-  Nepřítomnost záznamu v baseline, jejíž collector selhal, není „stejně
-  chybí", je „nezměřeno" → dnešní FAIL/WARN zůstává. Stav se nefabuluje.
+  (`has_baseline and baseline_collectors.get(area, {}).get("status") ==
+  "ok"`; pro `"ping"`, který vlastní collector nemá, `bool(baseline["ping"])`
+  - dukazem jsou probe zaznamy scopu). Baseline bez záznamu daného
+  collectoru (starý snapshot, `--collectors` výběr) tak nevypadá jako
+  změřená stejně jako selhaný collector - obojí je „nezměřeno" → dnešní
+  FAIL/WARN zůstává. Stav se nefabuluje.
 - „Chybí v obou" (neighbor/routa/ARP/session není ani v baseline ani
   v subjektu, oblast změřena) **je** UNCHANGED.
 - Výjimky, kde shoda s baseline PASS **není**: `deactivation_state`
