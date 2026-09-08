@@ -377,3 +377,11 @@ test("checkRow: carries unchanged and compared from details", () => {
   assert.strictEqual(plain.unchanged, false);
   assert.strictEqual(plain.compared, true);
 });
+
+test("changeText: new_since_baseline row says 'novy zaznam', not 'bez baseline'", () => {
+  const row = MigView.checkRow({ id: "x", mode: "both", status: "PASS",
+    value: "0c:00:00:00:00:01 -> 10.0.0.2", details: { new_since_baseline: true } }, false);
+  assert.strictEqual(row.new, true);
+  assert.strictEqual(MigView.changeText(row, true), "novy zaznam (v baseline nebyl)");
+  assert.strictEqual(MigView.changeText(row, false), "");
+});

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from migration_validator.models.result import (
     CheckResult,
     COMPARED,
+    NEW_SINCE_BASELINE,
     ScopeResult,
     Severity,
     SKIPPED_BECAUSE,
@@ -30,6 +31,7 @@ _STATUS_ORDER = (Status.FAIL, Status.WARN, Status.SKIP, Status.RECV, Status.PASS
 
 NO_BASELINE = "bez baseline"
 UNCHANGED_TEXT = "beze zmeny (chyba uz v baseline)"
+NEW_TEXT = "novy zaznam (v baseline nebyl)"
 
 
 @dataclass
@@ -42,6 +44,7 @@ class Row:
     mode: str
     unchanged: bool = False
     compared: bool = True
+    new: bool = False
 
 
 @dataclass
@@ -100,7 +103,8 @@ def change_text(row: Row, has_baseline: bool) -> str:
     (namereno, ale z definice neporovnavano - napr. L2-vazany radek nebo
     port, ktery baseline vubec nezmerila, R-4), NO_BASELINE jen kdyz baseline
     hodnotu nemela a status neni SKIP (SKIP uz duvod nese ve vlastni
-    hlasce), a jinak 'bylo <baseline_value>' (s delta, pokud je).
+    hlasce), NEW_TEXT u radku se znackou new_since_baseline (adresa/cil, ktery
+    zmerena baseline nemela), a jinak 'bylo <baseline_value>' (s delta, pokud je).
     """
     if not has_baseline:
         return ""
@@ -112,6 +116,10 @@ def change_text(row: Row, has_baseline: bool) -> str:
     if not row.compared:
         # Namereno, ale z definice neporovnavano (R-4) - ne "bez baseline".
         return ""
+    if row.new:
+        # Baseline oblast zmerila, jen tuhle adresu/cil nemela - "bez
+        # baseline" by tvrdilo, ze srovnat nebylo s cim.
+        return NEW_TEXT
     if row.baseline_value is None:
         # SKIP uz duvod nese ve vlastni hlasce ("peer neni v baseline
         # snapshotu"), takze 'bez baseline' vedle ni je druha kopie teze
@@ -192,6 +200,7 @@ def _row(check: CheckResult, qualify: bool) -> Row:
         mode=check.mode,
         unchanged=bool(check.details.get(UNCHANGED_SINCE_BASELINE)),
         compared=check.details.get(COMPARED, True) is not False,
+        new=bool(check.details.get(NEW_SINCE_BASELINE)),
     )
 
 

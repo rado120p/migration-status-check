@@ -9,6 +9,7 @@ from migration_validator.checks.reachability import (
 from migration_validator.config import default_config
 from migration_validator.models.result import (
     COMPARED,
+    NEW_SINCE_BASELINE,
     Outcome,
     Severity,
     Status,
@@ -827,3 +828,65 @@ def test_nd_baseline_link_local_only_filtered_same_as_subject_is_unchanged():
     )
     assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
     assert row.value == "zadny zaznam" == row.baseline_value
+
+
+def test_arp_address_new_since_measured_baseline_is_marked():
+    """Adresa, kterou zmerena baseline nemela: ZMENA ma rict "novy zaznam",
+    ne "bez baseline" - baseline ARP zmerila, jen tuhle adresu nemela."""
+    entry = {"ip": "198.11.13.2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}
+    other = dict(entry, ip="198.11.13.3")
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": [entry]}, baseline={"arp": [other]}))
+    assert row.status is Status.PASS and row.baseline_value is None
+    assert row.details[NEW_SINCE_BASELINE] is True
+
+
+def test_arp_incomplete_address_new_since_baseline_is_marked_too():
+    entry = {"ip": "198.11.13.2", "mac": "00:00:00:00:00:00", "interface": "ge-0/0/2.113"}
+    other = {"ip": "198.11.13.3", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": [entry]}, baseline={"arp": [other]}))
+    assert row.status is Status.FAIL
+    assert row.details[NEW_SINCE_BASELINE] is True
+
+
+def test_arp_address_known_in_baseline_is_not_marked_new():
+    entry = {"ip": "198.11.13.2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}
+    [row] = run_check(ArpPresentCheck(), _ctx({"arp": [entry]}, baseline={"arp": [entry]}))
+    assert NEW_SINCE_BASELINE not in row.details
+
+
+def test_arp_address_with_failed_baseline_collector_keeps_bez_baseline():
+    """Bez pozitivniho dukazu, ze baseline ARP zmerila (collector selhal),
+    zustava "bez baseline" - "novy zaznam" by fabuloval, co baseline vedela."""
+    entry = {"ip": "198.11.13.2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113"}
+    ctx = _ctx({"arp": [entry]}, baseline={"arp": []})
+    ctx.baseline_collectors["arp"] = {"status": "failed"}
+    [row] = run_check(ArpPresentCheck(), ctx)
+    assert row.baseline_value is None
+    assert NEW_SINCE_BASELINE not in row.details
+
+
+def test_nd_address_new_since_measured_baseline_is_marked():
+    entry = {"ip": "2001:db8:11:13::2", "mac": "0c:00:00:00:00:01", "interface": "ge-0/0/2.113", "state": "reachable"}
+    other = dict(entry, ip="2001:db8:11:13::3")
+    scope = Scope(id="svc:X:IPVPN", kind="service", key=ScopeKey("X", "IPVPN", None),
+                  selectors=Selectors(interfaces=["ge-0/0/2.113"], local_ipv6=["2001:db8:11:13::1/64"]))
+    [row] = run_check(NdPresentCheck(), _ctx({"nd": [entry]}, baseline={"nd": [other]}, scope=scope))
+    assert row.status is Status.PASS and row.baseline_value is None
+    assert row.details[NEW_SINCE_BASELINE] is True
+
+
+def test_ping_target_new_since_measured_baseline_is_marked():
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
+    other_baseline_probe = dict(probe, target="198.11.13.9")
+    [row] = run_check(
+        PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": [other_baseline_probe]}),
+    )
+    assert row.baseline_value is None
+    assert row.details[NEW_SINCE_BASELINE] is True
+
+
+def test_ping_target_without_any_baseline_probes_is_not_marked_new():
+    # Baseline bez jedineho probe = ping v baseline nebezel, ne "novy cil".
+    probe = {"scope_id": "svc:X:IPVPN", "target": "198.11.13.2", "family": 4, "sent": 5, "received": 5, "rtt_avg_ms": 1.0}
+    [row] = run_check(PingReachabilityCheck(), _ctx({"ping": [probe]}, baseline={"ping": []}))
+    assert NEW_SINCE_BASELINE not in row.details

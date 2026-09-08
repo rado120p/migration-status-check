@@ -114,6 +114,11 @@ UNCHANGED_SINCE_BASELINE = "unchanged_since_baseline"
 # rika rendereru "ZMENA prazdna", ne "bez baseline" (R-4).
 COMPARED = "compared"
 
+# Znacka radku vazaneho na adresu/cil (ARP, ND, ping), ktery baseline
+# ZMERILA, ale tuhle adresu nemela. Renderer tiskne "novy zaznam" misto
+# "bez baseline" - to by tvrdilo, ze se s baseline nedalo srovnavat.
+NEW_SINCE_BASELINE = "new_since_baseline"
+
 
 def count_unchanged(checks: Iterable["CheckResult"]) -> int:
     return sum(1 for check in checks if check.details.get(UNCHANGED_SINCE_BASELINE))
@@ -139,6 +144,8 @@ class Finding:
     delta: str | None = None
     # False = hodnota se proti baseline neporovnava, renderer necha ZMENA prazdnou
     compared: bool = True
+    # True = baseline oblast zmerila, ale tenhle zaznam (adresa, cil) nemela
+    new_since_baseline: bool = False
     baseline: dict[str, Any] | None = None
     subject: dict[str, Any] | None = None
     details: dict[str, Any] = field(default_factory=dict)

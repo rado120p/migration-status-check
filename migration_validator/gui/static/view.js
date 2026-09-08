@@ -5,6 +5,7 @@
 const FAMILY_ORDER = [null, 4, 6];
 const NO_BASELINE = "bez baseline";
 const UNCHANGED_TEXT = "beze zmeny (chyba uz v baseline)";
+const NEW_TEXT = "novy zaznam (v baseline nebyl)";
 const MERGED_LABEL = "Ostatni checky";
 
 function changeText(row, hasBaseline) {
@@ -12,6 +13,7 @@ function changeText(row, hasBaseline) {
   if (row.mode === "state") return "";
   if (row.unchanged) return UNCHANGED_TEXT;
   if (row.compared === false) return "";
+  if (row.new) return NEW_TEXT;
   if (row.baseline_value == null) {
     return row.status === "SKIP" ? "" : NO_BASELINE;
   }
@@ -53,6 +55,7 @@ function checkRow(check, qualify) {
     mode: check.mode,
     unchanged: !!((check.details || {}).unchanged_since_baseline),
     compared: (check.details || {}).compared !== false,
+    new: !!((check.details || {}).new_since_baseline),
   };
 }
 

@@ -20,6 +20,7 @@ from migration_validator.models.result import (
     CheckResult,
     Finding,
     COMPARED,
+    NEW_SINCE_BASELINE,
     Outcome,
     Severity,
     SKIPPED_BECAUSE,
@@ -191,6 +192,8 @@ def _details(finding: Finding) -> dict[str, Any]:
         details[UNCHANGED_SINCE_BASELINE] = True
     if not finding.compared:
         details[COMPARED] = False
+    if finding.new_since_baseline:
+        details[NEW_SINCE_BASELINE] = True
     return details
 
 

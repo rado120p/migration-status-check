@@ -377,7 +377,9 @@ Common message strings, translated:
 | `ambiguous: N kandidatu (...)` | ambiguous: N candidates, so no pairing was made |
 | `198.11.13.2/inet.0: pokles advertised 14 -> 3, prah je -10 %` | advertised prefixes on that RIB dropped from 14 to 3, past the −10 % tolerance |
 | `bez chyb` | no errors (interface error counters) |
-| `bez baseline` | no baseline (this check has no baseline value by definition) |
+| `bez baseline` | no baseline value for this row, and the baseline demonstrably did not measure the area |
+| `beze zmeny (chyba uz v baseline)` | unchanged: the same failure was already in the baseline (row is PASS with the `unchanged_since_baseline` marker, R-3) |
+| `novy zaznam (v baseline nebyl)` | new entry: an ARP/ND/ping address or target the measured baseline did not have |
 
 ### Exit codes
 

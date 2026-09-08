@@ -464,8 +464,12 @@ Co je na tom podstatné:
 - **Každý řádek vázaný na rozhraní nese jméno rozhraní v závorce** (`Interface admin status
   (et-0/0/8.13)`). Scope drží fyzické i logické rozhraní, takže bez toho by v bloku stály dvojice
   řádků se stejným popiskem, jinými hodnotami a protichůdnými sloupci `ZMENA`.
-- **Sloupec `ZMENA`** ukazuje `bylo <hodnota>` a případně deltu (`-100 %`, `+3`); u checků bez
-  baseline (`arp_present`, `ping_reachability`, `interface_state`, ...) zůstává prázdný.
+- **Sloupec `ZMENA`** ukazuje `bylo <hodnota>` a případně deltu (`-100 %`, `+3`). Další texty:
+  `beze zmeny (chyba uz v baseline)` = stejná chyba byla už před migrací (řádek je PASS se
+  značkou, R-3); `novy zaznam (v baseline nebyl)` = ARP/ND/ping řádek adresy nebo cíle, který
+  změřená baseline neměla; `bez baseline` = check baseline hodnotu nemá a baseline tu oblast
+  prokazatelně nezměřila. Prázdný zůstává u shodné hodnoty, u `state` checků
+  (`interface_state`, ...) a u řádků, které se z definice neporovnávají (`compared=false`).
   **Bez načtené baseline se sloupec `ZMENA` nevypisuje vůbec** (viz `--detail` bez `--baseline`).
 - Šířky všech sloupců **se počítají z obsahu** — dlouhý název služby, routing instance nebo
   IPv6 adresa se nikdy neořízne. Platí to i pro popisek v sekci `NESPAROVANO`.

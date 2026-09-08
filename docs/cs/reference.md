@@ -562,6 +562,10 @@ Vlastnosti:
   počítá se nejhorší). `RECV` — měření je teď zdravé a v baseline zdravé nebylo (zlepšení
   proti baseline); na exit code nemá vliv. `PASS` se značkou `unchanged_since_baseline` =
   stejná chyba byla už v baseline (R-3, spec 2026-09-08); souhrn nese `pass_unchanged`.
+  `details.new_since_baseline: true` = ARP/ND/ping řádek adresy nebo cíle, který změřená
+  baseline neměla; renderer tiskne `novy zaznam (v baseline nebyl)` místo `bez baseline`.
+  Bez pozitivního důkazu měření (selhaný baseline collector, ping bez probe záznamů) značka
+  chybí a `bez baseline` zůstává — je pravdivé.
 - **Zlepšení** (`Outcome.RECOVERED` → `Status.RECV`, vždy RECV bez ohledu na severity) se
   hlásí místo tichého sloučení do `PASS`, aby operátor viděl, co se opravilo, ne jen že nic
   není rozbité. Používá se v: `isis_adjacency_state` (adjacency teď `Up`, baseline ne-`Up`),

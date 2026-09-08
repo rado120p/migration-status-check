@@ -30,6 +30,13 @@ ZERO_MAC = "00:00:00:00:00:00"
 UNRESOLVED_ND_STATES = frozenset({"incomplete", "unreachable"})
 
 
+def _new_since_baseline(ctx: CheckContext, area: str, was: Any) -> bool:
+    """Adresa/cil, ktery zmerena baseline nemela - renderer tiskne "novy
+    zaznam" misto "bez baseline". Bez pozitivniho dukazu mereni (selhany
+    collector, stary snapshot) zustava "bez baseline" - je to pravda."""
+    return was is None and ctx.baseline_measured(area)
+
+
 def owning_prefix(address: str, prefixes: list[str]) -> str | None:
     """Ktery nakonfigurovany rozsah tuhle adresu obsahuje.
 
@@ -181,6 +188,7 @@ class ArpPresentCheck(Check):
                         family=4,
                         value=_arp_value(entry),
                         baseline_value=_arp_value(was) if was else None,
+                        new_since_baseline=_new_since_baseline(ctx, "arp", was),
                         subject={
                             "ip": ip,
                             "mac": entry.get("mac"),
@@ -198,6 +206,7 @@ class ArpPresentCheck(Check):
                     family=4,
                     value=_arp_value(entry),
                     baseline_value=_arp_value(was) if was else None,
+                    new_since_baseline=_new_since_baseline(ctx, "arp", was),
                     subject={
                         "ip": ip,
                         "mac": entry.get("mac"),
@@ -274,6 +283,7 @@ class NdPresentCheck(Check):
                         family=6,
                         value=_nd_value(entry),
                         baseline_value=_nd_value(was) if was else None,
+                        new_since_baseline=_new_since_baseline(ctx, "nd", was),
                         subject={
                             "ip": ip,
                             "mac": entry.get("mac"),
@@ -292,6 +302,7 @@ class NdPresentCheck(Check):
                     family=6,
                     value=_nd_value(entry),
                     baseline_value=_nd_value(was) if was else None,
+                    new_since_baseline=_new_since_baseline(ctx, "nd", was),
                     subject={
                         "ip": ip,
                         "mac": entry.get("mac"),
@@ -491,6 +502,7 @@ def _ping_findings(
                     family=family,
                     value=_ping_value(probe),
                     baseline_value=_ping_value(was) if was else None,
+                    new_since_baseline=_new_since_baseline(ctx, "ping", was),
                     subject={"target": target, "sent": 0, "received": received},
                     details=details,
                     compared=not same_loss,
@@ -505,6 +517,7 @@ def _ping_findings(
                     family=family,
                     value=_ping_value(probe),
                     baseline_value=_ping_value(was) if was else None,
+                    new_since_baseline=_new_since_baseline(ctx, "ping", was),
                     subject={"target": target, "sent": sent, "received": received},
                     details=details,
                     compared=not same_loss,
@@ -525,6 +538,7 @@ def _ping_findings(
                     family=family,
                     value=_ping_value(probe),
                     baseline_value=_ping_value(was) if was else None,
+                    new_since_baseline=_new_since_baseline(ctx, "ping", was),
                     subject={"target": target, "sent": sent, "received": 0},
                     details=details,
                     compared=not same_loss,

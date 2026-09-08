@@ -1,6 +1,7 @@
 from migration_validator.models.result import (
     CheckResult,
     COMPARED,
+    NEW_SINCE_BASELINE,
     MatchInfo,
     ScopeResult,
     Severity,
@@ -9,7 +10,7 @@ from migration_validator.models.result import (
     Status,
     UNCHANGED_SINCE_BASELINE,
 )
-from migration_validator.reporting.view import build_view, change_text, UNCHANGED_TEXT, _row
+from migration_validator.reporting.view import NEW_TEXT, build_view, change_text, UNCHANGED_TEXT, _row
 
 
 def _check(check_id, *, family=None, label="X", value="v", status=Status.PASS,
@@ -549,3 +550,13 @@ def test_change_text_uncompared_row_is_blank_not_bez_baseline():
 def test_change_text_missing_baseline_without_marker_still_says_bez_baseline():
     check = _check("x", mode="both", value="v", baseline_value=None, status=Status.WARN)
     assert change_text(_row(check, qualify=False), True) == "bez baseline"
+
+
+def test_change_text_new_since_baseline_says_novy_zaznam_not_bez_baseline():
+    # ARP/ND/ping radek pro adresu, kterou zmerena baseline nemela.
+    check = _check("x", mode="both", value="0c:00:00:00:00:01 -> 10.0.0.2", baseline_value=None)
+    check.details[NEW_SINCE_BASELINE] = True
+    row = _row(check, qualify=False)
+    assert row.new is True
+    assert change_text(row, True) == NEW_TEXT == "novy zaznam (v baseline nebyl)"
+    assert change_text(row, False) == ""
