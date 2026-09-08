@@ -91,10 +91,16 @@ class ServiceView:
 def change_text(row: Row, has_baseline: bool) -> str:
     """Obsah sloupce ZMENA.
 
-    Rozliseni podle rezimu checku je nutne, ne kosmeticke: STATE checky
-    (arp_present, ping_reachability, interface_state) baseline hodnotu
-    nemaji z definice, takze bez tohoto by se 'bez baseline' vytisklo na
-    vetsine radku a hlasku by nikdo necetl.
+    Rozliseni podle rezimu checku je nutne, ne kosmeticke. STATE checky
+    (napr. isis_interface_info, isis_overview) baseline hodnotu nemaji
+    z definice - tisknou vzdy prazdno, jinak by se 'bez baseline' vypsalo
+    na vetsine radku a hlasku by nikdo necetl. BOTH checky tisknou podle
+    pravidel nize: znacku UNCHANGED_TEXT u radku s row.unchanged (shodny
+    spatny stav proti baseline, R-3), prazdno u radku s compared=False
+    (namereno, ale z definice neporovnavano - napr. L2-vazany radek nebo
+    port, ktery baseline vubec nezmerila, R-4), NO_BASELINE jen kdyz baseline
+    hodnotu nemela a status neni SKIP (SKIP uz duvod nese ve vlastni
+    hlasce), a jinak 'bylo <baseline_value>' (s delta, pokud je).
     """
     if not has_baseline:
         return ""
