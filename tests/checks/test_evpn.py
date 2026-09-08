@@ -6,7 +6,7 @@ from migration_validator.checks.evpn import (
     EvpnVpwsStatusCheck,
 )
 from migration_validator.config import default_config
-from migration_validator.models.result import Outcome, Status
+from migration_validator.models.result import Outcome, Status, UNCHANGED_SINCE_BASELINE
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
@@ -19,12 +19,18 @@ def _ctx(subject, baseline=None, service_type="E-LAN", subtype="vlan-aware"):
             interfaces=["ge-0/0/2.313"], routing_instances=["EVPN-AWARE-CPE13"]
         ),
     )
+    # Kdyz je baseline predana, kazda oblast v ni je "zmerena" (status ok) -
+    # jinak by unchanged_or (R-3) shodny rozbity stav nikdy neuznal za
+    # UNCHANGED, protoze ctx.baseline_measured() by pro kazdou oblast
+    # vracelo False.
+    baseline_collectors = {area: {"status": "ok"} for area in baseline} if baseline else {}
     return CheckContext(
         scope=scope,
         subject=subject,
         baseline=baseline,
         config=default_config(),
         failed_collectors={},
+        baseline_collectors=baseline_collectors,
     )
 
 
@@ -116,6 +122,20 @@ def test_interface_down_still_broken():
     findings = run_findings(_vpws_subject(status="Down", remote_peers=[PEER_OK]))
     row = _by_label(findings, "EVPN VPWS local interface status")
     assert row.outcome is Outcome.BROKEN
+
+
+def test_vpws_local_interface_down_in_both_is_unchanged():
+    subject = _vpws_subject(status="Down", remote_peers=(PEER_OK,))
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    assert _by_label(rows, "EVPN VPWS local interface status").status is Status.PASS
+
+
+def test_vpws_unresolved_peer_in_both_is_unchanged():
+    peer = {**PEER_OK, "status": "Unresolved"}
+    subject = _vpws_subject(remote_peers=(peer,))
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    status = _by_label(rows, "EVPN VPWS SID remote status")
+    assert status.status is Status.PASS and status.value == "Unresolved" == status.baseline_value
 
 
 def test_two_interfaces_qualify_labels():
@@ -238,6 +258,16 @@ def test_vpws_missing_remote_peer_borrows_baseline_from_first_peer():
     assert status.baseline_value == "Resolved"
 
 
+def test_vpws_missing_remote_peer_in_both_is_unchanged_with_sentinel_baseline():
+    subject = _vpws_subject(remote_peers=())
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    pe = _by_label(rows, "EVPN VPWS SID remote PE")
+    assert pe.status is Status.PASS and pe.details[UNCHANGED_SINCE_BASELINE] is True
+    assert pe.baseline_value == "Neznamy peer"
+    status = _by_label(rows, "EVPN VPWS SID remote status")
+    assert status.status is Status.PASS and status.baseline_value == "Unresolved / Chybi"
+
+
 # Rozpad ESI bloku na samostatne radky (lab 2026-08-13): jeden slepeny
 # radek "Up/Forwarding  DF 150.0.0.12" s ESI v labelu se spatne cetl a
 # u nezvoleneho DF vypsal "DF DF not elected yet". Novy tvar: INFO
@@ -264,7 +294,8 @@ def test_esi_block_splits_into_header_and_detail_rows():
     assert status.status is Status.PASS
     assert status.value == "Resolved by IFL ae0.14"
     assert local.status is Status.PASS
-    assert local.value == "ae0.14 Up/Forwarding"
+    # Hodnota uz nenese jmeno IFL (meni se migraci) - jen stav.
+    assert local.value == "Up/Forwarding"
     assert df.status is Status.PASS and df.value == "150.0.0.12"
 
 
@@ -280,8 +311,16 @@ def test_esi_rows_carry_the_previous_state_when_there_is_one():
     # shodna baseline hodnota necha sloupec ZMENA prazdny.
     assert header.baseline_value == "00:11"
     assert status.baseline_value == "Resolved by IFL ae0.14"
-    assert local.baseline_value == "ae0.14 Down"
+    assert local.baseline_value == "Down"
     assert df.baseline_value == "-"
+
+
+def test_esi_unresolved_and_df_not_elected_in_both_are_unchanged():
+    esi = {"00:11": {"interface": "ge-0/0/2.313", "status": "Up/Forwarding",
+                     "resolved_status": "Unresolved", "df_role": "DF not elected yet"}}
+    rows = run_check(EvpnEsiStatusCheck(), _ctx({"evpn_esi": esi}, baseline={"evpn_esi": esi}))
+    assert _by_label(rows, "ESI Status").status is Status.PASS
+    assert _by_label(rows, "ESI DF").status is Status.PASS
 
 
 def test_esi_down_interface_fails():
@@ -356,6 +395,14 @@ def test_mac_count_vlan_based_has_no_domain_prefix():
 def test_mac_count_zero_vlan_fails():
     findings = EvpnMacCountCheck().run(_ctx(_mac_subject(0)))
     assert _by_label(findings, "BD-313 MAC count").outcome is Outcome.BROKEN
+
+
+def test_mac_count_zero_in_both_is_unchanged():
+    from migration_validator.checks.evpn import _mac_compare_finding
+
+    ctx = _ctx(_mac_subject(0), baseline=_mac_subject(0))
+    finding = _mac_compare_finding("MAC count", 0, 0, -60.0, ctx)
+    assert finding.outcome is Outcome.UNCHANGED
 
 
 def test_mac_count_compares_vlan_against_baseline_key():
@@ -476,10 +523,11 @@ def _instance_findings(subject, baseline=None):
 
 def test_instance_healthy_rows_pass():
     # Agregatni radky (Task 2) zmizely - "zdravi" ted nese jen count a
-    # posouzeny radek vlastniho unitu.
+    # posouzeny radek vlastniho unitu. Label nese jmeno IFL v zavorce -
+    # hodnota uz jmeno nenese (R-5, meni se migraci).
     findings = _instance_findings(_instance_subject())
     assert _by_label(findings, "EVPN neighbors").outcome is Outcome.OK
-    assert _by_label(findings, "EVPN interface").outcome is Outcome.OK
+    assert _by_label(findings, "EVPN interface (ge-0/0/2.313)").outcome is Outcome.OK
 
 
 def test_instance_zero_neighbors_fails():
@@ -582,8 +630,8 @@ def test_instance_two_instances_qualify_labels():
     subject["evpn_instance"]["EVPN-B"] = subject["evpn_instance"].pop("EVPN-AWARE-CPE13")
     subject["evpn_instance"]["EVPN-A"] = _instance_subject()["evpn_instance"]["EVPN-AWARE-CPE13"]
     findings = _instance_findings(subject)
-    assert any(f.label == "EVPN interface (EVPN-A)" for f in findings)
-    assert any(f.label == "EVPN interface (EVPN-B)" for f in findings)
+    assert any(f.label == "EVPN interface (ge-0/0/2.313) (EVPN-A)" for f in findings)
+    assert any(f.label == "EVPN interface (ge-0/0/2.313) (EVPN-B)" for f in findings)
 
 
 def test_instance_esi_status_text_not_compared_to_baseline():
@@ -603,8 +651,8 @@ def test_instance_info_rows_list_names():
     # viz test_bez_linku_zadny_irb_radek. Tady se overuje jen EVPN
     # interface a neighbor, ktere link nepotrebuji.
     findings = _instance_findings(_instance_subject())
-    values = [f.value for f in findings if f.label == "EVPN interface"]
-    assert "ge-0/0/2.313 Up" in values
+    values = [f.value for f in findings if f.label == "EVPN interface (ge-0/0/2.313)"]
+    assert "Up" in values
     neighbor_values = [f.value for f in findings if f.label == "EVPN neighbor"]
     assert "150.0.0.13" in neighbor_values
 
@@ -626,9 +674,9 @@ def test_instance_status_rows_carry_baseline_value():
     ]
     findings = _instance_findings(subject, baseline=baseline)
 
-    interface_row = _by_label(findings, "EVPN interface")
-    assert interface_row.value == "ge-0/0/2.313 Up"
-    assert interface_row.baseline_value == "ge-0/0/2.313 Down"
+    interface_row = _by_label(findings, "EVPN interface (ge-0/0/2.313)")
+    assert interface_row.value == "Up"
+    assert interface_row.baseline_value == "Down"
 
     neighbor_by_value = {
         f.value: f.baseline_value for f in findings if f.label == "EVPN neighbor"
@@ -647,9 +695,9 @@ def test_irb_instance_status_row_carries_baseline_value():
     ] = "Down"
     ctx.baseline = baseline
     findings = EvpnInstanceStatusCheck().run(ctx)
-    row = _by_label(findings, "IRB interface")
-    assert row.value == "irb.14 Up (master)"
-    assert row.baseline_value == "irb.14 Down (master)"
+    row = _by_label(findings, "IRB interface (irb.14)")
+    assert row.value == "Up (master)"
+    assert row.baseline_value == "Down (master)"
 
 
 def test_instance_missing_data_skips():
@@ -741,8 +789,8 @@ def test_agregatni_radky_se_netisknou():
 
 def test_evpn_interface_jen_vlastni_unit_a_je_posuzovany():
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
-    rows = [f for f in findings if f.label == "EVPN interface"]
-    assert [r.value for r in rows] == ["ae0.14 Up"]
+    rows = [f for f in findings if f.label == "EVPN interface (ae0.14)"]
+    assert [r.value for r in rows] == ["Up"]
     assert rows[0].outcome is Outcome.OK
 
 
@@ -751,15 +799,15 @@ def test_evpn_interface_down_je_broken():
     subject["evpn_instance"]["EVPN-VLAN-AWARE-POP1"]["local_interfaces"]["entries"][1][
         "status"] = "Down"
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(subject))
-    rows = [f for f in findings if f.label == "EVPN interface"]
+    rows = [f for f in findings if f.label == "EVPN interface (ae0.14)"]
     assert rows[0].outcome is Outcome.BROKEN
 
 
 def test_irb_radek_jen_linkovany_unit():
     findings = EvpnInstanceStatusCheck().run(
         _vlan_aware_ctx(_aware_subject(), link=LINK_L2))
-    rows = [f for f in findings if f.label == "IRB interface"]
-    assert [r.value for r in rows] == ["irb.14 Up (master)"]
+    rows = [f for f in findings if f.label == "IRB interface (irb.14)"]
+    assert [r.value for r in rows] == ["Up (master)"]
     assert rows[0].outcome is Outcome.OK
 
 
@@ -772,22 +820,22 @@ def test_irb_down_je_broken():
         "status"] = "Down"
     findings = EvpnInstanceStatusCheck().run(
         _vlan_aware_ctx(subject, link=LINK_L2))
-    rows = [f for f in findings if f.label == "IRB interface"]
-    assert [r.value for r in rows] == ["irb.14 Down (master)"]
+    rows = [f for f in findings if f.label == "IRB interface (irb.14)"]
+    assert [r.value for r in rows] == ["Down (master)"]
     assert rows[0].outcome is Outcome.BROKEN
     assert "ocekavano Up" in rows[0].message
 
 
 def test_bez_linku_zadny_irb_radek():
     findings = EvpnInstanceStatusCheck().run(_vlan_aware_ctx(_aware_subject()))
-    assert not [f for f in findings if f.label == "IRB interface"]
+    assert not [f for f in findings if f.label.startswith("IRB interface")]
 
 
 def test_fallback_bez_selektoru_tiskne_vse():
     ctx = _vlan_aware_ctx(_aware_subject())
     ctx.scope.selectors.interfaces = []
     findings = EvpnInstanceStatusCheck().run(ctx)
-    rows = [f for f in findings if f.label == "EVPN interface"]
+    rows = [f for f in findings if f.label.startswith("EVPN interface")]
     assert len(rows) == 4  # filtr vypnuty, vsechno jako drive
 
 
@@ -804,9 +852,18 @@ def _aware_subject_bez_vlastni_unit():
 def test_chybejici_vlastni_unit_je_broken():
     findings = EvpnInstanceStatusCheck().run(
         _vlan_aware_ctx(_aware_subject_bez_vlastni_unit()))
-    rows = [f for f in findings if f.label == "EVPN interface"]
+    rows = [f for f in findings if f.label == "EVPN interface (ae0.14)"]
     assert [r.value for r in rows] == ["ae0.14 chybi v instanci"]
     assert rows[0].outcome is Outcome.BROKEN
+
+
+def test_instance_missing_unit_in_both_is_unchanged_with_baseline_value():
+    data = {"neighbors": {"total": 1, "addresses": ["150.0.0.13"]},
+            "local_interfaces": {"entries": []}, "irb_interfaces": {"entries": []}, "esis": {}}
+    subject = {"evpn_instance": {"EVPN-AWARE-CPE13": data}}
+    rows = run_check(EvpnInstanceStatusCheck(), _ctx(subject, baseline=subject))
+    unit = [r for r in rows if r.value == "ge-0/0/2.313 chybi v instanci"][0]
+    assert unit.status is Status.PASS and unit.baseline_value == unit.value
 
 
 def test_chybejici_linkovany_irb_je_broken():
@@ -817,7 +874,7 @@ def test_chybejici_linkovany_irb_je_broken():
     ]
     findings = EvpnInstanceStatusCheck().run(
         _vlan_aware_ctx(subject, link=LINK_L2))
-    rows = [f for f in findings if f.label == "IRB interface"]
+    rows = [f for f in findings if f.label == "IRB interface (irb.14)"]
     assert [r.value for r in rows] == ["irb.14 chybi v instanci"]
     assert rows[0].outcome is Outcome.BROKEN
 
@@ -837,9 +894,9 @@ def test_vice_chybejicich_unitu_jeden_radek_kazdy_serazene():
     ctx = _vlan_aware_ctx(_aware_subject())
     ctx.scope.selectors.interfaces = ["ae0.16", "ae0.14"]
     findings = EvpnInstanceStatusCheck().run(ctx)
-    rows = [f for f in findings if f.label == "EVPN interface"]
+    rows = [f for f in findings if f.label.startswith("EVPN interface")]
     assert [(r.value, r.outcome) for r in rows] == [
-        ("ae0.14 Up", Outcome.OK),
+        ("Up", Outcome.OK),
         ("ae0.16 chybi v instanci", Outcome.BROKEN),
     ]
 

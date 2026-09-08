@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
+from migration_validator.checks.baseline import suffix, unchanged_or
 from migration_validator.checks.ifaces import percent_change, qualified
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
@@ -25,10 +26,6 @@ def _is_up(status: str) -> bool:
     Porovnani na presnou rovnost by to prvni oznacilo za rozbite.
     """
     return status.split("/", 1)[0].strip() == UP
-
-
-def _esi_local_value(data: dict[str, Any]) -> str:
-    return f"{data.get('interface') or '?'} {data.get('status', 'unknown')}"
 
 
 def _find_baseline_peer(
@@ -91,7 +88,7 @@ class EvpnVpwsStatusCheck(Check):
                     baseline_interfaces[idx] if idx < len(baseline_interfaces) else None
                 )
                 findings.extend(
-                    self._interface_findings(name, iface, baseline_iface, many)
+                    self._interface_findings(name, iface, baseline_iface, many, ctx)
                 )
         return findings
 
@@ -101,6 +98,7 @@ class EvpnVpwsStatusCheck(Check):
         iface: dict[str, Any],
         baseline_iface: dict[str, Any] | None,
         qualify: bool,
+        ctx: CheckContext,
     ) -> list[Finding]:
         def label(text: str) -> str:
             return qualified(text, iface["name"]) if qualify else text
@@ -112,19 +110,25 @@ class EvpnVpwsStatusCheck(Check):
             if baseline_iface is not None
             else None
         )
+        up = _is_up(status)
+        outcome = (
+            Outcome.OK if up
+            else unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=baseline_status == status)
+        )
         findings.append(
             Finding(
-                Outcome.OK if _is_up(status) else Outcome.BROKEN,
+                outcome,
                 f"{instance}: stav rozhrani {status}"
-                + ("" if _is_up(status) else f", ocekavano {UP}"),
+                + ("" if up else f", ocekavano {UP}")
+                + suffix(outcome),
                 label=label("EVPN VPWS local interface status"),
                 value=status,
                 baseline_value=baseline_status,
                 subject={"interface": iface["name"], "status": status},
             )
         )
-        findings.extend(self._sid_findings(instance, iface, baseline_iface, "local", label))
-        findings.extend(self._sid_findings(instance, iface, baseline_iface, "remote", label))
+        findings.extend(self._sid_findings(instance, iface, baseline_iface, "local", label, ctx))
+        findings.extend(self._sid_findings(instance, iface, baseline_iface, "remote", label, ctx))
         return findings
 
     def _sid_findings(
@@ -134,6 +138,7 @@ class EvpnVpwsStatusCheck(Check):
         baseline_iface: dict[str, Any] | None,
         side: str,
         label,
+        ctx: CheckContext,
     ) -> list[Finding]:
         sid = iface.get(f"{side}_sid") or {"value": None, "peers": []}
         value = sid.get("value")
@@ -168,29 +173,37 @@ class EvpnVpwsStatusCheck(Check):
                 # kterou operator potrebuje - proto se pujcuje z prvniho
                 # baseline peeru, i kdyz v subjektu zadny peer neni.
                 first_baseline_peer = baseline_peers[0] if baseline_peers else None
+                same = baseline_iface is not None and not baseline_peers
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=same)
                 findings.append(
                     Finding(
-                        Outcome.BROKEN,
-                        f"{instance}: remote peer chybi",
+                        outcome,
+                        f"{instance}: remote peer chybi" + suffix(outcome),
                         label=label(f"{prefix} PE"),
                         value="Neznamy peer",
                         baseline_value=(
-                            str(first_baseline_peer.get("ipaddr") or "?")
-                            if first_baseline_peer
-                            else None
+                            "Neznamy peer" if same
+                            else (
+                                str(first_baseline_peer.get("ipaddr") or "?")
+                                if first_baseline_peer
+                                else None
+                            )
                         ),
                     )
                 )
                 findings.append(
                     Finding(
-                        Outcome.BROKEN,
-                        f"{instance}: remote SID nema zadny Resolved zaznam",
+                        outcome,
+                        f"{instance}: remote SID nema zadny Resolved zaznam" + suffix(outcome),
                         label=label(f"{prefix} status"),
                         value="Unresolved / Chybi",
                         baseline_value=(
-                            str(first_baseline_peer.get("status") or "Unresolved / Chybi")
-                            if first_baseline_peer
-                            else None
+                            "Unresolved / Chybi" if same
+                            else (
+                                str(first_baseline_peer.get("status") or "Unresolved / Chybi")
+                                if first_baseline_peer
+                                else None
+                            )
                         ),
                     )
                 )
@@ -233,7 +246,17 @@ class EvpnVpwsStatusCheck(Check):
         for peer in peers:
             baseline_peer = _find_baseline_peer(baseline_peers, peer.get("ipaddr"))
             resolved = (peer.get("status") or "").strip().lower() == "resolved"
-            outcome = Outcome.OK if resolved else Outcome.BROKEN
+            was_resolved = (
+                baseline_peer is not None
+                and (baseline_peer.get("status") or "").strip().lower() == "resolved"
+            )
+            outcome = (
+                Outcome.OK if resolved
+                else unchanged_or(
+                    Outcome.BROKEN, ctx, "evpn_vpws",
+                    same=baseline_peer is not None and not was_resolved,
+                )
+            )
             reason = (
                 ""
                 if resolved
@@ -242,7 +265,7 @@ class EvpnVpwsStatusCheck(Check):
             findings.append(
                 Finding(
                     outcome,
-                    f"{instance}: {side} peer {peer.get('ipaddr')}{reason}",
+                    f"{instance}: {side} peer {peer.get('ipaddr')}{reason}" + suffix(outcome),
                     label=label(peer_label),
                     value=str(peer.get("ipaddr") or "?"),
                     baseline_value=(
@@ -255,7 +278,7 @@ class EvpnVpwsStatusCheck(Check):
                 Finding(
                     outcome,
                     f"{instance}: {side} peer {peer.get('ipaddr')} "
-                    f"status {peer.get('status') or 'chybi'}",
+                    f"status {peer.get('status') or 'chybi'}" + suffix(outcome),
                     label=label(f"{prefix} status"),
                     value=str(peer.get("status") or "Unresolved / Chybi"),
                     baseline_value=(
@@ -317,12 +340,16 @@ class EvpnEsiStatusCheck(Check):
         findings: list[Finding] = []
         for esi in sorted(entries):
             findings.extend(
-                self._esi_block(esi, entries[esi], baseline_entries.get(esi))
+                self._esi_block(esi, entries[esi], baseline_entries.get(esi), ctx)
             )
         return findings
 
     def _esi_block(
-        self, esi: str, data: dict[str, Any], baseline: dict[str, Any] | None
+        self,
+        esi: str,
+        data: dict[str, Any],
+        baseline: dict[str, Any] | None,
+        ctx: CheckContext,
     ) -> list[Finding]:
         # ESI je HODNOTA hlavicky, ne label: kazdy radek musi mit hodnotu
         # (invariant end-to-end testu) a v labelu by dlouhe ESI roztahlo
@@ -343,51 +370,74 @@ class EvpnEsiStatusCheck(Check):
         resolved = data.get("resolved_status")
         if resolved:
             resolved_ok = resolved.lower().startswith("resolved")
+            baseline_resolved = baseline.get("resolved_status")
+            same = (
+                baseline_resolved is not None
+                and not baseline_resolved.lower().startswith("resolved")
+            )
+            outcome = (
+                Outcome.OK if resolved_ok
+                else unchanged_or(Outcome.BROKEN, ctx, "evpn_esi", same=same)
+            )
             findings.append(
                 Finding(
-                    Outcome.OK if resolved_ok else Outcome.BROKEN,
-                    f"{esi}: {resolved}",
+                    outcome,
+                    f"{esi}: {resolved}" + suffix(outcome),
                     label="ESI Status",
                     value=resolved,
-                    baseline_value=baseline.get("resolved_status"),
+                    baseline_value=baseline_resolved,
                 )
             )
 
+        # Hodnota nese jen stav, ne jmeno IFL - to se migraci meni, coby
+        # cast hodnoty by shodny stav pred a po migraci vypadal jako
+        # zmenu (R-5). Jmeno zustava jen v subject (pro report).
         status = str(data.get("status", "unknown"))
         up = _is_up(status)
+        baseline_status = baseline.get("status")
+        same = bool(baseline_status) and not _is_up(str(baseline_status))
+        outcome = (
+            Outcome.OK if up
+            else unchanged_or(Outcome.BROKEN, ctx, "evpn_esi", same=same)
+        )
         findings.append(
             Finding(
-                Outcome.OK if up else Outcome.BROKEN,
+                outcome,
                 f"{esi}: stav rozhrani {status}"
-                + ("" if up else f", ocekavano {UP}"),
+                + ("" if up else f", ocekavano {UP}")
+                + suffix(outcome),
                 label="ESI Local interface status",
-                value=_esi_local_value(data),
-                baseline_value=(
-                    _esi_local_value(baseline) if baseline.get("status") else None
-                ),
+                value=status,
+                baseline_value=str(baseline_status) if baseline_status else None,
                 subject={"status": status, "interface": data.get("interface")},
             )
         )
 
         # "" se chova jako chybejici hodnota (stejny stav, jiny zdroj dat).
         df = data.get("df_role") or None
+        baseline_df = baseline.get("df_role")
         if df is None:
             # DF blok ve vypisu chybi - zadny verdikt, stav se nefabuluje.
             df_outcome = Outcome.INFO
             df_message = f"{esi}: DF bez zaznamu"
         else:
-            df_outcome = Outcome.BROKEN if "not elected" in df.lower() else Outcome.OK
+            not_elected = "not elected" in df.lower()
+            same = "not elected" in str(baseline_df or "").lower()
+            df_outcome = (
+                Outcome.OK if not not_elected
+                else unchanged_or(Outcome.BROKEN, ctx, "evpn_esi", same=same)
+            )
             # Junos uz sam vraci "DF not elected yet" - kdyz text s "DF" uz
             # zacina, dalsi "DF " by hlaseni zdvojilo ("DF DF not elected...").
             text = df if df.upper().startswith("DF") else f"DF {df}"
-            df_message = f"{esi}: {text}"
+            df_message = f"{esi}: {text}" + suffix(df_outcome)
         findings.append(
             Finding(
                 df_outcome,
                 df_message,
                 label="ESI DF",
                 value=df or "-",
-                baseline_value=baseline.get("df_role"),
+                baseline_value=baseline_df or ("-" if baseline else None),
                 subject={"df_role": df},
             )
         )
@@ -402,7 +452,9 @@ def _count_finding(
     *,
     ok: bool,
     expectation: str,
+    ctx: CheckContext,
     warn_below_baseline: bool = False,
+    same_broken: bool = False,
 ) -> Finding:
     """Ciselny radek: stavove pravidlo; rozdil proti baseline nese ZMENA.
 
@@ -416,8 +468,14 @@ def _count_finding(
     konsolidaci sluzeb do jedne mac-vrf instance a rovnost by FAILovala
     trvale, viz _ServiceUnits vyse.
     """
-    outcome = Outcome.OK if ok else Outcome.BROKEN
-    text = f"{message}: {value}" if ok else f"{message}: {value}, ocekavano {expectation}"
+    outcome = (
+        Outcome.OK if ok
+        else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same_broken)
+    )
+    text = (
+        f"{message}: {value}" if ok
+        else f"{message}: {value}, ocekavano {expectation}" + suffix(outcome)
+    )
     if (
         ok
         and warn_below_baseline
@@ -512,7 +570,7 @@ class EvpnInstanceStatusCheck(Check):
         for name in sorted(instances):
             findings.extend(
                 self._instance_findings(
-                    name, instances[name], baseline_instances.get(name), many, units
+                    name, instances[name], baseline_instances.get(name), many, units, ctx
                 )
             )
         return findings
@@ -524,6 +582,7 @@ class EvpnInstanceStatusCheck(Check):
         baseline: dict[str, Any] | None,
         qualify: bool,
         units: _ServiceUnits,
+        ctx: CheckContext,
     ) -> list[Finding]:
         def label(text: str) -> str:
             return qualified(text, instance) if qualify else text
@@ -532,20 +591,28 @@ class EvpnInstanceStatusCheck(Check):
         findings: list[Finding] = []
 
         neighbors = data.get("neighbors", {})
-        baseline_neighbors = baseline.get("neighbors") or None
+        # Prazdny dict znamena "baseline zmerila nulu sousedu", ne "baseline
+        # neni k dispozici" - proto se tu na rozdil od drive nesmi "or None"
+        # koercit na None (viz baseline_value nize).
+        baseline_neighbors = baseline.get("neighbors")
         findings.append(
             _count_finding(
                 label("EVPN neighbors"),
                 f"{instance}: EVPN neighbors",
                 str(neighbors.get("total") or 0),
                 (
-                    str(baseline_neighbors["total"])
-                    if baseline_neighbors
+                    str(baseline_neighbors.get("total") or 0)
+                    if baseline_neighbors is not None
                     else None
                 ),
                 ok=(neighbors.get("total") or 0) > 0,
                 expectation="> 0",
                 warn_below_baseline=True,
+                same_broken=(
+                    baseline_neighbors is not None
+                    and int(baseline_neighbors.get("total") or 0) == 0
+                ),
+                ctx=ctx,
             )
         )
 
@@ -561,7 +628,7 @@ class EvpnInstanceStatusCheck(Check):
                 )
             )
 
-        findings.extend(self._esi_findings(instance, data, baseline, label, units))
+        findings.extend(self._esi_findings(instance, data, baseline, label, units, ctx))
 
         local = data.get("local_interfaces", {})
         local_entries = local.get("entries", [])
@@ -573,19 +640,27 @@ class EvpnInstanceStatusCheck(Check):
         for entry in local_entries:
             if units.active and entry["name"] not in units.interfaces:
                 continue
-            up = _is_up(str(entry["status"]))
+            status = str(entry["status"])
+            up = _is_up(status)
             baseline_entry = baseline_local_by_name.get(entry["name"])
+            same = baseline_entry is not None and not _is_up(str(baseline_entry["status"]))
+            outcome = (
+                Outcome.OK if up
+                else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
+            )
             findings.append(
                 Finding(
-                    Outcome.OK if up else Outcome.BROKEN,
-                    f"{instance}: interface {entry['name']} {entry['status']}"
-                    + ("" if up else f", ocekavano {UP}"),
-                    label=label("EVPN interface"),
-                    value=f"{entry['name']} {entry['status']}",
+                    outcome,
+                    f"{instance}: interface {entry['name']} {status}"
+                    + ("" if up else f", ocekavano {UP}")
+                    + suffix(outcome),
+                    # Jmeno IFL jde do labelu, hodnota nese jen stav - jinak
+                    # by shodny stav pred a po migraci (jine jmeno) vypadal
+                    # jako zmena (R-5).
+                    label=label(f"EVPN interface ({entry['name']})"),
+                    value=status,
                     baseline_value=(
-                        f"{baseline_entry['name']} {baseline_entry['status']}"
-                        if baseline_entry
-                        else None
+                        baseline_entry["status"] if baseline_entry else None
                     ),
                 )
             )
@@ -598,12 +673,20 @@ class EvpnInstanceStatusCheck(Check):
         # nahlasila unit jako chybejici v kazde instanci krome te spravne.
         if units.active and not qualify:
             for unit in sorted(units.interfaces - local_names):
+                same = unit not in baseline_local_by_name and bool(baseline)
+                outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
+                b = baseline_local_by_name.get(unit)
+                baseline_value = (
+                    f"{unit} chybi v instanci" if outcome is Outcome.UNCHANGED
+                    else (b["status"] if b else None)
+                )
                 findings.append(
                     Finding(
-                        Outcome.BROKEN,
-                        f"{instance}: unit {unit} chybi v instanci",
-                        label=label("EVPN interface"),
+                        outcome,
+                        f"{instance}: unit {unit} chybi v instanci" + suffix(outcome),
+                        label=label(f"EVPN interface ({unit})"),
                         value=f"{unit} chybi v instanci",
+                        baseline_value=baseline_value,
                     )
                 )
 
@@ -618,34 +701,49 @@ class EvpnInstanceStatusCheck(Check):
             if units.active and entry["name"] != units.irb:
                 continue
             context = entry.get("l3_context")
-            value = f"{entry['name']} {entry['status']}"
+            status = str(entry["status"])
+            value = status
             if context:
                 value += f" ({context})"
-            up = _is_up(str(entry["status"]))
+            up = _is_up(status)
             baseline_entry = baseline_irb_by_name.get(entry["name"])
+            same = baseline_entry is not None and not _is_up(str(baseline_entry["status"]))
+            outcome = (
+                Outcome.OK if up
+                else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
+            )
             baseline_value = None
             if baseline_entry:
-                baseline_value = f"{baseline_entry['name']} {baseline_entry['status']}"
+                baseline_value = baseline_entry["status"]
                 baseline_context = baseline_entry.get("l3_context")
                 if baseline_context:
                     baseline_value += f" ({baseline_context})"
             findings.append(
                 Finding(
-                    Outcome.OK if up else Outcome.BROKEN,
-                    f"{instance}: IRB {value}"
-                    + ("" if up else f", ocekavano {UP}"),
-                    label=label("IRB interface"),
+                    outcome,
+                    f"{instance}: IRB {entry['name']} {status}"
+                    + ("" if up else f", ocekavano {UP}")
+                    + suffix(outcome),
+                    label=label(f"IRB interface ({entry['name']})"),
                     value=value,
                     baseline_value=baseline_value,
                 )
             )
         if units.active and not qualify and units.irb and units.irb not in irb_names:
+            same = units.irb not in baseline_irb_by_name and bool(baseline)
+            outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
+            b = baseline_irb_by_name.get(units.irb)
+            baseline_value = (
+                f"{units.irb} chybi v instanci" if outcome is Outcome.UNCHANGED
+                else (b["status"] if b else None)
+            )
             findings.append(
                 Finding(
-                    Outcome.BROKEN,
-                    f"{instance}: IRB unit {units.irb} chybi v instanci",
-                    label=label("IRB interface"),
+                    outcome,
+                    f"{instance}: IRB unit {units.irb} chybi v instanci" + suffix(outcome),
+                    label=label(f"IRB interface ({units.irb})"),
                     value=f"{units.irb} chybi v instanci",
+                    baseline_value=baseline_value,
                 )
             )
         return findings
@@ -657,6 +755,7 @@ class EvpnInstanceStatusCheck(Check):
         baseline: dict[str, Any],
         label,
         units: _ServiceUnits,
+        ctx: CheckContext,
     ) -> list[Finding]:
         if units.active:
             # Vlastni ESI sluzby nese blok checku evpn_esi_status (ESI
@@ -703,10 +802,18 @@ class EvpnInstanceStatusCheck(Check):
             # Substring by chytl i "Unresolved" - stejny duvod, proc VPWS
             # check (radek vyse) porovnava cele slovo, ne podretezec.
             resolved = status.lower().startswith("resolved")
+            same = (
+                baseline_status is not None
+                and not baseline_status.lower().startswith("resolved")
+            )
+            outcome = (
+                Outcome.OK if resolved
+                else unchanged_or(Outcome.BROKEN, ctx, "evpn_instance", same=same)
+            )
             findings.append(
                 Finding(
-                    Outcome.OK if resolved else Outcome.BROKEN,
-                    f"{instance}: ESI {esi} {status or 'bez statusu'}",
+                    outcome,
+                    f"{instance}: ESI {esi} {status or 'bez statusu'}" + suffix(outcome),
                     label=label(f"ESI {esi}"),
                     value=status or "bez statusu",
                     # Text nese jmeno IFL, ktere se migraci meni - baseline
@@ -766,7 +873,7 @@ class EvpnMacCountCheck(Check):
                 if subject_entry is None:
                     findings.append(
                         _mac_compare_finding(
-                            row_label, int(baseline_entry["count"]), 0, tolerance
+                            row_label, int(baseline_entry["count"]), 0, tolerance, ctx
                         )
                     )
                 elif baseline_entry is None:
@@ -780,6 +887,7 @@ class EvpnMacCountCheck(Check):
                             int(baseline_entry["count"]),
                             int(subject_entry["count"]),
                             tolerance,
+                            ctx,
                         )
                     )
 
@@ -806,6 +914,7 @@ class EvpnMacCountCheck(Check):
                             int(baseline_entry["count"]),
                             int(entry["count"]),
                             tolerance,
+                            ctx,
                         )
                     )
 
@@ -853,7 +962,7 @@ def _mac_state_finding(label: str, count: int) -> Finding:
 
 
 def _mac_compare_finding(
-    label: str, baseline: int, subject: int, tolerance: float
+    label: str, baseline: int, subject: int, tolerance: float, ctx: CheckContext
 ) -> Finding:
     change = percent_change(baseline, subject)
     details: dict[str, Any] = {"tolerance_percent": tolerance}
@@ -881,9 +990,10 @@ def _mac_compare_finding(
             **presentation,
         )
     if subject == 0:
+        outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_mac", same=baseline == 0)
         return Finding(
-            Outcome.BROKEN,
-            f"{label}: 0 naucenych MAC adres (baseline {baseline})",
+            outcome,
+            f"{label}: 0 naucenych MAC adres (baseline {baseline})" + suffix(outcome),
             label=label,
             baseline={"mac_count": baseline},
             subject={"mac_count": 0},
