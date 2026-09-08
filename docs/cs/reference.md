@@ -80,6 +80,10 @@ Detaily chování jednotlivých checků: [files/checks.md](files/checks.md).
   objednal?". Právě proto odhalí routu, která je v konfiguraci, ale do tabulky se nikdy
   nedostala (`neni v tabulce`) — třeba když se její next-hop stal nedosažitelným po
   deaktivaci rozhraní.
+- **Baseline zachycená před 2026-09-08 (před sloučením `rt-entry` v collectoru rout,
+  R-8) může u prefixů s qualified-next-hop ukázat falešné RECV nebo „next-hop se
+  změnil".** Starý baseline snapshot nese jen jeden `rt-entry` na prefix místo sjednocení
+  přes všechny; recaptureni baseline nebo výsledek u těchto prefixů ignorujte.
 - **`bfd_session_state` čeká na BGP.** Dokud peer není `Established`, vrací `SKIP`
   s hodnotou `BGP neni Established` místo FAILu. BFD nemůže naběhnout bez BGP a dva červené
   řádky za jednu příčinu jsou důvod, proč operátoři výpisy přeskakují.

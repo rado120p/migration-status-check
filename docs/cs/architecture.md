@@ -156,8 +156,16 @@ provozu přesně u služeb, kde se rozhraní přejmenovalo.
 > selhal hlasitě, kdyby kdy padl. V kódu takový assert **není** — `zip` by prostě tiše
 > zarovnal jen první dvojici. Je to poznámka o stavu kódu, ne návod k opravě.
 
-Zarovnání se týká jen rozhraní. BGP se klíčuje IP adresou peera a EVPN názvem instance —
-obojí zůstává při migraci stabilní.
+Zarovnání (R-6, spec 2026-09-08) se netýká jen `interfaces` — stejný poziční mapping se
+aplikuje na všechny oblasti, kde se jméno rozhraní objevuje jako klíč slovníku nebo jako
+pole v záznamu, konkrétně: `interfaces`, `evpn_mac` (`interfaces` uvnitř instance),
+`optics` (i členové LAGu), `isis_adjacency`, `isis_interface`, `ldp_neighbor`,
+`pim_neighbor`, `mpls_interface`, `igmp_group` (klíč slovníku), pole `interface`
+v záznamech `arp`, `nd`, `bfd`, `evpn_esi`, a zanořené `name` v `evpn_instance`
+(`local_interfaces.entries[]`, `irb_interfaces.entries[]`). BGP se klíčuje IP adresou
+peera a zůstává při migraci stabilní bez přejmenování. Oblasti `pim_join`
+a `multicast_route` se záměrně nepřeklíčovávají — jméno rozhraní tam leží jen v hodnotě
+záznamu, která se s baseline neporovnává, takže by rename byl bez efektu.
 
 ### 3.5 Odvození statusu žije na jednom místě
 
@@ -167,8 +175,10 @@ odvodí framework v `models/result.py::derive_status()`:
 | check vrátí | severity `critical` | severity `advisory` |
 |---|---|---|
 | `ok` | PASS | PASS |
+| `unchanged` (R-3: stejný špatný stav v baseline i subjektu) | PASS (se značkou `unchanged_since_baseline`) | PASS (se značkou `unchanged_since_baseline`) |
 | `degraded` (částečný úspěch) | **WARN** | **WARN** |
 | `broken` | FAIL | WARN |
+| `recovered` (zlepšení proti baseline) | **RECV** | **RECV** |
 | `skip(reason)` | SKIP | SKIP |
 
 Pravidlo *„částečný úspěch = WARN"* je tím zapsané jednou, ne v každém checku. Ping na
