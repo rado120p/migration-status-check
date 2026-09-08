@@ -118,13 +118,12 @@ def test_bfd_removed_since_baseline_is_broken():
     assert findings[0].outcome is Outcome.BROKEN
     assert findings[0].value == "v baseline patril k teto sluzbe, v subjektu uz ne"
     assert findings[0].message == "198.11.13.2: v baseline patril k teto sluzbe, v subjektu uz ne"
-    # R-5: baseline_value ted pochazi ze stejne _session_value() jako value,
-    # se STEJNYM configured/is_device jako ma subjekt (bfd_peers=[] =>
-    # configured=False). Peer neni ve sluzbe (service scope, ne device), takze
-    # se na baseline session aplikuje stejna PARSER_MISSED hlidka jako by
-    # session prisla v subjektu - baseline_value uz nerika "Up", ale mluvi
-    # slovnikem radku (i kdyz to na NOT_IN_SERVICE radku pusobi nezvykle).
-    assert findings[0].baseline_value == "parser nenasel konfiguraci"
+    # NOT_IN_SERVICE je z definice "v baseline byla, ted neni" - nikdy
+    # UNCHANGED, takze baseline_value NEMLUVI slovnikem _session_value() se
+    # subjektovym configured/is_device (to by na tomto radku vratilo
+    # PARSER_MISSED, i kdyz baseline session realne mela stav). Poctivy
+    # baseline_value je to, co baseline skutecne zmerila (review 2026-09-08).
+    assert findings[0].baseline_value == "Up"
     assert findings[0].family == 4
 
 
@@ -140,10 +139,10 @@ def test_peer_only_in_baseline_value_is_full_sentence():
     )[0]
 
     assert f.value == "v baseline patril k teto sluzbe, v subjektu uz ne"
-    # Stejny duvod jako v test_bfd_removed_since_baseline_is_broken - R-5
-    # sjednocuje baseline_value pres _session_value() s configured/is_device
-    # subjektu.
-    assert f.baseline_value == "parser nenasel konfiguraci"
+    # Stejny duvod jako v test_bfd_removed_since_baseline_is_broken - vetev
+    # se nikdy nestane UNCHANGED, takze baseline_value je poctivy zmereny
+    # stav baseline, ne _session_value() se subjektovym configured/is_device.
+    assert f.baseline_value == "Up"
 
 
 def test_bfd_removed_since_baseline_is_broken_even_when_bgp_is_gone():

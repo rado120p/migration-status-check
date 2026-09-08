@@ -236,40 +236,45 @@ class OpticalAlarmsCheck(Check):
             raised = _raised(data)
             baseline_data = baseline_optics.get(name)
             baseline_raised = _raised(baseline_data)
-            if not raised:
-                # Renderer tiskne "bez baseline" u kazdeho ne-SKIP radku BOTH
-                # checku s baseline_value=None, kdyz baseline beh existuje -
-                # OK radek proto musi nest baseline_value, kdyz baseline pro
-                # tento port opticka data ma (i kdyz byla bez alarmu).
-                baseline_value = (
-                    "bez alarmu" if baseline_data is not None and not baseline_raised
-                    else (
-                        ", ".join(tag for _, tag, _ in baseline_raised)
-                        if baseline_data is not None
-                        else None
-                    )
+            # Co baseline pro tento port skutecne zmerila - pouziva se jako
+            # baseline_value kdykoli konkretni tag/lane neni "same" (nebo na
+            # tichem OK radku). Renderer tiskne "bez baseline" u kazdeho
+            # ne-SKIP radku BOTH checku s baseline_value=None, kdyz baseline
+            # beh existuje - takze None patri jen portu, ktery baseline vubec
+            # nezmerila.
+            baseline_summary = (
+                "bez alarmu" if baseline_data is not None and not baseline_raised
+                else (
+                    ", ".join(sorted({tag for _, tag, _ in baseline_raised}))
+                    if baseline_data is not None
+                    else None
                 )
+            )
+            if not raised:
                 findings.append(
                     Finding(
                         Outcome.OK,
                         f"{name}: bez optickych alarmu",
                         label=_optics_label(self.label, name, None, port),
                         value="bez alarmu",
-                        baseline_value=baseline_value,
+                        baseline_value=baseline_summary,
                     )
                 )
                 continue
-            baseline_pairs = {(lane_no, tag) for lane_no, tag, _ in baseline_raised}
-            for lane_no, tag, outcome in raised:
-                same = (lane_no, tag) in baseline_pairs
-                outcome = unchanged_or(outcome, ctx, "optics", same=same)
+            # Klic nese i Outcome (BROKEN/DEGRADED), ne jen (lane, tag) -
+            # tag, ktery v baseline byl jen warning a ted je alarm (eskalace
+            # severity), neni "stejny stav" a nesmi se schovat za UNCHANGED.
+            baseline_triples = {(lane_no, tag, o) for lane_no, tag, o in baseline_raised}
+            for lane_no, tag, alarm_outcome in raised:
+                same = (lane_no, tag, alarm_outcome) in baseline_triples
+                outcome = unchanged_or(alarm_outcome, ctx, "optics", same=same)
                 findings.append(
                     Finding(
                         outcome,
                         f"{name}: {tag} je aktivni{suffix(outcome)}",
                         label=_optics_label(self.label, name, lane_no, port),
                         value=tag,
-                        baseline_value=tag if same else None,
+                        baseline_value=tag if same else baseline_summary,
                     )
                 )
         return findings

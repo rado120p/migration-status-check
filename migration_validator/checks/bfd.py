@@ -107,12 +107,21 @@ class BfdSessionStateCheck(Check):
         label = f"{self.label} ({peer})"
         family = peer_family(peer)
         # Stejna funkce pro subjekt i baseline (se stejnym configured/is_device
-        # subjektu), takze baseline_value mluvi slovnikem radku (R-5).
+        # subjektu), takze baseline_value mluvi slovnikem radku (R-5). Plati
+        # jen pro vetve, ktere se MOHOU stat UNCHANGED (porovnavaji se) -
+        # SESSION_GONE/NOT_IN_SERVICE nize maji vlastni `was_measured`.
         was = (
             _session_value(baseline, configured, is_device, bgp_state)
             if ctx.has_baseline
             else None
         )
+        # SESSION_GONE/NOT_IN_SERVICE jsou z definice "v baseline byla, ted
+        # neni" - nikdy UNCHANGED, takze baseline_value tam nema mluvit
+        # slovnikem SUBJEKTOVEHO configured/is_device (`_session_value` by na
+        # NOT_IN_SERVICE radku vratila PARSER_MISSED, i kdyz baseline session
+        # realne mela stav). Poctivy baseline_value je to, co baseline
+        # skutecne zmerila - surovy stav session.
+        was_measured = str(baseline.get("state")) if baseline else None
 
         if session is not None:
             # Surovy stav ze session, ne slovnik `value` - hlaska "existuje
@@ -166,11 +175,11 @@ class BfdSessionStateCheck(Check):
                 # vetev je z definice "v baseline byla" - nikdy UNCHANGED.
                 return Finding(
                     Outcome.BROKEN,
-                    f"{peer}: session byla v baseline ({was}), v subjektu neexistuje",
+                    f"{peer}: session byla v baseline ({was_measured}), v subjektu neexistuje",
                     label=label,
                     family=family,
                     value=SESSION_GONE,
-                    baseline_value=was,
+                    baseline_value=was_measured,
                     baseline=baseline,
                 )
 
@@ -190,7 +199,7 @@ class BfdSessionStateCheck(Check):
                 label=label,
                 family=family,
                 value=NOT_IN_SERVICE,
-                baseline_value=was,
+                baseline_value=was_measured,
                 baseline=baseline,
             )
 

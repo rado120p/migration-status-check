@@ -167,6 +167,39 @@ def test_alarm_raised_in_both_is_unchanged():
     assert row.status is Status.PASS and row.value == "rx-loss-of-signal" == row.baseline_value
 
 
+def test_new_alarm_with_measured_baseline_carries_baseline_summary():
+    """Nove zvednuty alarm (nebyl v baseline) nedostava baseline_value=None,
+    kdyz baseline pro port opticka data mela - jinak by renderer tiskl
+    "bez baseline", i kdyz baseline byla zmerena (jen bez tohoto alarmu)."""
+    now_lane = _lane(alarms={"rx-loss-of-signal": True})
+    baseline_lane = _lane()  # bez alarmu/warningu
+    ctx = _ctx(
+        {"optics": {"ae0": {"lanes": [now_lane]}}},
+        baseline={"optics": {"ae0": {"lanes": [baseline_lane]}}},
+    )
+    [row] = run_check(OpticalAlarmsCheck(), ctx)
+    assert row.status is Status.FAIL
+    assert row.baseline_value == "bez alarmu"
+
+
+def test_alarm_escalated_from_warning_in_baseline_is_not_unchanged():
+    """Stejny tag, ale warning v baseline a alarm ted, neni "stejny stav".
+
+    Klic same= musi nest Outcome (BROKEN/DEGRADED), ne jen (lane, tag) -
+    jinak by eskalace severity zmizela za UNCHANGED PASSem.
+    """
+    now_lane = _lane(alarms={"rx-loss-of-signal": True})
+    baseline_lane = _lane(warnings={"rx-loss-of-signal": True})
+    ctx = _ctx(
+        {"optics": {"ae0": {"lanes": [now_lane]}}},
+        baseline={"optics": {"ae0": {"lanes": [baseline_lane]}}},
+    )
+    [row] = run_check(OpticalAlarmsCheck(), ctx)
+    assert row.status is Status.FAIL
+    assert row.value == "rx-loss-of-signal"
+    assert row.details.get(UNCHANGED_SINCE_BASELINE) is not True
+
+
 # Check.applies_to() pousti device scope na VSECHNY checky bez ohledu na
 # service_types/layer1 (base.py: `if scope.is_device: return True` je prvni
 # vetev). device_scope() ma prazdny selectors.interfaces - kdyby run()
