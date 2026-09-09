@@ -257,10 +257,15 @@ function mainEvaluationModels(model) {
   return [...model.groups.flatMap((g) => g.evaluations), ...model.rollback, ...model.other];
 }
 
+function unassignedIsEmpty(payload) {
+  return !Object.values(payload || {}).some((list) => Array.isArray(list) && list.length > 0);
+}
+
 function collectUnassigned(models) {
   const bySubject = new Map();
   for (const model of models) {
     const payload = (model.evaluation.result || {}).unassigned || {};
+    if (unassignedIsEmpty(payload)) continue;
     const serialized = JSON.stringify(payload);
     let entry = bySubject.get(model.evaluation.subject);
     if (!entry) {

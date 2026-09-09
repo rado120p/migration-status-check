@@ -290,3 +290,25 @@ test("filterAcrossModels: per-evaluation filtering, no cross-evaluation dedupe b
   const withLink = R.filterAcrossModels([linkedModelA, plainModelB], "Internet");
   assert.strictEqual(withLink.linkedContextCount, 1);
 });
+
+test("collectUnassigned: models with an empty unassigned payload (all lists empty, or key absent) produce no entry", () => {
+  const emptyPayload = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), []);
+  emptyPayload.result.unassigned = { bgp_peers: [], static_routes: [], bfd_sessions: [] };
+  const noKey = evaluation("post-et8.json", "pre-ge6.json", step("ge-0/0/6", "et-0/0/8"), []);
+  delete noKey.result.unassigned;
+  const withPeer = evaluation("post-ae0.json", "pre-ge5.json", step("ge-0/0/5", "ae0"), []);
+  withPeer.result.unassigned = { bgp_peers: [{ peer: "10.0.0.1", routing_instance: "X" }], static_routes: [], bfd_sessions: [] };
+
+  const emptyOnly = R.collectUnassigned([
+    R.buildEvaluationModel(emptyPayload, 0, SNAPSHOTS, "pair"),
+    R.buildEvaluationModel(noKey, 0, SNAPSHOTS, "pair"),
+  ]);
+  assert.deepStrictEqual(emptyOnly, []);
+
+  const withOne = R.collectUnassigned([
+    R.buildEvaluationModel(emptyPayload, 0, SNAPSHOTS, "pair"),
+    R.buildEvaluationModel(withPeer, 0, SNAPSHOTS, "pair"),
+  ]);
+  assert.strictEqual(withOne.length, 1);
+  assert.strictEqual(withOne[0].subject, "post-ae0.json");
+});
