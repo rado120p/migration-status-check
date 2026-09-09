@@ -19,6 +19,33 @@ DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 DEVICE_5 = str(FIXTURES / "172.20.20.5.yml")
 
 
+def _snapshot_from_entries(
+    entries: list[ServiceEntry], address: str, phase: str
+) -> Snapshot:
+    """Postavi Snapshot z rucne vyrobene inventory (ne z laborkove fixture).
+
+    Mirroruje `test_local_elan_block_follows_its_irb_block` nize v tomhle
+    souboru: `Inventory` -> `build_scopes` -> synteticka fakta pres
+    conftest `_facts_for` -> `Snapshot` primo (ne pres `synthetic_snapshot`
+    fixture, ktera cte inventory jen ze souboru na disku).
+    """
+    inventory = Inventory(device=address, entries=entries)
+    scopes = build_scopes(inventory)
+    return Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase=phase,
+            collectors={name: {"status": "ok"} for name in COLLECTOR_NAMES},
+        ),
+        facts=_facts_for(scopes, 400),
+        probes={"ping": []},
+        scopes=scopes,
+        inventory=inventory.entries,
+    )
+
+
 # Task 5 (regenerace 2026-09-02) zaznamenal realny rozdil MX (.4, baseline)
 # vs. EVO (.5, subjekt): L3VPN-CPE13-NNI mela na MX pod BGP peerem
 # 2001:db8:11:13::b nakonfigurovany bfd-liveness-detection, na EVO ne.
@@ -276,14 +303,58 @@ def test_traffic_drop_on_new_device_is_detected(synthetic_snapshot):
     assert any(check.status is Status.WARN for check in traffic)
 
 
-def test_new_elan_service_shows_up_as_unmatched(synthetic_snapshot):
-    old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
-    new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
+def test_new_elan_service_shows_up_as_unmatched():
+    """Sluzba, ktera existuje jen na subjektu (zadny protejsek v baseline),
+    musi skoncit v result.unmatched["subject"] - a nesmi tam skoncit ta,
+    ktera protejsek ma.
+
+    Inventory je rucne postavena (ne laborkova fixture 172.20.20.5.yml,
+    jejiz topologie se zmenila a uz EVPN-VLAN-AWARE-INTERNET jako E-LAN
+    nenese). Baseline nese jen Internet sluzbu; subjekt nese tutez Internet
+    sluzbu na prejmenovanem portu (matchuje se pres description+service_type,
+    ne pres jmeno rozhrani) a navic novou E-LAN vlan-aware sluzbu bez
+    protejsku v baseline.
+    """
+    baseline_internet = ServiceEntry(
+        interface="ge-0/0/2.13",
+        service_type="Internet",
+        description="INTERNET-CPE13",
+    )
+    old = _snapshot_from_entries([baseline_internet], "172.20.20.4", "pre-migration")
+
+    subject_internet = ServiceEntry(
+        interface="et-0/0/8.13",
+        service_type="Internet",
+        description="INTERNET-CPE13",
+    )
+    subject_new_elan = ServiceEntry(
+        interface="et-0/0/8.313",
+        service_type="E-LAN",
+        service_subtype="vlan-aware",
+        description="EVPN-VLAN-AWARE-NEW",
+        routing_instance="EVPN-VLAN-AWARE-NEW",
+        bridge_domain=["BD-313"],
+        customer_vlan=["313"],
+    )
+    new = _snapshot_from_entries(
+        [subject_internet, subject_new_elan], "172.20.20.5", "post-migration"
+    )
 
     result = api.evaluate(new, baseline=old, now=NOW)
 
     subject_ids = {item["scope_id"] for item in result.unmatched["subject"]}
-    assert any("EVPN-VLAN-AWARE-INTERNET" in scope_id for scope_id in subject_ids)
+    new_elan_scope_id = next(
+        scope.id
+        for scope in new.scopes
+        if scope.key is not None and scope.key.description == "EVPN-VLAN-AWARE-NEW"
+    )
+    matched_scope_id = next(
+        scope.id
+        for scope in new.scopes
+        if scope.key is not None and scope.key.description == "INTERNET-CPE13"
+    )
+    assert new_elan_scope_id in subject_ids
+    assert matched_scope_id not in subject_ids
 
 
 def test_management_interfaces_never_appear(synthetic_snapshot):
@@ -874,8 +945,45 @@ def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
         assert old.facts["bgp"][peer]["ribs"] == new.facts["bgp"][peer]["ribs"], peer
 
 
-def test_l2_l3_link_renders_paired_blocks(synthetic_snapshot):
-    snapshot = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post")
+def test_l2_l3_link_renders_paired_blocks():
+    """Na novem boxu se IPVPN IRB scope (L3) vaze na svuj EVPN vlan-aware
+    L2 tranzit ve stejne mac-vrf pres fakta `evpn_instance` (linker.py) -
+    L2 blok se rendruje hned za L3 blokem, L3 blok odkazuje "errors/traffic"
+    na L2 a nenese vlastni interface_traffic check.
+
+    Inventory je rucne postavena (ne laborkova fixture 172.20.20.5.yml,
+    ktera uz EVPN-VLAN-AWARE-POP1/ae0.15/irb.15/L3VPN-CPE14-UNI nenese) -
+    jen ty dva zaznamy, ktere vazbu tvori. Injektovana `evpn_instance`
+    fakta jsou zamerne beze zmeny - linker je cte stejne, at uz IRB/L2
+    prijdou z laborky nebo z rucni inventory.
+    """
+    irb = ServiceEntry(
+        interface="irb.15",
+        service_type="IPVPN",
+        description="L3VPN-CPE14-UNI",
+        routing_instance="L3VPN-CPE14-UNI",
+        ipv4_address=["198.11.14.1/29"],
+        l2_interface=["ae0.15"],
+        bridge_domain=["VL-15"],
+        customer_vlan=["15"],
+    )
+    l2 = ServiceEntry(
+        interface="ae0.15",
+        service_type="E-LAN",
+        service_subtype="vlan-aware",
+        # Popisek zamerne odlisny od IRB jen kvuli citelnosti - test bezi
+        # nad jednim snimkem bez baseline, matcher se tu vubec nevola;
+        # scope id uz je stejne unikatni, protoze nese i service_type.
+        description="EVPN-VLAN-AWARE-POP1-L2",
+        routing_instance="EVPN-VLAN-AWARE-POP1",
+        l3_interface=["irb.15"],
+        bridge_domain=["VL-15"],
+        customer_vlan=["15"],
+    )
+    # Poradi zamerne L2 pred L3: build_scopes zachovava poradi inventory,
+    # takze "L2 hned za L3" by tady drzelo i bez linkeru - prohozene
+    # poradi zdrojovych zaznamu drzi assert na poradi ne-vakuovy.
+    snapshot = _snapshot_from_entries([l2, irb], "172.20.20.5", "post")
     snapshot.facts["evpn_instance"] = {
         "EVPN-VLAN-AWARE-POP1": {
             "local_interfaces": {
