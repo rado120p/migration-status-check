@@ -274,3 +274,19 @@ test("collectUnassigned: identical payload from one subject shown once; differen
   assert.deepStrictEqual(found[1].variants[1].labels, ["post-et8.json"]);
   assert.strictEqual(found[1].variants[0].payload, other);
 });
+
+test("filterAcrossModels: per-evaluation filtering, no cross-evaluation dedupe by scope id", () => {
+  const modelA = { serviceEntries: entriesOf([scope("A", "Internet"), scope("B", "IPVPN")]) };
+  const modelB = { serviceEntries: entriesOf([scope("A", "Internet"), scope("B", "IPVPN")]) };
+  const summed = R.filterAcrossModels([modelA, modelB], "Internet");
+  assert.strictEqual(summed.matchedCount, 2);
+  assert.strictEqual(summed.visibleCount, 2);
+  assert.strictEqual(summed.linkedContextCount, 0);
+  assert.strictEqual(summed.statuses.length, 2);
+
+  const [l3, l2] = linked("A", "B", "Internet", "IPVPN");
+  const linkedModelA = { serviceEntries: entriesOf([l3, l2]) };
+  const plainModelB = { serviceEntries: entriesOf([scope("A", "Internet"), scope("B", "IPVPN")]) };
+  const withLink = R.filterAcrossModels([linkedModelA, plainModelB], "Internet");
+  assert.strictEqual(withLink.linkedContextCount, 1);
+});

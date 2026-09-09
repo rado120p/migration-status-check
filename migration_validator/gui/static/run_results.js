@@ -188,6 +188,21 @@ function filterServiceEntries(entries, selectedType) {
   return { visible, matchedCount: matched.size, linkedContextCount: context.size };
 }
 
+function filterAcrossModels(models, selectedType) {
+  let matchedCount = 0;
+  let linkedContextCount = 0;
+  let visibleCount = 0;
+  const statuses = [];
+  for (const model of models) {
+    const shown = filterServiceEntries(model.serviceEntries, selectedType);
+    matchedCount += shown.matchedCount;
+    linkedContextCount += shown.linkedContextCount;
+    visibleCount += shown.visible.length;
+    for (const v of shown.visible) if (!v.linkedContext) statuses.push(v.entry.scope.status);
+  }
+  return { matchedCount, linkedContextCount, visibleCount, statuses };
+}
+
 function missingPartners(entry, entries) {
   const ids = new Set(entries.map((e) => e.scope.scope_id));
   return linkedIds(entry.scope).filter((id) => !ids.has(id));
@@ -276,6 +291,7 @@ const MigRunResults = {
   countStatuses,
   linkedIds,
   filterServiceEntries,
+  filterAcrossModels,
   missingPartners,
   countByType,
   serviceTypeChoices,
