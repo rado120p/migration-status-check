@@ -98,12 +98,23 @@ def test_mac_count_interface_key_strips_vlan_suffix(rpc_fixture):
     }
 
 
-def test_mac_count_skips_system_instance_and_empty_entries(rpc_fixture):
+def test_mac_count_keeps_default_switch_and_skips_empty_entries(rpc_fixture):
+    # default-switch = globalni bridge-domains / vlans (E-LAN local, spec
+    # 2026-09-09). Drive se zahazoval jako systemova instance.
     result = EvpnMacCollector().parse(rpc_fixture("junos-evo", "evpn_mac"), "junos-evo")
-    assert "default-switch" not in result
+    assert "default-switch" in result
+    local = result["default-switch"]
+    assert local["vlans"], "default-switch bez per-VLAN poctu"
+    assert all(entry["domain"] for entry in local["vlans"].values())
     # prazdne <...-if-mac-count-entry/> bloky nesmi vyrobit zaznam
     aware = result["EVPN-VLAN-AWARE-CPE13-NNI"]
     assert set(aware["interfaces"]) == {"et-0/0/8.313"}
+
+
+def test_mac_count_keeps_default_switch_on_mx(rpc_fixture):
+    result = EvpnMacCollector().parse(rpc_fixture("junos", "evpn_mac"), "junos")
+    assert "default-switch" in result
+    assert result["default-switch"]["vlans"]
 
 
 def test_mac_count_merges_domains_of_one_instance(rpc_fixture):

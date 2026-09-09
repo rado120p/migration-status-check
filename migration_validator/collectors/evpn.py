@@ -249,9 +249,11 @@ class EvpnMacCollector(Collector):
         "junos-evo": ("get_mac_vrf_mac_table",),
     }
 
-    # Systemove instance boxu - nejsou sluzba a v device scope by kazdy
-    # beh svitily radkem bez vypovedi.
-    SYSTEM_INSTANCES = frozenset({"default-switch"})
+    # default-switch (globalni bridge-domains / vlans) je od spec 2026-09-09
+    # sluzba E-LAN `local`, ne systemova instance - nic se nezahazuje.
+    # Zapis zustava jako mnozina, aby se dala pripadna vyjimka pridat bez
+    # zmeny parse().
+    SYSTEM_INSTANCES: frozenset[str] = frozenset()
 
     def rpc_name(self, platform: str) -> str:
         return self.RPCS[platform][0]
