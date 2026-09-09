@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0", "httpx2"]
+dev = ["pytest>=8.0", "httpx2>=2.0"]
 
 [project.scripts]
 mig-validate = "migration_validator.cli:main"
