@@ -6,6 +6,7 @@ from lxml import etree
 from migration_validator.capture import _record, capture_device
 from migration_validator.collectors.base import Collector
 from migration_validator.models.inventory import load_inventory
+from migration_validator.models.scope import MULTICAST_SUBTYPES
 from migration_validator.scoping.builder import build_scopes
 
 NOW = "2026-07-24T09:12:41Z"
@@ -510,11 +511,19 @@ def test_service_types_filtruje_ping_a_zapisuje_marker():
     # pozitivni tvrzeni: filtr nesmi umlcet ping uplne - IPVPN sluzby, ktere
     # v profilu jsou, se skutecne pingly. irb.4094 je vyjimka bez cile:
     # jediny subnet je /24 (IPV4_FALLBACK_MIN_PREFIX fallback nepusti)
-    # a fake ARP na irb.4094 nic nema. "MUX1 receivers POP1" je IPVPN/mvpn -
-    # ping se na multicast sluzby nepocita (R-7).
+    # a fake ARP na irb.4094 nic nema. Scopy s IPVPN/mvpn subtypem (NGMVPN
+    # IGMP/PIM receivers POP1) jsou vyjimka jina - ping se na multicast
+    # sluzby vubec nepocita (R-7, resolve_targets v probes/ping.py to
+    # filtruje pred vytvorenim cile), proto se vylucuji podle subtypu, ne
+    # podle jmena.
+    ipvpn_scopes_by_id = {s.id: s for s in expected_scopes if s.service_type == "IPVPN"}
+    multicast_ipvpn_ids = {
+        sid for sid, s in ipvpn_scopes_by_id.items() if s.service_subtype in MULTICAST_SUBTYPES
+    }
+    excluded_ipvpn = multicast_ipvpn_ids | {"svc:irb.4094:IPVPN"}
     assert ipvpn_scope_ids  # sanity - fixture musi mit IPVPN sluzby
     assert pinged_scopes
-    excluded_ipvpn = {"svc:irb.4094:IPVPN", "svc:MUX1 receivers POP1:IPVPN"}
+    assert multicast_ipvpn_ids  # sanity - fixture musi mit IPVPN/mvpn sluzbu
     assert ipvpn_scope_ids - excluded_ipvpn <= pinged_scopes
     assert not (pinged_scopes & excluded_ipvpn)
     # vsechny scopy jsou porad ve snapshotu (inventory se nefiltruje)
