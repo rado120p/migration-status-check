@@ -329,6 +329,9 @@ class EvpnEsiStatusCheck(Check):
     mode = Mode.BOTH
     requires = ("evpn_esi",)
     service_types = frozenset({"E-LAN"})
+    # E-LAN local (globalni bridge-domain, spec 2026-09-09) nema ESI ani
+    # EVPN instanci - bez vylouceni by kazdy lokalni blok nesl SKIP "bez dat".
+    excluded_subtypes = frozenset({"local"})
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
@@ -554,6 +557,9 @@ class EvpnInstanceStatusCheck(Check):
     mode = Mode.BOTH
     requires = ("evpn_instance",)
     service_types = frozenset({"E-LAN"})
+    # E-LAN local (globalni bridge-domain, spec 2026-09-09) nema ESI ani
+    # EVPN instanci - bez vylouceni by kazdy lokalni blok nesl SKIP "bez dat".
+    excluded_subtypes = frozenset({"local"})
     default_severity = Severity.CRITICAL
 
     def run(self, ctx: CheckContext) -> list[Finding]:
@@ -849,7 +855,9 @@ class EvpnInstanceStatusCheck(Check):
 class EvpnMacCountCheck(Check):
     id = "evpn_mac_count"
     title = "Pocet MAC adres"
-    label = "EVPN MAC count"
+    # Label je spolecny pro vlan-aware, vlan-based i local (default-switch) -
+    # id evpn_mac_count zustava kvuli profilum.
+    label = "MAC count"
     mode = Mode.BOTH
     requires = ("evpn_mac",)
     service_types = frozenset({"E-LAN"})

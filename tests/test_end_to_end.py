@@ -2,12 +2,15 @@ import json
 import re
 from pathlib import Path
 
-from conftest import DUAL_RIB_PEER
+from conftest import COLLECTOR_NAMES, DUAL_RIB_PEER, _facts_for
 from migration_validator import api
 from migration_validator.engine import evaluate_snapshots
+from migration_validator.models.inventory import Inventory, ServiceEntry
 from migration_validator.models.result import Status
+from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 from migration_validator.reporting.json_report import to_json
 from migration_validator.reporting.text_report import filter_result, render
+from migration_validator.scoping.builder import build_scopes
 
 NOW = "2026-07-24T11:40:02Z"
 
@@ -768,7 +771,7 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
     overene spustenim - je to viceradkove presunuti kodu, ne jednoradkovy
     sed. Test hlida strukturalni fakt: `Ostatni checky` se v JSON labelech
     neobjevi a vsech devet deaktivacnich SKIPu (Agregatni routa, BFD,
-    EVPN ESI status, EVPN instance, EVPN MAC count, Interface errors,
+    EVPN ESI status, EVPN instance, MAC count, Interface errors,
     Interface status, Interface traffic, Staticka routa - zmereno na tomto
     snimku), ktere se v textovem reportu slevaji do jedineho radku, je
     v JSON pritomno jednotlive.
@@ -807,7 +810,7 @@ def test_json_report_keeps_every_check_regardless_of_detail(synthetic_snapshot):
         "BFD",
         "EVPN ESI status",
         "EVPN instance",
-        "EVPN MAC count",
+        "MAC count",
         "Interface errors",
         "Interface status",
         "Interface traffic",
@@ -947,3 +950,57 @@ def test_synthetic_mvpn_scope_has_pim_join(synthetic_snapshot):
     (join,) = table.values()
     assert join["downstream_interfaces"] == ["irb.2"]
     assert join["upstream_interface"] == "Through BGP"
+
+
+def test_local_elan_block_follows_its_irb_block():
+    """E-LAN local (globalni bridge-domain, spec 2026-09-09) se vaze na
+    IRB pres selektor l2_interfaces (linker._link_local_scopes) a musi se
+    v report poradi objevit hned za svym IRB blokem, se svym vlastnim
+    check-setem: MAC count ano, ESI/instance ne (default-switch je nema).
+
+    Inventory je rucne postavene (ne laborkove fixtures) - stavi jen ty
+    dva zaznamy, ktere vazbu tvori.
+    """
+    irb = ServiceEntry(
+        interface="irb.2",
+        service_type="IPVPN",
+        description="NGMVPN receivers",
+        l2_interface=["ge-0/0/2.12"],
+    )
+    port = ServiceEntry(
+        interface="ge-0/0/2.12",
+        service_type="E-LAN",
+        service_subtype="local",
+        description="NGMVPN-IGMP-RECEIVER",
+        l3_interface=["irb.2"],
+        customer_vlan=["12"],
+        bridge_domain=["BD-X"],
+    )
+    inventory = Inventory(device="172.20.20.9", entries=[irb, port])
+    scopes = build_scopes(inventory)
+    snapshot = Snapshot(
+        device=DeviceMeta(address="172.20.20.9"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="post-migration",
+            collectors={name: {"status": "ok"} for name in COLLECTOR_NAMES},
+        ),
+        facts=_facts_for(scopes, 400),
+        probes={"ping": []},
+        scopes=scopes,
+        inventory=inventory.entries,
+    )
+
+    result = api.evaluate(snapshot, now=NOW)
+
+    ids = [scope.scope_id for scope in result.scopes]
+    irb_index = ids.index("svc:NGMVPN receivers:IPVPN")
+    assert ids[irb_index + 1] == "svc:NGMVPN-IGMP-RECEIVER:E-LAN"
+
+    local = result.scopes[irb_index + 1]
+    check_ids = {check.id for check in local.checks}
+    assert "evpn_mac_count" in check_ids
+    assert "evpn_esi_status" not in check_ids
+    assert "evpn_instance_status" not in check_ids
+    assert local.link["peer_interface"] == "irb.2"

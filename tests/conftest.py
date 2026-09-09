@@ -456,12 +456,17 @@ def _facts_for(scopes, pps: int) -> dict:
                     }
                 ]
             }
+        if service_type == "E-LAN" and instance is None and scope.service_subtype == "local":
+            # E-LAN local: MAC count zije v default-switch (spec 2026-09-09),
+            # ESI ani EVPN instance neexistuji.
+            instance = "default-switch"
         if service_type == "E-LAN" and instance:
-            evpn_esi[f"esi-{instance}"] = {
-                "status": "Up",
-                "df_role": "DF",
-                "interface": scope.selectors.interfaces[0],
-            }
+            if instance != "default-switch":
+                evpn_esi[f"esi-{instance}"] = {
+                    "status": "Up",
+                    "df_role": "DF",
+                    "interface": scope.selectors.interfaces[0],
+                }
             # Nove schema (Task 2): klic je VLAN id, domena je jen popisek k
             # rendrovani (None u vlan-based - collector taky nevraci domenu).
             #

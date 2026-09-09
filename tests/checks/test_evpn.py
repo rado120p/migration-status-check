@@ -1034,3 +1034,56 @@ def test_esi_fallback_bez_selektoru_tiskne_vse():
     findings = EvpnInstanceStatusCheck().run(ctx)
     esi_rows = [f for f in findings if f.label.startswith("ESI ")]
     assert len(esi_rows) == 2
+
+
+def _local_ctx(subject, baseline=None):
+    ctx = _ctx(subject, baseline, subtype="local")
+    ctx.scope.selectors.interfaces = ["ge-0/0/2.12"]
+    ctx.scope.selectors.routing_instances = []
+    ctx.scope.selectors.vlans = ["12"]
+    return ctx
+
+
+def _local_mac_subject():
+    return {"evpn_mac": {"default-switch": {
+        "vlans": {
+            "12": {"domain": "BD-NGMVPN-IGMP-RECEIVER", "count": 1},
+            "10": {"domain": "BD-NGMVPN-PIM-RECEIVER", "count": 2},
+        },
+        "interfaces": {
+            "ge-0/0/2.12": {"name": "ge-0/0/2.12:12", "domain": "BD-NGMVPN-IGMP-RECEIVER", "count": 1},
+            "ge-0/0/2.10": {"name": "ge-0/0/2.10:10", "domain": "BD-NGMVPN-PIM-RECEIVER", "count": 2},
+        },
+    }}}
+
+
+def test_local_mac_count_shows_only_its_own_domain_and_port():
+    findings = EvpnMacCountCheck().run(_local_ctx(_local_mac_subject()))
+    labels = [f.label for f in findings]
+    assert labels == [
+        "BD-NGMVPN-IGMP-RECEIVER MAC count",
+        "BD-NGMVPN-IGMP-RECEIVER Interface ge-0/0/2.12:12 MAC count",
+    ]
+    assert all(f.outcome is Outcome.OK for f in findings)
+
+
+def test_local_mac_count_compares_against_baseline():
+    baseline = _local_mac_subject()
+    baseline["evpn_mac"]["default-switch"]["vlans"]["12"]["count"] = 5
+    findings = EvpnMacCountCheck().run(_local_ctx(_local_mac_subject(), baseline))
+    row = _by_label(findings, "BD-NGMVPN-IGMP-RECEIVER MAC count")
+    assert row.baseline_value == "5"
+
+
+def test_mac_count_label_is_generic():
+    assert EvpnMacCountCheck.label == "MAC count"
+    assert EvpnMacCountCheck.id == "evpn_mac_count"
+
+
+def test_evpn_only_checks_skip_local_subtype():
+    local = _local_ctx({}).scope
+    aware = _ctx({}).scope
+    for check in (EvpnEsiStatusCheck(), EvpnInstanceStatusCheck()):
+        assert check.applies_to(local) is False
+        assert check.applies_to(aware) is True
+    assert EvpnMacCountCheck().applies_to(local) is True
