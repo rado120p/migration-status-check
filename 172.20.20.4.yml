@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.4
 interfaces:
 - interface: fxp0
@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -47,6 +48,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -72,6 +74,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -103,6 +106,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -127,6 +131,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -158,6 +163,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -176,12 +182,13 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -192,30 +199,33 @@ interfaces:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: ge-0/0/2.10
   description: NGMVPN-PIM-RECEIVER
-  service_type: Unknown
-  service_subtype: layer2
+  service_type: E-LAN
+  service_subtype: local
   ipv4_address: []
   ipv6_address: []
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   bgp_neighbor: []
   bgp_neighbor_inactive: []
-  bridge_domain: []
+  bridge_domain:
+  - BD-NGMVPN-PIM-RECEIVER
   customer_vlan:
   - '10'
+  l3_interface:
+  - irb.10
   l2_interface: []
   mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
-  detection_confidence: low
+  detection_confidence: high
   detection_reason:
-  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+  - Rozhraní je členem globální bridge-domain / vlan (default-switch), bez EVPN instance.
 - interface: ge-0/0/2.11
   description: INET2-MULTICAST-RECEIVER
   service_type: Internet
@@ -227,7 +237,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - igmp
@@ -236,6 +246,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '11'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -247,30 +258,33 @@ interfaces:
   - Rozhraní je pod protocols igmp — multicast receiver.
 - interface: ge-0/0/2.12
   description: NGMVPN-IGMP-RECEIVER
-  service_type: Unknown
-  service_subtype: layer2
+  service_type: E-LAN
+  service_subtype: local
   ipv4_address: []
   ipv6_address: []
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   bgp_neighbor: []
   bgp_neighbor_inactive: []
-  bridge_domain: []
+  bridge_domain:
+  - BD-NGMVPN-IGMP-RECEIVER
   customer_vlan:
   - '12'
+  l3_interface:
+  - irb.2
   l2_interface: []
   mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
-  detection_confidence: low
+  detection_confidence: high
   detection_reason:
-  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+  - Rozhraní je členem globální bridge-domain / vlan (default-switch), bez EVPN instance.
 - interface: ge-0/0/2.13
   description: INTERNET-CPE13-NNI
   service_type: Internet
@@ -283,7 +297,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -293,6 +307,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '13'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -341,7 +356,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
@@ -354,6 +369,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -391,7 +407,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE13-NNI
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - ccc
   - evpn
@@ -401,6 +417,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '213'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -419,7 +436,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -430,6 +447,7 @@ interfaces:
   - BD-313
   customer_vlan:
   - '313'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -448,7 +466,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-BASED-CPE13-NNI
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -457,6 +475,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '413'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -474,8 +493,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-POP1
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -488,6 +507,8 @@ interfaces:
   - 0x8100.4093
   - 0x8100.4094
   - '4094'
+  l3_interface:
+  - irb.4094
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -512,6 +533,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -539,6 +561,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -563,6 +586,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -595,6 +619,7 @@ interfaces:
   - 2001:db8:11:14::4
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -619,6 +644,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -649,6 +675,7 @@ interfaces:
   - 2001:abcd:11:14::4
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -683,6 +710,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -700,7 +728,7 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-POP1
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: false
   protocol:
   - bridge
@@ -713,6 +741,8 @@ interfaces:
   customer_vlan:
   - 0x8100.4094
   - '4094'
+  l3_interface:
+  - irb.4094
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -731,12 +761,13 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -759,8 +790,8 @@ interfaces:
   interface_active: false
   protocol:
   - inet
-  - igmp
   - pim
+  - igmp
   - mvpn
   - vrf
   bgp_neighbor: []
@@ -769,6 +800,7 @@ interfaces:
   - BD-NGMVPN-IGMP-RECEIVER
   customer_vlan:
   - '12'
+  l3_interface: []
   l2_interface:
   - ge-0/0/2.12
   mvpn_site:
@@ -794,8 +826,8 @@ interfaces:
   interface_active: false
   protocol:
   - inet
-  - igmp
   - pim
+  - igmp
   - mvpn
   - vrf
   bgp_neighbor: []
@@ -804,6 +836,7 @@ interfaces:
   - BD-NGMVPN-PIM-RECEIVER
   customer_vlan:
   - '10'
+  l3_interface: []
   l2_interface:
   - ge-0/0/2.10
   mvpn_site:
@@ -839,7 +872,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: MGMT
   routing_instance_active: false
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - vrf
@@ -849,6 +882,7 @@ interfaces:
   - BD-4094
   customer_vlan:
   - '4094'
+  l3_interface: []
   l2_interface:
   - ge-0/0/6.4094
   - ge-0/0/2.4094
@@ -891,6 +925,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -924,6 +959,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -945,6 +981,10 @@ interfaces:
     - to: 10.1.2.0
       interface: null
       qualified: false
+      active: true
+    - to: 10.1.0.3
+      interface: null
+      qualified: true
       active: true
     active: true
   - rib: inet6.0
