@@ -21,7 +21,7 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `interface` | `str` | povinné, logická jednotka nebo fyzický port |
 | `service_type` | `str` | povinné (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`, `Layer1`, ...) |
 | `description` | `str \| None` | popisek z konfigurace — nese hlavní tíhu párování |
-| `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `physical-port`, ... |
+| `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `local`, `physical-port`, ... |
 | `ipv4_address` | `list[str]` | IPv4 adresy s prefixem |
 | `ipv6_address` | `list[str]` | IPv6 adresy s prefixem |
 | `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address u IRB |
@@ -30,6 +30,7 @@ Jeden záznam = jedno rozhraní a služba, která na něm běží.
 | `routing_instance_active` | `bool` | `False`, když je routing instance deaktivovaná (`deactivate`) |
 | `interface_active` | `bool` | `False`, když je rozhraní deaktivované (`deactivate`) |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
+| `l3_interface` | `list[str]` | (schema 10) irb protějšky bridge-domains/vlanů tohoto L2 unitu (`routing-interface` / `l3-interface`); per-port filtr inventory podle nich přitahuje L3 polovinu služby |
 | `static_route` | `list[dict]` | záměr z konfigurace: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | záměr z konfigurace: `{peer, minimum_interval, multiplier, source}` |
 | `l2_interface` | `list[str]` | (schema 8) L2 access porty bridge-domains/vlanů, které IRB routuje — singulár pole podle konvence `bridge_domain`/`customer_vlan`; v `Selectors` je plurál `l2_interfaces` (builder překládá) |
@@ -56,7 +57,7 @@ Pomocné funkce `_as_list()` / `_as_optional_str()` normalizují skalár na sezn
 `Inventory` = `device` (adresa) + `entries`. `load_inventory(path)` čte YAML a vyžaduje
 mapping s klíčem `interfaces`; jinak vyhodí `ValueError` s cestou k souboru v hlášce.
 
-Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 9`).
+Inventory nese top-level klíč `schema_version` (`INVENTORY_SCHEMA_VERSION = 10`).
 `load_inventory()` **jinou hodnotu tvrdě odmítne** — nedopočítává starou strukturu.
 
 Důvod je u všech zvýšení stejný: chybějící pole by se neprojevilo jako chyba, ale jako
@@ -88,6 +89,10 @@ zelená služba.
   z konfigurace). Stará inventory by nesla starý subtype, na který už žádný check
   nenaskočí — párovací pravidlo `description + type + subtype` by MVPN službu na baseline
   straně vyřadilo z nových multicast checků.
+- **9 → 10** (spec 2026-09-09): subtype E-LAN `local` (access port v globální
+  bridge-domain / vlan, instance `default-switch`) a pole `l3_interface` se poprvé
+  zapisuje do YAML. Stará inventory by port nesla jako `Unknown/layer2` — žádný scope,
+  žádný blok v reportu, a per-port běh by nepřitáhl IRB polovinu služby.
 
 Inventory se proto po zvýšení verze musí **znovu vygenerovat parserem**, ne doupravit ručně.
 

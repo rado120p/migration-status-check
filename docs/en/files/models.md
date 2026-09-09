@@ -20,7 +20,7 @@ One entry = one interface and the service running on it.
 | `interface` | `str` | required, a logical unit or a physical port |
 | `service_type` | `str` | required (`Internet`, `IPVPN`, `E-Line`, `E-LAN`, `Core`, `Layer1`, ...) |
 | `description` | `str \| None` | the configuration description — carries most of the pairing weight |
-| `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `physical-port`, ... |
+| `service_subtype` | `str \| None` | `vpws`, `vlan-aware`, `vlan-based`, `local`, `physical-port`, ... |
 | `ipv4_address` | `list[str]` | IPv4 addresses with prefix |
 | `ipv6_address` | `list[str]` | IPv6 addresses with prefix |
 | `virtual_gw_ipv4_address` | `list[str]` | IPv4 virtual-gateway-address on IRB |
@@ -29,6 +29,7 @@ One entry = one interface and the service running on it.
 | `routing_instance_active` | `bool` | `False` when the routing instance is deactivated (`deactivate`) |
 | `interface_active` | `bool` | `False` when the interface is deactivated (`deactivate`) |
 | `protocol`, `bgp_neighbor`, `bridge_domain`, `customer_vlan` | `list[str]` | |
+| `l3_interface` | `list[str]` | (schema 10) the irb counterparts of the bridge-domains/vlans this L2 unit belongs to (`routing-interface` / `l3-interface`); the per-port inventory filter uses them to pull in the L3 half of the service |
 | `static_route` | `list[dict]` | intent from the configuration: `{rib, prefix, next_hop: list[str]}` |
 | `bfd` | `list[dict]` | intent from the configuration: `{peer, minimum_interval, multiplier, source}` |
 | `l2_interface` | `list[str]` | (schema 8) L2 access ports of the bridge-domains/vlans this IRB routes — singular field, matching the `bridge_domain`/`customer_vlan` convention; on `Selectors` it is the plural `l2_interfaces` (the builder translates) |
@@ -56,7 +57,7 @@ into strings, so a VLAN written as the number `113` does not blow up.
 mapping with an `interfaces` key; otherwise it raises `ValueError` with the file path in the
 message.
 
-The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 9`).
+The inventory carries a top-level `schema_version` key (`INVENTORY_SCHEMA_VERSION = 10`).
 `load_inventory()` **rejects any other value outright** rather than tolerating it.
 
 The reason is the same for every bump: a missing field would not surface as an error but as
@@ -92,6 +93,11 @@ a green service.
   from configuration). An old inventory would still carry the old subtype name, which no
   check matches any more — the `description + type + subtype` pairing rule would drop the
   MVPN service on the baseline side out of the new multicast checks.
+- **9 → 10** (2026-09-09 spec): the E-LAN subtype `local` (an access port in a global
+  bridge-domain / vlan, the `default-switch` instance) and the field `l3_interface` are
+  written to YAML for the first time. An old inventory would carry the port as
+  `Unknown/layer2` — no scope, no block in the report, and a per-port run would not pull in
+  the IRB half of the service.
 
 After a version bump the inventory therefore has to be **regenerated with the parser**, not
 patched by hand.

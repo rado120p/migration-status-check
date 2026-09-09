@@ -357,6 +357,31 @@ checky je pole inertní (nikdo ho zatím nečte pro branching), slouží jen jak
 
 ---
 
+## E-LAN `local`: globální bridge-domain / vlan (vlna 2026-09-09)
+
+Access port bez routing-instance, který je explicitně (`interface/name`) členem
+globální `bridge-domains/domain` (MX) nebo `vlans/vlan` (EVO) — tedy instance
+`default-switch` — se klasifikuje jako **E-LAN / `local`** (confidence high, důvod
+„Rozhraní je členem globální bridge-domain / vlan (default-switch), bez EVPN instance.").
+Odlišnost od `vlan-aware` je chybějící EVPN/MPLS transport: L2 je lokální na boxu
+a opouští ho jen přes IRB (`routing-interface` na MX, `l3-interface` na EVO).
+
+- Vyhledání domény je jen podle explicitního členství, nikdy podle překryvu VLAN —
+  `default-switch` na EVO nese i `default` (VLAN 1).
+- `bridge_domain`, `customer_vlan` a `l3_interface` (irb protějšky) se plní stejně jako
+  u instančních domén; `routing_instance` je `null`.
+- `routing_instance_active` nese aktivitu **domény** (`BridgeDomain.active`, dědí se
+  z kontejneru `bridge-domains inactive` / `vlans inactive`) — doména je kontejner služby
+  stejně jako RI u EVPN. IRB tím dotčena není.
+- L2 port bez domény zůstává `Unknown / layer2`.
+
+Runtime: scope `local` čte MAC count z `evpn_mac["default-switch"]`, vazba na IRB
+vzniká z inventory (selektor `l2_interfaces` IRB), EVPN-only checky (`evpn_esi_status`,
+`evpn_instance_status`) se na `local` neaplikují. Viz spec
+`docs/superpowers/specs/2026-09-09-local-bridge-domain-elan-design.md`.
+
+---
+
 ## Kde se ty dva soubory liší
 
 Rozdíl je soustředěný do detekce EVPN E-LAN a EVPN/VPLS instancí:
@@ -364,7 +389,7 @@ Rozdíl je soustředěný do detekce EVPN E-LAN a EVPN/VPLS instancí:
 | | MX (`mx_parser.py`) | EVO (`evo_parser.py`) |
 |---|---|---|
 | VPLS | `instance-type vpls` nebo `protocols vpls` | navíc `virtual-switch` + `protocols vpls` |
-| E-LAN subtype | `virtual-switch` + bridge domain → `vlan-aware`; `instance-type evpn` → `vlan-based` | nejdřív explicitní `service-type` (`vlan-aware` / `vlan-based` / `vlan-bundle`), pak `mac-vrf` podle počtu VLAN/domén, pak `virtual-switch` + `protocols evpn` |
+| E-LAN subtype | `virtual-switch` + bridge domain → `vlan-aware`; `instance-type evpn` → `vlan-based`; `local` = globální doména bez instance (společné) | nejdřív explicitní `service-type` (`vlan-aware` / `vlan-based` / `vlan-bundle`), pak `mac-vrf` podle počtu VLAN/domén, pak `virtual-switch` + `protocols evpn`; `local` = globální doména bez instance (společné) |
 | EVPN instance | `instance-type evpn` | `instance-type evpn` **nebo** `mac-vrf` |
 
 Zbytek souboru (datové modely, XML pomocné funkce, CLI, připojení, zápis YAML) je shodný —

@@ -381,6 +381,32 @@ the report header.
 
 ---
 
+## E-LAN `local`: global bridge-domain / vlan (2026-09-09 wave)
+
+An access port with no routing instance that is explicitly (`interface/name`) a member of
+a global `bridge-domains/domain` (MX) or `vlans/vlan` (EVO) — i.e. the `default-switch`
+instance — is classified as **E-LAN / `local`** (confidence high, reason "The interface is
+a member of a global bridge-domain / vlan (default-switch), with no EVPN instance."). The
+difference from `vlan-aware` is the missing EVPN/MPLS transport: L2 stays local to the box
+and only leaves it through an IRB (`routing-interface` on MX, `l3-interface` on EVO).
+
+- The domain lookup is explicit-membership-only, never by VLAN overlap —
+  `default-switch` on EVO also carries `default` (VLAN 1).
+- `bridge_domain`, `customer_vlan` and `l3_interface` (the irb counterparts) are filled the
+  same way as for instance-scoped domains; `routing_instance` is `null`.
+- `routing_instance_active` carries the activity of the **domain**
+  (`BridgeDomain.active`, inherited from the `bridge-domains inactive` / `vlans inactive`
+  container) — the domain is the service's container, the same as an RI for EVPN. The IRB
+  is not affected by it.
+- An L2 port with no domain stays `Unknown / layer2`.
+
+Runtime: the `local` scope reads the MAC count from `evpn_mac["default-switch"]`, the link
+to the IRB comes from inventory (the `l2_interfaces` IRB selector), and the EVPN-only checks
+(`evpn_esi_status`, `evpn_instance_status`) do not apply to `local`. See the spec
+`docs/superpowers/specs/2026-09-09-local-bridge-domain-elan-design.md`.
+
+---
+
 ## Where the two files differ
 
 The difference is concentrated in the detection of EVPN E-LAN and EVPN/VPLS instances:
@@ -388,7 +414,7 @@ The difference is concentrated in the detection of EVPN E-LAN and EVPN/VPLS inst
 | | MX (`mx_parser.py`) | EVO (`evo_parser.py`) |
 |---|---|---|
 | VPLS | `instance-type vpls` or `protocols vpls` | additionally `virtual-switch` + `protocols vpls` |
-| E-LAN subtype | `virtual-switch` + bridge domain → `vlan-aware`; `instance-type evpn` → `vlan-based` | first an explicit `service-type` (`vlan-aware` / `vlan-based` / `vlan-bundle`), then `mac-vrf` by VLAN/domain count, then `virtual-switch` + `protocols evpn` |
+| E-LAN subtype | `virtual-switch` + bridge domain → `vlan-aware`; `instance-type evpn` → `vlan-based`; `local` = global domain with no instance (shared) | first an explicit `service-type` (`vlan-aware` / `vlan-based` / `vlan-bundle`), then `mac-vrf` by VLAN/domain count, then `virtual-switch` + `protocols evpn`; `local` = global domain with no instance (shared) |
 | EVPN instance | `instance-type evpn` | `instance-type evpn` **or** `mac-vrf` |
 
 The rest of the file (data models, XML helpers, CLI, connection handling, YAML writing) is
