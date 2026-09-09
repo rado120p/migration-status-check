@@ -301,9 +301,10 @@ interfaces:
   protocol:
   - inet
   - inet6
-  bgp_neighbor: []
-  bgp_neighbor_inactive:
+  - bgp
+  bgp_neighbor:
   - 152.11.13.2
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '13'
@@ -343,6 +344,7 @@ interfaces:
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.13.2'
   - 'Statická routa odpovídá subnetu rozhraní: 198.62.1.0/29, 198.62.2.0/24, 2001:abcd:11:13::/64'
 - interface: ge-0/0/2.113
   description: L3VPN-CPE13-NNI
@@ -355,17 +357,17 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE13-NNI
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: true
   protocol:
   - inet
   - inet6
   - bgp
   - vrf
-  bgp_neighbor: []
-  bgp_neighbor_inactive:
+  bgp_neighbor:
   - 198.11.13.2
   - 2001:db8:11:13::b
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan:
   - '113'
@@ -382,7 +384,7 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    active: false
+    active: true
   - rib: L3VPN-CPE13-NNI.inet6.0
     prefix: 2001:eeee::/64
     route_type: static
@@ -391,11 +393,12 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    active: false
+    active: true
   bfd: []
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.13.2, 2001:db8:11:13::b'
   - 'Statická routa odpovídá subnetu rozhraní: 172.26.1.0/29, 2001:eeee::/64'
 - interface: ge-0/0/2.213
   description: EVPN-VPWS-CPE13-NNI
@@ -406,7 +409,7 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE13-NNI
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: true
   protocol:
   - ccc
@@ -435,7 +438,7 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: true
   protocol:
   - bridge
@@ -465,7 +468,7 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-BASED-CPE13-NNI
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: true
   protocol:
   - bridge
@@ -527,7 +530,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
@@ -551,8 +554,8 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE23-UNI
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - ccc
   - evpn
@@ -580,7 +583,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
@@ -606,17 +609,17 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: L3VPN-CPE14-UNI
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
   - inet6
   - bgp
   - vrf
-  bgp_neighbor: []
-  bgp_neighbor_inactive:
+  bgp_neighbor:
   - 198.11.14.4
   - 2001:db8:11:14::4
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   l3_interface: []
@@ -628,6 +631,7 @@ interfaces:
   detection_confidence: high
   detection_reason:
   - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.4, 2001:db8:11:14::4'
 - interface: ge-0/0/5
   description: EVPN-VLAN-AWARE-INTERNET
   service_type: Layer1
@@ -638,7 +642,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
@@ -665,14 +669,15 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - inet
   - inet6
-  bgp_neighbor: []
-  bgp_neighbor_inactive:
+  - bgp
+  bgp_neighbor:
   - 152.11.14.4
   - 2001:abcd:11:14::4
+  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
   l3_interface: []
@@ -693,6 +698,7 @@ interfaces:
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.14.4, 2001:abcd:11:14::4'
   - 'Statická routa odpovídá subnetu rozhraní: 2001:aaaa::/64'
 - interface: ge-0/0/6
   description: MGMT-SWITCH;ge-0/0/0
@@ -704,7 +710,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
@@ -729,7 +735,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-POP1
   routing_instance_active: true
-  interface_active: false
+  interface_active: true
   protocol:
   - bridge
   - evpn
@@ -786,12 +792,12 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: NGMVPN-IGMP-RECEIVER
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
-  - pim
   - igmp
+  - pim
   - mvpn
   - vrf
   bgp_neighbor: []
@@ -822,12 +828,12 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: NGMVPN-PIM-RECEIVER
-  routing_instance_active: false
-  interface_active: false
+  routing_instance_active: true
+  interface_active: true
   protocol:
   - inet
-  - pim
   - igmp
+  - pim
   - mvpn
   - vrf
   bgp_neighbor: []
@@ -851,7 +857,7 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    active: false
+    active: true
   bfd: []
   detection_confidence: high
   detection_reason:
@@ -871,7 +877,7 @@ interfaces:
   - 10.40.94.1
   virtual_gw_ipv6_address: []
   routing_instance: MGMT
-  routing_instance_active: false
+  routing_instance_active: true
   interface_active: true
   protocol:
   - inet
@@ -897,12 +903,12 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    active: false
+    active: true
   - rib: MGMT.inet.0
     prefix: 10.40.94.0/23
     route_type: aggregate
     next_hops: []
-    active: false
+    active: true
   bfd: []
   detection_confidence: high
   detection_reason:
