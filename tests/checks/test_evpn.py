@@ -1075,6 +1075,62 @@ def test_local_mac_count_compares_against_baseline():
     assert row.baseline_value == "5"
 
 
+def _local_mac_subject_missing_scope_domain():
+    # Count vypis nikdy nezminuje BD-NGMVPN-IGMP-RECEIVER (vlan 12, scope
+    # domena) - jen sousedni domenu na stejnem default-switch. Union
+    # subject|baseline vlan proto scope domenu vubec nenajde.
+    return {"evpn_mac": {"default-switch": {
+        "vlans": {
+            "10": {"domain": "BD-NGMVPN-PIM-RECEIVER", "count": 2},
+        },
+        "interfaces": {
+            "ge-0/0/2.10": {"name": "ge-0/0/2.10:10", "domain": "BD-NGMVPN-PIM-RECEIVER", "count": 2},
+        },
+    }}}
+
+
+def test_local_mac_count_scope_vlan_absent_from_output_yields_zero_row():
+    ctx = _local_ctx(_local_mac_subject_missing_scope_domain())
+    ctx.scope.selectors.bridge_domains = ["BD-NGMVPN-IGMP-RECEIVER"]
+    findings = EvpnMacCountCheck().run(ctx)
+    domain_rows = [f for f in findings if f.label == "BD-NGMVPN-IGMP-RECEIVER MAC count"]
+    assert len(domain_rows) == 1
+    row = domain_rows[0]
+    assert row.value == "0"
+    assert row.outcome == _mac_state_finding_outcome()
+    assert not [f for f in findings if "ge-0/0/2.12" in (f.label or "")]
+
+
+def test_local_mac_count_scope_vlan_absent_in_both_is_unchanged():
+    ctx = _local_ctx(
+        _local_mac_subject_missing_scope_domain(),
+        baseline=_local_mac_subject_missing_scope_domain(),
+    )
+    ctx.scope.selectors.bridge_domains = ["BD-NGMVPN-IGMP-RECEIVER"]
+    findings = EvpnMacCountCheck().run(ctx)
+    row = _by_label(findings, "BD-NGMVPN-IGMP-RECEIVER MAC count")
+    assert row.outcome is Outcome.UNCHANGED
+
+
+def test_vlan_aware_scope_with_present_vlan_is_unaffected():
+    findings = EvpnMacCountCheck().run(_mac_ctx(_mac_subject_aware()))
+    labels = [f.label for f in findings]
+    assert labels.count("VL-14 MAC count") == 1
+
+
+def test_local_mac_count_scope_vlan_absent_no_bridge_domain_uses_plain_label():
+    ctx = _local_ctx(_local_mac_subject_missing_scope_domain())
+    ctx.scope.selectors.bridge_domains = []
+    findings = EvpnMacCountCheck().run(ctx)
+    row = _by_label(findings, "MAC count")
+    assert row.value == "0"
+
+
+def _mac_state_finding_outcome():
+    from migration_validator.checks.evpn import _mac_state_finding
+    return _mac_state_finding("x", 0).outcome
+
+
 def test_mac_count_label_is_generic():
     assert EvpnMacCountCheck.label == "MAC count"
     assert EvpnMacCountCheck.id == "evpn_mac_count"

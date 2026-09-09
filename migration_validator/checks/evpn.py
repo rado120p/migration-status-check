@@ -889,14 +889,33 @@ class EvpnMacCountCheck(Check):
             baseline_vlans = baseline.get("vlans", {})
             # Union se baseline: count vypis mrtvou domenu vubec neuvadi,
             # iterace jen pres subject by jeji zmizeni tise zahodila.
+            # Kdyz scope vlastni VLAN deklaruje (units.vlans), musi mit radek
+            # i domena s nula naucenymi MAC, ktera count vypis vubec
+            # neuvadi (svc:NGMVPN-PIM-RECEIVER:E-LAN na obou platformach) -
+            # jinak union subjekt|baseline scope VLAN vubec nenajde.
+            scope_vlans = set(units.vlans) if units.active and units.vlans else set()
             for vlan in sorted(
-                set(subject_vlans) | set(baseline_vlans),
+                set(subject_vlans) | set(baseline_vlans) | scope_vlans,
                 key=lambda v: int(v) if v.isdigit() else 0,
             ):
                 if units.active and units.vlans and vlan not in units.vlans:
                     continue
                 subject_entry = subject_vlans.get(vlan)
                 baseline_entry = baseline_vlans.get(vlan)
+                if subject_entry is None and baseline_entry is None:
+                    # Merena nula, ne fabulovany stav ([[stav-se-nikdy-
+                    # nefabuluje]]) - jmeno domeny neni z faktu znamo,
+                    # pujcuje se ze scope selektoru jen kdyz je jednoznacne.
+                    bridge_domains = ctx.scope.selectors.bridge_domains
+                    domain = bridge_domains[0] if len(bridge_domains) == 1 else None
+                    row_label = label(f"{domain} MAC count" if domain else "MAC count")
+                    if ctx.baseline is None:
+                        findings.append(_mac_state_finding(row_label, 0))
+                    else:
+                        findings.append(
+                            _mac_compare_finding(row_label, 0, 0, tolerance, ctx)
+                        )
+                    continue
                 domain = (subject_entry or baseline_entry).get("domain")
                 row_label = label(f"{domain} MAC count" if domain else "MAC count")
                 if subject_entry is None:
