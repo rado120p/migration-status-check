@@ -12,6 +12,7 @@ def _scope(
     addresses=(),
     addresses_v6=(),
     vlans=(),
+    bridge_domains=(),
 ):
     label = description or interface
     return Scope(
@@ -24,6 +25,7 @@ def _scope(
             local_ipv4=list(addresses),
             local_ipv6=list(addresses_v6),
             vlans=list(vlans),
+            bridge_domains=list(bridge_domains),
         ),
     )
 
@@ -249,6 +251,95 @@ def test_deactivation_does_not_block_pairing():
     assert result.pairs[0].method == "description+service_type"
     assert not result.unmatched_baseline
     assert not result.unmatched_subject
+
+
+def test_local_scope_pairs_across_platforms_ignoring_domain_names():
+    """Local E-LAN scope (globalni bridge-domain/vlan): domenove jmeno neni
+    parovaci klic - MX BD-* a PTX VL-* jmena tehoz portu se paruji podle
+    description+service_type+service_subtype, ne podle bridge_domains."""
+    baseline = [
+        _scope(
+            "ge-0/0/2.12",
+            "NGMVPN-IGMP-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["12"],
+            bridge_domains=["BD-NGMVPN-IGMP-RECEIVER"],
+        )
+    ]
+    subject = [
+        _scope(
+            "et-0/0/8.12",
+            "NGMVPN-IGMP-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["12"],
+            bridge_domains=["VL-NGMVPN-IGMP-RECEIVER"],
+        )
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert len(result.pairs) == 1
+    pair = result.pairs[0]
+    assert pair.method == "description+service_type+service_subtype"
+    assert pair.baseline.selectors.bridge_domains == ["BD-NGMVPN-IGMP-RECEIVER"]
+    assert pair.subject.selectors.bridge_domains == ["VL-NGMVPN-IGMP-RECEIVER"]
+    assert pair.subject.selectors.interfaces == ["et-0/0/8.12"]
+
+
+def test_two_local_scopes_pair_independently_never_cross():
+    """Dve local sluzby na jednom boxu s ruznymi descriptions se paruji
+    kazda se svym protejskem, nikdy navzajem."""
+    baseline = [
+        _scope(
+            "ge-0/0/2.12",
+            "NGMVPN-IGMP-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["12"],
+            bridge_domains=["BD-NGMVPN-IGMP-RECEIVER"],
+        ),
+        _scope(
+            "ge-0/0/2.10",
+            "NGMVPN-PIM-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["10"],
+            bridge_domains=["BD-NGMVPN-PIM-RECEIVER"],
+        ),
+    ]
+    subject = [
+        _scope(
+            "et-0/0/8.10",
+            "NGMVPN-PIM-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["10"],
+            bridge_domains=["VL-NGMVPN-PIM-RECEIVER"],
+        ),
+        _scope(
+            "et-0/0/8.12",
+            "NGMVPN-IGMP-RECEIVER",
+            "E-LAN",
+            subtype="local",
+            vlans=["12"],
+            bridge_domains=["VL-NGMVPN-IGMP-RECEIVER"],
+        ),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert len(result.pairs) == 2
+    by_description = {
+        pair.baseline.key.description: pair for pair in result.pairs
+    }
+    igmp = by_description["NGMVPN-IGMP-RECEIVER"]
+    pim = by_description["NGMVPN-PIM-RECEIVER"]
+    assert igmp.subject.key.description == "NGMVPN-IGMP-RECEIVER"
+    assert pim.subject.key.description == "NGMVPN-PIM-RECEIVER"
+    assert result.unmatched_baseline == []
+    assert result.unmatched_subject == []
 
 
 def test_pairing_works_when_both_sides_are_deactivated():
