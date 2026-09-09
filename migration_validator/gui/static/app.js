@@ -765,6 +765,7 @@ class App {
 
   setAllPairings(groups, open) {
     for (const group of groups) this.state.openPairings[group.key] = open;
+    this.pendingFocus = open ? "expand-all" : "collapse-all";
     this.render();
   }
 
@@ -2649,9 +2650,9 @@ class App {
             + (shown.linkedContextCount ? ` + ${shown.linkedContextCount} linked context rows` : ""),
         }),
         el("span", { className: "section-spacer" }),
-        el("button", { className: "link-btn", text: "Expand all", attrs: { type: "button" },
+        el("button", { className: "link-btn", text: "Expand all", attrs: { type: "button", "data-focus-key": "expand-all" },
           onClick: () => this.setAllPairings(model.groups, true) }),
-        el("button", { className: "link-btn", text: "Collapse all", attrs: { type: "button" },
+        el("button", { className: "link-btn", text: "Collapse all", attrs: { type: "button", "data-focus-key": "collapse-all" },
           onClick: () => this.setAllPairings(model.groups, false) }),
       ],
     });
