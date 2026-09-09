@@ -68,6 +68,12 @@ class ScopeKey:
 # probes/ping.py (kde se ping/ARP/ND vypinaji, rozhodnuti 2026-09-08).
 MULTICAST_SUBTYPES = frozenset({"multicast", "mvpn"})
 
+# Systemova L2 instance boxu: globalni bridge-domains (MX) / vlans (EVO).
+# Scope E-LAN `local` z ni cte MAC count; do routing_instances se nedava
+# (matcher by dve lokalni domeny paroval jako jednu sluzbu).
+LOCAL_L2_INSTANCE = "default-switch"
+LOCAL_L2_SUBTYPE = "local"
+
 
 @dataclass
 class Selectors:
@@ -158,7 +164,12 @@ class Scope:
         """Kratky duvod do sloupce hodnot. None, kdyz je sluzba ziva."""
         reasons = []
         if not self.routing_instance_active:
-            reasons.append("RI")
+            # E-LAN local nema RI - kontejnerem sluzby je bridge-domain.
+            is_local = (
+                self.service_subtype == LOCAL_L2_SUBTYPE
+                and not self.selectors.routing_instances
+            )
+            reasons.append("bridge-domain" if is_local else "RI")
         if not self.interface_active:
             reasons.append("interface")
         return f"{' + '.join(reasons)} deactivated" if reasons else None
@@ -227,10 +238,13 @@ class Scope:
             for name, data in (facts.get("evpn_instance") or {}).items()
             if name in self.selectors.routing_instances
         }
+        mac_instances = set(self.selectors.routing_instances)
+        if self.service_type == "E-LAN" and self.service_subtype == LOCAL_L2_SUBTYPE:
+            mac_instances.add(LOCAL_L2_INSTANCE)
         evpn_mac = {
             name: data
             for name, data in (facts.get("evpn_mac") or {}).items()
-            if name in self.selectors.routing_instances
+            if name in mac_instances
         }
         wanted_routes = {
             (str(route.get("rib")), str(route.get("prefix")))

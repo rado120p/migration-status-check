@@ -393,3 +393,43 @@ def test_selectors_survive_roundtrip():
     assert restored.bfd_peers == [
         {"peer": "152.11.13.2", "minimum_interval": 300, "multiplier": 3}
     ]
+
+
+def _local_scope(active=True) -> Scope:
+    return Scope(
+        id="svc:NGMVPN-IGMP-RECEIVER:E-LAN",
+        kind="service",
+        key=ScopeKey("NGMVPN-IGMP-RECEIVER", "E-LAN", "local"),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.12"], vlans=["12"],
+            bridge_domains=["BD-NGMVPN-IGMP-RECEIVER"],
+        ),
+        routing_instance_active=active,
+    )
+
+
+def test_local_scope_selects_default_switch_mac_table():
+    facts = {
+        "evpn_mac": {
+            "default-switch": {"vlans": {"12": {"count": 1, "domain": "BD-X"}}, "interfaces": {}},
+            "EVPN-VLAN-AWARE-POP1": {"vlans": {}, "interfaces": {}},
+        }
+    }
+    selected = _local_scope().select(facts, {})
+    assert list(selected["evpn_mac"]) == ["default-switch"]
+
+
+def test_vlan_aware_scope_does_not_get_default_switch():
+    scope = Scope(
+        id="s", kind="service", key=ScopeKey("X", "E-LAN", "vlan-aware"),
+        selectors=Selectors(interfaces=["ge-0/0/2.313"], routing_instances=["EVPN-A"]),
+    )
+    facts = {"evpn_mac": {"default-switch": {}, "EVPN-A": {}}}
+    assert list(scope.select(facts, {})["evpn_mac"]) == ["EVPN-A"]
+
+
+def test_local_scope_deactivation_reason_names_bridge_domain():
+    assert _local_scope(active=False).deactivation_reason == "bridge-domain deactivated"
+    off_both = _local_scope(active=False)
+    off_both.interface_active = False
+    assert off_both.deactivation_reason == "bridge-domain + interface deactivated"
