@@ -187,3 +187,82 @@ def test_each_scope_links_at_most_once():
     l3 = _l3_scope()
     links = link_scopes([l3, l2], facts)
     assert len(links) == 1
+
+
+def _local_l2_scope(scope_id="svc:NGMVPN-IGMP-RECEIVER:E-LAN", interface="ge-0/0/2.12"):
+    return Scope(
+        id=scope_id,
+        kind="service",
+        key=ScopeKey("NGMVPN-IGMP-RECEIVER", "E-LAN", "local"),
+        selectors=Selectors(interfaces=[interface], vlans=["12"]),
+    )
+
+
+def _irb_scope(
+    scope_id="svc:NGMVPN receivers:IPVPN",
+    interface="irb.2",
+    instances=("NGMVPN-IGMP-RECEIVER",),
+    l2_interfaces=("ge-0/0/2.12",),
+):
+    return Scope(
+        id=scope_id,
+        kind="service",
+        key=ScopeKey("NGMVPN receivers", "IPVPN", "mvpn"),
+        selectors=Selectors(
+            interfaces=[interface],
+            routing_instances=list(instances),
+            l2_interfaces=list(l2_interfaces),
+        ),
+    )
+
+
+def test_local_scope_links_to_irb_from_inventory_without_evpn_facts():
+    l2, l3 = _local_l2_scope(), _irb_scope()
+    assert link_scopes([l3, l2], {}) == [
+        ScopeLink(
+            l3_scope_id=l3.id,
+            l2_scope_id=l2.id,
+            irb_interface="irb.2",
+            l2_interface="ge-0/0/2.12",
+            l3_context="NGMVPN-IGMP-RECEIVER",
+            l2_instance="default-switch",
+        )
+    ]
+
+
+def test_local_scope_links_internet_irb_as_master():
+    l2 = _local_l2_scope()
+    l3 = _irb_scope(scope_id="svc:INET:Internet", instances=())
+    l3.key = ScopeKey("INET", "Internet", None)
+    (link,) = link_scopes([l3, l2], {})
+    assert link.l3_context == "master"
+
+
+def test_local_scope_with_two_irb_candidates_gets_no_link():
+    l2 = _local_l2_scope()
+    a = _irb_scope(scope_id="svc:A:IPVPN", interface="irb.2")
+    b = _irb_scope(scope_id="svc:B:IPVPN", interface="irb.3")
+    assert link_scopes([a, b, l2], {}) == []
+
+
+def test_two_local_ports_link_to_one_irb():
+    l2a = _local_l2_scope(scope_id="svc:A:E-LAN", interface="ge-0/0/2.12")
+    l2b = _local_l2_scope(scope_id="svc:B:E-LAN", interface="ge-0/0/3.12")
+    l3 = _irb_scope(l2_interfaces=("ge-0/0/2.12", "ge-0/0/3.12"))
+    links = link_scopes([l3, l2a, l2b], {})
+    assert {(l.l2_scope_id, l.l3_scope_id) for l in links} == {
+        ("svc:A:E-LAN", l3.id), ("svc:B:E-LAN", l3.id)
+    }
+
+
+def test_local_port_not_listed_on_any_irb_gets_no_link():
+    l2 = _local_l2_scope(interface="ge-0/0/9.12")
+    assert link_scopes([_irb_scope(), l2], {}) == []
+
+
+def test_vlan_aware_scope_ignores_l2_interfaces_source():
+    # EVPN scope se vaze jen pres evpn_instance fakta - l2_interfaces na
+    # IRB (z globalni domeny se stejnym portem) ho nesmi svazat.
+    l2 = _l2_scope(interface="ge-0/0/2.12")
+    l3 = _irb_scope()
+    assert link_scopes([l3, l2], {}) == []

@@ -12,6 +12,10 @@ zustava na matcheru a description. Nejednoznacnost (vic L3 kandidatu pro
 jeden IRB) vazbu nevytvori: spatny odkaz je horsi nez zadny. Opacny smer
 nejednoznacny neni: jeden IRB obsluhuje vsechny L2 scopy sve bridge
 domain, vazba je tedy N L2 : 1 L3.
+
+E-LAN `local` scope (access port v globalni bridge-domain/vlan, instance
+`default-switch`) nema `evpn_instance` fakta - vaze se konfiguracne, pres
+selektor `l2_interfaces` IRB scopu (`_link_local_scopes`).
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from migration_validator.models.scope import Scope
+from migration_validator.models.scope import LOCAL_L2_INSTANCE, LOCAL_L2_SUBTYPE, Scope
 
 L3_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 L2_SERVICE_TYPE = "E-LAN"
@@ -77,6 +81,8 @@ def link_scopes(
     for scope in scopes:
         if scope.is_device or scope.service_type != L2_SERVICE_TYPE:
             continue
+        if scope.service_subtype == LOCAL_L2_SUBTYPE:
+            continue
         if not scope.selectors.routing_instances or not scope.selectors.interfaces:
             continue
         # [0]: builder emituje nejvyse jednu RI na scope, takze tenhle index
@@ -118,4 +124,45 @@ def link_scopes(
                     l2_instance=instance,
                 )
             )
+    links.extend(_link_local_scopes(scopes))
+    return links
+
+
+def _link_local_scopes(scopes: list[Scope]) -> list[ScopeLink]:
+    """Vazba E-LAN `local` (globalni bridge-domain / vlan) na IRB.
+
+    Zdrojem neni RPC vypis (default-switch zadny `l3_context` nema), ale
+    inventory: IRB nese access porty svych domen v selektoru
+    `l2_interfaces`. Pravidlo 'prave jeden kandidat' plati stejne jako
+    u EVPN - spatny odkaz je horsi nez zadny (spec 2026-09-09).
+    """
+    l3_scopes = [
+        scope
+        for scope in scopes
+        if not scope.is_device and scope.service_type in L3_SERVICE_TYPES
+    ]
+    links: list[ScopeLink] = []
+    for scope in scopes:
+        if scope.is_device or scope.service_type != L2_SERVICE_TYPE:
+            continue
+        if scope.service_subtype != LOCAL_L2_SUBTYPE or not scope.selectors.interfaces:
+            continue
+        l2_interface = scope.selectors.interfaces[0]
+        candidates = [
+            l3 for l3 in l3_scopes if l2_interface in l3.selectors.l2_interfaces
+        ]
+        if len(candidates) != 1:
+            continue
+        l3_scope = candidates[0]
+        instances = l3_scope.selectors.routing_instances
+        links.append(
+            ScopeLink(
+                l3_scope_id=l3_scope.id,
+                l2_scope_id=scope.id,
+                irb_interface=l3_scope.selectors.interfaces[0],
+                l2_interface=l2_interface,
+                l3_context=instances[0] if instances else "master",
+                l2_instance=LOCAL_L2_INSTANCE,
+            )
+        )
     return links
