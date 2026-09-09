@@ -124,7 +124,7 @@ class App {
       selectedSnapshot: null,
       openResults: {},
       openPairings: {},
-      serviceTypeFilter: "All",
+      serviceTypeFilter: MigRunResults.ALL_TYPES,
       activeCaptureId: null,
       captureForm: null,
       captureSubmitError: null,
