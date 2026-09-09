@@ -97,6 +97,10 @@ class BridgeDomain:
     vlan_id_list: list[str] = field(default_factory=list)
     interfaces: list[str] = field(default_factory=list)
     routing_interface: str | None = None
+    # Deaktivace domeny (i zdedena z kontejneru bridge-domains / vlans).
+    # U E-LAN `local` je domena kontejner sluzby stejne jako RI u EVPN,
+    # takze jeji priznak konci v routing_instance_active (spec 2026-09-09).
+    active: bool = True
 
     @property
     def all_vlan_ids(self) -> list[str]:
@@ -938,6 +942,7 @@ class JunosServiceParserCore:
                     vlan_id_list=vlan_id_list,
                     interfaces=interfaces,
                     routing_interface=routing_interface,
+                    active=not self._is_inactive(domain_node),
                 )
             )
 
@@ -1212,7 +1217,11 @@ class JunosServiceParserCore:
             virtual_gw_ipv6_address=interface.virtual_gw_ipv6_addresses,
             routing_instance=instance.name if instance else None,
             protocol=protocols,
-            routing_instance_active=instance.active if instance else True,
+            routing_instance_active=(
+                instance.active
+                if instance
+                else all(domain.active for domain in bridge_domains)
+            ),
             interface_active=interface.active,
             bridge_domain=unique(
                 [domain.name for domain in bridge_domains]
@@ -1556,7 +1565,17 @@ class JunosServiceParserCore:
         self, interface: InterfaceConfig, instance: RoutingInstance | None
     ) -> list[BridgeDomain]:
         if instance is None:
-            return []
+            # Unit bez routing-instance muze byt access port globalni
+            # bridge-domain (MX) / vlan (EVO) = instance default-switch.
+            # Jen explicitni clenstvi: default-switch na EVO nese i
+            # `default` (VLAN 1) a hadani trunku podle prekryvu VLAN by
+            # privesilo nahodne porty (spec 2026-09-09).
+            return [
+                domain
+                for domain in self.global_l2_domains
+                if interface.name in domain.interfaces
+                or interface.physical_name in domain.interfaces
+            ]
 
         all_domains = instance.bridge_domains + instance.vlans
 
@@ -1704,6 +1723,18 @@ class JunosServiceParserCore:
             reasons.append(vpls_reason)
 
             return ("E-LAN", "vpls", "high", reasons)
+
+        # --------------------------------------------------------------
+        # E-LAN local: globalni bridge-domain / vlan (default-switch)
+        # --------------------------------------------------------------
+
+        if instance is None and bridge_domains and self._is_layer2(interface):
+            reasons.append(
+                "Rozhraní je členem globální bridge-domain / vlan (default-switch), "
+                "bez EVPN instance."
+            )
+
+            return ("E-LAN", "local", "high", reasons)
 
         # --------------------------------------------------------------
         # E-LAN EVPN
