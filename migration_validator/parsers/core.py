@@ -2084,6 +2084,7 @@ def clean_service_dict(data: dict[str, Any]) -> dict[str, Any]:
         "bgp_neighbor_inactive",
         "bridge_domain",
         "customer_vlan",
+        "l3_interface",
         "l2_interface",
         "mvpn_site",
         "lag_members",

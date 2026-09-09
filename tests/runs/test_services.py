@@ -63,7 +63,7 @@ def test_generate_inventory_port_filter(tmp_path, monkeypatch):
         "ge-0/0/0",
         "ge-0/0/0.100",
     ]
-    assert data["schema_version"] == 9
+    assert data["schema_version"] == 10
 
 
 def test_generate_inventory_all_mode(tmp_path, monkeypatch):
@@ -187,6 +187,65 @@ def test_port_filter_pulls_irb_of_shared_vlan(tmp_path, monkeypatch):
     assert "irb.4094" in names
     assert "irb.15" not in names
     assert "ae0.15" not in names
+
+
+GLOBAL_BD_WITH_IRB = """
+<configuration>
+  <interfaces>
+    <interface>
+      <name>ge-0/0/2</name>
+      <unit>
+        <name>12</name>
+        <description>NGMVPN-IGMP-RECEIVER</description>
+        <encapsulation>vlan-bridge</encapsulation>
+        <vlan-id>12</vlan-id>
+      </unit>
+    </interface>
+    <interface>
+      <name>irb</name>
+      <unit>
+        <name>2</name>
+        <family><inet><address><name>10.12.11.2/30</name></address></inet></family>
+      </unit>
+    </interface>
+  </interfaces>
+  <routing-instances>
+    <instance>
+      <name>NGMVPN-IGMP-RECEIVER</name>
+      <instance-type>vrf</instance-type>
+      <interface><name>irb.2</name></interface>
+    </instance>
+  </routing-instances>
+  <bridge-domains>
+    <domain>
+      <name>BD-NGMVPN-IGMP-RECEIVER</name>
+      <domain-type>bridge</domain-type>
+      <vlan-id>12</vlan-id>
+      <interface><name>ge-0/0/2.12</name></interface>
+      <routing-interface>irb.2</routing-interface>
+    </domain>
+  </bridge-domains>
+</configuration>
+"""
+
+
+def test_port_filter_pulls_irb_of_global_bridge_domain(tmp_path, monkeypatch):
+    """Lab 2026-09-09: IRB v MVPN VRF + access port v globalni bridge-domain.
+
+    Per-port beh ge-0/0/2 bez irb.2 nema L3 polovinu sluzby - presne to,
+    co se stalo pri per-port migraci (spec 2026-09-09).
+    """
+    _fake_retrieve_configuration(monkeypatch, GLOBAL_BD_WITH_IRB)
+
+    output_path = tmp_path / "inv.yml"
+    generate_inventory(object(), "junos", output_path, port="ge-0/0/2")
+
+    entries = {
+        s["interface"]: s for s in yaml.safe_load(output_path.read_text())["interfaces"]
+    }
+    assert "irb.2" in entries
+    assert entries["ge-0/0/2.12"]["service_subtype"] == "local"
+    assert entries["ge-0/0/2.12"]["l3_interface"] == ["irb.2"]
 
 
 def test_generate_inventory_unknown_platform(tmp_path, monkeypatch):

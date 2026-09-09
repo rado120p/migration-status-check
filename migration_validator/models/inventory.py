@@ -68,6 +68,10 @@ class ServiceEntry:
     bgp_neighbor_inactive: list[str] = field(default_factory=list)
     bridge_domain: list[str] = field(default_factory=list)
     customer_vlan: list[str] = field(default_factory=list)
+    # irb protejsky domen tohoto L2 unitu (schema 10). Do te doby zil jen
+    # v procesu parseru pro port filtr; ted ho nese i YAML, aby bylo z
+    # inventory videt, ke ktere IRB access port patri.
+    l3_interface: list[str] = field(default_factory=list)
     l2_interface: list[str] = field(default_factory=list)
     mvpn_site: list[str] = field(default_factory=list)
     lag_members: list[str] = field(default_factory=list)
@@ -104,6 +108,7 @@ class ServiceEntry:
             bgp_neighbor_inactive=_as_list(data.get("bgp_neighbor_inactive")),
             bridge_domain=_as_list(data.get("bridge_domain")),
             customer_vlan=_as_list(data.get("customer_vlan")),
+            l3_interface=_as_list(data.get("l3_interface")),
             l2_interface=_as_list(data.get("l2_interface")),
             mvpn_site=_as_list(data.get("mvpn_site")),
             lag_members=_as_list(data.get("lag_members")),
@@ -129,6 +134,7 @@ class ServiceEntry:
             "bgp_neighbor_inactive": list(self.bgp_neighbor_inactive),
             "bridge_domain": list(self.bridge_domain),
             "customer_vlan": list(self.customer_vlan),
+            "l3_interface": list(self.l3_interface),
             "l2_interface": list(self.l2_interface),
             "mvpn_site": list(self.mvpn_site),
             "lag_members": list(self.lag_members),
@@ -153,7 +159,11 @@ class Inventory:
 #    mvpn_site (role instance z konfigurace, spec 2026-09-07). Stara inventory
 #    by nesla "mvpn-igmp" a parovaci pravidlo description+type+subtype by
 #    baseline scope vyradilo z multicast checku.
-INVENTORY_SCHEMA_VERSION = 9
+# 10: subtype E-LAN "local" (access port v globalni bridge-domain / vlan,
+#     instance default-switch, spec 2026-09-09) a pole l3_interface (irb
+#     protejsky domen L2 unitu) se poprve zapisuje do YAML. Stara inventory
+#     by port nesla jako Unknown/layer2 - bez scope, bez vazby na IRB.
+INVENTORY_SCHEMA_VERSION = 10
 
 
 def load_inventory(path: str | Path) -> Inventory:
@@ -186,6 +196,11 @@ def load_inventory(path: str | Path) -> Inventory:
     Tolerantni cteni stare (v8) inventory by nechalo subtype "mvpn-igmp",
     na ktery uz zadny check nenaskoci - MVPN sluzba by tise prosla bez
     multicast radku.
+
+    Verze 10 pridala subtype E-LAN "local" a pole l3_interface. Tolerantni
+    cteni stare (v9) inventory by access port v globalni domene nechalo
+    jako Unknown/layer2 - zadny scope, zadny blok v reportu, a per-port
+    beh by nepritahl IRB polovinu sluzby, aniz by to bylo videt.
     """
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
