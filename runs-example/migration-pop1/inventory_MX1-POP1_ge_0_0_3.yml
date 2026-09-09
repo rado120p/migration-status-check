@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.4
 interfaces:
 - interface: ge-0/0/3
@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -34,7 +35,7 @@ interfaces:
   virtual_gw_ipv4_address: []
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VPWS-CPE23-UNI
-  routing_instance_active: true
+  routing_instance_active: false
   interface_active: true
   protocol:
   - ccc
@@ -44,6 +45,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []

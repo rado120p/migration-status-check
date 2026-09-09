@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.5
 interfaces:
 - interface: ae0
@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members:
@@ -50,6 +51,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '14'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -94,6 +96,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '15'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -123,6 +126,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '224'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -153,6 +157,8 @@ interfaces:
   customer_vlan:
   - 0x8100.4094
   - '4094'
+  l3_interface:
+  - irb.4094
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -185,6 +191,7 @@ interfaces:
   - VL-4094
   customer_vlan:
   - '4094'
+  l3_interface: []
   l2_interface:
   - ae0.4094
   - et-0/0/8.4094

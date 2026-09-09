@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.4
 interfaces:
 - interface: ge-0/0/6
@@ -11,12 +11,13 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: true
+  interface_active: false
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -35,7 +36,7 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: EVPN-VLAN-AWARE-POP1
   routing_instance_active: true
-  interface_active: true
+  interface_active: false
   protocol:
   - bridge
   - evpn
@@ -47,6 +48,8 @@ interfaces:
   customer_vlan:
   - 0x8100.4094
   - '4094'
+  l3_interface:
+  - irb.4094
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -68,7 +71,7 @@ interfaces:
   - 10.40.94.1
   virtual_gw_ipv6_address: []
   routing_instance: MGMT
-  routing_instance_active: true
+  routing_instance_active: false
   interface_active: true
   protocol:
   - inet
@@ -79,6 +82,7 @@ interfaces:
   - BD-4094
   customer_vlan:
   - '4094'
+  l3_interface: []
   l2_interface:
   - ge-0/0/6.4094
   - ge-0/0/2.4094
@@ -93,12 +97,12 @@ interfaces:
       interface: null
       qualified: false
       active: true
-    active: true
+    active: false
   - rib: MGMT.inet.0
     prefix: 10.40.94.0/23
     route_type: aggregate
     next_hops: []
-    active: true
+    active: false
   bfd: []
   detection_confidence: high
   detection_reason:

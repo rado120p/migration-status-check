@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.4
 interfaces:
 - interface: ge-0/0/5
@@ -11,12 +11,13 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: true
+  interface_active: false
   protocol: []
   bgp_neighbor: []
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -37,17 +38,17 @@ interfaces:
   virtual_gw_ipv6_address: []
   routing_instance: null
   routing_instance_active: true
-  interface_active: true
+  interface_active: false
   protocol:
   - inet
   - inet6
-  - bgp
-  bgp_neighbor:
+  bgp_neighbor: []
+  bgp_neighbor_inactive:
   - 152.11.14.4
   - 2001:abcd:11:14::4
-  bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -65,5 +66,4 @@ interfaces:
   detection_confidence: medium
   detection_reason:
   - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
-  - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.14.4, 2001:abcd:11:14::4'
   - 'Statická routa odpovídá subnetu rozhraní: 2001:aaaa::/64'

@@ -1,4 +1,4 @@
-schema_version: 9
+schema_version: 10
 device: 172.20.20.5
 interfaces:
 - interface: et-0/0/8
@@ -17,6 +17,7 @@ interfaces:
   bgp_neighbor_inactive: []
   bridge_domain: []
   customer_vlan: []
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -27,8 +28,8 @@ interfaces:
   - Jde o fyzické rozhraní bez logické servisní konfigurace.
 - interface: et-0/0/8.10
   description: NGMVPN-PIM-RECEIVER
-  service_type: Unknown
-  service_subtype: layer2
+  service_type: E-LAN
+  service_subtype: local
   ipv4_address: []
   ipv6_address: []
   virtual_gw_ipv4_address: []
@@ -40,17 +41,20 @@ interfaces:
   - ethernet-switching
   bgp_neighbor: []
   bgp_neighbor_inactive: []
-  bridge_domain: []
+  bridge_domain:
+  - VL-NGMVPN-PIM-RECEIVER
   customer_vlan:
   - '10'
+  l3_interface:
+  - irb.10
   l2_interface: []
   mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
-  detection_confidence: low
+  detection_confidence: high
   detection_reason:
-  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+  - Rozhraní je členem globální bridge-domain / vlan (default-switch), bez EVPN instance.
 - interface: et-0/0/8.11
   description: INET2-MULTICAST-RECEIVER
   service_type: Internet
@@ -71,6 +75,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '11'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -82,8 +87,8 @@ interfaces:
   - Rozhraní je pod protocols igmp — multicast receiver.
 - interface: et-0/0/8.12
   description: NGMVPN-IGMP-RECEIVER
-  service_type: Unknown
-  service_subtype: layer2
+  service_type: E-LAN
+  service_subtype: local
   ipv4_address: []
   ipv6_address: []
   virtual_gw_ipv4_address: []
@@ -95,17 +100,20 @@ interfaces:
   - ethernet-switching
   bgp_neighbor: []
   bgp_neighbor_inactive: []
-  bridge_domain: []
+  bridge_domain:
+  - VL-NGMVPN-IGMP-RECEIVER
   customer_vlan:
   - '12'
+  l3_interface:
+  - irb.2
   l2_interface: []
   mvpn_site: []
   lag_members: []
   static_route: []
   bfd: []
-  detection_confidence: low
+  detection_confidence: high
   detection_reason:
-  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+  - Rozhraní je členem globální bridge-domain / vlan (default-switch), bez EVPN instance.
 - interface: et-0/0/8.13
   description: INTERNET-CPE13-NNI
   service_type: Internet
@@ -129,6 +137,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '13'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -191,6 +200,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '113'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -239,6 +249,7 @@ interfaces:
   bridge_domain: []
   customer_vlan:
   - '213'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -268,6 +279,7 @@ interfaces:
   - VL-313
   customer_vlan:
   - '313'
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -298,6 +310,7 @@ interfaces:
   customer_vlan:
   - '413'
   - none
+  l3_interface: []
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -328,6 +341,8 @@ interfaces:
   customer_vlan:
   - '4093'
   - '4094'
+  l3_interface:
+  - irb.4094
   l2_interface: []
   mvpn_site: []
   lag_members: []
@@ -336,6 +351,88 @@ interfaces:
   detection_confidence: high
   detection_reason:
   - Routing instance explicitně používá service-type vlan-aware.
+- interface: irb.2
+  description: NGMVPN IGMP receivers POP1
+  service_type: IPVPN
+  service_subtype: mvpn
+  ipv4_address:
+  - 10.12.11.2/30
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: NGMVPN-IGMP-RECEIVER
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - igmp
+  - pim
+  - mvpn
+  - vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-NGMVPN-IGMP-RECEIVER
+  customer_vlan:
+  - '12'
+  l3_interface: []
+  l2_interface:
+  - et-0/0/8.12
+  mvpn_site:
+  - receiver
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - Rozhraní je pod protocols igmp a pim a instance má protocols mvpn — MVPN site.
+- interface: irb.10
+  description: NGMVPN PIM receivers POP1
+  service_type: IPVPN
+  service_subtype: mvpn
+  ipv4_address:
+  - 10.100.11.1/30
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: NGMVPN-PIM-RECEIVER
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - igmp
+  - pim
+  - mvpn
+  - vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-NGMVPN-PIM-RECEIVER
+  customer_vlan:
+  - '10'
+  l3_interface: []
+  l2_interface:
+  - et-0/0/8.10
+  mvpn_site:
+  - receiver
+  lag_members: []
+  static_route:
+  - rib: NGMVPN-PIM-RECEIVER.inet.0
+    prefix: 10.10.11.0/30
+    route_type: static
+    next_hops:
+    - to: 10.100.11.2
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - Rozhraní je pod protocols igmp a pim a instance má protocols mvpn — MVPN site.
+  - 'Statická routa odpovídá subnetu rozhraní: 10.10.11.0/30'
 - interface: irb.4094
   description: null
   service_type: IPVPN
@@ -360,6 +457,7 @@ interfaces:
   - VL-4094
   customer_vlan:
   - '4094'
+  l3_interface: []
   l2_interface:
   - ae0.4094
   - et-0/0/8.4094

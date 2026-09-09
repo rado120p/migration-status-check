@@ -720,8 +720,8 @@ interfaces:
   interface_active: true
   protocol:
   - inet
-  - igmp
   - pim
+  - igmp
   - mvpn
   - vrf
   bgp_neighbor: []
@@ -756,8 +756,8 @@ interfaces:
   interface_active: true
   protocol:
   - inet
-  - igmp
   - pim
+  - igmp
   - mvpn
   - vrf
   bgp_neighbor: []
