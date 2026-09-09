@@ -129,7 +129,8 @@ function buildPairingGroups({ runName, rows, evaluations, snapshots }) {
         groups.push(group);
         byKey.set(key, group);
       }
-      group.evaluations.push(buildEvaluationModel(evaluation, index, snapshots, "pair"));
+      const localIndex = group.evaluations.length;
+      group.evaluations.push(buildEvaluationModel(evaluation, localIndex, snapshots, key));
       return;
     }
     const model = buildEvaluationModel(evaluation, index, snapshots, "aux");

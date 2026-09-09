@@ -312,3 +312,17 @@ test("collectUnassigned: models with an empty unassigned payload (all lists empt
   assert.strictEqual(withOne.length, 1);
   assert.strictEqual(withOne[0].subject, "post-ae0.json");
 });
+
+test("buildPairingGroups: reordering evaluations across different pairings does not change per-service-entry keys", () => {
+  const rows = [row("ge-0/0/4", "ae0"), row("ge-0/0/5", "et-0/0/8")];
+  const step2 = { old: { node: "MX1", port: "ge-0/0/5" }, new: { node: "PTX1", port: "et-0/0/8" } };
+  const evalA = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), [scope("A", "Internet")]);
+  const evalB = evaluation("post-et8.json", "pre-ge5.json", step2, [scope("B", "IPVPN")]);
+
+  const forward = R.buildPairingGroups({ runName: "mig01", rows, evaluations: [evalA, evalB], snapshots: SNAPSHOTS });
+  const reversed = R.buildPairingGroups({ runName: "mig01", rows, evaluations: [evalB, evalA], snapshots: SNAPSHOTS });
+
+  const keyFor = (model, port) => model.groups.find((g) => g.old.port === port).evaluations[0].serviceEntries[0].key;
+  assert.strictEqual(keyFor(forward, "ge-0/0/4"), keyFor(reversed, "ge-0/0/4"));
+  assert.strictEqual(keyFor(forward, "ge-0/0/5"), keyFor(reversed, "ge-0/0/5"));
+});
