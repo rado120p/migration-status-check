@@ -1,0 +1,54 @@
+schema_version: 9
+device: 172.20.20.4
+interfaces:
+- interface: ge-0/0/3
+  description: EVPN-VPWS-CPE23-UNI
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: ge-0/0/3.0
+  description: EVPN-VPWS-CPE23-UNI
+  service_type: E-Line
+  service_subtype: vpws
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VPWS-CPE23-UNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ccc
+  - evpn
+  - evpn-vpws
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance používá instance-type evpn-vpws.

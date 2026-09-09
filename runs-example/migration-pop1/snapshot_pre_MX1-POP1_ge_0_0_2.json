@@ -1,5 +1,5 @@
 {
-  "schema_version": 12,
+  "schema_version": 13,
   "device": {
     "address": "172.20.20.4",
     "hostname": "clab-pop-migration-MX1-POP1",
@@ -9,8 +9,8 @@
     "uptime_seconds": null
   },
   "capture": {
-    "started_at": "2026-09-04T09:23:02Z",
-    "finished_at": "2026-09-04T09:23:15Z",
+    "started_at": "2026-09-08T19:30:14Z",
+    "finished_at": "2026-09-08T19:30:26Z",
     "phase": "pre",
     "collectors": {
       "arp": {
@@ -67,6 +67,9 @@
       "optics": {
         "status": "ok"
       },
+      "pim_join": {
+        "status": "ok"
+      },
       "pim_neighbor": {
         "status": "ok"
       },
@@ -76,168 +79,6 @@
     }
   },
   "inventory": [
-    {
-      "interface": "fxp0",
-      "description": null,
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "fxp0.0",
-      "description": null,
-      "service_type": "Internet",
-      "service_subtype": null,
-      "ipv4_address": [
-        "10.0.0.15/24"
-      ],
-      "ipv6_address": [
-        "2001:db8::2/64"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "inet6",
-        "bgp"
-      ],
-      "bgp_neighbor": [
-        "2001:db8::1"
-      ],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/0",
-      "description": "P1;et-0/0/0",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/0.0",
-      "description": "P1;et-0/0/0.0",
-      "service_type": "Core",
-      "service_subtype": "transit",
-      "ipv4_address": [
-        "10.1.2.1/31"
-      ],
-      "ipv6_address": [
-        "2001:db8:2::2/127"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "iso",
-        "inet6",
-        "mpls",
-        "pim"
-      ],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/1",
-      "description": "PTX1-POP1;et-0/0/1",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/1.0",
-      "description": "PTX1-POP1;et-0/0/1.0",
-      "service_type": "Core",
-      "service_subtype": "transit",
-      "ipv4_address": [
-        "10.1.0.4/31"
-      ],
-      "ipv6_address": [
-        "2001:db8:6::1/127"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "iso",
-        "inet6",
-        "mpls",
-        "pim"
-      ],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
     {
       "interface": "ge-0/0/2",
       "description": "NNI1-TO-CPE1",
@@ -256,6 +97,34 @@
       "bridge_domain": [],
       "customer_vlan": [],
       "l2_interface": [],
+      "mvpn_site": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/2.10",
+      "description": "NGMVPN-PIM-RECEIVER",
+      "service_type": "Unknown",
+      "service_subtype": "layer2",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "bridge"
+      ],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [
+        "10"
+      ],
+      "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -285,13 +154,14 @@
         "11"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
     },
     {
       "interface": "ge-0/0/2.12",
-      "description": "NGMVPN-RECEIVER",
+      "description": "NGMVPN-IGMP-RECEIVER",
       "service_type": "Unknown",
       "service_subtype": "layer2",
       "ipv4_address": [],
@@ -311,6 +181,7 @@
         "12"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -345,6 +216,7 @@
         "13"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [
         {
@@ -424,6 +296,7 @@
         "113"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [
         {
@@ -481,6 +354,7 @@
         "213"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -511,6 +385,7 @@
         "313"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -538,6 +413,7 @@
         "413"
       ],
       "l2_interface": [],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -570,291 +446,7 @@
         "4094"
       ],
       "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/3",
-      "description": "EVPN-VPWS-CPE23-UNI",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/3.0",
-      "description": "EVPN-VPWS-CPE23-UNI",
-      "service_type": "E-Line",
-      "service_subtype": "vpws",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": "EVPN-VPWS-CPE23-UNI",
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "ccc",
-        "evpn",
-        "evpn-vpws"
-      ],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/4",
-      "description": "L3VPN-CPE14-UNI",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/4.0",
-      "description": "L3VPN-CPE14-UNI",
-      "service_type": "IPVPN",
-      "service_subtype": null,
-      "ipv4_address": [
-        "198.11.14.1/29"
-      ],
-      "ipv6_address": [
-        "2001:db8:11:14::1/64"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": "L3VPN-CPE14-UNI",
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "inet6",
-        "bgp",
-        "vrf"
-      ],
-      "bgp_neighbor": [
-        "198.11.14.4",
-        "2001:db8:11:14::4"
-      ],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/5",
-      "description": "EVPN-VLAN-AWARE-INTERNET",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/5.0",
-      "description": "EVPN-VLAN-AWARE-INTERNET",
-      "service_type": "Internet",
-      "service_subtype": null,
-      "ipv4_address": [
-        "152.11.14.1/29"
-      ],
-      "ipv6_address": [
-        "2001:abcd:11:14::1/64"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "inet6",
-        "bgp"
-      ],
-      "bgp_neighbor": [
-        "152.11.14.4",
-        "2001:abcd:11:14::4"
-      ],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [
-        {
-          "rib": "inet6.0",
-          "prefix": "2001:aaaa::/64",
-          "route_type": "static",
-          "next_hops": [
-            {
-              "to": "2001:abcd:11:14::4",
-              "interface": null,
-              "qualified": false,
-              "active": true
-            }
-          ],
-          "active": true
-        }
-      ],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/6",
-      "description": "MGMT-SWITCH;ge-0/0/0",
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "ge-0/0/6.4094",
-      "description": "MGMT-VLAN",
-      "service_type": "E-LAN",
-      "service_subtype": "vlan-aware",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": "EVPN-VLAN-AWARE-POP1",
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "bridge",
-        "evpn",
-        "virtual-switch"
-      ],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [
-        "BD-4094"
-      ],
-      "customer_vlan": [
-        "0x8100.4094",
-        "4094"
-      ],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "irb",
-      "description": null,
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "irb.2",
-      "description": "NGMVPN receivers POP1",
-      "service_type": "IPVPN",
-      "service_subtype": "mvpn-igmp",
-      "ipv4_address": [
-        "10.12.11.2/30"
-      ],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": "NGMVPN-RECEIVER",
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "igmp",
-        "mvpn",
-        "pim",
-        "vrf"
-      ],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [
-        "BD-NGMVPN-RECEIVER"
-      ],
-      "customer_vlan": [
-        "12"
-      ],
-      "l2_interface": [
-        "ge-0/0/2.12"
-      ],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [],
       "bfd": []
@@ -893,6 +485,7 @@
         "ge-0/0/6.4094",
         "ge-0/0/2.4094"
       ],
+      "mvpn_site": [],
       "lag_members": [],
       "static_route": [
         {
@@ -918,188 +511,9 @@
         }
       ],
       "bfd": []
-    },
-    {
-      "interface": "lo0",
-      "description": null,
-      "service_type": "Layer1",
-      "service_subtype": "physical-port",
-      "ipv4_address": [],
-      "ipv6_address": [],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [],
-      "bgp_neighbor": [],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [],
-      "bfd": []
-    },
-    {
-      "interface": "lo0.0",
-      "description": null,
-      "service_type": "Core",
-      "service_subtype": "loopback",
-      "ipv4_address": [
-        "150.0.0.11/32"
-      ],
-      "ipv6_address": [
-        "2001:db8::11/128"
-      ],
-      "virtual_gw_ipv4_address": [],
-      "virtual_gw_ipv6_address": [],
-      "routing_instance": null,
-      "routing_instance_active": true,
-      "interface_active": true,
-      "protocol": [
-        "inet",
-        "iso",
-        "inet6",
-        "bgp"
-      ],
-      "bgp_neighbor": [
-        "150.0.0.1",
-        "150.0.0.2",
-        "2001:db8::1"
-      ],
-      "bgp_neighbor_inactive": [],
-      "bridge_domain": [],
-      "customer_vlan": [],
-      "l2_interface": [],
-      "lag_members": [],
-      "static_route": [
-        {
-          "rib": "inet.0",
-          "prefix": "10.1.0.0/23",
-          "route_type": "aggregate",
-          "next_hops": [],
-          "active": true
-        },
-        {
-          "rib": "inet.0",
-          "prefix": "150.0.0.0/24",
-          "route_type": "aggregate",
-          "next_hops": [],
-          "active": true
-        },
-        {
-          "rib": "inet.2",
-          "prefix": "10.11.11.1/32",
-          "route_type": "static",
-          "next_hops": [
-            {
-              "to": "10.1.2.0",
-              "interface": null,
-              "qualified": false,
-              "active": true
-            }
-          ],
-          "active": true
-        },
-        {
-          "rib": "inet6.0",
-          "prefix": "2001:abcd::/32",
-          "route_type": "aggregate",
-          "next_hops": [],
-          "active": true
-        }
-      ],
-      "bfd": []
     }
   ],
   "scopes": [
-    {
-      "id": "svc:P1;et-0/0/0.0:Core",
-      "kind": "service",
-      "key": {
-        "description": "P1;et-0/0/0.0",
-        "service_type": "Core",
-        "service_subtype": "transit"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/0.0"
-        ],
-        "physical_interfaces": [
-          "ge-0/0/0"
-        ],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "10.1.2.1/31"
-        ],
-        "local_ipv6": [
-          "2001:db8:2::2/127"
-        ],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "iso",
-          "inet6",
-          "mpls",
-          "pim"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:PTX1-POP1;et-0/0/1.0:Core",
-      "kind": "service",
-      "key": {
-        "description": "PTX1-POP1;et-0/0/1.0",
-        "service_type": "Core",
-        "service_subtype": "transit"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/1.0"
-        ],
-        "physical_interfaces": [
-          "ge-0/0/1"
-        ],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "10.1.0.4/31"
-        ],
-        "local_ipv6": [
-          "2001:db8:6::1/127"
-        ],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "iso",
-          "inet6",
-          "mpls",
-          "pim"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
     {
       "id": "svc:INET2-MULTICAST-RECEIVER:Internet",
       "kind": "service",
@@ -1135,7 +549,8 @@
         "protocols": [
           "inet",
           "igmp"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1223,7 +638,8 @@
           "inet",
           "inet6",
           "bgp"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1301,7 +717,8 @@
           "inet6",
           "bgp",
           "vrf"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1342,7 +759,8 @@
           "ccc",
           "evpn",
           "evpn-vpws"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1385,7 +803,8 @@
           "bridge",
           "evpn",
           "virtual-switch"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1425,7 +844,8 @@
         "protocols": [
           "bridge",
           "evpn"
-        ]
+        ],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1470,245 +890,8 @@
           "bridge",
           "evpn",
           "virtual-switch"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:EVPN-VPWS-CPE23-UNI:E-Line",
-      "kind": "service",
-      "key": {
-        "description": "EVPN-VPWS-CPE23-UNI",
-        "service_type": "E-Line",
-        "service_subtype": "vpws"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/3.0"
         ],
-        "physical_interfaces": [
-          "ge-0/0/3"
-        ],
-        "routing_instances": [
-          "EVPN-VPWS-CPE23-UNI"
-        ],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "ccc",
-          "evpn",
-          "evpn-vpws"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:L3VPN-CPE14-UNI:IPVPN",
-      "kind": "service",
-      "key": {
-        "description": "L3VPN-CPE14-UNI",
-        "service_type": "IPVPN",
-        "service_subtype": null
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/4.0"
-        ],
-        "physical_interfaces": [
-          "ge-0/0/4"
-        ],
-        "routing_instances": [
-          "L3VPN-CPE14-UNI"
-        ],
-        "bgp_neighbors": [
-          "198.11.14.4",
-          "2001:db8:11:14::4"
-        ],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "198.11.14.1/29"
-        ],
-        "local_ipv6": [
-          "2001:db8:11:14::1/64"
-        ],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "inet6",
-          "bgp",
-          "vrf"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
-      "kind": "service",
-      "key": {
-        "description": "EVPN-VLAN-AWARE-INTERNET",
-        "service_type": "Internet",
-        "service_subtype": null
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/5.0"
-        ],
-        "physical_interfaces": [
-          "ge-0/0/5"
-        ],
-        "routing_instances": [],
-        "bgp_neighbors": [
-          "152.11.14.4",
-          "2001:abcd:11:14::4"
-        ],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "152.11.14.1/29"
-        ],
-        "local_ipv6": [
-          "2001:abcd:11:14::1/64"
-        ],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [
-          {
-            "rib": "inet6.0",
-            "prefix": "2001:aaaa::/64",
-            "route_type": "static",
-            "next_hops": [
-              {
-                "to": "2001:abcd:11:14::4",
-                "interface": null,
-                "qualified": false,
-                "active": true
-              }
-            ],
-            "active": true
-          }
-        ],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "inet6",
-          "bgp"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:MGMT-VLAN:E-LAN",
-      "kind": "service",
-      "key": {
-        "description": "MGMT-VLAN",
-        "service_type": "E-LAN",
-        "service_subtype": "vlan-aware"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/6.4094"
-        ],
-        "physical_interfaces": [
-          "ge-0/0/6"
-        ],
-        "routing_instances": [
-          "EVPN-VLAN-AWARE-POP1"
-        ],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [
-          "0x8100.4094",
-          "4094"
-        ],
-        "bridge_domains": [
-          "BD-4094"
-        ],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "bridge",
-          "evpn",
-          "virtual-switch"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:NGMVPN receivers POP1:IPVPN",
-      "kind": "service",
-      "key": {
-        "description": "NGMVPN receivers POP1",
-        "service_type": "IPVPN",
-        "service_subtype": "mvpn-igmp"
-      },
-      "selectors": {
-        "interfaces": [
-          "irb.2"
-        ],
-        "physical_interfaces": [
-          "irb"
-        ],
-        "routing_instances": [
-          "NGMVPN-RECEIVER"
-        ],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "10.12.11.2/30"
-        ],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [
-          "12"
-        ],
-        "bridge_domains": [
-          "BD-NGMVPN-RECEIVER"
-        ],
-        "lag_members": [],
-        "l2_interfaces": [
-          "ge-0/0/2.12"
-        ],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "igmp",
-          "mvpn",
-          "pim",
-          "vrf"
-        ]
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1725,9 +908,7 @@
         "interfaces": [
           "irb.4094"
         ],
-        "physical_interfaces": [
-          "irb"
-        ],
+        "physical_interfaces": [],
         "routing_instances": [
           "MGMT"
         ],
@@ -1781,151 +962,8 @@
         "protocols": [
           "inet",
           "vrf"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "svc:lo0.0:Core",
-      "kind": "service",
-      "key": {
-        "description": null,
-        "service_type": "Core",
-        "service_subtype": "loopback"
-      },
-      "selectors": {
-        "interfaces": [
-          "lo0.0"
         ],
-        "physical_interfaces": [
-          "lo0"
-        ],
-        "routing_instances": [],
-        "bgp_neighbors": [
-          "150.0.0.1",
-          "150.0.0.2",
-          "2001:db8::1"
-        ],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [
-          "150.0.0.11/32"
-        ],
-        "local_ipv6": [
-          "2001:db8::11/128"
-        ],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [
-          {
-            "rib": "inet.0",
-            "prefix": "10.1.0.0/23",
-            "route_type": "aggregate",
-            "next_hops": [],
-            "active": true
-          },
-          {
-            "rib": "inet.0",
-            "prefix": "150.0.0.0/24",
-            "route_type": "aggregate",
-            "next_hops": [],
-            "active": true
-          },
-          {
-            "rib": "inet.2",
-            "prefix": "10.11.11.1/32",
-            "route_type": "static",
-            "next_hops": [
-              {
-                "to": "10.1.2.0",
-                "interface": null,
-                "qualified": false,
-                "active": true
-              }
-            ],
-            "active": true
-          },
-          {
-            "rib": "inet6.0",
-            "prefix": "2001:abcd::/32",
-            "route_type": "aggregate",
-            "next_hops": [],
-            "active": true
-          }
-        ],
-        "bfd_peers": [],
-        "protocols": [
-          "inet",
-          "iso",
-          "inet6",
-          "bgp"
-        ]
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/0",
-      "kind": "layer1",
-      "key": {
-        "description": "P1;et-0/0/0",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/0"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/1",
-      "kind": "layer1",
-      "key": {
-        "description": "PTX1-POP1;et-0/0/1",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/1"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -1956,131 +994,8 @@
         "l2_interfaces": [],
         "static_routes": [],
         "bfd_peers": [],
-        "protocols": []
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/3",
-      "kind": "layer1",
-      "key": {
-        "description": "EVPN-VPWS-CPE23-UNI",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/3"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/4",
-      "kind": "layer1",
-      "key": {
-        "description": "L3VPN-CPE14-UNI",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/4"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/5",
-      "kind": "layer1",
-      "key": {
-        "description": "EVPN-VLAN-AWARE-INTERNET",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/5"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
-      },
-      "routing_instance_active": true,
-      "interface_active": true
-    },
-    {
-      "id": "l1:ge-0/0/6",
-      "kind": "layer1",
-      "key": {
-        "description": "MGMT-SWITCH;ge-0/0/0",
-        "service_type": "Layer1",
-        "service_subtype": "physical-port"
-      },
-      "selectors": {
-        "interfaces": [
-          "ge-0/0/6"
-        ],
-        "physical_interfaces": [],
-        "routing_instances": [],
-        "bgp_neighbors": [],
-        "bgp_neighbors_inactive": [],
-        "local_ipv4": [],
-        "local_ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "vlans": [],
-        "bridge_domains": [],
-        "lag_members": [],
-        "l2_interfaces": [],
-        "static_routes": [],
-        "bfd_peers": [],
-        "protocols": []
+        "protocols": [],
+        "mvpn_site": []
       },
       "routing_instance_active": true,
       "interface_active": true
@@ -2097,58 +1012,58 @@
       },
       {
         "ip": "10.1.0.5",
-        "mac": "98:0f:4d:78:00:09",
+        "mac": "7e:83:2c:0b:00:09",
         "interface": "ge-0/0/1.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "10.1.2.0",
-        "mac": "1c:e8:ef:7c:00:00",
+        "mac": "ba:03:b0:72:00:00",
         "interface": "ge-0/0/0.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "10.40.94.2",
-        "mac": "0c:00:c0:79:3f:02",
+        "mac": "0c:00:54:57:c7:02",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.3",
-        "mac": "0c:00:60:e7:e0:03",
+        "mac": "0c:00:37:c0:d0:03",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
-        "ip": "10.40.94.4",
-        "mac": "0c:00:d2:a4:0f:01",
-        "interface": "irb.4094",
-        "learned_via": "ge-0/0/2.4094",
-        "routing_instance": null
-      },
-      {
         "ip": "10.40.94.10",
-        "mac": "2c:6b:f5:fa:00:f0",
+        "mac": "2c:6b:f5:d8:ea:f0",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.94.252",
-        "mac": "2c:6b:f5:57:da:f0",
+        "mac": "2c:6b:f5:25:67:f0",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
         "routing_instance": null
       },
       {
         "ip": "10.40.95.3",
-        "mac": "0c:00:27:99:aa:04",
+        "mac": "0c:00:5e:b5:21:04",
         "interface": "irb.4094",
         "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.100.11.2",
+        "mac": "0c:00:d3:e0:e7:01",
+        "interface": "irb.10",
+        "learned_via": "ge-0/0/2.10",
         "routing_instance": null
       },
       {
@@ -2160,28 +1075,28 @@
       },
       {
         "ip": "152.11.13.2",
-        "mac": "0c:00:d2:a4:0f:01",
+        "mac": "0c:00:d3:e0:e7:01",
         "interface": "ge-0/0/2.13",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "152.11.14.4",
-        "mac": "0c:00:85:cf:f5:03",
+        "mac": "0c:00:41:09:49:03",
         "interface": "ge-0/0/5.0",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "198.11.13.2",
-        "mac": "0c:00:d2:a4:0f:01",
+        "mac": "0c:00:d3:e0:e7:01",
         "interface": "ge-0/0/2.113",
         "learned_via": null,
         "routing_instance": null
       },
       {
         "ip": "198.11.14.4",
-        "mac": "0c:00:49:96:60:02",
+        "mac": "0c:00:25:3f:b3:02",
         "interface": "ge-0/0/4.0",
         "learned_via": null,
         "routing_instance": null
@@ -2222,7 +1137,7 @@
           "bgp.rtarget.0": {
             "received": 1,
             "accepted": 1,
-            "advertised": 12,
+            "advertised": 14,
             "active": 1,
             "suppressed": 0
           },
@@ -2234,24 +1149,24 @@
             "suppressed": 0
           },
           "bgp.l3vpn.0": {
-            "received": 4,
-            "accepted": 4,
+            "received": 6,
+            "accepted": 6,
             "advertised": 0,
-            "active": 4,
+            "active": 6,
             "suppressed": 0
           },
           "bgp.evpn.0": {
             "received": 8,
             "accepted": 8,
-            "advertised": 27,
+            "advertised": 24,
             "active": 8,
             "suppressed": 0
           },
           "bgp.mvpn.0": {
-            "received": 1,
-            "accepted": 1,
-            "advertised": 2,
-            "active": 1,
+            "received": 2,
+            "accepted": 2,
+            "advertised": 4,
+            "active": 2,
             "suppressed": 0
           },
           "L3VPN-CPE13-NNI.inet.0": {
@@ -2271,18 +1186,32 @@
           "MGMT.inet.0": {
             "received": 0,
             "accepted": 0,
-            "advertised": 10,
+            "advertised": 9,
             "active": 0,
             "suppressed": 0
           },
-          "NGMVPN-RECEIVER.inet.0": {
+          "NGMVPN-IGMP-RECEIVER.inet.0": {
             "received": 2,
             "accepted": 2,
             "advertised": 1,
             "active": 2,
             "suppressed": 0
           },
-          "NGMVPN-RECEIVER.mvpn.0": {
+          "NGMVPN-PIM-RECEIVER.inet.0": {
+            "received": 2,
+            "accepted": 2,
+            "advertised": 2,
+            "active": 2,
+            "suppressed": 0
+          },
+          "NGMVPN-IGMP-RECEIVER.mvpn.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 0,
+            "active": 1,
+            "suppressed": 0
+          },
+          "NGMVPN-PIM-RECEIVER.mvpn.0": {
             "received": 1,
             "accepted": 1,
             "advertised": 0,
@@ -2334,7 +1263,7 @@
         }
       },
       "150.0.0.2": {
-        "state": "Active",
+        "state": "Connect",
         "peer_as": 65000,
         "routing_instance": null,
         "ribs": {}
@@ -2460,7 +1389,7 @@
           "up": 2,
           "entries": [
             {
-              "name": ".local..18",
+              "name": ".local..20",
               "status": "Up"
             },
             {
@@ -2488,7 +1417,7 @@
           "up": 3,
           "entries": [
             {
-              "name": ".local..19",
+              "name": ".local..14",
               "status": "Up"
             },
             {
@@ -2524,7 +1453,7 @@
           "up": 2,
           "entries": [
             {
-              "name": ".local..20",
+              "name": ".local..21",
               "status": "Up"
             },
             {
@@ -2566,18 +1495,18 @@
       "EVPN-VLAN-AWARE-POP1": {
         "vlans": {
           "4094": {
-            "count": 7,
+            "count": 5,
             "domain": "BD-4094"
           }
         },
         "interfaces": {
           "ge-0/0/2.4094": {
-            "count": 1,
+            "count": 0,
             "name": "ge-0/0/2.4094:4094",
             "domain": "BD-4094"
           },
           "ge-0/0/6.4094": {
-            "count": 6,
+            "count": 5,
             "name": "ge-0/0/6.4094:4094",
             "domain": "BD-4094"
           }
@@ -2652,16 +1581,16 @@
       }
     },
     "igmp_group": {
-      "irb.2": [
-        {
-          "source": "10.12.12.1",
-          "group": "239.1.1.1"
-        }
-      ],
       "ge-0/0/2.11": [
         {
           "source": "10.11.11.1",
           "group": "232.1.1.1"
+        }
+      ],
+      "irb.2": [
+        {
+          "source": "10.12.12.1",
+          "group": "239.1.1.1"
         }
       ]
     },
@@ -2672,15 +1601,15 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 14,
-        "output_pps": 3
+        "input_pps": 20,
+        "output_pps": 2
       },
       "ge-0/0/0.0": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 14,
-        "output_pps": 2,
+        "input_pps": 20,
+        "output_pps": 1,
         "admin_status": "up",
         "oper_status": "up"
       },
@@ -2772,7 +1701,16 @@
         "output_errors": 0,
         "framing_errors": 0,
         "input_pps": 0,
-        "output_pps": 10
+        "output_pps": 17
+      },
+      "ge-0/0/2.10": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 5,
+        "admin_status": "up",
+        "oper_status": "up"
       },
       "ge-0/0/2.11": {
         "input_errors": 0,
@@ -2788,7 +1726,7 @@
         "output_errors": 0,
         "framing_errors": 0,
         "input_pps": 0,
-        "output_pps": 5,
+        "output_pps": 6,
         "admin_status": "up",
         "oper_status": "up"
       },
@@ -3077,14 +2015,14 @@
         "input_pps": 0,
         "output_pps": 0
       },
-      ".local..9": {
+      ".local..6": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
         "input_pps": 0,
         "output_pps": 0
       },
-      ".local..13": {
+      ".local..7": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3134,6 +2072,13 @@
         "output_pps": 0
       },
       ".local..20": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..21": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3344,6 +2289,15 @@
         "output_errors": 0,
         "framing_errors": 0,
         "input_pps": 0,
+        "output_pps": 6,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "irb.10": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
         "output_pps": 5,
         "admin_status": "up",
         "oper_status": "up"
@@ -3352,8 +2306,8 @@
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
-        "input_pps": 3,
-        "output_pps": 3,
+        "input_pps": 4,
+        "output_pps": 4,
         "admin_status": "up",
         "oper_status": "up"
       },
@@ -3420,7 +2374,7 @@
         "input_pps": 0,
         "output_pps": 0
       },
-      "lsi.3": {
+      "lsi.256": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3429,7 +2383,7 @@
         "admin_status": "up",
         "oper_status": "up"
       },
-      "lsi.4": {
+      "lsi.257": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3438,7 +2392,7 @@
         "admin_status": "up",
         "oper_status": "up"
       },
-      "lsi.5": {
+      "lsi.258": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3447,7 +2401,16 @@
         "admin_status": "up",
         "oper_status": "up"
       },
-      "lsi.6": {
+      "lsi.259": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi.260": {
         "input_errors": 0,
         "output_errors": 0,
         "framing_errors": 0,
@@ -3581,11 +2544,11 @@
     "ldp_neighbor": {
       "ge-0/0/0.0": {
         "neighbor_address": "10.1.2.0",
-        "uptime_seconds": 1039
+        "uptime_seconds": 19234
       },
       "ge-0/0/1.0": {
         "neighbor_address": "10.1.0.5",
-        "uptime_seconds": 1057
+        "uptime_seconds": 19236
       }
     },
     "mpls_interface": {
@@ -3604,31 +2567,53 @@
             "ge-0/0/2.11"
           ],
           "forwarding_rate_pps": 6,
-          "uptime_seconds": 114,
+          "uptime_seconds": 47,
           "state": "Active",
           "forwarding_state": "Forwarding"
         }
       },
-      "NGMVPN-RECEIVER": {
+      "NGMVPN-IGMP-RECEIVER": {
         "10.12.12.1,239.1.1.1": {
-          "upstream_interface": "lsi.3",
+          "upstream_interface": "lsi.259",
           "downstream_interfaces": [
             "irb.2"
           ],
           "forwarding_rate_pps": 6,
-          "uptime_seconds": 120,
+          "uptime_seconds": 49,
+          "state": "Active",
+          "forwarding_state": "Forwarding"
+        }
+      },
+      "NGMVPN-PIM-RECEIVER": {
+        "10.10.10.1,232.10.10.1": {
+          "upstream_interface": "lsi.260",
+          "downstream_interfaces": [
+            "irb.10"
+          ],
+          "forwarding_rate_pps": 6,
+          "uptime_seconds": 51,
           "state": "Active",
           "forwarding_state": "Forwarding"
         }
       }
     },
     "mvpn_instance": {
-      "NGMVPN-RECEIVER": {
+      "NGMVPN-IGMP-RECEIVER": {
         "c_multicast": [
           {
             "source_prefix": "10.12.12.1/32",
             "group_prefix": "239.1.1.1/32",
-            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 43148,150.0.0.13",
+            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 33489,150.0.0.13",
+            "sender_pe": "150.0.0.13"
+          }
+        ]
+      },
+      "NGMVPN-PIM-RECEIVER": {
+        "c_multicast": [
+          {
+            "source_prefix": "10.10.10.1/32",
+            "group_prefix": "232.10.10.1/32",
+            "provider_tunnel_id": "RSVP-TE P2MP:150.0.0.13, 33490,150.0.0.13",
             "sender_pe": "150.0.0.13"
           }
         ]
@@ -3644,30 +2629,23 @@
       },
       {
         "ip": "2001:db8:11:13::b",
-        "mac": "0c:00:d2:a4:0f:01",
+        "mac": "0c:00:d3:e0:e7:01",
         "interface": "ge-0/0/2.113",
         "state": "reachable",
         "learned_via": null
       },
       {
         "ip": "2001:db8:11:14::4",
-        "mac": "0c:00:49:96:60:02",
+        "mac": "0c:00:25:3f:b3:02",
         "interface": "ge-0/0/4.0",
         "state": "reachable",
         "learned_via": null
       },
       {
         "ip": "2001:abcd:11:14::4",
-        "mac": "0c:00:85:cf:f5:03",
+        "mac": "0c:00:41:09:49:03",
         "interface": "ge-0/0/5.0",
         "state": "reachable",
-        "learned_via": null
-      },
-      {
-        "ip": "fe80::2",
-        "mac": "0c:00:d2:a4:0f:01",
-        "interface": "ge-0/0/2.13",
-        "state": "stale",
         "learned_via": null
       },
       {
@@ -3678,43 +2656,82 @@
         "learned_via": null
       },
       {
-        "ip": "fe80::4f9:6ff:fe85:da1a",
-        "mac": "06:f9:06:85:da:1a",
-        "interface": "ge-0/0/0.0",
-        "state": "stale",
-        "learned_via": null
-      },
-      {
-        "ip": "fe80::1ee8:efff:fe7c:0",
-        "mac": "1c:e8:ef:7c:00:00",
-        "interface": "ge-0/0/0.0",
+        "ip": "fe80::2",
+        "mac": "0c:00:d3:e0:e7:01",
+        "interface": "ge-0/0/2.13",
         "state": "reachable",
         "learned_via": null
       },
       {
-        "ip": "fe80::6c90:3eff:fe98:b075",
-        "mac": "6e:90:3e:98:b0:75",
+        "ip": "fe80::7826:caff:fee1:f6ce",
+        "mac": "7a:26:ca:e1:f6:ce",
         "interface": "ge-0/0/1.0",
         "state": "stale",
         "learned_via": null
       },
       {
-        "ip": "fe80::9a0f:4dff:fe78:9",
-        "mac": "98:0f:4d:78:00:09",
+        "ip": "fe80::7e83:2cff:fe0b:9",
+        "mac": "7e:83:2c:0b:00:09",
         "interface": "ge-0/0/1.0",
         "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::ba03:b0ff:fe72:0",
+        "mac": "ba:03:b0:72:00:00",
+        "interface": "ge-0/0/0.0",
+        "state": "reachable",
         "learned_via": null
       }
     ],
     "optics": {},
+    "pim_join": {
+      "master": {
+        "10.11.11.1,232.1.1.1": {
+          "source": "10.11.11.1",
+          "group": "232.1.1.1",
+          "upstream_interface": "ge-0/0/0.0",
+          "upstream_neighbor": "10.1.2.0",
+          "downstream_interfaces": [
+            "Pseudo-GMP",
+            "ge-0/0/2.11"
+          ],
+          "uptime_seconds": 48
+        }
+      },
+      "NGMVPN-IGMP-RECEIVER": {
+        "10.12.12.1,239.1.1.1": {
+          "source": "10.12.12.1",
+          "group": "239.1.1.1",
+          "upstream_interface": "Through BGP",
+          "upstream_neighbor": "Through MVPN",
+          "downstream_interfaces": [
+            "irb.2"
+          ],
+          "uptime_seconds": 50
+        }
+      },
+      "NGMVPN-PIM-RECEIVER": {
+        "10.10.10.1,232.10.10.1": {
+          "source": "10.10.10.1",
+          "group": "232.10.10.1",
+          "upstream_interface": "Through BGP",
+          "upstream_neighbor": "Through MVPN",
+          "downstream_interfaces": [
+            "irb.10"
+          ],
+          "uptime_seconds": 52
+        }
+      }
+    },
     "pim_neighbor": {
       "ge-0/0/0.0": {
         "neighbor_address": "10.1.2.0",
-        "uptime_seconds": 1031
+        "uptime_seconds": 19225
       },
       "ge-0/0/1.0": {
         "neighbor_address": "10.1.0.5",
-        "uptime_seconds": 1058
+        "uptime_seconds": 19224
       }
     },
     "routes": {
@@ -3755,12 +2772,14 @@
       "inet.2": {
         "10.11.11.1/32": {
           "next_hop": [
-            "10.1.2.0"
+            "10.1.2.0",
+            "10.1.0.5"
           ],
           "via": [
-            "ge-0/0/0.0"
+            "ge-0/0/0.0",
+            "ge-0/0/1.0"
           ],
-          "active": true,
+          "active": false,
           "protocol": "static"
         }
       },
@@ -3804,6 +2823,18 @@
           "via": [],
           "active": true,
           "protocol": "aggregate"
+        }
+      },
+      "NGMVPN-PIM-RECEIVER.inet.0": {
+        "10.10.11.0/30": {
+          "next_hop": [
+            "10.100.11.2"
+          ],
+          "via": [
+            "irb.10"
+          ],
+          "active": true,
+          "protocol": "static"
         }
       },
       "inet6.0": {
@@ -3872,7 +2903,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 8.774
+        "rtt_avg_ms": 0.924
       },
       {
         "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
@@ -3884,7 +2915,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.117
+        "rtt_avg_ms": 1.043
       },
       {
         "scope_id": "svc:INTERNET-CPE13-NNI:Internet",
@@ -3896,7 +2927,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.153
+        "rtt_avg_ms": 1.122
       },
       {
         "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -3908,7 +2939,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.122
+        "rtt_avg_ms": 1.164
       },
       {
         "scope_id": "svc:L3VPN-CPE13-NNI:IPVPN",
@@ -3920,67 +2951,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.156
-      },
-      {
-        "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
-        "target": "198.11.14.4",
-        "routing_instance": "L3VPN-CPE14-UNI",
-        "resolved_from": "bgp",
-        "family": 4,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 0.98
-      },
-      {
-        "scope_id": "svc:L3VPN-CPE14-UNI:IPVPN",
-        "target": "2001:db8:11:14::4",
-        "routing_instance": "L3VPN-CPE14-UNI",
-        "resolved_from": "bgp",
-        "family": 6,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 1.6
-      },
-      {
-        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
-        "target": "152.11.14.4",
-        "routing_instance": null,
-        "resolved_from": "bgp",
-        "family": 4,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 1.257
-      },
-      {
-        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
-        "target": "2001:abcd:11:14::4",
-        "routing_instance": null,
-        "resolved_from": "bgp",
-        "family": 6,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 1.108
-      },
-      {
-        "scope_id": "svc:NGMVPN receivers POP1:IPVPN",
-        "target": "10.12.11.1",
-        "routing_instance": "NGMVPN-RECEIVER",
-        "resolved_from": "subnet-fallback",
-        "family": 4,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 1.35
+        "rtt_avg_ms": 1.123
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -3992,7 +2963,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.879
+        "rtt_avg_ms": 1.915
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4004,19 +2975,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 2.191
-      },
-      {
-        "scope_id": "svc:irb.4094:IPVPN",
-        "target": "10.40.94.4",
-        "routing_instance": "MGMT",
-        "resolved_from": "arp",
-        "family": 4,
-        "interface": null,
-        "sent": 5,
-        "received": 5,
-        "loss_percent": 0,
-        "rtt_avg_ms": 5.954
+        "rtt_avg_ms": 2.448
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4040,7 +2999,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.345
+        "rtt_avg_ms": 5.814
       },
       {
         "scope_id": "svc:irb.4094:IPVPN",
@@ -4052,7 +3011,7 @@
         "sent": 5,
         "received": 5,
         "loss_percent": 0,
-        "rtt_avg_ms": 1.896
+        "rtt_avg_ms": 1.729
       }
     ],
     "ping_skipped": []

@@ -1,0 +1,60 @@
+schema_version: 9
+device: 172.20.20.4
+interfaces:
+- interface: ge-0/0/4
+  description: L3VPN-CPE14-UNI
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: ge-0/0/4.0
+  description: L3VPN-CPE14-UNI
+  service_type: IPVPN
+  service_subtype: null
+  ipv4_address:
+  - 198.11.14.1/29
+  ipv6_address:
+  - 2001:db8:11:14::1/64
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: L3VPN-CPE14-UNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - inet6
+  - bgp
+  - vrf
+  bgp_neighbor:
+  - 198.11.14.4
+  - 2001:db8:11:14::4
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.14.4, 2001:db8:11:14::4'

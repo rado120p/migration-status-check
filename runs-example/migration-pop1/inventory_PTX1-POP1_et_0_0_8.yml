@@ -1,0 +1,388 @@
+schema_version: 9
+device: 172.20.20.5
+interfaces:
+- interface: et-0/0/8
+  description: NNI1-TO-CPE1
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: et-0/0/8.10
+  description: NGMVPN-PIM-RECEIVER
+  service_type: Unknown
+  service_subtype: layer2
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '10'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: low
+  detection_reason:
+  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+- interface: et-0/0/8.11
+  description: INET2-MULTICAST-RECEIVER
+  service_type: Internet
+  service_subtype: multicast
+  ipv4_address:
+  - 10.111.11.1/30
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - igmp
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '11'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - Rozhraní je pod protocols igmp — multicast receiver.
+- interface: et-0/0/8.12
+  description: NGMVPN-IGMP-RECEIVER
+  service_type: Unknown
+  service_subtype: layer2
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '12'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: low
+  detection_reason:
+  - Rozhraní je L2, ale konfigurace neobsahuje dostatek údajů pro určení konkrétní služby.
+- interface: et-0/0/8.13
+  description: INTERNET-CPE13-NNI
+  service_type: Internet
+  service_subtype: null
+  ipv4_address:
+  - 152.11.13.1/30
+  ipv6_address:
+  - fe80::1/64
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - inet6
+  - bgp
+  bgp_neighbor:
+  - 152.11.13.2
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '13'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route:
+  - rib: inet.0
+    prefix: 198.62.1.0/29
+    route_type: static
+    next_hops:
+    - to: 152.11.13.2
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  - rib: inet.0
+    prefix: 198.62.2.0/24
+    route_type: static
+    next_hops:
+    - to: 152.11.13.2
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  - rib: inet6.0
+    prefix: 2001:abcd:11:13::/64
+    route_type: static
+    next_hops:
+    - to: fe80::2
+      interface: et-0/0/8.13
+      qualified: true
+      active: true
+    active: true
+  bfd: []
+  detection_confidence: medium
+  detection_reason:
+  - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.13.2'
+  - 'Statická routa odpovídá subnetu rozhraní: 198.62.1.0/29, 198.62.2.0/24, 2001:abcd:11:13::/64'
+- interface: et-0/0/8.113
+  description: L3VPN-CPE13-NNI
+  service_type: IPVPN
+  service_subtype: null
+  ipv4_address:
+  - 198.11.13.1/30
+  ipv6_address:
+  - 2001:db8:11:13::a/127
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: L3VPN-CPE13-NNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - inet6
+  - bgp
+  - vrf
+  bgp_neighbor:
+  - 198.11.13.2
+  - 2001:db8:11:13::b
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '113'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route:
+  - rib: L3VPN-CPE13-NNI.inet.0
+    prefix: 172.26.1.0/29
+    route_type: static
+    next_hops:
+    - to: 198.11.13.2
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  - rib: L3VPN-CPE13-NNI.inet6.0
+    prefix: 2001:eeee::/64
+    route_type: static
+    next_hops:
+    - to: 2001:db8:11:13::b
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 198.11.13.2, 2001:db8:11:13::b'
+  - 'Statická routa odpovídá subnetu rozhraní: 172.26.1.0/29, 2001:eeee::/64'
+- interface: et-0/0/8.213
+  description: EVPN-VPWS-CPE13-NNI
+  service_type: E-Line
+  service_subtype: vpws
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VPWS-CPE13-NNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ccc
+  - evpn
+  - evpn-vpws
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan:
+  - '213'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance používá instance-type evpn-vpws.
+- interface: et-0/0/8.313
+  description: EVPN-VLAN-AWARE-CPE13-NNI
+  service_type: E-LAN
+  service_subtype: vlan-aware
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VLAN-AWARE-CPE13-NNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  - evpn
+  - mac-vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-313
+  customer_vlan:
+  - '313'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance explicitně používá service-type vlan-aware.
+- interface: et-0/0/8.413
+  description: EVPN-VLAN-BASED-CPE13-NNI
+  service_type: E-LAN
+  service_subtype: vlan-based
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VLAN-BASED-CPE13-NNI
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  - evpn
+  - mac-vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-NONE
+  customer_vlan:
+  - '413'
+  - none
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance explicitně používá service-type vlan-based.
+- interface: et-0/0/8.4094
+  description: MGMT-DEVICE4
+  service_type: E-LAN
+  service_subtype: vlan-aware
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: EVPN-VLAN-AWARE-POP1
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - ethernet-switching
+  - evpn
+  - mac-vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-4094
+  customer_vlan:
+  - '4093'
+  - '4094'
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Routing instance explicitně používá service-type vlan-aware.
+- interface: irb.4094
+  description: null
+  service_type: IPVPN
+  service_subtype: null
+  ipv4_address:
+  - 10.40.94.254/24
+  - 10.40.95.254/24
+  ipv6_address: []
+  virtual_gw_ipv4_address:
+  - 10.40.94.1
+  - 10.40.95.1
+  virtual_gw_ipv6_address: []
+  routing_instance: MGMT
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - vrf
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain:
+  - VL-4094
+  customer_vlan:
+  - '4094'
+  l2_interface:
+  - ae0.4094
+  - et-0/0/8.4094
+  mvpn_site: []
+  lag_members: []
+  static_route:
+  - rib: MGMT.inet.0
+    prefix: 10.40.96.0/24
+    route_type: static
+    next_hops:
+    - to: 10.40.94.10
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  - rib: MGMT.inet.0
+    prefix: 10.40.94.0/23
+    route_type: aggregate
+    next_hops: []
+    active: true
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Rozhraní je přiřazeno do routing instance typu vrf.
+  - 'Statická routa odpovídá subnetu rozhraní: 10.40.96.0/24'
+  - 'Agregátní routa patří této službě: 10.40.94.0/23'

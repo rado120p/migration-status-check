@@ -1,0 +1,78 @@
+schema_version: 1
+kind: migration
+devices:
+  MX1-POP1:
+    host: 172.20.20.4
+    platform: junos
+    role: old
+  PTX1-POP1:
+    host: 172.20.20.5
+    platform: junos-evo
+    role: new
+interface_mapping:
+- old:
+    node: MX1-POP1
+    port: ge-0/0/2
+  new:
+    node: PTX1-POP1
+    port: et-0/0/8
+- old:
+    node: MX1-POP1
+    port: ge-0/0/3
+  new:
+    node: PTX1-POP1
+    port: ae0
+- old:
+    node: MX1-POP1
+    port: ge-0/0/4
+  new:
+    node: PTX1-POP1
+    port: ae0
+- old:
+    node: MX1-POP1
+    port: ge-0/0/5
+  new:
+    node: PTX1-POP1
+    port: ae0
+- old:
+    node: MX1-POP1
+    port: ge-0/0/6
+  new:
+    node: PTX1-POP1
+    port: ae0
+captures:
+- phase: pre
+  device: MX1-POP1
+  port: ge-0/0/2
+  snapshot: snapshot_pre_MX1-POP1_ge_0_0_2.json
+  taken: '2026-09-08T19:30:14Z'
+- phase: post
+  device: PTX1-POP1
+  port: et-0/0/8
+  snapshot: snapshot_post_PTX1-POP1_et_0_0_8.json
+  taken: '2026-09-08T19:31:03Z'
+- phase: pre
+  device: MX1-POP1
+  port: ge-0/0/3
+  snapshot: snapshot_pre_MX1-POP1_ge_0_0_3.json
+  taken: '2026-09-09T07:22:56Z'
+- phase: post
+  device: PTX1-POP1
+  port: ae0
+  snapshot: snapshot_post_PTX1-POP1_ae0.json
+  taken: '2026-09-09T07:32:18Z'
+- phase: pre
+  device: MX1-POP1
+  port: ge-0/0/4
+  snapshot: snapshot_pre_MX1-POP1_ge_0_0_4.json
+  taken: '2026-09-09T07:25:18Z'
+- phase: pre
+  device: MX1-POP1
+  port: ge-0/0/5
+  snapshot: snapshot_pre_MX1-POP1_ge_0_0_5.json
+  taken: '2026-09-09T07:26:48Z'
+- phase: pre
+  device: MX1-POP1
+  port: ge-0/0/6
+  snapshot: snapshot_pre_MX1-POP1_ge_0_0_6.json
+  taken: '2026-09-09T07:27:14Z'

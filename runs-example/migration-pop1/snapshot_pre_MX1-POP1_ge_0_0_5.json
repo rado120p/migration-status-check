@@ -1,0 +1,1525 @@
+{
+  "schema_version": 13,
+  "device": {
+    "address": "172.20.20.4",
+    "hostname": "clab-pop-migration-MX1-POP1",
+    "platform": "junos",
+    "model": "VMX",
+    "version": "24.2R1-S2.5",
+    "uptime_seconds": null
+  },
+  "capture": {
+    "started_at": "2026-09-09T07:26:48Z",
+    "finished_at": "2026-09-09T07:26:58Z",
+    "phase": "pre",
+    "collectors": {
+      "arp": {
+        "status": "ok"
+      },
+      "bfd": {
+        "status": "ok"
+      },
+      "bgp": {
+        "status": "ok"
+      },
+      "evpn_esi": {
+        "status": "ok"
+      },
+      "evpn_instance": {
+        "status": "ok"
+      },
+      "evpn_mac": {
+        "status": "ok"
+      },
+      "evpn_vpws": {
+        "status": "ok"
+      },
+      "igmp_group": {
+        "status": "ok"
+      },
+      "interfaces": {
+        "status": "ok"
+      },
+      "isis_adjacency": {
+        "status": "ok"
+      },
+      "isis_interface": {
+        "status": "ok"
+      },
+      "isis_overview": {
+        "status": "ok"
+      },
+      "ldp_neighbor": {
+        "status": "ok"
+      },
+      "mpls_interface": {
+        "status": "ok"
+      },
+      "multicast_route": {
+        "status": "ok"
+      },
+      "mvpn_instance": {
+        "status": "ok"
+      },
+      "nd": {
+        "status": "ok"
+      },
+      "optics": {
+        "status": "ok"
+      },
+      "pim_join": {
+        "status": "ok"
+      },
+      "pim_neighbor": {
+        "status": "ok"
+      },
+      "routes": {
+        "status": "ok"
+      }
+    }
+  },
+  "inventory": [
+    {
+      "interface": "ge-0/0/5",
+      "description": "EVPN-VLAN-AWARE-INTERNET",
+      "service_type": "Layer1",
+      "service_subtype": "physical-port",
+      "ipv4_address": [],
+      "ipv6_address": [],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [],
+      "bgp_neighbor": [],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "mvpn_site": [],
+      "lag_members": [],
+      "static_route": [],
+      "bfd": []
+    },
+    {
+      "interface": "ge-0/0/5.0",
+      "description": "EVPN-VLAN-AWARE-INTERNET",
+      "service_type": "Internet",
+      "service_subtype": null,
+      "ipv4_address": [
+        "152.11.14.1/29"
+      ],
+      "ipv6_address": [
+        "2001:abcd:11:14::1/64"
+      ],
+      "virtual_gw_ipv4_address": [],
+      "virtual_gw_ipv6_address": [],
+      "routing_instance": null,
+      "routing_instance_active": true,
+      "interface_active": true,
+      "protocol": [
+        "inet",
+        "inet6",
+        "bgp"
+      ],
+      "bgp_neighbor": [
+        "152.11.14.4",
+        "2001:abcd:11:14::4"
+      ],
+      "bgp_neighbor_inactive": [],
+      "bridge_domain": [],
+      "customer_vlan": [],
+      "l2_interface": [],
+      "mvpn_site": [],
+      "lag_members": [],
+      "static_route": [
+        {
+          "rib": "inet6.0",
+          "prefix": "2001:aaaa::/64",
+          "route_type": "static",
+          "next_hops": [
+            {
+              "to": "2001:abcd:11:14::4",
+              "interface": null,
+              "qualified": false,
+              "active": true
+            }
+          ],
+          "active": true
+        }
+      ],
+      "bfd": []
+    }
+  ],
+  "scopes": [
+    {
+      "id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+      "kind": "service",
+      "key": {
+        "description": "EVPN-VLAN-AWARE-INTERNET",
+        "service_type": "Internet",
+        "service_subtype": null
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/5.0"
+        ],
+        "physical_interfaces": [
+          "ge-0/0/5"
+        ],
+        "routing_instances": [],
+        "bgp_neighbors": [
+          "152.11.14.4",
+          "2001:abcd:11:14::4"
+        ],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [
+          "152.11.14.1/29"
+        ],
+        "local_ipv6": [
+          "2001:abcd:11:14::1/64"
+        ],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [
+          {
+            "rib": "inet6.0",
+            "prefix": "2001:aaaa::/64",
+            "route_type": "static",
+            "next_hops": [
+              {
+                "to": "2001:abcd:11:14::4",
+                "interface": null,
+                "qualified": false,
+                "active": true
+              }
+            ],
+            "active": true
+          }
+        ],
+        "bfd_peers": [],
+        "protocols": [
+          "inet",
+          "inet6",
+          "bgp"
+        ],
+        "mvpn_site": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    },
+    {
+      "id": "l1:ge-0/0/5",
+      "kind": "layer1",
+      "key": {
+        "description": "EVPN-VLAN-AWARE-INTERNET",
+        "service_type": "Layer1",
+        "service_subtype": "physical-port"
+      },
+      "selectors": {
+        "interfaces": [
+          "ge-0/0/5"
+        ],
+        "physical_interfaces": [],
+        "routing_instances": [],
+        "bgp_neighbors": [],
+        "bgp_neighbors_inactive": [],
+        "local_ipv4": [],
+        "local_ipv6": [],
+        "virtual_gw_v4": [],
+        "virtual_gw_v6": [],
+        "vlans": [],
+        "bridge_domains": [],
+        "lag_members": [],
+        "l2_interfaces": [],
+        "static_routes": [],
+        "bfd_peers": [],
+        "protocols": [],
+        "mvpn_site": []
+      },
+      "routing_instance_active": true,
+      "interface_active": true
+    }
+  ],
+  "facts": {
+    "arp": [
+      {
+        "ip": "10.0.0.2",
+        "mac": "52:55:0a:00:00:02",
+        "interface": "fxp0.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.1.0.5",
+        "mac": "7e:83:2c:0b:00:09",
+        "interface": "ge-0/0/1.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.1.2.0",
+        "mac": "ba:03:b0:72:00:00",
+        "interface": "ge-0/0/0.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.2",
+        "mac": "0c:00:54:57:c7:02",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.3",
+        "mac": "0c:00:37:c0:d0:03",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.4",
+        "mac": "0c:00:d3:e0:e7:01",
+        "interface": "irb.4094",
+        "learned_via": ".local..14",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.10",
+        "mac": "2c:6b:f5:d8:ea:f0",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.252",
+        "mac": "2c:6b:f5:25:67:f0",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.94.254",
+        "mac": "7e:83:2c:0b:08:06",
+        "interface": "irb.4094",
+        "learned_via": ".local..14",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.95.3",
+        "mac": "0c:00:5e:b5:21:04",
+        "interface": "irb.4094",
+        "learned_via": "ge-0/0/6.4094",
+        "routing_instance": null
+      },
+      {
+        "ip": "10.40.95.254",
+        "mac": "7e:83:2c:0b:08:06",
+        "interface": "irb.4094",
+        "learned_via": ".local..14",
+        "routing_instance": null
+      },
+      {
+        "ip": "128.0.0.16",
+        "mac": "02:00:00:00:00:10",
+        "interface": "em1.0",
+        "learned_via": null,
+        "routing_instance": null
+      },
+      {
+        "ip": "152.11.14.4",
+        "mac": "0c:00:41:09:49:03",
+        "interface": "ge-0/0/5.0",
+        "learned_via": null,
+        "routing_instance": null
+      }
+    ],
+    "bfd": {
+      "10.1.0.5": {
+        "state": "Up",
+        "interface": "ge-0/0/1.0",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": [
+          "ISIS L2"
+        ],
+        "detection_time": "30.000",
+        "transmission_interval": "10.000",
+        "multiplier": 3
+      },
+      "10.1.2.0": {
+        "state": "Up",
+        "interface": "ge-0/0/0.0",
+        "remote_state": "Up",
+        "local_diagnostic": "None",
+        "clients": [
+          "ISIS L2"
+        ],
+        "detection_time": "30.000",
+        "transmission_interval": "10.000",
+        "multiplier": 3
+      }
+    },
+    "bgp": {
+      "150.0.0.1": {
+        "state": "Established",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {
+          "bgp.rtarget.0": {
+            "received": 1,
+            "accepted": 1,
+            "advertised": 3,
+            "active": 1,
+            "suppressed": 0
+          },
+          "inet.0": {
+            "received": 8,
+            "accepted": 8,
+            "advertised": 4,
+            "active": 8,
+            "suppressed": 0
+          },
+          "bgp.l3vpn.0": {
+            "received": 5,
+            "accepted": 5,
+            "advertised": 0,
+            "active": 5,
+            "suppressed": 0
+          },
+          "bgp.evpn.0": {
+            "received": 10,
+            "accepted": 10,
+            "advertised": 18,
+            "active": 10,
+            "suppressed": 0
+          },
+          "bgp.mvpn.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          },
+          "MGMT.inet.0": {
+            "received": 5,
+            "accepted": 5,
+            "advertised": 9,
+            "active": 1,
+            "suppressed": 0
+          },
+          "EVPN-VLAN-AWARE-POP1.evpn.0": {
+            "received": 10,
+            "accepted": 10,
+            "advertised": 0,
+            "active": 10,
+            "suppressed": 0
+          },
+          "__default_evpn__.evpn.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 0,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "150.0.0.2": {
+        "state": "Active",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {}
+      },
+      "152.11.14.4": {
+        "state": "Established",
+        "peer_as": 100,
+        "routing_instance": null,
+        "ribs": {
+          "inet.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 10,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:db8::1": {
+        "state": "Established",
+        "peer_as": 65000,
+        "routing_instance": null,
+        "ribs": {
+          "inet6.0": {
+            "received": 2,
+            "accepted": 2,
+            "advertised": 5,
+            "active": 2,
+            "suppressed": 0
+          }
+        }
+      },
+      "2001:abcd:11:14::4": {
+        "state": "Established",
+        "peer_as": 100,
+        "routing_instance": null,
+        "ribs": {
+          "inet6.0": {
+            "received": 0,
+            "accepted": 0,
+            "advertised": 4,
+            "active": 0,
+            "suppressed": 0
+          }
+        }
+      }
+    },
+    "evpn_esi": {},
+    "evpn_instance": {
+      "EVPN-VLAN-AWARE-POP1": {
+        "local_interfaces": {
+          "total": 2,
+          "up": 2,
+          "entries": [
+            {
+              "name": ".local..14",
+              "status": "Up"
+            },
+            {
+              "name": "ge-0/0/6.4094",
+              "status": "Up"
+            }
+          ]
+        },
+        "irb_interfaces": {
+          "total": 1,
+          "up": 1,
+          "entries": [
+            {
+              "name": "irb.4094",
+              "status": "Up",
+              "l3_context": "MGMT"
+            }
+          ]
+        },
+        "neighbors": {
+          "total": 1,
+          "addresses": [
+            "150.0.0.12"
+          ]
+        },
+        "esis": {}
+      }
+    },
+    "evpn_mac": {
+      "EVPN-VLAN-AWARE-POP1": {
+        "vlans": {
+          "4094": {
+            "count": 8,
+            "domain": "BD-4094"
+          }
+        },
+        "interfaces": {
+          "ge-0/0/6.4094": {
+            "count": 5,
+            "name": "ge-0/0/6.4094:4094",
+            "domain": "BD-4094"
+          }
+        }
+      }
+    },
+    "evpn_vpws": {},
+    "igmp_group": {},
+    "interfaces": {
+      "ge-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 5,
+        "output_pps": 1
+      },
+      "ge-0/0/0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 5,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lc-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lc-0/0/0.32769": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfe-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pfe-0/0/0.16383": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfh-0/0/0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pfh-0/0/0.16383": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "pfh-0/0/0.16384": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 1
+      },
+      "ge-0/0/1.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 1,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/2": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/2.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/3": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/3.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/4": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/4.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/5": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/5.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/6": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 3,
+        "output_pps": 3
+      },
+      "ge-0/0/6.4094": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 3,
+        "output_pps": 3,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/6.32767": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/7": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/7.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/8": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/8.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "ge-0/0/9": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/9.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      "ge-0/0/10": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/10.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      "ge-0/0/11": {
+        "admin_status": "up",
+        "oper_status": "down",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ge-0/0/11.16386": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "down"
+      },
+      ".local.": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..1": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..2": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..3": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..4": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..5": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..6": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..7": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..14": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..17": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36735": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36736": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36737": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      ".local..36738": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "cbp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "demux0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "dsc": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "em1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "em1.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "esi": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti1": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti2": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti3": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti4": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti5": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti6": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fti7": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fxp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "fxp0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "gre": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "ipip": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "irb": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "irb.4094": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 3,
+        "output_pps": 3,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "jsrv": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "jsrv.1": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lo0.0": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0.16384": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lo0.16385": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "lsi": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "lsi.258": {
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0,
+        "admin_status": "up",
+        "oper_status": "up"
+      },
+      "mif": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "mtun": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pimd": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pime": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pip0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "pp0": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "rbeb": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "tap": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      },
+      "vtep": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "input_errors": 0,
+        "output_errors": 0,
+        "framing_errors": 0,
+        "input_pps": 0,
+        "output_pps": 0
+      }
+    },
+    "isis_adjacency": {
+      "ge-0/0/0.0": {
+        "system_name": "clab-pop-migration-P1",
+        "state": "Up",
+        "ip_address": "10.1.2.0",
+        "ipv6_address": "2001:db8:2::1"
+      },
+      "ge-0/0/1.0": {
+        "system_name": "clab-pop-migration-PTX1-POP1",
+        "state": "Up",
+        "ip_address": "10.1.0.5",
+        "ipv6_address": "2001:db8:6::2"
+      }
+    },
+    "isis_interface": {
+      "ge-0/0/0.0": {
+        "levels": {
+          "2": {
+            "passive": false
+          }
+        }
+      },
+      "ge-0/0/1.0": {
+        "levels": {
+          "2": {
+            "passive": false
+          }
+        }
+      },
+      "lo0.0": {
+        "levels": {
+          "2": {
+            "passive": true
+          }
+        }
+      }
+    },
+    "isis_overview": {
+      "overload_enabled": false
+    },
+    "ldp_neighbor": {
+      "ge-0/0/0.0": {
+        "neighbor_address": "10.1.2.0",
+        "uptime_seconds": 62227
+      },
+      "ge-0/0/1.0": {
+        "neighbor_address": "10.1.0.5",
+        "uptime_seconds": 62229
+      }
+    },
+    "mpls_interface": {
+      "ge-0/0/0.0": {
+        "state": "Up"
+      },
+      "ge-0/0/1.0": {
+        "state": "Up"
+      }
+    },
+    "multicast_route": {},
+    "mvpn_instance": {},
+    "nd": [
+      {
+        "ip": "2001:db8::1",
+        "mac": "none",
+        "interface": "fxp0.0",
+        "state": "unreachable",
+        "learned_via": null
+      },
+      {
+        "ip": "2001:abcd:11:14::4",
+        "mac": "0c:00:41:09:49:03",
+        "interface": "ge-0/0/5.0",
+        "state": "reachable",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::2",
+        "mac": "52:56:00:00:00:02",
+        "interface": "fxp0.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::e00:41ff:fe09:4903",
+        "mac": "0c:00:41:09:49:03",
+        "interface": "ge-0/0/5.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::1426:15ff:fe14:60e8",
+        "mac": "16:26:15:14:60:e8",
+        "interface": "ge-0/0/5.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::7826:caff:fee1:f6ce",
+        "mac": "7a:26:ca:e1:f6:ce",
+        "interface": "ge-0/0/1.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::7e83:2cff:fe0b:9",
+        "mac": "7e:83:2c:0b:00:09",
+        "interface": "ge-0/0/1.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::a8c1:abff:fe25:770d",
+        "mac": "aa:c1:ab:25:77:0d",
+        "interface": "ge-0/0/5.0",
+        "state": "stale",
+        "learned_via": null
+      },
+      {
+        "ip": "fe80::ba03:b0ff:fe72:0",
+        "mac": "ba:03:b0:72:00:00",
+        "interface": "ge-0/0/0.0",
+        "state": "stale",
+        "learned_via": null
+      }
+    ],
+    "optics": {},
+    "pim_join": {},
+    "pim_neighbor": {
+      "ge-0/0/0.0": {
+        "neighbor_address": "10.1.2.0",
+        "uptime_seconds": 62218
+      },
+      "ge-0/0/1.0": {
+        "neighbor_address": "10.1.0.5",
+        "uptime_seconds": 62217
+      }
+    },
+    "routes": {
+      "inet.2": {
+        "10.11.11.1/32": {
+          "next_hop": [
+            "10.1.2.0",
+            "10.1.0.5"
+          ],
+          "via": [
+            "ge-0/0/0.0",
+            "ge-0/0/1.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "mgmt_junos.inet.0": {
+        "0.0.0.0/0": {
+          "next_hop": [
+            "10.0.0.2"
+          ],
+          "via": [
+            "fxp0.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "MGMT.inet.0": {
+        "10.40.96.0/24": {
+          "next_hop": [
+            "10.40.94.10"
+          ],
+          "via": [
+            "irb.4094"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "10.40.94.0/23": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      },
+      "inet6.0": {
+        "2001:aaaa::/64": {
+          "next_hop": [
+            "2001:abcd:11:14::4"
+          ],
+          "via": [
+            "ge-0/0/5.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        },
+        "2001:abcd::/32": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      },
+      "mgmt_junos.inet6.0": {
+        "::/0": {
+          "next_hop": [
+            "2001:db8::1"
+          ],
+          "via": [
+            "fxp0.0"
+          ],
+          "active": true,
+          "protocol": "static"
+        }
+      },
+      "inet.0": {
+        "10.1.0.0/23": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        },
+        "150.0.0.0/24": {
+          "next_hop": [],
+          "via": [],
+          "active": true,
+          "protocol": "aggregate"
+        }
+      }
+    }
+  },
+  "probes": {
+    "ping": [
+      {
+        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+        "target": "152.11.14.4",
+        "routing_instance": null,
+        "resolved_from": "bgp",
+        "family": 4,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.094
+      },
+      {
+        "scope_id": "svc:EVPN-VLAN-AWARE-INTERNET:Internet",
+        "target": "2001:abcd:11:14::4",
+        "routing_instance": null,
+        "resolved_from": "bgp",
+        "family": 6,
+        "interface": null,
+        "sent": 5,
+        "received": 5,
+        "loss_percent": 0,
+        "rtt_avg_ms": 1.026
+      }
+    ],
+    "ping_skipped": []
+  }
+}

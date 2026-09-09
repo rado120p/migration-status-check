@@ -1,0 +1,69 @@
+schema_version: 9
+device: 172.20.20.4
+interfaces:
+- interface: ge-0/0/5
+  description: EVPN-VLAN-AWARE-INTERNET
+  service_type: Layer1
+  service_subtype: physical-port
+  ipv4_address: []
+  ipv6_address: []
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol: []
+  bgp_neighbor: []
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route: []
+  bfd: []
+  detection_confidence: high
+  detection_reason:
+  - Jde o fyzické rozhraní bez logické servisní konfigurace.
+- interface: ge-0/0/5.0
+  description: EVPN-VLAN-AWARE-INTERNET
+  service_type: Internet
+  service_subtype: null
+  ipv4_address:
+  - 152.11.14.1/29
+  ipv6_address:
+  - 2001:abcd:11:14::1/64
+  virtual_gw_ipv4_address: []
+  virtual_gw_ipv6_address: []
+  routing_instance: null
+  routing_instance_active: true
+  interface_active: true
+  protocol:
+  - inet
+  - inet6
+  - bgp
+  bgp_neighbor:
+  - 152.11.14.4
+  - 2001:abcd:11:14::4
+  bgp_neighbor_inactive: []
+  bridge_domain: []
+  customer_vlan: []
+  l2_interface: []
+  mvpn_site: []
+  lag_members: []
+  static_route:
+  - rib: inet6.0
+    prefix: 2001:aaaa::/64
+    route_type: static
+    next_hops:
+    - to: 2001:abcd:11:14::4
+      interface: null
+      qualified: false
+      active: true
+    active: true
+  bfd: []
+  detection_confidence: medium
+  detection_reason:
+  - Rozhraní má family inet/inet6 nebo IP adresu a není přiřazeno do zákaznické VRF.
+  - 'BGP neighbor odpovídá subnetu rozhraní: 152.11.14.4, 2001:abcd:11:14::4'
+  - 'Statická routa odpovídá subnetu rozhraní: 2001:aaaa::/64'
