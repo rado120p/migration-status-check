@@ -2638,7 +2638,7 @@ class App {
     const catalogueTypes = this.cache.catalogue ? this.cache.catalogue.service_types : null;
     this.mainEl.appendChild(this.buildServiceTypeFilter(pairedEntries, catalogueTypes, mainModels));
 
-    const shown = R.filterServiceEntries(pairedEntries, filterType);
+    const shown = R.filterAcrossModels(model.groups.flatMap((g) => g.evaluations), filterType);
     const head = el("div", {
       className: "section-head",
       children: [
@@ -2795,7 +2795,7 @@ class App {
       badges.appendChild(el("span", { className: "badge-pill neutral", text: this.pendingLabel(group, evaluationFailed) }));
     } else {
       const entries = group.evaluations.flatMap((m) => m.serviceEntries);
-      const shown = R.filterServiceEntries(entries, filterType);
+      const shown = R.filterAcrossModels(group.evaluations, filterType);
       const filtering = filterType !== R.ALL_TYPES;
       const countText = filtering
         ? `${shown.matchedCount} / ${entries.length} service results`
@@ -2805,8 +2805,7 @@ class App {
       if (shown.linkedContextCount) {
         badges.appendChild(el("span", { className: "pair-count", text: `+ ${shown.linkedContextCount} linked context` }));
       }
-      const matchedOnly = shown.visible.filter((v) => !v.linkedContext);
-      const counts = R.countStatuses(matchedOnly.map((v) => v.entry.scope.status));
+      const counts = R.countStatuses(shown.statuses);
       for (const key of R.STATUS_KEYS) {
         if (!counts[key]) continue;
         const badgeAttrs = filtering ? { title: `${key.toUpperCase()} among visible results` } : {};
