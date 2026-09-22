@@ -322,6 +322,13 @@ function phaseCell(row, phase, taskState) {
   return { kind: "time", text: match ? match[1] : taken, title: taken };
 }
 
+// Sidebar snapshot row: device and port on separate lines so a long port is
+// never cropped. The phase is carried by the badge, not repeated in the text.
+function snapshotLabel(snap) {
+  const port = snap.port || "all";
+  return { device: snap.device, port, title: `${snap.device}:${port}` };
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -344,6 +351,7 @@ const MigView = {
   groupRowOrder,
   sortGroupRows,
   phaseCell,
+  snapshotLabel,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;

@@ -225,12 +225,18 @@ a:hover { color: #0e3fa9; }
 .snap-row-label {
   font: 500 12px 'IBM Plex Mono', monospace;
   color: #374151;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.snap-row.active .snap-row-label { color: #1a56db; }
+.snap-row-port {
+  font: 500 12px 'IBM Plex Mono', monospace;
+  color: #374151;
+  overflow-wrap: anywhere;
+}
+
+.snap-row.active .snap-row-label,
+.snap-row.active .snap-row-port { color: #1a56db; }
 
 .phase-badge {
   font: 600 10px 'IBM Plex Mono', monospace;

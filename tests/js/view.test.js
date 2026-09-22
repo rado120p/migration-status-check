@@ -385,3 +385,18 @@ test("changeText: new_since_baseline row says 'novy zaznam', not 'bez baseline'"
   assert.strictEqual(MigView.changeText(row, true), "novy zaznam (v baseline nebyl)");
   assert.strictEqual(MigView.changeText(row, false), "");
 });
+
+test("snapshotLabel: device and port on separate lines, phase not repeated", () => {
+  const snap = { phase: "post", device: "172.20.20.5", port: "et-0/0/12" };
+  const out = MigView.snapshotLabel(snap);
+  assert.strictEqual(out.device, "172.20.20.5");
+  assert.strictEqual(out.port, "et-0/0/12");
+  assert.strictEqual(out.title, "172.20.20.5:et-0/0/12");
+  assert.ok(!out.device.includes("post") && !out.port.includes("post"));
+});
+
+test("snapshotLabel: whole-box capture shows 'all' as the port", () => {
+  const out = MigView.snapshotLabel({ phase: "pre", device: "mx1", port: null });
+  assert.strictEqual(out.port, "all");
+  assert.strictEqual(out.title, "mx1:all");
+});

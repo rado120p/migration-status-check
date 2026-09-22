@@ -2092,22 +2092,24 @@ class App {
     const snapshots = this.cache.detail ? this.cache.detail.snapshots : [];
     for (const snap of snapshots) {
       const active = snap.file === this.state.selectedSnapshot;
-      const label = `${snap.phase} ${snap.device}:${snap.port || "all"}`;
+      const label = MigView.snapshotLabel(snap);
       this.sidebarSnapshotsEl.appendChild(
         el("div", {
           className: "snap-row" + (active ? " active" : ""),
+          attrs: { title: label.title },
           onClick: () => this.selectSnapshot(snap.file),
           children: [
             el("div", {
               className: "snap-row-top",
               children: [
-                el("span", { className: "snap-row-label mono", text: label }),
+                el("span", { className: "snap-row-label mono", text: label.device }),
                 el("span", {
                   className: "phase-badge phase-" + snap.phase,
                   text: snap.phase,
                 }),
               ],
             }),
+            el("span", { className: "snap-row-port mono", text: label.port }),
             el("span", { className: "snap-row-taken", text: snap.taken || "" }),
           ],
         })
