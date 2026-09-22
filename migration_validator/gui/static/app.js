@@ -185,6 +185,8 @@ class App {
     this.sidebarSnapshotsEl = document.getElementById("sidebar-snapshots");
     this.sidebarFooterEl = document.getElementById("sidebar-footer");
     this.mainEl = document.getElementById("main");
+    // Column widths are measured from rendered text; re-measure once web fonts land.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.syncResultsColumns());
     this.guideEl = document.getElementById("guide");
     this.btnProfilesEl = document.getElementById("btn-profiles");
 
@@ -2045,22 +2047,25 @@ class App {
       const target = this.mainEl.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
       if (target) target.focus();
     }
-    this.syncRiColumn();
+    this.syncResultsColumns();
     this.syncCapturePolling();
     this.syncGroupPolling();
   }
 
-  // RI column: each results row is its own grid and a view may hold several
-  // results tables (one per port pairing), so size the track once from the
-  // longest RI name on the page (JetBrains Mono 14px ~ 8.4px/char) and share
-  // it via a CSS variable on the main panel so every table lines up.
-  syncRiColumn() {
-    let riChars = 0;
-    for (const cell of this.mainEl.querySelectorAll(".ri-cell")) {
-      riChars = Math.max(riChars, cell.textContent.length);
+  // Typ and RI columns: each results row is its own grid and a view may hold
+  // several results tables (one per port pairing), so size each track once
+  // from the widest cell on the page and share it via a CSS variable on the
+  // main panel so every table lines up. Cells are nowrap, so scrollWidth is
+  // the full single-line width even when the current track is narrower.
+  syncResultsColumns() {
+    for (const [cls, prop] of [["svc-cell", "--typ-col"], ["ri-cell", "--ri-col"]]) {
+      let width = 0;
+      for (const cell of this.mainEl.querySelectorAll(`.results-row .${cls}`)) {
+        width = Math.max(width, cell.scrollWidth);
+      }
+      if (width === 0) this.mainEl.style.removeProperty(prop);
+      else this.mainEl.style.setProperty(prop, `${width + 2}px`);
     }
-    if (riChars === 0) this.mainEl.style.removeProperty("--ri-col");
-    else this.mainEl.style.setProperty("--ri-col", `${Math.ceil(riChars * 8.4) + 4}px`);
   }
 
   renderGuide() {
