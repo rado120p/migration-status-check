@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 
 from migration_validator.gui.app import create_app
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
-from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot, save_snapshot
+from migration_validator.models.snapshot import (
+    CaptureMeta,
+    DeviceMeta,
+    Snapshot,
+    load_snapshot,
+    save_snapshot,
+)
 from migration_validator.runs.manifest import (
     CaptureRecord,
     InterfaceMapping,
@@ -381,3 +387,49 @@ def test_run_evaluation_sdileny_cil_dve_baseline(tmp_path):
     assert [x["description"] for x in steps[1]["result"]["excluded_services"]] == ["A"]
     assert steps[0]["result"]["unmatched"]["subject"] == []
     assert not any(ev["same_device"] for ev in data["evaluations"])
+
+
+def test_run_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
+    """Per-port post snimek ae0 nese celoboxovou tabulku rout; statika sluzby
+    z et-0/0/8 nesmi v ae0 kroku skoncit v NEZARAZENO (run migration-01)."""
+    store = RunStore(tmp_path, "mig03")
+    manifest = RunManifest(
+        devices={
+            "MX1": RunDevice(host="10.0.0.1", platform="junos", role="old"),
+            "PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="new"),
+        },
+        interface_mapping=[
+            InterfaceMapping(
+                old=MappingEndpoint(node="MX1", port="ge-0/0/4"),
+                new=MappingEndpoint(node="PTX1", port="ae0"),
+            ),
+        ],
+    )
+    pre = _write_multi_snapshot(store, "pre", "MX1", "ge-0/0/4", "10.0.0.1",
+                                [("A", "Internet", "ge-0/0/4.100")])
+    post_path = _write_multi_snapshot(store, "post", "PTX1", "ae0", "10.0.0.2",
+                                      [("A", "Internet", "ae0.100")])
+    post = load_snapshot(post_path)
+    post.facts["routes"] = {
+        "inet.0": {
+            "198.62.1.0/29": {
+                "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"],
+                "active": True, "protocol": "static",
+            },
+            "10.99.0.0/24": {
+                "next_hop": ["10.99.1.1"], "via": ["ae0.100"],
+                "active": True, "protocol": "static",
+            },
+        }
+    }
+    save_snapshot(post, post_path)
+    manifest.record_capture(CaptureRecord("pre", "MX1", "ge-0/0/4", pre.name, NOW))
+    manifest.record_capture(CaptureRecord("post", "PTX1", "ae0", post_path.name, NOW))
+    store.save(manifest)
+
+    client = TestClient(create_app(run_root=tmp_path))
+    data = client.get("/api/runs/mig03/evaluation").json()
+    [step] = [ev for ev in data["evaluations"] if ev["step"] is not None]
+    assert [r["prefix"] for r in step["result"]["unassigned"]["static_routes"]] == [
+        "10.99.0.0/24"
+    ]

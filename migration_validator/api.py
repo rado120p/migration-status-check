@@ -84,8 +84,12 @@ def evaluate(
     service_types: list[str] | None = None,
     profile_name: str | None = None,
     step: dict[str, Any] | None = None,
+    port: str | None = None,
 ) -> RunResult:
-    """Vyhodnoti snapshot, volitelne proti baseline snapshotu."""
+    """Vyhodnoti snapshot, volitelne proti baseline snapshotu.
+
+    `port` je port per-port snimku subjectu podle manifestu (None =
+    celoboxovy snimek); zuzuje NEZARAZENO na objekty tohoto portu."""
     load_all()
     return evaluate_snapshots(
         subject=snapshot,
@@ -96,6 +100,7 @@ def evaluate(
         service_types=service_types,
         profile_name=profile_name,
         step=step,
+        port=port,
     )
 
 

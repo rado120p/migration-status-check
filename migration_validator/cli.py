@@ -190,6 +190,7 @@ def _evaluate_run(args: argparse.Namespace) -> int:
             service_types=service_types,
             profile_name=profile.name or None,
             step=step_payload,
+            port=evaluation.subject.port,
         )
         shown = filter_result(result, text=args.filter, statuses=statuses)
 

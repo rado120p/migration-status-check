@@ -610,6 +610,17 @@ Properties:
   management instance land here (`mgmt_junos.inet.0 0.0.0.0/0` via `fxp0.0` — `fxp0.0` can
   never become a scope), but so does a route whose configuration shape the parser could not
   read: it never reaches the selectors, yet it is plainly visible in the table.
+- **A per-port snapshot narrows `unassigned` to its own port** (fix 2026-09-22). The route,
+  BGP and BFD collectors read the whole box, but a per-port capture builds scopes only for
+  the services on that port — without narrowing, every migration step would list the statics
+  and peers of services on the other ports. `evaluate(..., port=...)` (GUI and CLI take the
+  port from the manifest) therefore keeps only: a route via a unit of this port or via an
+  interface of some scope in the snapshot (IRB), an aggregate without an interface only in
+  the RIB of a scope's VRF, a BGP peer in a scope's VRF or (global) inside a scope's local
+  subnet, and a BFD session on a unit of the port or a scope interface. Global aggregates and
+  loopback iBGP peers are thus visible only in the whole-box snapshot (`port=None`), which
+  owns Core `lo0.0`. The parsing-gap safety net stays — a route via the port's own unit with
+  no scope remains visible.
 - **`unassigned.bfd_sessions`** holds sessions of peers absent from every `bgp_neighbors` —
   typically BFD held by a client other than BGP, whose intent the parser does not read at all.
   Core-loopback `bgp_neighbors` (internal iBGP peers on lo0.0) never count as "assigned" here

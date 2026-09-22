@@ -5,6 +5,7 @@ Engine nesaha na sit. Vsechna data pochazeji ze snapshotu.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from collections import Counter
 from datetime import datetime, timezone
@@ -411,7 +412,65 @@ def _match_info(pair: MatchedPair) -> MatchInfo:
     )
 
 
-def _unassigned_bgp_peers(subject: Snapshot, scopes: list[Scope]) -> list[dict[str, Any]]:
+def _port_of(interface: str) -> str:
+    """Fyzicky port unitu: et-0/0/8.13 -> et-0/0/8, ae0.14 -> ae0."""
+    return interface.split(".", 1)[0]
+
+
+def _scope_interfaces(scopes: list[Scope]) -> set[str]:
+    return {
+        name
+        for scope in scopes
+        for name in (*scope.selectors.interfaces, *scope.selectors.physical_interfaces)
+    }
+
+
+def _scope_instances(scopes: list[Scope]) -> set[str]:
+    return {ri for scope in scopes for ri in scope.selectors.routing_instances}
+
+
+def _rib_instance(rib: str) -> str | None:
+    """L3VPN.inet.0 -> L3VPN, inet.0 / inet6.0 / inet.2 -> None."""
+    head, sep, _ = rib.partition(".inet")
+    return head if sep and head else None
+
+
+def _interface_on_port(name: str, port: str, scopes: list[Scope]) -> bool:
+    """Rozhrani patri k per-port snimku: je unitem portu, nebo je rozhranim
+    nektereho scopu snimku (irb navazane na E-LAN local / vlan-aware)."""
+    return _port_of(name) == port or name in _scope_interfaces(scopes)
+
+
+def _peer_in_scope_subnets(peer: str, scopes: list[Scope]) -> bool:
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return False
+    for scope in scopes:
+        for local in (*scope.selectors.local_ipv4, *scope.selectors.local_ipv6):
+            try:
+                if address in ipaddress.ip_interface(local).network:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
+def _unassigned_bgp_peers(
+    subject: Snapshot, scopes: list[Scope], port: str | None = None
+) -> list[dict[str, Any]]:
+    # Per-port snimek nese celoboxovou BGP tabulku, ale scopy jen sveho
+    # portu. Peer cizi sluzby (jina VRF, jiny subnet) tu neni mezera v
+    # parsovani - patri jinemu kroku migrace. Loopbackovy iBGP peer patri
+    # Core lo0.0, ktery vznika jen v celoboxovem snimku.
+    def _on_port(peer: str, data: dict[str, Any]) -> bool:
+        if port is None:
+            return True
+        instance = data.get("routing_instance")
+        if instance:
+            return instance in _scope_instances(scopes)
+        return _peer_in_scope_subnets(peer, scopes)
+
     # Deaktivovany peer je porad peer sve sluzby. Kdyz pro nej presto prijde
     # session, je to nalez o teto sluzbe - do NEZARAZENO patri jen peer,
     # ktery ke zadne sluzbe nesedi.
@@ -432,12 +491,12 @@ def _unassigned_bgp_peers(subject: Snapshot, scopes: list[Scope]) -> list[dict[s
             "snapshot": "subject",
         }
         for peer, data in sorted((subject.facts.get("bgp") or {}).items())
-        if peer not in assigned
+        if peer not in assigned and _on_port(peer, data)
     ]
 
 
 def _unassigned_static_routes(
-    subject: Snapshot, scopes: list[Scope]
+    subject: Snapshot, scopes: list[Scope], port: str | None = None
 ) -> list[dict[str, Any]]:
     """Routy z tabulky, ktere si nenarokuje zadny scope.
 
@@ -447,12 +506,28 @@ def _unassigned_static_routes(
     nedostane, ale v tabulce ji videt je. Je to tedy i pojistka proti
     mezeram v parsovani. Sem spadne i agregat bez odpovidajici sluzby (VRF
     bez sluzeb, box bez Core lo0.0) - pojistka ze specu, bod 2.
+
+    Per-port snimek (port != None) nese celoboxovou tabulku, ale scopy jen
+    sveho portu. Routa pres unit jineho portu patri jinemu kroku migrace,
+    ne sem; agregat bez rozhrani se pripise podle VRF, globalni agregat
+    patri Core lo0.0 z celoboxoveho snimku. Pojistka proti mezere v
+    parsovani zustava pro routy pres vlastni port.
     """
     assigned = {
         (str(route.get("rib")), str(route.get("prefix")))
         for scope in scopes
         for route in scope.selectors.static_routes
     }
+
+    def _on_port(table: str, data: dict[str, Any]) -> bool:
+        if port is None:
+            return True
+        via = [str(name) for name in data.get("via", [])]
+        if via:
+            return any(_interface_on_port(name, port, scopes) for name in via)
+        instance = _rib_instance(table)
+        return instance is not None and instance in _scope_instances(scopes)
+
     if any(scope.is_device for scope in scopes):
         return []
     return [
@@ -466,12 +541,12 @@ def _unassigned_static_routes(
         }
         for table, prefixes in sorted((subject.facts.get("routes") or {}).items())
         for prefix, data in sorted(prefixes.items())
-        if (table, prefix) not in assigned
+        if (table, prefix) not in assigned and _on_port(table, data)
     ]
 
 
 def _unassigned_bfd_sessions(
-    subject: Snapshot, scopes: list[Scope]
+    subject: Snapshot, scopes: list[Scope], port: str | None = None
 ) -> list[dict[str, Any]]:
     """Session peeru, ktery neni v zadnem bgp_neighbors.
 
@@ -525,6 +600,7 @@ def _unassigned_bfd_sessions(
         }
         for peer, data in sorted(bfd_facts.items())
         if peer not in assigned
+        and (port is None or _interface_on_port(str(data.get("interface", "")), port, scopes))
     ]
 
 
@@ -537,7 +613,10 @@ def evaluate_snapshots(
     service_types: list[str] | None = None,
     profile_name: str | None = None,
     step: dict[str, Any] | None = None,
+    port: str | None = None,
 ) -> RunResult:
+    """`port` = port per-port snimku subjectu (z manifestu); None = celoboxovy
+    snimek. Zuzuje jen NEZARAZENO - checky ani parovani se ho nedotknou."""
     config = config or default_config()
     mapping = mapping or empty_mapping()
 
@@ -684,9 +763,9 @@ def evaluate_snapshots(
         scopes=scope_results,
         unmatched=unmatched,
         unassigned={
-            "bgp_peers": _unassigned_bgp_peers(subject, subject_scopes),
-            "static_routes": _unassigned_static_routes(subject, subject_scopes),
-            "bfd_sessions": _unassigned_bfd_sessions(subject, subject_scopes),
+            "bgp_peers": _unassigned_bgp_peers(subject, subject_scopes, port),
+            "static_routes": _unassigned_static_routes(subject, subject_scopes, port),
+            "bfd_sessions": _unassigned_bfd_sessions(subject, subject_scopes, port),
         },
         filtered=filtered,
         profile=profile_name,

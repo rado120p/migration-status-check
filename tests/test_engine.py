@@ -1579,3 +1579,151 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatc
     # entry bez klice "interface" zustane beze zmeny, "interface" se nedofabrikuje
     assert data["arp"][1] == {"ip": "198.11.13.9", "no_interface_here": True}
     assert "interface" not in data["arp"][1]
+
+
+# --- NEZARAZENO na per-port snimku (oprava 2026-09-22) -----------------------
+#
+# Per-port capture nese celoboxove tabulky (routes, bgp, bfd), ale scopy jen
+# svého portu. Bez zuzeni se v NEZARAZENO objevi kazda routa/peer/session
+# sluzby z jineho portu - v runu migration-01 tak ae0 kroky vypisovaly statiku
+# INTERNET-CPE13-NNI a L3VPN-CPE13-NNI z et-0/0/8.
+
+
+def _route(via, protocol="static", next_hop=("152.11.13.2",)):
+    return {
+        "next_hop": list(next_hop),
+        "via": list(via),
+        "active": True,
+        "protocol": protocol,
+    }
+
+
+def test_per_port_route_via_other_port_is_not_unassigned():
+    subject = _new()
+    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["ae0.14"])}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert result.unassigned["static_routes"] == []
+
+
+def test_per_port_unclaimed_route_via_own_port_stays_unassigned():
+    """Pojistka proti mezere v parsovani zustava: routa pres vlastni port,
+    kterou si zadny scope nenarokuje, je porad videt."""
+    subject = _new()
+    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["et-0/0/8.13"])}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [r["prefix"] for r in result.unassigned["static_routes"]] == ["198.62.1.0/29"]
+
+
+def test_per_port_route_via_irb_of_own_scope_stays_unassigned():
+    """IRB neni unit portu, ale je rozhranim scopu z tohoto snimku (E-LAN
+    local -> irb), takze routa pres nej k portu patri."""
+    subject = _new()
+    subject.scopes[0].selectors.interfaces.append("irb.10")
+    subject.facts["routes"] = {
+        "NGMVPN.inet.0": {"10.10.11.0/30": _route(["irb.10"], next_hop=["10.100.11.2"])}
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [r["prefix"] for r in result.unassigned["static_routes"]] == ["10.10.11.0/30"]
+
+
+def test_per_port_global_aggregate_without_interface_is_not_unassigned():
+    """Agregat bez rozhrani v globalni tabulce patri lo0.0 - ten vznika jen
+    v celoboxovem snimku. Per-port snimek ho nema komu pripsat."""
+    subject = _new()
+    subject.facts["routes"] = {
+        "inet6.0": {"2001:abcd::/32": _route([], protocol="aggregate", next_hop=[])}
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert result.unassigned["static_routes"] == []
+
+
+def test_per_port_aggregate_in_own_vrf_stays_unassigned():
+    subject = _new()
+    subject.scopes[0].selectors.routing_instances = ["L3VPN"]
+    subject.facts["routes"] = {
+        "L3VPN.inet.0": {"172.26.0.0/23": _route([], protocol="aggregate", next_hop=[])}
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [r["prefix"] for r in result.unassigned["static_routes"]] == ["172.26.0.0/23"]
+
+
+def test_whole_box_evaluation_keeps_route_via_any_port_unassigned():
+    """Bez portu (celoboxovy snimek) se nic nezuzuje - chovani beze zmeny."""
+    subject = _new()
+    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["ae0.14"])}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert [r["prefix"] for r in result.unassigned["static_routes"]] == ["198.62.1.0/29"]
+
+
+def test_per_port_bgp_peer_of_other_vrf_is_not_unassigned():
+    subject = _new()
+    subject.facts["bgp"] = {
+        "198.11.14.4": {"routing_instance": "L3VPN-CPE14-UNI", "state": "Established"}
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert result.unassigned["bgp_peers"] == []
+
+
+def test_per_port_bgp_peer_in_own_vrf_stays_unassigned():
+    subject = _new()
+    subject.scopes[0].selectors.routing_instances = ["L3VPN"]
+    subject.facts["bgp"] = {
+        "198.11.13.9": {"routing_instance": "L3VPN", "state": "Established"}
+    }
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [p["peer"] for p in result.unassigned["bgp_peers"]] == ["198.11.13.9"]
+
+
+def test_per_port_global_bgp_peer_outside_own_subnets_is_not_unassigned():
+    """iBGP peer na loopbacku (150.0.0.1) patri Core lo0.0 - ne portu."""
+    subject = _new()
+    subject.scopes[0].selectors.local_ipv4 = ["152.11.13.1/30"]
+    subject.facts["bgp"] = {"150.0.0.1": {"routing_instance": None, "state": "Established"}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert result.unassigned["bgp_peers"] == []
+
+
+def test_per_port_global_bgp_peer_in_own_subnet_stays_unassigned():
+    subject = _new()
+    subject.scopes[0].selectors.local_ipv4 = ["152.11.13.1/30"]
+    subject.facts["bgp"] = {"152.11.13.2": {"routing_instance": None, "state": "Established"}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [p["peer"] for p in result.unassigned["bgp_peers"]] == ["152.11.13.2"]
+
+
+def test_per_port_bfd_session_on_other_port_is_not_unassigned():
+    subject = _new()
+    subject.facts["bfd"] = {"10.1.1.2": {"interface": "et-0/0/0.0", "state": "Up"}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert result.unassigned["bfd_sessions"] == []
+
+
+def test_per_port_bfd_session_on_own_port_stays_unassigned():
+    subject = _new()
+    subject.facts["bfd"] = {"152.11.13.2": {"interface": "et-0/0/8.13", "state": "Up"}}
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
+
+    assert [s["peer"] for s in result.unassigned["bfd_sessions"]] == ["152.11.13.2"]

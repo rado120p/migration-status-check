@@ -250,6 +250,7 @@ def create_app(
                 service_types=profile.service_types,
                 profile_name=profile.name or None,
                 step=step_payload,
+                port=evaluation.subject.port,
             )
             evaluations.append({
                 "subject": evaluation.subject.snapshot,

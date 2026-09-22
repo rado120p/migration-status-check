@@ -593,6 +593,16 @@ Vlastnosti:
   statika v management instanci (`mgmt_junos.inet.0 0.0.0.0/0` přes `fxp0.0` — `fxp0.0` se
   scopem nikdy nestane), ale i routa, jejíž konfigurační tvar parser neuměl přečíst: do
   selektorů se nedostane, v tabulce ji ale vidět je.
+- **Per-port snímek zužuje `unassigned` na svůj port** (oprava 2026-09-22). Collectory rout,
+  BGP a BFD čtou celý box, ale per-port capture staví scopy jen pro služby svého portu —
+  bez zúžení by v každém kroku migrace skončila statika a peeři služeb z ostatních portů.
+  `evaluate(..., port=...)` (GUI i CLI berou port z manifestu) proto nechá v seznamech jen:
+  routu přes unit tohoto portu nebo přes rozhraní některého scopu snímku (IRB), agregát bez
+  rozhraní jen v RIB VRF některého scopu, BGP peera ve VRF některého scopu nebo (globální)
+  v subnetu lokální adresy scopu, BFD session na unitu portu nebo rozhraní scopu. Globální
+  agregáty a loopbackové iBGP peery tak vidí jen celoboxový snímek (`port=None`), kde je
+  vlastní Core `lo0.0`. Pojistka proti mezeře v parsování zůstává — routa přes vlastní port
+  bez scopu je vidět dál.
 - **`unassigned.bfd_sessions`** obsahuje session peeru, který není v žádném `bgp_neighbors` —
   typicky BFD držené jiným klientem než BGP, jehož záměr parser vůbec nečte. Core-loopback
   `bgp_neighbors` (interní iBGP peeři na lo0.0) se do „přiřazeno" nepočítají vůbec — vědomě
