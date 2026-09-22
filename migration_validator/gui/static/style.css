@@ -223,14 +223,15 @@ a:hover { color: #0e3fa9; }
 .snap-row-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 
 .snap-row-label {
-  font: 500 12px 'IBM Plex Mono', monospace;
-  color: #374151;
+  font: 400 12px 'IBM Plex Mono', monospace;
+  color: #6b7280;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
+/* The port is what the list is scanned by, so it carries the weight. */
 .snap-row-port {
-  font: 500 12px 'IBM Plex Mono', monospace;
+  font: 600 12px 'IBM Plex Mono', monospace;
   color: #374151;
   overflow-wrap: anywhere;
 }
