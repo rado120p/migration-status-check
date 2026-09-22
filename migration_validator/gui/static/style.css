@@ -462,7 +462,7 @@ a:hover { color: #0e3fa9; }
 .results-row .svc-name { font-weight: 600; color: #111827; }
 .results-row .svc-cell { color: #374151; }
 .results-row .port-cell { font-family: 'JetBrains Mono', monospace; color: #111827; }
-/* RI column: width set per table by buildResultsTable (--ri-col) from the longest RI name, so it never wraps. */
+/* RI column: width set once per view by syncRiColumn (--ri-col on #main) from the longest RI name, so it never wraps. */
 .results-row .ri-cell { white-space: nowrap; }
 .results-row .find-cell { color: #4b5563; font-size: 13.5px; }
 .results-row .chevron { color: #9ca3af; font-size: 11px; justify-self: end; transition: transform 0.15s; }

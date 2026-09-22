@@ -796,10 +796,6 @@ class App {
     const singlePort = !!(opts && opts.singlePort);
     const mode = singlePort ? " single-port" : "";
     const table = el("div", { className: "results-table" });
-    // RI column: each row is its own grid, so size the track once from the
-    // longest RI name (JetBrains Mono 14px ~ 8.4px/char) and share it via a CSS variable.
-    const riChars = Math.max(2, ...entries.map((e) => (e.view.routing_instance || "-").length));
-    table.style.setProperty("--ri-col", `${Math.ceil(riChars * 8.4) + 4}px`);
     const headers = singlePort
       ? ["Stav", "Služba", "Typ", "Port", "RI", "Nález", ""]
       : ["Stav", "Služba", "Typ", "Starý port", "Nový port", "RI", "Nález", ""];
@@ -2049,8 +2045,22 @@ class App {
       const target = this.mainEl.querySelector(`[data-focus-key="${CSS.escape(key)}"]`);
       if (target) target.focus();
     }
+    this.syncRiColumn();
     this.syncCapturePolling();
     this.syncGroupPolling();
+  }
+
+  // RI column: each results row is its own grid and a view may hold several
+  // results tables (one per port pairing), so size the track once from the
+  // longest RI name on the page (JetBrains Mono 14px ~ 8.4px/char) and share
+  // it via a CSS variable on the main panel so every table lines up.
+  syncRiColumn() {
+    let riChars = 0;
+    for (const cell of this.mainEl.querySelectorAll(".ri-cell")) {
+      riChars = Math.max(riChars, cell.textContent.length);
+    }
+    if (riChars === 0) this.mainEl.style.removeProperty("--ri-col");
+    else this.mainEl.style.setProperty("--ri-col", `${Math.ceil(riChars * 8.4) + 4}px`);
   }
 
   renderGuide() {
