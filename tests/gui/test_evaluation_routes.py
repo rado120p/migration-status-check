@@ -433,3 +433,50 @@ def test_run_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
     assert [r["prefix"] for r in step["result"]["unassigned"]["static_routes"]] == [
         "10.99.0.0/24"
     ]
+
+
+def _leaky_routes():
+    return {
+        "inet.0": {
+            "198.62.1.0/29": {
+                "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"],
+                "active": True, "protocol": "static",
+            },
+            "10.99.0.0/24": {
+                "next_hop": ["10.99.1.1"], "via": ["ae0.100"],
+                "active": True, "protocol": "static",
+            },
+        }
+    }
+
+
+def _run_with_ae0_post(tmp_path, port):
+    """Post snimek PTX1 s celoboxovou tabulkou rout; `port` = zaznam v manifestu
+    (None = celoboxovy snimek)."""
+    store = RunStore(tmp_path, "mig04")
+    manifest = RunManifest(
+        devices={
+            "PTX1": RunDevice(host="10.0.0.2", platform="junos-evo", role="new"),
+        },
+        interface_mapping=[],
+    )
+    post_path = _write_multi_snapshot(store, "post", "PTX1", port, "10.0.0.2",
+                                      [("A", "Internet", "ae0.100")])
+    post = load_snapshot(post_path)
+    post.facts["routes"] = _leaky_routes()
+    save_snapshot(post, post_path)
+    manifest.record_capture(CaptureRecord("post", "PTX1", port, post_path.name, NOW))
+    store.save(manifest)
+    client = TestClient(create_app(run_root=tmp_path))
+    data = client.get(f"/api/runs/mig04/snapshots/{post_path.name}/evaluation").json()
+    return [r["prefix"] for r in data["result"]["unassigned"]["static_routes"]]
+
+
+def test_snapshot_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
+    """Pohled na jeden snimek bere port ze zaznamu v manifestu - stejne zuzeni
+    jako run evaluation."""
+    assert _run_with_ae0_post(tmp_path, "ae0") == ["10.99.0.0/24"]
+
+
+def test_snapshot_evaluation_celoboxovy_snimek_nezuzuje(tmp_path):
+    assert _run_with_ae0_post(tmp_path, None) == ["10.99.0.0/24", "198.62.1.0/29"]

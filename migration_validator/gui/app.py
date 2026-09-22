@@ -301,12 +301,17 @@ def create_app(
             baseline_snapshot = load_snapshot(str(baseline_path))
         snapshot = load_snapshot(str(path))
         profile = _profile_for(store, manifest)
+        # Port per-port snimku z manifestu: zuzuje NEZARAZENO stejne jako
+        # run evaluation. Celoboxovy zaznam (port None) i snimek mimo
+        # run.yml se vyhodnoti bez zuzeni.
+        record = next((c for c in manifest.captures if c.snapshot == file), None)
         result = api.evaluate(
             snapshot,
             baseline=baseline_snapshot,
             config=profile.checks,
             service_types=profile.service_types,
             profile_name=profile.name or None,
+            port=record.port if record is not None else None,
         )
         return {
             "snapshot": _snapshot_meta(snapshot),
