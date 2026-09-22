@@ -796,6 +796,10 @@ class App {
     const singlePort = !!(opts && opts.singlePort);
     const mode = singlePort ? " single-port" : "";
     const table = el("div", { className: "results-table" });
+    // RI column: each row is its own grid, so size the track once from the
+    // longest RI name (JetBrains Mono 14px ~ 8.4px/char) and share it via a CSS variable.
+    const riChars = Math.max(2, ...entries.map((e) => (e.view.routing_instance || "-").length));
+    table.style.setProperty("--ri-col", `${Math.ceil(riChars * 8.4) + 4}px`);
     const headers = singlePort
       ? ["Stav", "Služba", "Typ", "Port", "RI", "Nález", ""]
       : ["Stav", "Služba", "Typ", "Starý port", "Nový port", "RI", "Nález", ""];
@@ -833,7 +837,7 @@ class App {
               ],
             }),
             ...portCells,
-            el("span", { className: "port-cell", text: view.routing_instance || "-" }),
+            el("span", { className: "port-cell ri-cell", text: view.routing_instance || "-" }),
             el("span", { className: "find-cell", text: view.worst_message }),
             el("span", { className: "chevron" + (open ? " open" : ""), html: "&#9654;" }),
           ],

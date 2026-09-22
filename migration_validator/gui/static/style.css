@@ -436,14 +436,14 @@ a:hover { color: #0e3fa9; }
 
 .results-header-row, .results-row {
   display: grid;
-  grid-template-columns: 56px 1.7fr 90px 110px 110px 100px 2fr 18px;
+  grid-template-columns: 56px minmax(140px, 1fr) 90px 110px 110px var(--ri-col, 100px) minmax(0, 2fr) 18px;
   gap: 0 10px;
   padding: 9px 16px;
   align-items: baseline;
 }
 
 .results-header-row.single-port, .results-row.single-port {
-  grid-template-columns: 56px 1.8fr 90px 120px 100px 2fr 18px;
+  grid-template-columns: 56px minmax(140px, 1fr) 90px 120px var(--ri-col, 100px) minmax(0, 2fr) 18px;
 }
 
 .results-header-row {
@@ -462,6 +462,8 @@ a:hover { color: #0e3fa9; }
 .results-row .svc-name { font-weight: 600; color: #111827; }
 .results-row .svc-cell { color: #374151; }
 .results-row .port-cell { font-family: 'JetBrains Mono', monospace; color: #111827; }
+/* RI column: width set per table by buildResultsTable (--ri-col) from the longest RI name, so it never wraps. */
+.results-row .ri-cell { white-space: nowrap; }
 .results-row .find-cell { color: #4b5563; font-size: 13.5px; }
 .results-row .chevron { color: #9ca3af; font-size: 11px; justify-self: end; transition: transform 0.15s; }
 .results-row .chevron.open { transform: rotate(90deg); }
