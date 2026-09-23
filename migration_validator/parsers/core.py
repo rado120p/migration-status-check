@@ -1311,10 +1311,14 @@ class JunosServiceParserCore:
 
         protocols.extend(interface.families)
 
-        protocols.extend(self.global_protocols_by_interface.get(interface.name, set()))
+        protocols.extend(
+            sorted(self.global_protocols_by_interface.get(interface.name, set()))
+        )
 
         protocols.extend(
-            self.global_protocols_by_interface.get(interface.physical_name, set())
+            sorted(
+                self.global_protocols_by_interface.get(interface.physical_name, set())
+            )
         )
 
         if instance:
