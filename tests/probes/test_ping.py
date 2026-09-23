@@ -926,6 +926,59 @@ def test_parse_ping_result_handles_total_loss():
     assert result["rtt_avg_ms"] is None
 
 
+def test_parse_ping_result_accepts_fractional_packet_loss():
+    """EVO hlasi ztratu s desetinami - 1 odpoved ze 3 je 66.6667.
+
+    int("66.6667") padal na ValueError a shodil celou post capture
+    (produkce 2026-09-23, ae0 na EVO).
+    """
+    xml = etree.fromstring(
+        """
+        <ping-results>
+          <probe-results-summary>
+            <probes-sent>3</probes-sent>
+            <responses-received>1</responses-received>
+            <packet-loss>66.6667</packet-loss>
+            <rtt-average>1843.6</rtt-average>
+          </probe-results-summary>
+        </ping-results>
+        """
+    )
+    result = parse_ping_result(xml)
+
+    assert result["sent"] == 3
+    assert result["received"] == 1
+    assert result["loss_percent"] == 67
+    assert result["rtt_avg_ms"] == pytest.approx(1.844)
+
+
+class _MalformedSummaryRpc:
+    def ping(self, **kwargs):
+        return etree.fromstring(
+            "<ping-results><probe-results-summary>"
+            "<probes-sent>3</probes-sent><responses-received>n/a</responses-received>"
+            "</probe-results-summary></ping-results>"
+        )
+
+
+class _MalformedSummaryDevice:
+    def __init__(self):
+        self.rpc = _MalformedSummaryRpc()
+
+
+def test_run_ping_records_unparseable_reply_instead_of_raising():
+    """Jedna necitelna odpoved je vysledek jednoho cile, ne padla capture."""
+    target = PingTarget("svc:X:IPVPN", "198.11.13.2", "L3VPN-CPE13-NNI", "arp", 4)
+
+    record = run_ping(_MalformedSummaryDevice(), target, count=3)
+
+    assert record["sent"] == 3
+    assert record["received"] == 0
+    assert record["loss_percent"] == 100
+    assert record["rtt_avg_ms"] is None
+    assert record["error"].startswith("ValueError:")
+
+
 class _RpcRecorder:
     def __init__(self):
         self.kwargs = None

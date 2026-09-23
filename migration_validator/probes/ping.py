@@ -447,8 +447,11 @@ def parse_ping_result(xml: etree._Element) -> dict[str, Any]:
         "received": received,
         # Kdyz summary chybi, neprosel ani jeden paket - 100 je pravdivejsi
         # nez None, ktere by se v reportu cetlo jako "nemereno".
-        "loss_percent": int(loss) if loss is not None else (None if summary is not None else 100),
-        "rtt_avg_ms": round(int(rtt_us) / 1000.0, 3) if rtt_us and received else None,
+        # EVO hlasi ztratu i RTT s desetinami (1 ze 3 = "66.6667"), int()
+        # na tom padal. Ztrata se zaokrouhluje na cela procenta - presne
+        # cislo nesou sent/received.
+        "loss_percent": round(float(loss)) if loss is not None else (None if summary is not None else 100),
+        "rtt_avg_ms": round(float(rtt_us) / 1000.0, 3) if rtt_us and received else None,
     }
 
     reason = _failure_reason(xml)
@@ -493,8 +496,12 @@ def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dic
         kwargs["interface"] = target.interface
 
     record = target.to_dict()
+    # Parsovani je uvnitr try zamerne: necitelna odpoved jednoho cile se
+    # zapise jako jeho chyba, jinak by ValueError shodil celou capture
+    # (produkce 2026-09-23, packet-loss "66.6667" na EVO).
     try:
         xml = device.rpc.ping(**kwargs)
+        record.update(parse_ping_result(xml))
     except Exception as error:  # noqa: BLE001
         record.update(
             {
@@ -505,7 +512,4 @@ def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dic
                 "error": f"{type(error).__name__}: {error}",
             }
         )
-        return record
-
-    record.update(parse_ping_result(xml))
     return record
