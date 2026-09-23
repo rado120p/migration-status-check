@@ -19,6 +19,7 @@
 - Upgrade (GUI) vyžaduje `Permission.ADMIN`. Návratové kódy CLI `upgrade`: `0` vše přegenerováno, `1` (`EXIT_FAILED_CHECKS`) některé capture nejdou, `2` (`EXIT_TOOL_ERROR`) upgrade některého runu spadl.
 - Řetězce z backendu (CLI výstup, `reason`, `detail`, varování) jsou ASCII bez diakritiky jako zbytek nástroje (`pregenerovano - beze zmeny`, `nelze - bez raw zaznamu (zachyceno pred zavedenim)`). Popisky v GUI jsou anglicky (`Upgrade run`, `outdated`, `no raw`), vysvětlující texty v modalech česky s diakritikou jako u „Archive run“. Příklad reportu ve specu s diakritikou je ilustrace, závazná je tahle ASCII podoba.
 - `NotRecorded` se nikdy nesmí proměnit ve změřený výsledek: collector → status `error`, ping → `sent=0` + `error="neni v raw zaznamu"`.
+- RPC na capture cestě se volají jen keyword argumenty (`device.rpc.get_config(filter_xml=..., options=...)`, `getattr(device.rpc, name)(**kwargs)`, `device.rpc.ping(**kwargs)`, `device.rpc.get_instance_information(brief=True)` — ověřeno grepem 2026-09-23). `RecordingDevice` a `ReplayDevice` přijímají jen `**kwargs`; nové RPC volání s pozičním argumentem je chyba.
 - Collectory (`collectors/base.py`, `interfaces.py`, `routes.py`, `evpn.py`, `multicast.py`) i `run_ping` chytají `Exception` a nevětví se podle typu výjimky PyEZ. Replay nahraných chyb na tom stojí — nepřidávat `except RpcError` do capture cesty.
 - Testy: `.venv/bin/pytest -q -p no:warnings` (výchozí stav 1929 passed, 1 skipped) a `node --test tests/js/*.test.js` (77 pass). Před každým commitem musí projít celá Python sada; JS sada po každém tasku, který sahá na `static/`.
 - Každé tvrzení o zabitém mutantu (docstring testu, commit message) se ověřuje **spuštěním** mutanta, ne úsudkem — a nahlas i tehdy, když je oprava mimo rozsah tvého tasku.
@@ -866,7 +867,7 @@ Expected: PASS
 
 - [ ] **Step 6: Run the mutants**
 
-1. V `_RecordingRpc.call` přesuň `entry.reply_xml = etree.tostring(reply)` za `return` tak, že se serializuje lazy (např. ulož `entry.reply_xml = reply` a serializuj až v `_call_to_json`) → `test_reply_is_serialized_before_caller_mutates_it` musí FAIL. Vrať.
+1. Lazy serializace: v `RecordedCall` (Task 1) dočasně přejmenuj pole `reply_xml` na `_reply_element: Any = None` a přidej property `reply_xml`, která vrací `etree.tostring(self._reply_element)` (nebo `None`); v `_RecordingRpc.call` ulož `entry._reply_element = reply` místo serializace. Typy sedí (property vrací bytes), takže `test_reply_is_serialized_before_caller_mutates_it` musí FAIL na chybějícím `<firewall/>` — ne na `TypeError`. Pokud spadne na čemkoliv jiném než na tom assertu, mutant je špatně postavený; oprav ho, ne test. Vrať.
 2. Ve `write_session` přesuň `remove_session(target)` těsně před `os.replace(tmp, target)` → `test_failed_write_leaves_no_old_session` musí FAIL. Vrať.
 
 - [ ] **Step 7: Commit**
@@ -1515,7 +1516,39 @@ Expected: PASS (celá sada — `tests/runs/test_services.py` monkeypatchuje `ret
 
 Smaž cyklus `for child in list(root): ...` → `test_parser_dostane_jen_sve_hierarchie` musí FAIL. Vrať.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Lab check — both platforms accept the extended filter**
+
+Jediný neověřený vnější fakt vlny: NETCONF odmítne hierarchii, kterou schéma platformy nezná (`vlans` na MX, `b01078f`). Ověř hned, ne až v Tasku 14 — Tasky 6-13 na tom stojí. Jen čtení:
+
+```bash
+eval "$(grep '^export MIG_LAB_PASSWORD=' ~/.bashrc)"
+for host in 172.20.20.4 172.20.20.5; do
+.venv/bin/python - "$host" <<'PY'
+import os, sys
+from jnpr.junos import Device
+from migration_validator.connection.junos import detect_platform
+from migration_validator.parsers import parser_for_platform
+from migration_validator.parsers.core import retrieve_configuration
+from migration_validator.raw.recorder import RecordingDevice, SessionRecording
+
+host = sys.argv[1]
+with Device(host=host, user="admin", passwd=os.environ["MIG_LAB_PASSWORD"], port=830) as dev:
+    recording = SessionRecording()
+    device = RecordingDevice(dev, recording)
+    platform = detect_platform(device)
+    root = retrieve_configuration(device, parser_for_platform(platform).CONFIG_HIERARCHIES)
+    call = recording.calls[0]
+    print(host, platform, "error:", call.error, "filter:", call.filter)
+    print("  parser vidi:", sorted({child.tag for child in root}))
+    for name in ("policy-options", "firewall", "class-of-service"):
+        print("  nahravka", name, f"<{name}".encode() in (call.reply_xml or b""))
+PY
+done
+```
+
+Expected: pro oba hosty `error: None`, filtr končí `policy-options, firewall, class-of-service`, „parser vidi“ neobsahuje žádnou z nich. `False` u nahrávky znamená jen prázdnou hierarchii v laborce (v pořádku). Pokud NETCONF filtr odmítne (`RpcError`), **STOP** — nahlas přesnou chybu; filtr sám neupravuj (rozsah konfigurace je rozhodnutí specu). Výstup vlož do reportu tasku.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add migration_validator/parsers/core.py tests/parsers/test_config_filter.py tests/raw/test_inventory_round_trip.py
@@ -4668,6 +4701,14 @@ ls tests/fixtures/raw/junos tests/fixtures/raw/junos-evo | head
 ```
 
 (Jméno uzlu v novém runu je adresa hostu — ověř skutečná jména adresářů v `"$RR"/*/raw/` a použij je.)
+
+Kontrola citlivých dat — fixtures jdou do pushovaného repa a konfigurace nese `protocols`:
+
+```bash
+zcat tests/fixtures/raw/*/inventory/*.xml.gz | grep -nE '\$9\$|authentication-key|secret|encrypted-password'
+```
+
+Expected: žádný výstup. Pokud cokoliv najde, **STOP** — necommituj a zeptej se uživatele (možnosti: vymazat hodnoty v nahrávce, nebo fixture konfigurace necommitovat).
 
 - [ ] **Step 5: Write the test `tests/raw/test_lab_bundles.py`**
 
