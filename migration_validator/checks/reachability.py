@@ -494,10 +494,12 @@ def _ping_findings(
         if sent == 0:
             # Nic neodeslano neni totez jako "odeslano a bez odpovedi" -
             # ping proste nebehl (napr. resolver cil vyhodil az pozdeji).
+            reason = probe.get("error")
+            message = f"{target}: ping neodeslan" + (f" ({reason})" if reason else "")
             findings.append(
                 Finding(
                     Outcome.SKIP,
-                    f"{target}: ping neodeslan",
+                    message,
                     label="Ping",
                     family=family,
                     value=_ping_value(probe),

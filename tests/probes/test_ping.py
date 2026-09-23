@@ -1012,6 +1012,32 @@ def test_run_ping_never_sets_source():
     assert "source" not in record
 
 
+class _NotRecordedRpc:
+    def ping(self, **kwargs):
+        from migration_validator.raw.calls import NotRecorded
+
+        raise NotRecorded("neni v raw zaznamu: ping")
+
+
+class _NotRecordedDevice:
+    rpc = _NotRecordedRpc()
+
+
+def test_run_ping_not_recorded_is_not_sent_not_unreachable():
+    """Replay miss nesmi skoncit v catch-all (sent=count, received=0 =
+    vymysleny BROKEN "neodpovedel"). Zabiji mutanta: odstraneny
+    `except NotRecorded` v run_ping."""
+    target = PingTarget("svc:X:IPVPN", "198.11.13.2", None, "arp", 4)
+
+    record = run_ping(_NotRecordedDevice(), target, count=5)
+
+    assert record["sent"] == 0
+    assert record["received"] == 0
+    assert record["loss_percent"] is None
+    assert record["error"] == "neni v raw zaznamu"
+    assert record["target"] == "198.11.13.2"
+
+
 def test_resolve_targets_skips_multicast_subtypes():
     scope = _scope()
     scope.key = ScopeKey("X", "Internet", "multicast")

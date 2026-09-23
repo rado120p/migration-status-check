@@ -17,6 +17,7 @@ from lxml import etree
 
 from migration_validator.addressing import is_link_local, link_local_is_configured
 from migration_validator.models.scope import MULTICAST_SUBTYPES, Scope
+from migration_validator.raw.calls import NOT_RECORDED, NotRecorded
 
 PING_SERVICE_TYPES = frozenset({"Internet", "IPVPN"})
 DEFAULT_COUNT = 5
@@ -502,6 +503,19 @@ def run_ping(device: Any, target: PingTarget, count: int = DEFAULT_COUNT) -> dic
     try:
         xml = device.rpc.ping(**kwargs)
         record.update(parse_ping_result(xml))
+    except NotRecorded:
+        # Replay (mig-validate upgrade): cil v puvodnim capture nahrany neni.
+        # sent=0 = "ping neodeslan" (SKIP); catch-all nize by zapsal
+        # sent=count/received=0, tedy vymysleny BROKEN.
+        record.update(
+            {
+                "sent": 0,
+                "received": 0,
+                "loss_percent": None,
+                "rtt_avg_ms": None,
+                "error": NOT_RECORDED,
+            }
+        )
     except Exception as error:  # noqa: BLE001
         record.update(
             {

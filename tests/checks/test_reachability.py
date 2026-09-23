@@ -364,6 +364,23 @@ def test_ping_zero_sent_is_skip():
     assert result.value == "10.0.0.2 neodeslan"
 
 
+def test_ping_not_recorded_names_the_reason():
+    ctx = _ctx(
+        {
+            "ping": [
+                {
+                    "target": "10.0.0.2", "family": 4, "sent": 0, "received": 0,
+                    "error": "neni v raw zaznamu",
+                }
+            ]
+        }
+    )
+    result = run_check(PingReachabilityCheck(), ctx)[0]
+    assert result.status is Status.SKIP
+    assert result.message == "10.0.0.2: ping neodeslan (neni v raw zaznamu)"
+    assert result.value == "10.0.0.2 neodeslan"
+
+
 def test_ping_probe_without_family_skips_instead_of_vanishing():
     """Probe bez rodiny nesmi tise zmizet - check musi zustat v poli checku.
 
