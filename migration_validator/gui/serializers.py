@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from migration_validator.models.snapshot import SCHEMA_VERSION, peek_schema_version
+from migration_validator.raw.bundle import has_session
 from migration_validator.runs.manifest import RunManifest
+from migration_validator.runs.store import RunStore
 
 
 def status_rows(manifest: RunManifest) -> list[dict]:
@@ -38,14 +41,20 @@ def status_rows(manifest: RunManifest) -> list[dict]:
     return rows
 
 
-def snapshot_list(manifest: RunManifest) -> list[dict]:
-    return [
-        {
+def snapshot_list(manifest: RunManifest, store: RunStore | None = None) -> list[dict]:
+    rows = []
+    for record in manifest.captures:
+        row = {
             "file": record.snapshot,
             "phase": record.phase,
             "device": record.device,
             "port": record.port,
             "taken": record.taken,
         }
-        for record in manifest.captures
-    ]
+        if store is not None:
+            version = peek_schema_version(store.dir / record.snapshot)
+            row["schema_version"] = version
+            row["outdated"] = version != SCHEMA_VERSION
+            row["has_raw"] = has_session(store.raw_dir(record.snapshot))
+        rows.append(row)
+    return rows

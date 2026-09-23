@@ -136,3 +136,35 @@ def test_version_two_snapshot_is_rejected():
     """
     with pytest.raises(SnapshotVersionError, match="schema_version 2"):
         Snapshot.from_dict({"schema_version": 2, "device": {}, "capture": {}})
+
+
+def test_version_error_names_the_fix(tmp_path):
+    import json
+
+    import pytest
+
+    from migration_validator.models.snapshot import (
+        CaptureMeta, DeviceMeta, Snapshot, SnapshotVersionError, load_snapshot, save_snapshot,
+    )
+
+    path = tmp_path / "s.json"
+    save_snapshot(Snapshot(device=DeviceMeta(address="x"), capture=CaptureMeta(started_at="t")), path)
+    data = json.loads(path.read_text())
+    data["schema_version"] = 12
+    path.write_text(json.dumps(data))
+
+    with pytest.raises(SnapshotVersionError, match="mig-validate upgrade"):
+        load_snapshot(path)
+
+
+def test_peek_schema_version(tmp_path):
+    from migration_validator.models.snapshot import (
+        SCHEMA_VERSION, CaptureMeta, DeviceMeta, Snapshot, peek_schema_version, save_snapshot,
+    )
+
+    path = tmp_path / "s.json"
+    save_snapshot(Snapshot(device=DeviceMeta(address="x"), capture=CaptureMeta(started_at="t")), path)
+    assert peek_schema_version(path) == SCHEMA_VERSION
+    (tmp_path / "bad.json").write_text("{")
+    assert peek_schema_version(tmp_path / "bad.json") is None
+    assert peek_schema_version(tmp_path / "missing.json") is None

@@ -81,3 +81,34 @@ def test_single_run_radek_je_pod_old_s_flagy():
         "new": None,
         "pre": True, "post": True, "rollback": False,
     }]
+
+
+def test_snapshot_list_with_store_adds_schema_and_raw(tmp_path):
+    from raw_run import build_run
+
+    from migration_validator.gui.serializers import snapshot_list
+    from migration_validator.models.snapshot import SCHEMA_VERSION
+
+    store = build_run(tmp_path)
+    rows = snapshot_list(store.load(), store)
+
+    assert {row["file"]: (row["schema_version"], row["outdated"], row["has_raw"]) for row in rows} == {
+        "snapshot_pre_MX1_all.json": (SCHEMA_VERSION, False, True),
+        "snapshot_post_PTX1_all.json": (SCHEMA_VERSION, False, True),
+    }
+
+
+def test_snapshot_list_marks_corrupt_snapshot_outdated(tmp_path):
+    import shutil
+
+    from raw_run import build_run
+
+    from migration_validator.gui.serializers import snapshot_list
+
+    store = build_run(tmp_path)
+    (store.dir / "snapshot_pre_MX1_all.json").write_text("{")
+    shutil.rmtree(store.raw_dir("snapshot_pre_MX1_all.json"))
+
+    row = next(r for r in snapshot_list(store.load(), store) if r["file"] == "snapshot_pre_MX1_all.json")
+
+    assert (row["schema_version"], row["outdated"], row["has_raw"]) == (None, True, False)

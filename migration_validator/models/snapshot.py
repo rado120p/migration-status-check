@@ -7,6 +7,7 @@ ani pristup na sit.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -128,6 +129,7 @@ class Snapshot:
         if version != SCHEMA_VERSION:
             raise SnapshotVersionError(
                 f"snapshot ma schema_version {version}, nastroj umi {SCHEMA_VERSION}"
+                " - pregeneruj run: mig-validate upgrade <run>"
             )
         inventory = data.get("inventory")
         return cls(
@@ -164,3 +166,19 @@ def load_snapshot(path: str | Path) -> Snapshot:
     return Snapshot.from_dict(
         decode_nonfinite(json.loads(Path(path).read_text(encoding="utf-8")))
     )
+
+
+_SCHEMA_RE = re.compile(r'"schema_version"\s*:\s*(\d+)')
+
+
+def peek_schema_version(path: str | Path) -> int | None:
+    """schema_version bez plneho nacteni - save_snapshot ji zapisuje jako
+    prvni klic. None, kdyz soubor chybi nebo ji na zacatku nenese
+    (poskozeny soubor); GUI z toho udela stitek 'outdated'."""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            head = handle.read(512)
+    except OSError:
+        return None
+    match = _SCHEMA_RE.search(head)
+    return int(match.group(1)) if match else None

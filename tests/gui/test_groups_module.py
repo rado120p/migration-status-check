@@ -236,3 +236,29 @@ def test_summary_cache_sdilena_pres_skupiny_se_neprorezava(tmp_path, monkeypatch
     )
     _summary(tmp_path, cache=cache)
     assert len(calls) == 1
+
+
+def test_group_summary_row_reports_outdated_run(tmp_path):
+    import json
+
+    from raw_run import build_run
+
+    from migration_validator.gui.captures import CaptureManager
+    from migration_validator.gui.groups import OUTDATED_ROW_ERROR, SummaryCache, build_group_summary
+    from migration_validator.profiles.store import ProfileStore
+
+    bad = build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+    path = bad.dir / "snapshot_post_PTX1_all.json"
+    data = json.loads(path.read_text())
+    data["schema_version"] = 12
+    path.write_text(json.dumps(data))
+
+    summary = build_group_summary(
+        "pop1", run_root=tmp_path, profiles=ProfileStore(tmp_path / "profiles"),
+        default_path=None, manager=CaptureManager(), cache=SummaryCache(),
+    )
+
+    rows = {row["run"]: row for row in summary["runs"]}
+    assert rows["pop1-mx1"]["error"] == OUTDATED_ROW_ERROR
+    assert rows["pop1-mx2"]["error"] is None

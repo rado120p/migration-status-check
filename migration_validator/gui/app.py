@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -20,7 +20,7 @@ from migration_validator.gui.groups import SummaryCache
 from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
-from migration_validator.models.snapshot import load_snapshot
+from migration_validator.models.snapshot import SnapshotVersionError, load_snapshot
 from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.pairing import plan_evaluations
@@ -85,6 +85,16 @@ def create_app(
     capture_pool: int = DEFAULT_CAPTURE_POOL,
 ) -> FastAPI:
     app = FastAPI(title="mig-validate")
+
+    @app.exception_handler(SnapshotVersionError)
+    async def schema_outdated(request: Request, error: SnapshotVersionError) -> JSONResponse:
+        # detail zustava retezec - app.js vsude cte body.detail jako text;
+        # jen notice s tlacitkem Upgrade run se ridi podle code.
+        return JSONResponse(
+            status_code=422,
+            content={"detail": str(error), "code": "schema_outdated"},
+        )
+
     app.state.run_root = run_root
     app.state.profile_path = profile_path
     profiles = ProfileStore(Path(profiles_root))
@@ -162,7 +172,7 @@ def create_app(
             "group": manifest.group,
             "devices": _devices_dict(manifest),
             "rows": status_rows(manifest),
-            "snapshots": snapshot_list(manifest),
+            "snapshots": snapshot_list(manifest, store),
         }
 
     @app.get("/api/runs/{run}")

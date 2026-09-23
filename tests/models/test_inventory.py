@@ -328,3 +328,16 @@ def test_entry_without_l3_interface_defaults_to_empty():
 
 def test_schema_version_is_10():
     assert INVENTORY_SCHEMA_VERSION == 10
+
+
+def test_inventory_version_error_is_value_error_with_fix(tmp_path):
+    import pytest
+
+    from migration_validator.models.inventory import InventoryVersionError, load_inventory
+
+    path = tmp_path / "inv.yml"
+    path.write_text("schema_version: 9\ndevice: r1\ninterfaces: []\n", encoding="utf-8")
+
+    with pytest.raises(InventoryVersionError, match="mig-validate upgrade") as info:
+        load_inventory(path)
+    assert isinstance(info.value, ValueError)

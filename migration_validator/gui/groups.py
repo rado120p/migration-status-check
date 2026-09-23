@@ -15,13 +15,15 @@ from migration_validator.config import Profile
 from migration_validator.gui.captures import CaptureManager
 from migration_validator.gui.profiles import profile_for_run
 from migration_validator.models.result import Status, count_statuses
-from migration_validator.models.snapshot import load_snapshot
+from migration_validator.models.snapshot import SnapshotVersionError, load_snapshot
 from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
 
 PHASES = ("pre", "post", "rollback")
+
+OUTDATED_ROW_ERROR = "zastarale snimky - spust Upgrade group"
 
 Counts = dict[str, int]
 Verdict = tuple[str | None, Counts, Counts]
@@ -125,6 +127,9 @@ def _member_row(
         if verdict is None:
             verdict = run_verdict(store, manifest, profile)
             cache.put(store.name, key, verdict)
+    except SnapshotVersionError:
+        row["error"] = OUTDATED_ROW_ERROR
+        return row
     except (ValueError, OSError) as error:
         row["error"] = str(error)
         return row

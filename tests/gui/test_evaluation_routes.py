@@ -480,3 +480,49 @@ def test_snapshot_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_p
 
 def test_snapshot_evaluation_celoboxovy_snimek_nezuzuje(tmp_path):
     assert _run_with_ae0_post(tmp_path, None) == ["10.99.0.0/24", "198.62.1.0/29"]
+
+
+def _outdated_run(tmp_path):
+    import json
+
+    from fastapi.testclient import TestClient
+    from raw_run import build_run
+
+    from migration_validator.gui.app import create_app
+
+    store = build_run(tmp_path)
+    path = store.dir / "snapshot_post_PTX1_all.json"
+    data = json.loads(path.read_text())
+    data["schema_version"] = 12
+    path.write_text(json.dumps(data))
+    return TestClient(create_app(run_root=tmp_path))
+
+
+def test_run_evaluation_outdated_snapshot_is_422_schema_outdated(tmp_path):
+    client = _outdated_run(tmp_path)
+
+    res = client.get("/api/runs/mig01/evaluation")
+
+    assert res.status_code == 422
+    body = res.json()
+    assert body["code"] == "schema_outdated"
+    assert isinstance(body["detail"], str)
+    assert "mig-validate upgrade" in body["detail"]
+
+
+def test_snapshot_evaluation_outdated_snapshot_is_422(tmp_path):
+    client = _outdated_run(tmp_path)
+
+    res = client.get("/api/runs/mig01/snapshots/snapshot_post_PTX1_all.json/evaluation")
+
+    assert res.status_code == 422
+    assert res.json()["code"] == "schema_outdated"
+
+
+def test_run_detail_lists_schema_and_raw(tmp_path):
+    client = _outdated_run(tmp_path)
+
+    snapshots = client.get("/api/runs/mig01").json()["snapshots"]
+
+    post = next(s for s in snapshots if s["file"] == "snapshot_post_PTX1_all.json")
+    assert (post["schema_version"], post["outdated"], post["has_raw"]) == (12, True, True)

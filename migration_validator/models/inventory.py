@@ -166,6 +166,10 @@ class Inventory:
 INVENTORY_SCHEMA_VERSION = 10
 
 
+class InventoryVersionError(ValueError):
+    """Inventory ma jinou schema_version, nez nastroj umi."""
+
+
 def load_inventory(path: str | Path) -> Inventory:
     """Nacte YAML vystup parseru konfigurace.
 
@@ -208,9 +212,10 @@ def load_inventory(path: str | Path) -> Inventory:
 
     version = raw.get("schema_version")
     if version != INVENTORY_SCHEMA_VERSION:
-        raise ValueError(
+        raise InventoryVersionError(
             f"{path}: inventory ma schema_version {version}, nastroj umi "
-            f"{INVENTORY_SCHEMA_VERSION} - vygeneruj ji znovu parserem"
+            f"{INVENTORY_SCHEMA_VERSION} - vygeneruj ji znovu parserem "
+            "(capture --parse-services) nebo pregeneruj run: mig-validate upgrade <run>"
         )
 
     if "interfaces" not in raw:
