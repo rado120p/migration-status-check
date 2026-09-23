@@ -14,7 +14,7 @@ from migration_validator.auth import DEFAULT_CAPTURE_POOL, load_settings
 from migration_validator.collectors.registry import collectors_for
 from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
 from migration_validator.gui.capture_launch import launch_capture
-from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
 from migration_validator.gui.group_routes import build_groups_router
 from migration_validator.gui.groups import SummaryCache
 from migration_validator.gui.profile_routes import build_profiles_router
@@ -222,6 +222,18 @@ def create_app(
         except (ValueError, FileNotFoundError) as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
         return {"archived_to": target.name}
+
+    @app.post("/api/runs/{run}/upgrade")
+    def upgrade_run(run: str, dry_run: bool = False, actor: Actor = require(Permission.ADMIN)) -> dict:
+        """Pregeneruje run z raw zaznamu (spec 2026-09-23). Synchronni -
+        replay je offline a kratky, fronta captures se nepouziva."""
+        _require_store(run)
+        try:
+            with manager.maintenance(run):
+                report = api.upgrade_run(run, run_root=run_root, dry_run=dry_run)
+        except RunBusy as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        return report.to_dict()
 
     @app.get("/api/runs/{run}/evaluation")
     def run_evaluation(run: str, ports: str | None = None, actor: Actor = require(Permission.VIEW)) -> dict:

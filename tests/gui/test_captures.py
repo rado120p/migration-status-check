@@ -4,7 +4,7 @@ import time
 import pytest
 
 import migration_validator.auth as auth
-from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
 
 
 def _ok_fn(on_progress):
@@ -271,3 +271,39 @@ def test_active_task_vraci_queued_nebo_running():
     gate.set()
     _wait_done(manager, queued.id)
     assert manager.active_task("g-a") is None
+
+
+def _blocking(event):
+    def fn(on_progress):
+        event.wait(5)
+        return object()
+    return fn
+
+
+def test_maintenance_refuses_run_with_active_capture():
+    manager = CaptureManager()
+    release = threading.Event()
+    task = manager.start(_blocking(release), run="mig01", device="MX1", port=None, phase="pre")
+    try:
+        with pytest.raises(RunBusy, match="bezici capture"):
+            with manager.maintenance("mig01"):
+                pass
+    finally:
+        release.set()
+        _wait_done(manager, task.id)
+
+
+def test_start_refuses_run_in_maintenance():
+    manager = CaptureManager()
+    with manager.maintenance("mig01"):
+        with pytest.raises(RunBusy, match="se upgraduje"):
+            manager.start(_ok_fn, run="mig01", device="MX1", port=None, phase="pre")
+        with pytest.raises(RunBusy, match="uz upgraduje"):
+            with manager.maintenance("mig01"):
+                pass
+    task = manager.start(_ok_fn, run="mig01", device="MX1", port=None, phase="pre")
+    assert _wait_done(manager, task.id).state == "done"
+
+
+def test_run_busy_is_device_busy_for_existing_handlers():
+    assert issubclass(RunBusy, DeviceBusy)

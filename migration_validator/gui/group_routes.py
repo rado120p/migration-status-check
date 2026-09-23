@@ -19,7 +19,7 @@ from migration_validator import api
 from migration_validator.auth import load_settings
 from migration_validator.gui.authz import Actor, Permission, require
 from migration_validator.gui.capture_launch import launch_capture
-from migration_validator.gui.captures import CaptureManager, DeviceBusy
+from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
 from migration_validator.gui.groups import PHASES, SummaryCache, build_group_summary
 from migration_validator.gui.profiles import profile_for_run
 from migration_validator.profiles.store import ProfileStore
@@ -168,5 +168,26 @@ def build_groups_router(
         except api.GroupWriteError as error:
             raise _write_error(error) from error
         return {"archived": archived}
+
+    @router.post("/{group}/upgrade")
+    def upgrade_group(group: str, dry_run: bool = False, actor: Actor = require(Permission.ADMIN)) -> dict:
+        """Upgrade vsech runu skupiny postupne; selhani jednoho runu
+        ostatni nezastavi (spec 2026-09-23, sekce 4)."""
+        members = api.group_runs(run_root).get(group)
+        if not members:
+            raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
+        if any(manager.busy_run(name) for name in members):
+            raise HTTPException(status_code=409, detail=f"skupina '{group}' ma bezici capture")
+        runs: list[dict[str, Any]] = []
+        for name in members:
+            try:
+                with manager.maintenance(name):
+                    runs.append(api.upgrade_run(name, run_root=run_root, dry_run=dry_run).to_dict())
+            except Exception as error:  # noqa: BLE001 - jeden run nesmi zastavit skupinu
+                runs.append({
+                    "run": name, "dry_run": dry_run, "backup": None, "items": [],
+                    "error": f"{type(error).__name__}: {error}",
+                })
+        return {"group": group, "runs": runs}
 
     return router

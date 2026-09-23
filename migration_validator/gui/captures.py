@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 
 class DeviceBusy(Exception):
     """Na zarizeni uz bezi capture - PyEZ session se nesdili."""
+
+
+class RunBusy(DeviceBusy):
+    """Run je v udrzbe (upgrade) nebo na nem ceka/bezi capture. Podtrida
+    DeviceBusy, aby existujici handlery (409) fungovaly beze zmeny."""
 
 
 ACTIVE_STATES = ("queued", "running")
@@ -51,6 +57,7 @@ class CaptureManager:
         self._tasks: dict[str, CaptureTask] = {}
         self._lock = threading.Lock()
         self._slots = threading.Semaphore(pool)
+        self._maintenance: set[str] = set()
 
     def get(self, task_id: str) -> CaptureTask | None:
         with self._lock:
@@ -62,10 +69,31 @@ class CaptureManager:
 
     def active_task(self, run: str) -> CaptureTask | None:
         with self._lock:
-            for task in self._tasks.values():
-                if task.run == run and task.state in ACTIVE_STATES:
-                    return task
+            return self._active_unlocked(run)
+
+    def _active_unlocked(self, run: str) -> CaptureTask | None:
+        for task in self._tasks.values():
+            if task.run == run and task.state in ACTIVE_STATES:
+                return task
         return None
+
+    @contextmanager
+    def maintenance(self, run: str) -> Iterator[None]:
+        """Zamek runu v GUI pro upgrade. Spravnost drzi flock na disku
+        (RunStore.lock); tohle jen vrati srozumitelnou 409 driv, nez se
+        capture vubec zaradi do fronty. Kontrola i nastaveni jsou pod
+        jednim zamkem manageru - zadny zavod."""
+        with self._lock:
+            if run in self._maintenance:
+                raise RunBusy(f"run {run} se uz upgraduje")
+            if self._active_unlocked(run) is not None:
+                raise RunBusy(f"run {run} ma bezici capture")
+            self._maintenance.add(run)
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._maintenance.discard(run)
 
     def last_finished(self, run: str) -> CaptureTask | None:
         """Posledni dokonceny (done/failed) task runu - insertion order slovniku."""
@@ -85,6 +113,8 @@ class CaptureManager:
         phase: str,
     ) -> CaptureTask:
         with self._lock:
+            if run in self._maintenance:
+                raise RunBusy(f"run {run} se upgraduje")
             for task in self._tasks.values():
                 if task.device == device and task.state in ACTIVE_STATES:
                     raise DeviceBusy(
