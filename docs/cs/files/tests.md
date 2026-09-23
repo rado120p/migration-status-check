@@ -110,7 +110,8 @@ a párování, ne parsování.
 |---|---|
 | `test_capture.py::test_every_area_is_registered_for_both_platforms` | collector zapomenutý v `all.py` by tiše vypustil celou oblast |
 | `test_capture.py::test_failed_arp_collector_leaves_ping_empty` | bez ARP nesmí vzniknout falešný probe (a `all()` na prázdném seznamu netvrdí nic — test to explicitně ošetřuje) |
-| `test_capture.py::test_record_raw_writes_every_rpc_of_multi_rpc_collector` | fixture jen z prvního RPC by byla tiše neúplná |
+| `raw/test_capture_round_trip.py::test_replay_reproduces_live_snapshot` | replay musí dát tentýž snapshot jako živý capture (multi-RPC collectory, chyby, pingy) |
+| `raw/test_lab_bundles.py::test_replay_makes_exactly_the_recorded_calls` | laboratorní bundly: replay dělá přesně nahraná volání; při změně RPC collectoru nahrát znovu z laborky |
 | `test_engine.py::test_healthy_scope_without_baseline_is_pass_not_skip` | zdravá služba nesmí svítit `SKIP` jen kvůli compare-only checku |
 | `test_engine.py::test_failed_collector_produces_skip_not_pass` | chybějící data nikdy nedají PASS |
 | `test_engine.py::test_unmatched_subject_scope_is_still_state_validated` | nová služba se pořád zkontroluje, jen se nemá s čím porovnat |

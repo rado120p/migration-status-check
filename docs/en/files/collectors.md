@@ -46,7 +46,7 @@ whose message says which collector, which RPC and what happened:
 `CollectorError` is caught by `capture.py` — collection continues with the other areas.
 
 **`rpc_names()` is a safeguard for fixture recording.** A collector with several RPCs must
-override it, otherwise `record` and `--record-raw` would store only the first one and the
+override it, otherwise `record` would store only the first one and the
 recorded fixtures would be silently incomplete. `EvpnMacCollector` on MX (two different
 response shapes) and, since the 2026-08-19 QNH wave, `RoutesCollector` (the same RPC twice,
 with a different `protocol`) both do — see the [`routes.py`](#routespy--static-and-aggregate-routes-from-the-routing-table)
@@ -234,7 +234,7 @@ with `{"protocol": "aggregate"}` (both platforms). The pattern is `InterfacesCol
 is the protocol filter that changes instead of the response shape. `rpc_calls()` — the new
 authoritative method on `collectors/base.py`, shared
 by every collector with more than one RPC call — returns both `(rpc_name, kwargs)` pairs;
-`record` and `--record-raw` use it to store **both** responses, so the fixtures carry
+`record` uses it to store **both** responses, so the fixtures carry
 `routes.xml` (protocol=static) and `routes.2.xml` (protocol=aggregate).
 
 The protocol filter keeps the response small even on a device carrying a full internet table.

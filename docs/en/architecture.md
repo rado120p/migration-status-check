@@ -254,7 +254,7 @@ Platform detection (`connection/junos.py::detect_platform`) looks for `EVO` in t
 string, then falls back to a model prefix (`PTX10`, `ACX7`, `QFX5700`, `MX304`).
 
 `Collector.rpc_names()` exists because of the first row of that table: a collector with more
-than one RPC must override it, otherwise `record` and `--record-raw` would store only the
+than one RPC must override it, otherwise `record` would store only the
 first one and the recorded fixtures would be silently incomplete.
 
 ---

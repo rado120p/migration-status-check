@@ -113,7 +113,8 @@ orchestration and pairing, not parsing.
 |---|---|
 | `test_capture.py::test_every_area_is_registered_for_both_platforms` | a collector forgotten in `all.py` would silently drop a whole area |
 | `test_capture.py::test_failed_arp_collector_leaves_ping_empty` | without ARP, no bogus probe may be created (and `all()` over an empty list asserts nothing — the test handles that explicitly) |
-| `test_capture.py::test_record_raw_writes_every_rpc_of_multi_rpc_collector` | a fixture from only the first RPC would be silently incomplete |
+| `raw/test_capture_round_trip.py::test_replay_reproduces_live_snapshot` | replay must produce the same snapshot as a live capture (multi-RPC collectors, errors, pings) |
+| `raw/test_lab_bundles.py::test_replay_makes_exactly_the_recorded_calls` | lab bundles: replay makes exactly the recorded calls; re-record from the lab when the RPC collector changes |
 | `test_engine.py::test_healthy_scope_without_baseline_is_pass_not_skip` | a healthy service must not glow `SKIP` merely because of a compare-only check |
 | `test_engine.py::test_failed_collector_produces_skip_not_pass` | missing data never yields a PASS |
 | `test_engine.py::test_unmatched_subject_scope_is_still_state_validated` | a new service is still checked, it just has nothing to compare to |

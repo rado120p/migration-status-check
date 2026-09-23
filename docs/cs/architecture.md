@@ -255,7 +255,7 @@ Detekce platformy (`connection/junos.py::detect_platform`) hledá `EVO` v řetě
 sekundárně model podle prefixu (`PTX10`, `ACX7`, `QFX5700`, `MX304`).
 
 `Collector.rpc_names()` existuje kvůli tomu prvnímu řádku tabulky: collector s více RPC ho
-musí přepsat, jinak by `record` a `--record-raw` uložily jen první z nich a nahrané fixtures
+musí přepsat, jinak by `record` uložil jen první z nich a nahrané fixtures
 by byly tiše nekompletní.
 
 ---

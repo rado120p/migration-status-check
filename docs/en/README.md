@@ -111,7 +111,6 @@ at all (neither the target nor the source address is known).
 | `--phase` | free text, stored in the snapshot and printed in the report (`pre-migration`, `post-migration`) |
 | `--collectors` | comma-separated subset of areas (`interfaces,bgp`) — for debugging |
 | `--ping-count` | ICMP packets per target, default 5 |
-| `--record-raw DIR` | additionally saves the raw RPC XML into `DIR/<platform>/` |
 | `--username` | default `ansible` |
 | `--auth key\|password` | default `key` |
 | `--key-file` | default `~/.ssh/id_rsa` |
@@ -173,7 +172,10 @@ migration (LAG by LAG, customer by customer), multi-phase runs (`pre` → `post`
 Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
 (`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,
 `snapshot_<pre|post|rollback>_<node>_<port|all>.json`. A capture without `--port`
-(whole-box mode) uses `all` instead of a port name.
+(whole-box mode) uses `all` instead of a port name. The run directory also holds
+`raw/` (raw device replies per capture/inventory, raw retention), `backup/upgrade-<time>/`
+(files replaced by the `upgrade` command) and `.lock` (the run's lock, held for capture
+writes and for swapping files during an upgrade).
 
 `run.yml` is the **single source of truth** for the migration; it can be written by hand as a
 migration plan (`mig-validate` then only reads it and fills in `captures`), or it can grow
@@ -263,6 +265,47 @@ service types, ping count) has a form that shows the defaults. A run picks its p
 *New run*; `(default)` is the server profile from `--profile` and is read-only in the GUI.
 
 Restore = move the directory back into `runs/` and rename it to the original name.
+
+### Raw recording and run upgrade (`upgrade`)
+
+Every capture into a run stores the device's raw data next to the snapshot in
+`raw/<snapshot stem>/`: `session.json` (capture inputs, facts, list of calls) and
+every RPC reply including pings as `NNNN-<rpc>.xml.gz`. `--parse-services` likewise
+stores the configuration the inventory was built from (`raw/inventory_<…>/`), and
+each capture bundles a copy under `inventory/`. The configuration is fetched with
+the parser hierarchies plus `policy-options`, `firewall` and `class-of-service` —
+the parser does not see them, they are there for future versions. **Note:** the raw
+configuration includes `$9$` keys under `protocols`; treat run directories as
+sensitive.
+
+When a new tool version changes the snapshot schema (or fixes parsing), `upgrade`
+regenerates inventories and snapshots from the raw recording with the current version:
+
+```bash
+.venv/bin/mig-validate upgrade migration-01 --dry-run   # report only
+.venv/bin/mig-validate upgrade migration-01             # regenerate, replaced files → backup/
+.venv/bin/mig-validate upgrade --group pop1             # every run of the group
+```
+
+The report has one line per file: `pregenerovano - beze zmeny` (unchanged),
+`pregenerovano - zmeneno` (changed) or `nelze - <reason>` (no raw recording, config
+without a needed hierarchy, raw does not belong to the snapshot). Whatever cannot be
+regenerated stays untouched. What the recording lacks (a new collector, a new ping
+target) is never passed off as a result: the collector gets status error and its
+checks SKIP, the ping reads "neodeslan (neni v raw zaznamu)".
+
+Exit code: 0 everything regenerated, 1 some files cannot be, 2 the run's upgrade
+failed. If replay fails (a tool error), the run is left unchanged; if the swap of
+files on disk fails, the run is **partially upgraded** — the originals of the files
+already replaced are in `backup/upgrade-<time>/`, and the report gives that path.
+With several runs or `--group`, one run failing (unknown run, disk error) prints
+`chyba: run <name>: ...` on stderr, counts as 2, and the remaining runs still run.
+In the GUI the **Upgrade run** and **Upgrade
+group** buttons do the same (preview, then Apply); snapshots carry `outdated` and
+`no raw` badges.
+
+Snapshots captured before raw recording existed (2026-09-23) cannot be regenerated;
+after the next schema bump the new version will not load them.
 
 ---
 
@@ -492,9 +535,8 @@ collector with multiple RPCs (`evpn_mac` on MX) stores each one separately — t
 `evpn_mac.2.xml`. It is the only sustainable way to keep collectors from rotting: unfamiliar
 output from production gets copied into the fixtures and the regression test is done.
 
-The same can be done as a side effect of a regular capture: `capture --record-raw DIR`. The
-difference is that `record` reports success or failure per RPC, while `--record-raw` is a
-silent best-effort.
+A capture into a run keeps the raw replies itself (`raw/`, see Raw recording and run upgrade);
+`record` stays for test fixtures.
 
 ---
 

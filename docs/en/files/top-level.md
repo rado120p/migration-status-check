@@ -42,7 +42,7 @@ The single seam a future GUI will call. Three functions:
 
 ```python
 capture(host, *, inventory=None, options=None, collectors=None, phase=None,
-        ping_count=5, record_raw=None, baselines=None, service_types=None) -> Snapshot
+        ping_count=5, baselines=None, service_types=None, recorder=None) -> Snapshot
 evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None,
          service_types=None, profile_name=None, step=None) -> RunResult
 list_checks() -> list[dict]
@@ -105,10 +105,11 @@ Two things worth watching:
 1. **With `--format text` and `--output` set**, the terminal receives text but the file
    receives **JSON** — and the unfiltered `result`, not the filtered `shown`. With
    `--format json` the filtered output is written instead.
-2. **The `record` subcommand exists in addition to what the specification describes**, which
-   mentions only `capture --record-raw`. Both work, and they differ: `record` reports success
-   or failure per RPC and keeps going with a message; `capture --record-raw` is a silent
-   best-effort (`capture._record`).
+2. **The `record` subcommand is for recording test fixtures**, not a regular capture — it
+   reports success or failure per RPC and keeps going with a message. `capture` has its own,
+   automatic raw retention (`raw/` in the run, see the README section Raw recording and run
+   upgrade), which works differently: it records transparently through the `RecordingDevice`
+   that `api.capture()` wraps around the connection, not inside `capture.py`.
 
 ## `capture.py` — collection orchestration
 
@@ -134,10 +135,6 @@ Key points:
   — otherwise a typo would look like a successful capture missing an area.
 - **Ping only runs when scopes exist**, i.e. only with an inventory. Without one the snapshot
   carries `probes.ping: []`.
-- **`_record()`** stores raw XML for `--record-raw`. It iterates `collector.rpc_names()`, not
-  just `rpc_name()`, so a collector with multiple RPCs (`evpn_mac` on MX) stores both — the
-  first as `evpn_mac.xml`, the second as `evpn_mac.2.xml`. It is best-effort: a failed RPC is
-  silently skipped, because recording fixtures must not bring down a capture.
 - The module-level import of `migration_validator.collectors.all` is what **populates the
   collector registry**.
 

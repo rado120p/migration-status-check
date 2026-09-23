@@ -46,7 +46,7 @@ s hláškou, která říká který collector, které RPC a co se stalo:
 `CollectorError` chytá `capture.py` — sběr pokračuje ostatními oblastmi.
 
 **`rpc_names()` je pojistka pro nahrávání fixtures.** Collector s více RPC ji musí přepsat,
-jinak `record` a `--record-raw` uloží jen první z nich a nahrané fixtures budou tiše
+jinak `record` uloží jen první z nich a nahrané fixtures budou tiše
 nekompletní. Takové jsou `EvpnMacCollector` na MX (dva různé tvary odpovědi) a od 2026-08-19
 QNH i `RoutesCollector` (dvakrát totéž RPC s jiným `protocol`) — viz sekci
 [„`routes.py`"](#routespy--statické-a-agregátní-routy-z-routovací-tabulky) níž. Autoritou pro
@@ -236,8 +236,8 @@ podruhé s `{"protocol": "aggregate"}` (obě platformy). Vzorem je `InterfacesCo
 (ten volá dvě **různá** jména RPC se stejnými kwargs) — tady se místo tvaru odpovědi mění
 filtr na protokol.
 `rpc_calls()` — nová autoritativní metoda z `collectors/base.py`, sdílená všemi collectory
-s víc než jedním RPC voláním — vrátí obě dvojice `(rpc_name, kwargs)`; `record` a
-`--record-raw` z ní nahrají **obě** odpovědi, takže fixtures nesou `routes.xml`
+s víc než jedním RPC voláním — vrátí obě dvojice `(rpc_name, kwargs)`; `record`
+z ní nahraje **obě** odpovědi, takže fixtures nesou `routes.xml`
 (protocol=static) i `routes.2.xml` (protocol=aggregate).
 
 Filtr na protokol drží odpověď malou i na zařízení s plnou internetovou tabulkou.

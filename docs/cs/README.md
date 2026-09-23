@@ -112,7 +112,6 @@ source adresa).
 | `--phase` | volný text, ukládá se do snapshotu a tiskne v reportu (`pre-migration`, `post-migration`) |
 | `--collectors` | čárkou oddělený podseznam oblastí (`interfaces,bgp`) — pro ladění |
 | `--ping-count` | počet ICMP paketů na cíl, výchozí 5 |
-| `--record-raw DIR` | vedle sběru uloží i syrové RPC XML do `DIR/<platforma>/` |
 | `--username` | výchozí `ansible` |
 | `--auth key\|password` | výchozí `key` |
 | `--key-file` | výchozí `~/.ssh/id_rsa` |
@@ -182,7 +181,10 @@ runs/mig01/
 ├── inventory_PTX1-POP1_et_0_0_0.yml
 ├── snapshot_pre_MX1-POP1_ge_0_0_0.json
 ├── snapshot_post_PTX1-POP1_et_0_0_0.json
-└── snapshot_rollback_MX1-POP1_ge_0_0_0.json
+├── snapshot_rollback_MX1-POP1_ge_0_0_0.json
+├── raw/                      syrové odpovědi zařízení per capture/inventory (raw retention)
+├── backup/upgrade-<čas>/     soubory nahrazené příkazem upgrade
+└── .lock                     zámek runu (zápis capture, výměna při upgradu)
 ```
 
 Jména souborů nesou fázi (`pre`/`post`/`rollback`), **node** (jméno zařízení z `run.yml`, ne
@@ -394,6 +396,44 @@ serverový profil z `--profile` a v GUI se needituje.
 
 Obnova = ruční přesun adresáře zpět do `runs/` a přejmenování na původní název.
 
+### Raw záznam a upgrade runu (`upgrade`)
+
+Každý capture do runu uloží vedle snapshotu syrová data ze zařízení do
+`raw/<kmen snapshotu>/`: `session.json` (vstupy capture, facts, seznam volání)
+a odpovědi všech RPC včetně pingů jako `NNNN-<rpc>.xml.gz`. `--parse-services`
+stejně uloží konfiguraci, ze které vznikla inventory (`raw/inventory_<…>/`), a každý
+capture si kopii přibalí do `inventory/`. Konfigurace se stahuje s hierarchiemi
+parseru plus `policy-options`, `firewall` a `class-of-service` — parser je nevidí,
+jsou tu pro budoucí verze. **Pozor:** v raw je konfigurace včetně `$9$` klíčů pod
+`protocols`; run adresáře ber jako citlivá data.
+
+Když nová verze nástroje změní schéma snímků (nebo opraví parsování),
+`upgrade` z raw záznamu přegeneruje inventory i snímky aktuální verzí:
+
+```bash
+.venv/bin/mig-validate upgrade migration-01 --dry-run   # jen report
+.venv/bin/mig-validate upgrade migration-01             # přegeneruje, změněné soubory → backup/
+.venv/bin/mig-validate upgrade --group pop1             # všechny runy skupiny
+```
+
+Report má řádek na soubor: `pregenerovano - beze zmeny`, `pregenerovano - zmeneno`
+nebo `nelze - <důvod>` (snímek bez raw záznamu, konfigurace bez potřebné hierarchie,
+raw nepatří ke snímku). Co přegenerovat nejde, zůstává beze změny. Co v raw záznamu
+není (nový collector, nový ping cíl), se nikdy nevydává za výsledek: collector má
+status error a jeho checky SKIP, ping „neodeslan (neni v raw zaznamu)".
+
+Návratový kód: 0 vše přegenerováno, 1 některé soubory nejdou, 2 upgrade runu
+spadl. Selže-li replay (chyba nástroje), run zůstal beze změny; selže-li až
+výměna souborů na disku, run je **částečně přegenerovaný** — originály už
+vyměněných souborů jsou v `backup/upgrade-<čas>/` a report tu cestu uvádí.
+Při víc runech nebo `--group` selhání jednoho runu (neznámý run, chyba disku)
+vypíše na stderr `chyba: run <jméno>: ...`, počítá se jako 2, a zbylé runy se
+přesto spustí. V GUI stejné dělají tlačítka **Upgrade run**
+a **Upgrade group** (náhled, pak Apply); snímky mají štítky `outdated` a `no raw`.
+
+Snímky zachycené před zavedením raw záznamu (2026-09-23) přegenerovat nejde;
+po příštím bumpu schématu je nová verze nenačte.
+
 ---
 
 ## 4. Jak číst výstup
@@ -594,8 +634,8 @@ s více RPC (na MX `evpn_mac`) uloží každé zvlášť — druhé jako `evpn_m
 udržitelný způsob, jak collectory nezastarají: neznámý výstup z produkce se zkopíruje do
 fixtures a regresní test je hotový.
 
-Totéž se dá udělat mimochodem při běžném sběru: `capture --record-raw DIR`. Rozdíl je, že
-`record` u každého RPC vypíše, jestli uspělo, zatímco `--record-raw` je tichý best-effort.
+Capture do runu si syrové odpovědi ukládá sám (`raw/`, viz Raw záznam a upgrade runu);
+`record` zůstává pro testovací fixtures.
 
 ---
 

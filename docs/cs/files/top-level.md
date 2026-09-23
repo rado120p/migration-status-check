@@ -42,7 +42,7 @@ Jediný šev, který bude volat budoucí GUI. Tři funkce:
 
 ```python
 capture(host, *, inventory=None, options=None, collectors=None, phase=None,
-        ping_count=5, record_raw=None, baselines=None, service_types=None) -> Snapshot
+        ping_count=5, baselines=None, service_types=None, recorder=None) -> Snapshot
 evaluate(snapshot, *, baseline=None, mapping=None, config=None, now=None,
          service_types=None, profile_name=None, step=None) -> RunResult
 list_checks() -> list[dict]
@@ -101,10 +101,11 @@ Dvě věci, které stojí za pozor:
 1. **Při `--format text` a zadaném `--output`** jde na terminál text, ale do souboru se
    zapíše **JSON** — a to nefiltrovaný `result`, ne odfiltrovaný `shown`. U `--format json`
    se naopak zapíše filtrovaný výstup.
-2. **Podpříkaz `record` existuje navíc oproti specifikaci**, která popisuje jen
-   `capture --record-raw`. Oba jsou funkční a liší se chováním: `record` u každého RPC
-   vypíše, zda uspělo, a při selhání pokračuje s hlášením; `capture --record-raw` je tichý
-   best-effort (`capture._record`).
+2. **Podpříkaz `record` je pro nahrávání testovacích fixtures**, ne pro běžný sběr — u
+   každého RPC vypíše, zda uspělo, a při selhání pokračuje s hlášením. `capture` má vlastní,
+   automatickou raw retention (`raw/` v runu, viz README, sekce Raw záznam a upgrade runu),
+   která funguje jinak: nahrává se transparentně skrz `RecordingDevice`, který `api.capture()`
+   obalí kolem spojení, ne uvnitř `capture.py`.
 
 ## `capture.py` — orchestrace sběru
 
@@ -129,10 +130,6 @@ Klíčová místa:
   jinak by překlep vypadal jako úspěšný sběr bez té oblasti.
 - **Ping běží jen když existují scopy**, tedy jen s inventory. Bez ní má snapshot
   `probes.ping: []`.
-- **`_record()`** ukládá syrové XML pro `--record-raw`. Prochází `collector.rpc_names()`,
-  ne jen `rpc_name()`, takže collector s více RPC (na MX `evpn_mac`) uloží obě —
-  první jako `evpn_mac.xml`, druhé jako `evpn_mac.2.xml`. Je to best-effort: selhané RPC
-  se tiše přeskočí, protože nahrávání fixtures nesmí shodit sběr.
 - Import `migration_validator.collectors.all` na úrovni modulu je to, co **naplní registr
   collectorů**.
 
