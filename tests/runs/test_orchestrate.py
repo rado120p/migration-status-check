@@ -1,8 +1,10 @@
 """capture_into_run - spolecna orchestrace pro CLI a GUI."""
 
+import os
 import threading
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 from lxml import etree
@@ -186,7 +188,7 @@ def test_second_capture_replaces_raw(tmp_path, monkeypatch):
 
 
 def test_raw_write_failure_is_warning_and_leaves_no_stale_raw(tmp_path, monkeypatch):
-    """Zabiji mutanta: capture_into_run nesmaze stary raw pred save_snapshot
+    """Zabiji mutanta: capture_into_run vubec nezavola remove_session(raw_dir)
     (po selhanem zapisu by vedle noveho snimku zustal raw predchoziho)."""
     store = RunStore(root=tmp_path, name="mig01")
     _fake_capture_recording(monkeypatch)
@@ -204,6 +206,32 @@ def test_raw_write_failure_is_warning_and_leaves_no_stale_raw(tmp_path, monkeypa
     assert not raw_dir.exists()
     assert outcome.snapshot_path.exists()
     assert len(load_manifest(store.manifest_path).captures) == 1
+
+
+def test_capture_removes_old_raw_before_save_snapshot(tmp_path, monkeypatch):
+    """Mutant A: capture_into_run prohodi poradi na save_snapshot(...) pred
+    remove_session(raw_dir) (orchestrate.py ~294-295) - pri padu po ulozeni
+    snimku, ale pred smazanim raw, by vedle noveho snimku zustal stary raw.
+    Zachyti se spy na save_snapshot: v okamziku volani uz musi byt stary raw
+    smazany."""
+    from migration_validator.models.snapshot import save_snapshot as real_save_snapshot
+
+    store = RunStore(root=tmp_path, name="mig01")
+    _fake_capture_recording(monkeypatch)
+    first = _capture(store)
+    raw_dir = store.raw_dir(first.snapshot_path.name)
+    assert has_session(raw_dir)
+
+    seen = {}
+
+    def spy(snapshot, path):
+        seen["raw_dir_existed_at_save"] = raw_dir.exists()
+        return real_save_snapshot(snapshot, path)
+
+    monkeypatch.setattr("migration_validator.runs.orchestrate.save_snapshot", spy)
+    _capture(store)
+
+    assert seen["raw_dir_existed_at_save"] is False
 
 
 def test_post_records_baselines_used(tmp_path, monkeypatch):
@@ -294,6 +322,35 @@ def test_inventory_raw_failure_leaves_no_stale_raw(tmp_path, monkeypatch):
 
     assert not inventory_raw.exists()
     assert any("nepujde pregenerovat" in warning for warning in outcome.warnings)
+
+
+def test_parse_services_removes_old_raw_before_os_replace(tmp_path, monkeypatch):
+    """Mutant B: _parse_services prohodi poradi na os.replace(scratch,
+    inventory_path) pred remove_session(raw_dir) (orchestrate.py ~140-141) -
+    pri padu po prejmenovani docasneho souboru, ale pred smazanim raw, by
+    vedle nove inventory zustal stary raw. Spy jde na globalni os.replace
+    (write_session ho pouziva taky), deleguje na skutecny os.replace a
+    zaznamena has_session(inventory raw) jen pro cil == inventory YAML."""
+    _fake_connect(monkeypatch)
+    _fake_capture_recording(monkeypatch)
+    store = RunStore(root=tmp_path, name="mig01")
+    _capture(store, port="ge-0/0/0", inventory=None, parse_services=True)
+    inventory_path = store.inventory_path("172.20.20.4", "ge-0/0/0")
+    inventory_raw = store.raw_dir(inventory_path.name)
+    assert has_session(inventory_raw)
+
+    real_replace = os.replace
+    seen = {}
+
+    def spy(src, dst):
+        if Path(dst) == inventory_path:
+            seen["raw_existed_at_replace"] = has_session(inventory_raw)
+        return real_replace(src, dst)
+
+    monkeypatch.setattr("os.replace", spy)
+    _capture(store, port="ge-0/0/0", inventory=None, parse_services=True)
+
+    assert seen["raw_existed_at_replace"] is False
 
 
 def test_capture_write_waits_for_run_lock(tmp_path, monkeypatch):
