@@ -1,14 +1,17 @@
 """mig-validate upgrade - pregenerovani runu z raw zaznamu (spec 2026-09-23, sekce 3)."""
 
 import json
+import shutil
 from datetime import datetime, timezone
 
-from raw_run import PRE_AT, arp_with_note, build_run
+from raw_run import PRE_AT, arp_with_note, build_run, record_capture
 
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot, save_snapshot
 from migration_validator.runs.manifest import CaptureRecord
+from migration_validator.runs.store import RunStore
 from migration_validator.raw.upgrade import (
     CHANGED,
+    INVENTORY_NO_RAW,
     NO_RAW,
     NOT_REGENERABLE,
     RAW_MISMATCH,
@@ -168,6 +171,40 @@ def test_config_without_needed_hierarchy_is_not_regenerable(tmp_path):
     )
 
 
+def test_production_inventory_raw_path_is_unchanged_same_version(tmp_path):
+    """Capture bezel proti inventory se skutecnou raw session (capture_into_run
+    cesta), ne jen kopii YAML - to je produkcni tvar bundlu."""
+    store = RunStore(tmp_path, "mig01")
+    record_capture(store, phase="pre", node="MX1", started_at=PRE_AT, inventory_raw=True)
+
+    report = upgrade_run(store, dry_run=True)
+
+    assert _results(report)["snapshot_pre_MX1_all.json"] == (UNCHANGED, None)
+
+
+def test_capture_inventory_copy_with_invalid_yaml_is_reported_not_regenerable(tmp_path):
+    store = build_run(tmp_path)
+    copy = store.raw_dir("snapshot_pre_MX1_all.json") / "inventory" / "inventory.yml"
+    copy.write_text("a: [unclosed")
+
+    report = upgrade_run(store, dry_run=True)
+
+    assert _results(report)["snapshot_pre_MX1_all.json"] == (NOT_REGENERABLE, INVENTORY_NO_RAW)
+    assert report.error is None
+
+
+def test_capture_inventory_missing_entirely_is_not_fabricated(tmp_path):
+    """session.inventory neni None (capture bezel s inventory), ale bundle
+    nema ani raw session, ani kopii YAML - stav se nefabrikuje jako 'zadna
+    inventory', capture se odmitne."""
+    store = build_run(tmp_path)
+    shutil.rmtree(store.raw_dir("snapshot_pre_MX1_all.json") / "inventory")
+
+    report = upgrade_run(store, dry_run=True)
+
+    assert _results(report)["snapshot_pre_MX1_all.json"] == (NOT_REGENERABLE, INVENTORY_NO_RAW)
+
+
 def test_dry_run_changes_nothing(tmp_path, monkeypatch):
     store = build_run(tmp_path)
     before = _bytes(store)
@@ -187,14 +224,25 @@ def test_crash_during_replay_leaves_run_untouched(tmp_path, monkeypatch):
     before = _bytes(store)
     arp_with_note(monkeypatch)
 
-    def boom(*args, **kwargs):
-        raise RuntimeError("bug v nastroji")
+    from migration_validator.raw import upgrade as upgrade_module
 
-    monkeypatch.setattr("migration_validator.raw.upgrade.capture_device", boom)
+    real = upgrade_module.capture_device
+
+    def boom(*args, **kwargs):
+        if kwargs.get("phase") == "post":
+            raise RuntimeError("bug v nastroji")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(upgrade_module, "capture_device", boom)
     report = upgrade_run(store, now=NOW)
 
     assert report.error == "replay selhal - RuntimeError: bug v nastroji"
     assert report.exit_code == 2
+    pre = next(item for item in report.items if item.file == "snapshot_pre_MX1_all.json")
+    post = next(item for item in report.items if item.file == "snapshot_post_PTX1_all.json")
+    assert pre.result == CHANGED
+    assert post.result == NOT_REGENERABLE
+    assert post.reason is not None and post.reason.startswith("replay selhal")
     assert _bytes(store) == before
     assert not (store.dir / "backup").exists()
     assert not (store.dir / ".upgrade-staging").exists()

@@ -125,7 +125,10 @@ def upgrade_run(
         try:
             staged = _regenerate(store, manifest, staging, report)
         except Exception as error:  # noqa: BLE001 - chyba nastroje, run zustava beze zmeny
-            report.error = f"replay selhal - {type(error).__name__}: {error}"
+            message = f"replay selhal - {type(error).__name__}: {error}"
+            report.error = message
+            if report.items:
+                report.items[-1].refuse(message)
             return report
         if dry_run or not staged:
             return report
@@ -208,7 +211,7 @@ def _replay_capture(
         return None
     scratch = staging / ".inventory" / f"{Path(record.snapshot).stem}.yml"
     try:
-        inventory = _capture_inventory(raw_dir, scratch)
+        inventory = _capture_inventory(session, raw_dir, scratch)
     except (NotRecorded, RawFormatError) as error:
         item.refuse(str(error))
         return None
@@ -231,9 +234,14 @@ def _replay_capture(
     )
 
 
-def _capture_inventory(raw_dir: Path, scratch: Path) -> Inventory | None:
+def _capture_inventory(
+    session: Session, raw_dir: Path, scratch: Path
+) -> Inventory | None:
     """Inventory, se kterou capture bezel: z kopie raw inventory, jinak
-    z kopie YAML (jen kdyz ji aktualni verze nacte)."""
+    z kopie YAML (jen kdyz ji aktualni verze nacte). Kdyz capture s
+    inventory bezel (session.inventory neni None), ale bundle nema ani
+    jedno, stav se nefabrikuje - misto tise prazdne inventory se to
+    odmitne (spec 2026-09-23: stav se nikdy nefabrikuje)."""
     inventory_dir = raw_dir / INVENTORY_DIR
     if has_session(inventory_dir):
         regenerate_inventory(read_session(inventory_dir), scratch)
@@ -242,8 +250,10 @@ def _capture_inventory(raw_dir: Path, scratch: Path) -> Inventory | None:
     if copy.is_file():
         try:
             return load_inventory(copy)
-        except ValueError as error:
+        except (ValueError, yaml.YAMLError) as error:
             raise _Unreadable(str(error)) from error
+    if session.inventory is not None:
+        raise _Unreadable(INVENTORY_NO_RAW)
     return None
 
 

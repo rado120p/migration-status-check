@@ -122,11 +122,24 @@ def record_inventory(store: RunStore, node: str, port: str | None = None) -> Pat
 def record_capture(
     store: RunStore, *, phase: str, node: str, started_at: str,
     port: str | None = None, baselines=(), collectors=COLLECTORS, role: str | None = None,
+    inventory_raw: bool = False,
 ) -> str:
+    """`inventory_raw=True` simuluje produkcni cestu: capture bezel proti
+    inventory, ktera sama ma raw session (viz capture_into_run) - misto
+    pouhe kopie YAML se do bundlu kopiruje cely inventory raw adresar."""
     recording = SessionRecording()
+    if inventory_raw:
+        inventory_path = record_inventory(store, node, port)
+        inventory = load_inventory(inventory_path)
+        inventory_field = {"file": inventory_path.name, "raw": True}
+        session_kwargs: dict = {"inventory_raw": store.raw_dir(inventory_path.name)}
+    else:
+        inventory = load_inventory(INVENTORY_4)
+        inventory_field = {"file": INVENTORY_4.name, "raw": False}
+        session_kwargs = {"inventory_yaml": INVENTORY_4}
     snapshot = capture_device(
         RecordingDevice(FakeDevice(), recording), "172.20.20.4",
-        inventory=load_inventory(INVENTORY_4), collector_names=list(collectors),
+        inventory=inventory, collector_names=list(collectors),
         phase=phase, now=started_at,
         baselines=[load_snapshot(store.dir / name) for name in baselines] or None,
     )
@@ -142,11 +155,11 @@ def record_capture(
                 "phase": phase, "port": port, "collectors": list(collectors),
                 "ping_count": 5, "service_types": None, "profile_name": None,
             },
-            inventory={"file": INVENTORY_4.name, "raw": False},
+            inventory=inventory_field,
             baselines=list(baselines), tool=tool_info(),
         ),
         store.raw_dir(name),
-        inventory_yaml=INVENTORY_4,
+        **session_kwargs,
     )
     manifest = store.load()
     manifest.devices.setdefault(node, RunDevice(
