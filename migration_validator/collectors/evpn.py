@@ -241,7 +241,7 @@ class EvpnMacCollector(Collector):
 
     name = "evpn_mac"
 
-    # Poradi je zamerne: prvni je "hlavni" RPC pro `record`/`--record-raw`.
+    # Poradi je zamerne: prvni je "hlavni" RPC pro `record`.
     # MX potrebuje dve RPC (bridge = vlan-aware, evpn = vlan-based),
     # EVO jedno. Uvadi se jen RPC, ktera na platforme opravdu plati.
     RPCS: dict[str, tuple[str, ...]] = {

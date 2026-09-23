@@ -11,10 +11,7 @@ a checky, ktere tu oblast potrebuji, dostanou SKIP.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Callable
-
-from lxml import etree
 
 import migration_validator.collectors.all  # noqa: F401  (registrace)
 from migration_validator.collectors.base import CollectorError
@@ -54,38 +51,6 @@ def _select_collectors(platform: str, names: list[str] | None):
     return [collector for collector in available if collector.name in names]
 
 
-def _record(xml_root: Path, platform: str, name: str, device: Any, collector) -> None:
-    """Ulozi syrove RPC XML pro pozdejsi pouziti jako fixture.
-
-    Collector s vice RPC uklada kazde zvlast - prvni pod jmenem oblasti,
-    dalsi s poradovym cislem. Jinak by fixture nesla jen cast dat.
-
-    record_calls() je autorita (ne rpc_calls()) - collector zavisly na
-    zarizeni (multicast_route: seznam VRF na MX pres get-instance-information)
-    by jinak pod --record-raw tise ztratil per-VRF nahravky. Volani
-    record_calls() samo o sobe muze selhat (RPC pro zjisteni seznamu
-    instanci spadne) - zabaleno stejne jako jednotlive RPC nize, aby
-    nahravani zustalo best effort a nezastavilo zbytek collectoru.
-    """
-    target = Path(xml_root) / platform
-    target.mkdir(parents=True, exist_ok=True)
-
-    try:
-        calls = collector.record_calls(device, platform)
-    except Exception:  # noqa: BLE001 - nahravani je best effort
-        return
-
-    for index, (rpc_name, rpc_kwargs) in enumerate(calls):
-        try:
-            xml = getattr(device.rpc, rpc_name)(**rpc_kwargs)
-        except Exception:  # noqa: BLE001 - nahravani je best effort
-            continue
-        suffix = "" if index == 0 else f".{index + 1}"
-        (target / f"{name}{suffix}.xml").write_bytes(
-            etree.tostring(xml, pretty_print=True)
-        )
-
-
 def _merged_baseline_entries(
     snapshots: list[Snapshot], area: str
 ) -> list[dict[str, Any]]:
@@ -114,7 +79,7 @@ def capture_device(
     phase: str | None = None,
     ping_count: int = DEFAULT_COUNT,
     now: str | None = None,
-    record_raw: str | Path | None = None,
+    finished_at: str | None = None,
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
     on_progress: ProgressCallback | None = None,
@@ -131,8 +96,6 @@ def capture_device(
     for collector in selected:
         if on_progress is not None:
             on_progress(collector.name, "start", None)
-        if record_raw is not None:
-            _record(Path(record_raw), platform, collector.name, device, collector)
         try:
             facts[collector.name] = collector.collect(device, platform)
             status[collector.name] = {"status": "ok"}
@@ -189,7 +152,7 @@ def capture_device(
         device=device_meta(device, address),
         capture=CaptureMeta(
             started_at=started_at,
-            finished_at=now or _timestamp(),
+            finished_at=finished_at or now or _timestamp(),
             phase=phase,
             collectors=status,
         ),

@@ -403,7 +403,6 @@ def _cmd_capture(args: argparse.Namespace) -> int:
             collectors=collectors,
             phase=args.phase,
             ping_count=ping_count,
-            record_raw=args.record_raw,
             service_types=service_types,
             profile_name=profile.name or None,
         )
@@ -446,7 +445,6 @@ def _capture_into_run(args: argparse.Namespace) -> int:
             collectors=collectors,
             ping_count=ping_count,
             service_types=service_types,
-            record_raw=args.record_raw,
         )
     except ValueError as error:
         raise ToolError(str(error)) from error
@@ -657,7 +655,6 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("--output")
     capture.add_argument("--collectors", help="carkou oddeleny seznam")
     capture.add_argument("--ping-count", type=int, default=None)
-    capture.add_argument("--record-raw")
     capture.add_argument(
         "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
     )

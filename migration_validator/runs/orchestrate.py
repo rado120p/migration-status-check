@@ -115,7 +115,6 @@ def capture_into_run(
     collectors: list[str] | None = None,
     ping_count: int | None = None,
     service_types: list[str] | None = None,
-    record_raw: str | None = None,
     on_progress: ProgressCallback | None = None,
 ) -> CaptureOutcome:
     """Sebere snapshot a zapise ho do run adresare (manifest + soubor).
@@ -190,7 +189,6 @@ def capture_into_run(
         collectors=collectors,
         phase=phase,
         ping_count=ping_count,
-        record_raw=record_raw,
         baselines=baselines or None,
         service_types=service_types,
         on_progress=on_progress,

@@ -36,8 +36,8 @@ class Collector(ABC):
         """Vsechna RPC, ktera collector na dane platforme opravdu vola.
 
         Vetsina collectoru ma jedno. Kdyz jich ma vic, musi tuhle metodu
-        prepsat, jinak `record` a `--record-raw` ulozi jen prvni z nich a
-        nahrane fixtures budou tise nekompletni.
+        prepsat, jinak `record` ulozi jen prvni z nich a nahrane fixtures
+        budou tise nekompletni.
         """
         return (self.rpc_name(platform),)
 
@@ -45,8 +45,8 @@ class Collector(ABC):
         return {}
 
     def record_calls(self, device: Any, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:
-        """Volani pro `record`, `--record-raw` i pro collect, kdyz zavisi na
-        zarizeni (napr. seznam instanci). Default = staticke rpc_calls."""
+        """Volani pro `record` i pro collect, kdyz zavisi na zarizeni
+        (napr. seznam instanci). Default = staticke rpc_calls."""
         return self.rpc_calls(platform)
 
     def rpc_calls(self, platform: str) -> tuple[tuple[str, dict[str, Any]], ...]:

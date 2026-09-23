@@ -24,6 +24,7 @@ from migration_validator.models.inventory import Inventory, load_inventory
 from migration_validator.models.result import RunResult
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.profiles.store import ProfileStore
+from migration_validator.raw.recorder import RecordingDevice, SessionRecording
 from migration_validator.runs.manifest import (
     RUN_KINDS,
     MappingEndpoint,
@@ -43,22 +44,27 @@ def capture(
     collectors: list[str] | None = None,
     phase: str | None = None,
     ping_count: int = 5,
-    record_raw: str | None = None,
     baselines: list[Snapshot] | None = None,
     service_types: list[str] | None = None,
     on_progress: ProgressCallback | None = None,
     profile_name: str | None = None,
+    recorder: SessionRecording | None = None,
 ) -> Snapshot:
     """Sebere stav zarizeni a vrati self-contained snapshot.
 
     `baselines` jsou pre snimky starych boxu mapovanych na tento port - ping
     cile pro --phase post se prednostne odvozuji ze sjednoceni jejich ARP/ND.
+
+    `recorder` - kdyz je zadany, vsechna RPC session se nahravaji do nej
+    (raw retention, spec 2026-09-23); zapis na disk dela volajici.
     """
     if isinstance(inventory, str):
         inventory = load_inventory(inventory)
 
     options = options or ConnectionOptions(host=host)
     with connect(options) as device:
+        if recorder is not None:
+            device = RecordingDevice(device, recorder)
         return capture_device(
             device,
             address=host,
@@ -66,7 +72,6 @@ def capture(
             collector_names=collectors,
             phase=phase,
             ping_count=ping_count,
-            record_raw=record_raw,
             baselines=baselines,
             service_types=service_types,
             on_progress=on_progress,
