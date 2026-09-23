@@ -2025,6 +2025,12 @@ def build_device(options: ConnectionOptions) -> Device:
     return Device(**arguments)
 
 
+# Hierarchie navic, ktere se jen nahravaji do raw zaznamu (spec 2026-09-23):
+# budouci parser z nich muze starsi capture pregenerovat. Parser je
+# nedostane - retrieve_configuration je z odpovedi odstrihne.
+RAW_EXTRA_HIERARCHIES = ("policy-options", "firewall", "class-of-service")
+
+
 def retrieve_configuration(
     device: Device, hierarchies: tuple[str, ...]
 ) -> etree._Element:
@@ -2032,20 +2038,29 @@ def retrieve_configuration(
     Načte konfiguraci potřebnou pro klasifikaci služeb.
 
     Filtr se skládá z hierarchií dané platformy (CONFIG_HIERARCHIES
-    parseru) - NETCONF server odmítne filtr s hierarchií, kterou
-    schéma platformy nezná (např. vlans na MX).
+    parseru) plus RAW_EXTRA_HIERARCHIES - NETCONF server odmítne filtr
+    s hierarchií, kterou schéma platformy nezná (např. vlans na MX).
+    Nahrávka (RecordingDevice) dostane celou odpověď; parser jen své
+    hierarchie - class-of-service interfaces interface má stejná jména
+    elementů jako top-level interfaces.
     """
 
     config_filter = etree.Element("configuration")
 
-    for hierarchy in hierarchies:
+    extra = tuple(h for h in RAW_EXTRA_HIERARCHIES if h not in hierarchies)
+    for hierarchy in (*hierarchies, *extra):
         etree.SubElement(config_filter, hierarchy)
 
     response = device.rpc.get_config(
         filter_xml=config_filter, options={"database": "committed", "inherit": ""}
     )
 
-    return find_configuration_root(response)
+    root = find_configuration_root(response)
+    wanted = set(hierarchies)
+    for child in list(root):
+        if isinstance(child.tag, str) and etree.QName(child).localname not in wanted:
+            root.remove(child)
+    return root
 
 
 # ---------------------------------------------------------------------------

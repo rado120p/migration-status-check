@@ -55,4 +55,58 @@ def test_retrieve_configuration_sklada_filtr_z_hierarchii():
     children = [
         child.tag for child in device.rpc.filter_xml
     ]
-    assert children == ["interfaces", "bridge-domains"]
+    assert children == [
+        "interfaces", "bridge-domains", "policy-options", "firewall", "class-of-service",
+    ]
+
+
+def test_retrieve_configuration_nezdvojuje_hierarchii_z_extra():
+    device = _FakeDevice()
+
+    retrieve_configuration(device, hierarchies=("interfaces", "firewall"))
+
+    children = [child.tag for child in device.rpc.filter_xml]
+    assert children == ["interfaces", "firewall", "policy-options", "class-of-service"]
+
+
+COS_CONFIG = (
+    "<rpc-reply><data><configuration>"
+    "<interfaces><interface><name>ge-0/0/0</name></interface></interfaces>"
+    "<firewall><family><inet><filter><name>F</name></filter></inet></family></firewall>"
+    "<class-of-service><interfaces><interface><name>ge-0/0/9</name></interface>"
+    "</interfaces></class-of-service>"
+    "</configuration></data></rpc-reply>"
+)
+
+
+class _CosRpc:
+    def get_config(self, filter_xml, options):
+        return etree.XML(COS_CONFIG)
+
+
+class _CosDevice:
+    def __init__(self):
+        self.facts = {"hostname": "MX1", "model": "MX204", "version": "21.4R3"}
+        self.hostname = "172.20.20.4"
+        self.rpc = _CosRpc()
+
+
+def test_parser_dostane_jen_sve_hierarchie():
+    """class-of-service interfaces interface ma stejna jmena elementu jako
+    top-level interfaces - parser ji nesmi videt. Zabiji mutanta: orez
+    v retrieve_configuration vynechan."""
+    root = retrieve_configuration(_CosDevice(), hierarchies=("interfaces",))
+    assert [child.tag for child in root] == ["interfaces"]
+
+
+def test_nahravka_nese_extra_hierarchie_i_po_orezu():
+    from migration_validator.raw.recorder import RecordingDevice, SessionRecording
+
+    recording = SessionRecording()
+    retrieve_configuration(RecordingDevice(_CosDevice(), recording), hierarchies=("interfaces",))
+
+    assert b"class-of-service" in recording.calls[0].reply_xml
+    assert b"<firewall>" in recording.calls[0].reply_xml
+    assert recording.calls[0].filter == [
+        "interfaces", "policy-options", "firewall", "class-of-service",
+    ]
