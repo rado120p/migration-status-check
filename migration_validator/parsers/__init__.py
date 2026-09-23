@@ -19,3 +19,14 @@ def parser_for_platform(platform: str):
         return _PLATFORM_PARSERS[platform]
     except KeyError:
         raise ValueError(f"nepodporovana platforma parseru: {platform}") from None
+
+
+def parser_hierarchies() -> frozenset[str]:
+    """Hierarchie, ktere potrebuje aspon jeden parser. Replay podle toho
+    rozlisuje povinnou hierarchii (chybi -> capture nejde pregenerovat) od
+    hierarchie, ktera se jen nahrava (RAW_EXTRA_HIERARCHIES)."""
+    return frozenset(
+        hierarchy
+        for parser_cls in _PLATFORM_PARSERS.values()
+        for hierarchy in parser_cls.CONFIG_HIERARCHIES
+    )
