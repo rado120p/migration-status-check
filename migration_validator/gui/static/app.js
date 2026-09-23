@@ -65,6 +65,7 @@ const GUIDE_TEXT = {
       "Nespárováno = služba, která po migraci chybí. Vždy zkontroluj, než run uzavřeš.",
       "Nezařazeno = objekt (BGP peer, routa, BFD session), který si nenárokovala žádná služba — typicky mezera v parsování.",
       "Archive run přesune adresář runu do runs/.archive/ — ze seznamu zmizí, snímky zůstanou. Archiv se čistí přes mig-validate run purge.",
+      "Upgrade run přegeneruje inventory a snímky z raw záznamu aktuální verzí nástroje (po upgradu nástroje nebo opravě parsování). Náhled ukáže, co se změní; změněné soubory jdou do backup/. Snímek se štítkem no raw přegenerovat nejde.",
     ],
   },
   snapshot: {
@@ -112,6 +113,7 @@ const GUIDE_TEXT = {
       "Verdict = nejhorší stav vyhodnocení runu (post nebo rollback proti vlastnímu pre). Řádky jsou seřazené od nejhoršího; kliknutím na hlavičku přeřadíš.",
       "capture › u řádku otevře formulář New capture předvyplněný tímto boxem — fáze, port i parse services se volí tam; po spuštění se vrátíš do skupiny. Add devices přidá další boxy do skupiny se stejným profilem.",
       "Archive group archivuje všechny runy skupiny najednou; se spuštěným capture odmítne.",
+      "Upgrade group udělá totéž pro všechny runy skupiny; run, který selže, ostatní nezastaví. Se spuštěným capture odmítne.",
     ],
   },
 };
@@ -139,6 +141,8 @@ class App {
       archiveGroupModal: null,
       addDevicesModal: null,
       captureReturnGroup: null,
+      upgradeModal: null,
+      upgradeGroupModal: null,
     };
     this.cache = {
       runs: [],
@@ -408,6 +412,213 @@ class App {
     }
   }
 
+  // -- upgrade run / group modal ---------------------------------------------
+
+  async openUpgradeModal() {
+    if (!this.leaveGuard()) return;
+    this.state.upgradeModal = { phase: "loading", report: null, error: null };
+    this.render();
+    await this.runUpgrade(true);
+  }
+
+  closeUpgradeModal() {
+    const done = this.state.upgradeModal && this.state.upgradeModal.phase === "done";
+    this.state.upgradeModal = null;
+    if (done) {
+      this.loadRun().then(() => this.render());
+    } else {
+      this.render();
+    }
+  }
+
+  async runUpgrade(dryRun) {
+    const modal = this.state.upgradeModal;
+    const run = this.state.run;
+    if (!modal || !run) return;
+    modal.phase = dryRun ? "loading" : "applying";
+    modal.error = null;
+    this.render();
+    try {
+      const res = await fetch(`/api/runs/${run}/upgrade?dry_run=${dryRun}`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        modal.report = body;
+        modal.phase = dryRun ? "preview" : "done";
+      } else {
+        modal.error = MigView.errorDetail(body, `upgrade selhal (${res.status})`);
+        modal.phase = dryRun ? "error" : "preview";
+      }
+    } catch (err) {
+      modal.error = String(err);
+      modal.phase = dryRun ? "error" : "preview";
+    }
+    this.render();
+  }
+
+  async openUpgradeGroupModal() {
+    if (!this.leaveGuard()) return;
+    this.state.upgradeGroupModal = { phase: "loading", reports: null, error: null };
+    this.render();
+    await this.runGroupUpgrade(true);
+  }
+
+  closeUpgradeGroupModal() {
+    const done = this.state.upgradeGroupModal && this.state.upgradeGroupModal.phase === "done";
+    this.state.upgradeGroupModal = null;
+    if (done) {
+      this.loadGroupSummary().then(() => this.render());
+    } else {
+      this.render();
+    }
+  }
+
+  async runGroupUpgrade(dryRun) {
+    const modal = this.state.upgradeGroupModal;
+    const name = this.state.group;
+    if (!modal || !name) return;
+    modal.phase = dryRun ? "loading" : "applying";
+    modal.error = null;
+    this.render();
+    try {
+      const res = await fetch(
+        `/api/groups/${encodeURIComponent(name)}/upgrade?dry_run=${dryRun}`,
+        { method: "POST" }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        modal.reports = body.runs || [];
+        modal.phase = dryRun ? "preview" : "done";
+      } else {
+        modal.error = MigView.errorDetail(body, `upgrade selhal (${res.status})`);
+        modal.phase = dryRun ? "error" : "preview";
+      }
+    } catch (err) {
+      modal.error = String(err);
+      modal.phase = dryRun ? "error" : "preview";
+    }
+    this.render();
+  }
+
+  buildUpgradeReport(report) {
+    const counts = MigView.upgradeCounts(report);
+    const rows = (report.items || []).map((item) => {
+      const row = MigView.upgradeItemRow(item);
+      const detail = [row.reason, ...row.notes].filter(Boolean).join(" · ");
+      return el("tr", {
+        children: [
+          el("td", { className: "mono", text: row.where }),
+          el("td", { children: [el("span", { className: "badge-pill " + row.cls, text: row.result })] }),
+          el("td", { className: "upgrade-detail", text: detail }),
+        ],
+      });
+    });
+    const children = [
+      el("p", {
+        text: `${counts.changed} changed · ${counts.unchanged} unchanged · ${counts.not_regenerable} cannot regenerate`,
+      }),
+      el("table", { className: "upgrade-report", children: [el("tbody", { children: rows })] }),
+    ];
+    if (report.error) {
+      children.push(el("div", { className: "notice notice-fail", text: `Run nezměněn: ${report.error}` }));
+    } else if (report.backup) {
+      children.push(
+        el("p", {
+          children: [document.createTextNode("Záloha: "), el("span", { className: "mono", text: report.backup })],
+        })
+      );
+    }
+    return el("div", { children });
+  }
+
+  buildUpgradeFooter(modal, canApply, onApply, onClose) {
+    const busy = modal.phase === "loading" || modal.phase === "applying";
+    const actions = [
+      el("button", {
+        className: "btn btn-secondary",
+        text: modal.phase === "done" ? "Close" : "Cancel",
+        onClick: busy ? null : onClose,
+      }),
+    ];
+    if (modal.phase !== "done") {
+      actions.push(
+        el("button", {
+          className: "btn btn-primary",
+          text: modal.phase === "applying" ? "Applying…" : "Apply",
+          attrs: canApply ? {} : { disabled: "disabled" },
+          onClick: canApply ? onApply : null,
+        })
+      );
+    }
+    return el("div", { className: "footer-actions", children: actions });
+  }
+
+  mountUpgradeModal(root, modal, children, onClose) {
+    const busy = modal.phase === "loading" || modal.phase === "applying";
+    root.appendChild(
+      el("div", {
+        className: "modal-backdrop",
+        onClick: (e) => {
+          if (e.target.classList.contains("modal-backdrop") && !busy) onClose();
+        },
+        children: [el("div", { className: "modal modal-wide", children })],
+      })
+    );
+  }
+
+  renderUpgradeModal(root) {
+    const modal = this.state.upgradeModal;
+    const children = [
+      el("h3", { text: "Upgrade run" }),
+      el("p", {
+        children: [
+          document.createTextNode("Přegeneruje inventory a snímky runu "),
+          el("span", { className: "mono", text: this.state.run || "" }),
+          document.createTextNode(
+            " z raw záznamu aktuální verzí nástroje. Změněné soubory se před přepsáním přesunou do backup/."
+          ),
+        ],
+      }),
+    ];
+    if (modal.phase === "loading") children.push(el("p", { text: "Náhled (dry run)…" }));
+    if (modal.phase === "applying") children.push(el("p", { text: "Upgraduju…" }));
+    if (modal.report && modal.phase !== "loading") children.push(this.buildUpgradeReport(modal.report));
+    if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
+    const canApply = modal.phase === "preview" && modal.report && !modal.report.error
+      && MigView.upgradeCounts(modal.report).changed > 0;
+    const close = () => this.closeUpgradeModal();
+    children.push(this.buildUpgradeFooter(modal, canApply, () => this.runUpgrade(false), close));
+    this.mountUpgradeModal(root, modal, children, close);
+  }
+
+  renderUpgradeGroupModal(root) {
+    const modal = this.state.upgradeGroupModal;
+    const children = [
+      el("h3", { text: "Upgrade group" }),
+      el("p", {
+        children: [
+          document.createTextNode("Přegeneruje všechny runy skupiny "),
+          el("span", { className: "mono", text: this.state.group || "" }),
+          document.createTextNode(" z raw záznamu. Run, který selže, ostatní nezastaví."),
+        ],
+      }),
+    ];
+    if (modal.phase === "loading") children.push(el("p", { text: "Náhled (dry run)…" }));
+    if (modal.phase === "applying") children.push(el("p", { text: "Upgraduju…" }));
+    if (modal.reports && modal.phase !== "loading") {
+      for (const report of modal.reports) {
+        children.push(el("h4", { className: "upgrade-report-run mono", text: report.run }));
+        children.push(this.buildUpgradeReport(report));
+      }
+    }
+    if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
+    const canApply = modal.phase === "preview" && (modal.reports || []).some(
+      (report) => !report.error && MigView.upgradeCounts(report).changed > 0
+    );
+    const close = () => this.closeUpgradeGroupModal();
+    children.push(this.buildUpgradeFooter(modal, canApply, () => this.runGroupUpgrade(false), close));
+    this.mountUpgradeModal(root, modal, children, close);
+  }
+
   renderModal() {
     let root = document.getElementById("modal-root");
     if (!root) {
@@ -415,6 +626,14 @@ class App {
       document.body.appendChild(root);
     }
     clear(root);
+    if (this.state.upgradeModal) {
+      this.renderUpgradeModal(root);
+      return;
+    }
+    if (this.state.upgradeGroupModal) {
+      this.renderUpgradeGroupModal(root);
+      return;
+    }
     if (this.state.archiveGroupModal) {
       this.renderArchiveGroupModal(root);
       return;
@@ -589,6 +808,7 @@ class App {
         this.cache.evaluationError = {
           status: res.status,
           detail: body.detail || `evaluation selhala (${res.status})`,
+          code: body.code || null,
         };
       }
     } catch (err) {
@@ -1134,6 +1354,11 @@ class App {
           onClick: () => this.goToProfiles(summary.profile || null),
         }),
         el("span", { className: "subtitle", text: summary.created ? `created ${summary.created}` : "" }),
+        el("button", {
+          className: "btn btn-secondary run-header-upgrade",
+          text: "Upgrade group",
+          onClick: () => this.openUpgradeGroupModal(),
+        }),
         el("button", {
           className: "btn btn-danger-secondary run-header-archive",
           text: "Archive group",
@@ -2122,6 +2347,9 @@ class App {
               className: "snap-row-top",
               children: [
                 el("span", { className: "snap-row-label mono", text: label.device }),
+                ...MigView.snapshotBadges(snap).map((badge) =>
+                  el("span", { className: "badge-pill snap-badge " + badge.cls, text: badge.text })
+                ),
                 el("span", {
                   className: "phase-badge phase-" + snap.phase,
                   text: snap.phase,
@@ -2281,6 +2509,13 @@ class App {
     this.mainEl.appendChild(header);
     header.appendChild(
       el("button", {
+        className: "btn btn-secondary run-header-upgrade",
+        text: "Upgrade run",
+        onClick: () => this.openUpgradeModal(),
+      })
+    );
+    header.appendChild(
+      el("button", {
         className: "btn btn-danger-secondary run-header-archive",
         text: "Archive run",
         onClick: () => this.openArchiveModal(),
@@ -2288,12 +2523,18 @@ class App {
     );
 
     if (this.cache.evaluationError) {
-      this.mainEl.appendChild(
-        el("div", {
-          className: "notice notice-warn",
-          text: this.cache.evaluationError.detail,
-        })
-      );
+      const error = this.cache.evaluationError;
+      const children = [document.createTextNode(error.detail)];
+      if (error.code === "schema_outdated") {
+        children.push(
+          el("button", {
+            className: "btn btn-secondary notice-action",
+            text: "Upgrade run",
+            onClick: () => this.openUpgradeModal(),
+          })
+        );
+      }
+      this.mainEl.appendChild(el("div", { className: "notice notice-warn", children }));
     }
 
     const evaluations = this.cache.evaluation ? this.cache.evaluation.evaluations : [];

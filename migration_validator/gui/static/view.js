@@ -329,6 +329,52 @@ function snapshotLabel(snap) {
   return { device: snap.device, port, title: `${snap.device}:${port}` };
 }
 
+/* Upgrade run/group report (spec 2026-09-23). Reason a poznamky prichazi
+   z backendu jako ASCII text, popisky vysledku jsou anglicky. */
+const UPGRADE_RESULT_LABEL = {
+  unchanged: "regenerated – unchanged",
+  changed: "regenerated – changed",
+  not_regenerable: "cannot regenerate",
+};
+
+function upgradeItemRow(item) {
+  const where = item.kind === "capture"
+    ? `${item.phase} ${item.device} ${item.port || "all"}`
+    : `inventory ${item.file}`;
+  let cls = "pass";
+  if (item.result === "not_regenerable") cls = "warn";
+  else if (item.result === "changed") cls = "info";
+  return {
+    where,
+    result: UPGRADE_RESULT_LABEL[item.result] || item.result,
+    cls,
+    reason: item.reason || "",
+    notes: item.notes || [],
+  };
+}
+
+function upgradeCounts(report) {
+  const counts = { unchanged: 0, changed: 0, not_regenerable: 0 };
+  for (const item of (report && report.items) || []) {
+    if (item.result in counts) counts[item.result] += 1;
+  }
+  return counts;
+}
+
+function snapshotBadges(snap) {
+  const badges = [];
+  if (snap.outdated) badges.push({ cls: "warn", text: "outdated" });
+  if (snap.has_raw === false) badges.push({ cls: "neutral", text: "no raw" });
+  return badges;
+}
+
+function errorDetail(body, fallback) {
+  const detail = body && body.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (detail && typeof detail.message === "string") return detail.message;
+  return fallback;
+}
+
 const MigView = {
   FAMILY_ORDER,
   changeText,
@@ -352,6 +398,10 @@ const MigView = {
   sortGroupRows,
   phaseCell,
   snapshotLabel,
+  upgradeItemRow,
+  upgradeCounts,
+  snapshotBadges,
+  errorDetail,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigView;

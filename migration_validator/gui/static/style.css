@@ -221,6 +221,8 @@ a:hover { color: #0e3fa9; }
 .snap-row.active:hover { background: #eef2ff; }
 
 .snap-row-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.snap-row-top .snap-row-label { margin-right: auto; }
+.snap-badge { font-size: 10.5px; padding: 1px 5px; }
 
 .snap-row-label {
   font: 400 13px 'JetBrains Mono', monospace;
@@ -1107,6 +1109,8 @@ a:hover { color: #0e3fa9; }
 .btn-pulse { animation: btn-pulse 1.6s ease-out infinite; }
 
 .run-header-archive { margin-left: auto; align-self: center; }
+.run-header-upgrade { margin-left: auto; align-self: center; }
+.run-header-upgrade + .run-header-archive { margin-left: 8px; }
 
 .btn-danger {
   border: none;
@@ -1144,6 +1148,11 @@ a:hover { color: #0e3fa9; }
 .bulk-remove { padding: 2px 8px; }
 .bulk-capture-pre { margin-left: auto; font-size: 13.5px; color: #374151; display: flex; align-items: center; gap: 6px; }
 .modal-wide { width: min(760px, 92vw); }
+.upgrade-report { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 12px; }
+.upgrade-report td { padding: 4px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+.upgrade-detail { color: #6b7280; }
+.upgrade-report-run { margin: 12px 0 6px; font-size: 14px; }
+.notice-action { margin-left: 12px; }
 
 /* Profile editor (spec 3) */
 .profile-toolbar {

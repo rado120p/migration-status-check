@@ -400,3 +400,55 @@ test("snapshotLabel: whole-box capture shows 'all' as the port", () => {
   assert.strictEqual(out.port, "all");
   assert.strictEqual(out.title, "mx1:all");
 });
+
+test("upgradeItemRow: capture row names phase, device and port; whole box is 'all'", () => {
+  const row = MigView.upgradeItemRow({
+    kind: "capture", phase: "post", device: "PTX1", port: null,
+    result: "changed", reason: null, notes: [],
+  });
+  assert.strictEqual(row.where, "post PTX1 all");
+  assert.strictEqual(row.result, "regenerated – changed");
+  assert.strictEqual(row.cls, "info");
+});
+
+test("upgradeItemRow: not regenerable carries reason and warn class", () => {
+  const row = MigView.upgradeItemRow({
+    kind: "capture", phase: "pre", device: "MX1", port: "ge-0/0/2",
+    result: "not_regenerable", reason: "bez raw zaznamu (zachyceno pred zavedenim)",
+    notes: ["collector x v teto verzi neexistuje"],
+  });
+  assert.strictEqual(row.where, "pre MX1 ge-0/0/2");
+  assert.strictEqual(row.result, "cannot regenerate");
+  assert.strictEqual(row.cls, "warn");
+  assert.strictEqual(row.reason, "bez raw zaznamu (zachyceno pred zavedenim)");
+  assert.deepStrictEqual(row.notes, ["collector x v teto verzi neexistuje"]);
+});
+
+test("upgradeItemRow: inventory row names the file, unchanged is pass", () => {
+  const row = MigView.upgradeItemRow({ kind: "inventory", file: "inventory_MX1_all.yml", result: "unchanged" });
+  assert.strictEqual(row.where, "inventory inventory_MX1_all.yml");
+  assert.strictEqual(row.result, "regenerated – unchanged");
+  assert.strictEqual(row.cls, "pass");
+  assert.deepStrictEqual(row.notes, []);
+});
+
+test("upgradeCounts counts results; empty report is zeros", () => {
+  const report = { items: [{ result: "changed" }, { result: "changed" }, { result: "not_regenerable" }] };
+  assert.deepStrictEqual(MigView.upgradeCounts(report), { unchanged: 0, changed: 2, not_regenerable: 1 });
+  assert.deepStrictEqual(MigView.upgradeCounts(null), { unchanged: 0, changed: 0, not_regenerable: 0 });
+});
+
+test("snapshotBadges: outdated and no raw are separate; current with raw has none", () => {
+  assert.deepStrictEqual(MigView.snapshotBadges({ outdated: true, has_raw: false }), [
+    { cls: "warn", text: "outdated" },
+    { cls: "neutral", text: "no raw" },
+  ]);
+  assert.deepStrictEqual(MigView.snapshotBadges({ outdated: false, has_raw: true }), []);
+  assert.deepStrictEqual(MigView.snapshotBadges({}), []);
+});
+
+test("errorDetail: string detail, object detail.message, fallback", () => {
+  assert.strictEqual(MigView.errorDetail({ detail: "run ma bezici capture" }, "x"), "run ma bezici capture");
+  assert.strictEqual(MigView.errorDetail({ detail: { message: "skupina chybi" } }, "x"), "skupina chybi");
+  assert.strictEqual(MigView.errorDetail({}, "upgrade selhal (500)"), "upgrade selhal (500)");
+});
