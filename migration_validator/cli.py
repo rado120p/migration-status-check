@@ -27,6 +27,7 @@ from migration_validator.models.snapshot import (
     SnapshotVersionError,
     load_snapshot,
 )
+from migration_validator.raw.upgrade import render_report
 from migration_validator.reporting.json_report import to_json, write_json
 from migration_validator.reporting.text_report import filter_result, render, use_color
 from migration_validator.runs.manifest import MappingEndpoint, RunManifest
@@ -586,6 +587,32 @@ def _cmd_record(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_upgrade(args: argparse.Namespace) -> int:
+    names = list(args.runs)
+    if args.group:
+        members = api.group_runs(args.run_root).get(args.group)
+        if not members:
+            raise ToolError(f"skupina '{args.group}' neexistuje")
+        names += [member for member in members if member not in names]
+    if not names:
+        raise ToolError("zadej aspon jeden run nebo --group")
+
+    worst = EXIT_OK
+    for name in names:
+        try:
+            report = api.upgrade_run(name, run_root=args.run_root, dry_run=args.dry_run)
+        except (OSError, ValueError) as error:
+            # R8: pad upgradu jednoho runu nesmi zastavit zbyvajici runy ve
+            # skupine/vyctu (FileNotFoundError na neznamy run je OSError).
+            print(f"chyba: run {name}: {error}", file=sys.stderr)
+            worst = max(worst, EXIT_TOOL_ERROR)
+            continue
+        for line in render_report(report):
+            print(line)
+        worst = max(worst, report.exit_code)
+    return worst
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mig-validate",
@@ -689,6 +716,20 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--output-dir", required=True)
     _add_auth_arguments(record)
     record.set_defaults(func=_cmd_record)
+
+    upgrade = sub.add_parser(
+        "upgrade",
+        help="pregeneruje inventory a snimky runu z raw zaznamu aktualni verzi nastroje",
+    )
+    upgrade.add_argument("runs", nargs="*", metavar="RUN", help="nazvy runu")
+    upgrade.add_argument("--group", help="vsechny runy skupiny")
+    upgrade.add_argument(
+        "--dry-run", action="store_true", help="jen report, v runu nic nemen"
+    )
+    upgrade.add_argument(
+        "--run-root", type=Path, default=Path("runs"), help="koren run adresaru"
+    )
+    upgrade.set_defaults(func=_cmd_upgrade)
 
     gui = sub.add_parser("gui", help="spusti webove GUI")
     gui.add_argument("--host", default="127.0.0.1")

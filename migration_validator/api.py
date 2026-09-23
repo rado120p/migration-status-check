@@ -24,6 +24,7 @@ from migration_validator.models.inventory import Inventory, load_inventory
 from migration_validator.models.result import RunResult
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.profiles.store import ProfileStore
+from migration_validator.raw import upgrade as raw_upgrade
 from migration_validator.raw.recorder import RecordingDevice, SessionRecording
 from migration_validator.runs.manifest import (
     RUN_KINDS,
@@ -427,6 +428,20 @@ def archive_run(
     target = archive / f"{name}-{stamp}"
     store.dir.rename(target)
     return target
+
+
+def upgrade_run(
+    name: str,
+    *,
+    run_root: str | Path = Path("runs"),
+    dry_run: bool = False,
+) -> "raw_upgrade.UpgradeReport":
+    """Pregeneruje inventory a snimky runu z raw zaznamu aktualni verzi
+    nastroje (spec 2026-09-23). FileNotFoundError, kdyz run neexistuje."""
+    store = RunStore(Path(run_root), name)
+    if not store.manifest_path.is_file():
+        raise FileNotFoundError(f"run '{name}' neexistuje")
+    return raw_upgrade.upgrade_run(store, dry_run=dry_run)
 
 
 _ARCHIVE_STAMP_RE = re.compile(r"^(?P<name>[a-z0-9_-]+)-(?P<stamp>\d{8}T\d{6}Z)$")

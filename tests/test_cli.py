@@ -1584,3 +1584,84 @@ def test_run_purge_bez_yes_interaktivni_ne_zachova(tmp_path, capsys, monkeypatch
     assert code == 0
     assert "zruseno" in out
     assert (tmp_path / ".archive" / "mig01-20260801T000000Z").exists()
+
+
+def test_upgrade_dry_run_prints_report(tmp_path, capsys):
+    from raw_run import build_run
+
+    build_run(tmp_path)
+
+    code = main(["upgrade", "mig01", "--run-root", str(tmp_path), "--dry-run"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out.splitlines()[0] == "run mig01 (dry-run)"
+    assert "pregenerovano - beze zmeny" in out
+
+
+def test_upgrade_not_regenerable_exits_1(tmp_path, capsys):
+    from raw_run import build_run
+
+    store = build_run(tmp_path)
+    import shutil
+
+    shutil.rmtree(store.raw_dir("snapshot_pre_MX1_all.json"))
+
+    code = main(["upgrade", "mig01", "--run-root", str(tmp_path), "--dry-run"])
+
+    assert code == 1
+    assert "nelze - bez raw zaznamu" in capsys.readouterr().out
+
+
+def test_upgrade_group_expands_members(tmp_path, capsys):
+    from raw_run import build_run
+
+    build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+
+    code = main(["upgrade", "--group", "pop1", "--run-root", str(tmp_path), "--dry-run"])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "run pop1-mx1 (dry-run)" in out
+    assert "run pop1-mx2 (dry-run)" in out
+
+
+def test_upgrade_without_runs_is_tool_error(tmp_path, capsys):
+    assert main(["upgrade", "--run-root", str(tmp_path)]) == 2
+    assert "zadej aspon jeden run" in capsys.readouterr().err
+
+
+def test_upgrade_unknown_run_is_tool_error(tmp_path, capsys):
+    assert main(["upgrade", "nope", "--run-root", str(tmp_path)]) == 2
+    assert "neexistuje" in capsys.readouterr().err
+
+
+def test_upgrade_one_run_failure_does_not_stop_others(tmp_path, capsys, monkeypatch):
+    """R8: jeden spadly run nesmi zastavit upgrade zbyvajicich runu ve skupine."""
+    from raw_run import build_run
+    from migration_validator import api as api_module
+
+    build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+
+    real_upgrade_run = api_module.upgrade_run
+
+    def fake_upgrade_run(name, **kwargs):
+        if name == "pop1-mx1":
+            raise OSError("disk")
+        return real_upgrade_run(name, **kwargs)
+
+    monkeypatch.setattr("migration_validator.cli.api.upgrade_run", fake_upgrade_run)
+
+    code = main(["upgrade", "--group", "pop1", "--run-root", str(tmp_path), "--dry-run"])
+
+    out = capsys.readouterr()
+    assert code == 2
+    assert "run pop1-mx2 (dry-run)" in out.out
+    assert "pop1-mx1" in out.err
+
+
+def test_capture_has_no_record_raw_flag():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["capture", "--device", "x", "--record-raw", "d"])
