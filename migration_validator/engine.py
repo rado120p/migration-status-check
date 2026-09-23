@@ -469,7 +469,12 @@ def _unassigned_bgp_peers(
         instance = data.get("routing_instance")
         if instance:
             return instance in _scope_instances(scopes)
-        return _peer_in_scope_subnets(peer, scopes)
+        # Master peer smi na port pritahnout jen scope, ktery peery bere
+        # z masteru. VRF scope se stejnou /30 by sem jinak vtahl peera
+        # Internet sluzby z jineho portu (dve sluzby, jedna adresa).
+        return _peer_in_scope_subnets(
+            peer, [scope for scope in scopes if scope.bgp_instance is None]
+        )
 
     # Stejne pravidlo clenstvi jako Scope.select (Scope.owns_bgp_peer), vcetne
     # deaktivovanych peeru: kdyz pro takoveho peera presto prijde session, je

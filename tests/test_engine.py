@@ -1902,3 +1902,24 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
     status = rows[("bgp_session_state", f"BGP status ({SHARED_PEER})")]
     assert status.status is Status.PASS
     assert status.baseline_value == "neznamy (kolize adresy)"
+
+
+def test_master_peer_on_shared_subnet_does_not_leak_into_vrf_port_unassigned():
+    """Per-port NEZARAZENO: master peer Internet sluzby na jinem portu, ktery
+    sdili adresu s peerem VRF na migrovanem portu. VRF scope ho nevlastni
+    (jina instance), takze o nem rozhoduje test podsiti - a ten se smi ptat
+    jen scopu, ktere sve peery berou z masteru. Jinak by se cizi port dostal
+    do NEZARAZENO tohoto kroku.
+
+    Zabiji mutanta: `_on_port` pro master peera nad vsemi scopy portu.
+    """
+    scope = _customer_b_scope()
+    scope.selectors.local_ipv4 = ["192.168.1.1/30"]
+    snapshot = _snapshot_with_facts(
+        {"bgp": {SHARED_PEER: {"state": "Established", "routing_instance": None}}},
+        [scope],
+    )
+
+    assert _unassigned_bgp_peers(snapshot, [scope], port="ge-0/0/2") == []
+    # Celoboxovy snimek ho dal ukaze - zadna sluzba snimku ho nevlastni.
+    assert [item["peer"] for item in _unassigned_bgp_peers(snapshot, [scope])] == [SHARED_PEER]
