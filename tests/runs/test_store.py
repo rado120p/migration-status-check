@@ -1,9 +1,11 @@
 """Cesty a nazvy souboru v runs/<nazev>/."""
 
+import threading
+import time
 from pathlib import Path
 
 from migration_validator.runs.manifest import CaptureRecord, RunManifest
-from migration_validator.runs.store import RunStore
+from migration_validator.runs.store import RunStore, raw_name
 
 
 def test_paths_and_naming(tmp_path):
@@ -52,3 +54,31 @@ def test_missing_snapshots(tmp_path):
     store.dir.mkdir(parents=True)
     (store.dir / "snapshot_pre_MX1-POP1_all.json").write_text("{}")
     assert store.missing_snapshots(manifest) == []
+
+
+def test_raw_name_and_dir(tmp_path):
+    store = RunStore(tmp_path, "mig01")
+    assert raw_name("snapshot_post_PTX1_et_0_0_8.json") == "post_PTX1_et_0_0_8"
+    assert raw_name("inventory_PTX1_all.yml") == "inventory_PTX1_all"
+    assert store.raw_dir("snapshot_pre_MX1_all.json") == tmp_path / "mig01" / "raw" / "pre_MX1_all"
+
+
+def test_lock_excludes_second_holder_in_same_process(tmp_path):
+    """GUI ma capture i upgrade v jednom procesu - zamek se musi vylucovat
+    i mezi vlakny. Zabiji mutanta: fcntl.lockf misto fcntl.flock (POSIX
+    record lock se uvnitr procesu nevylucuje)."""
+    store = RunStore(tmp_path, "mig01")
+    order = []
+
+    def other():
+        with store.lock():
+            order.append("other")
+
+    with store.lock():
+        thread = threading.Thread(target=other)
+        thread.start()
+        time.sleep(0.2)
+        order.append("main")
+    thread.join(5)
+
+    assert order == ["main", "other"]

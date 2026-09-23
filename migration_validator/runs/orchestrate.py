@@ -7,8 +7,10 @@ argparse.Namespace, jen typovane parametry - CLI i GUI ho volaji stejne.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -27,12 +29,39 @@ from migration_validator.models.snapshot import (
     load_snapshot,
     save_snapshot,
 )
+from migration_validator.raw.bundle import (
+    Session,
+    has_session,
+    remove_session,
+    tool_info,
+    write_session,
+)
+from migration_validator.raw.recorder import RecordingDevice, SessionRecording
 from migration_validator.runs.manifest import CaptureRecord, RunDevice
 from migration_validator.runs.pairing import find_pre_baseline
 from migration_validator.runs.services import generate_inventory
 from migration_validator.runs.store import RunStore
 
 _PHASE_TO_ROLE = {"pre": "old", "rollback": "old", "post": "new"}
+
+RAW_WRITE_WARNING = (
+    "raw zaznam {name} se nepodarilo ulozit - po upgradu nastroje nepujde "
+    "pregenerovat ({error})"
+)
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _write_raw(session: Session, target: Path, warnings: list[str], **copy) -> None:
+    """Zapis raw je best effort: selhani = varovani, capture plati dal
+    (spec 2026-09-23). write_session maze stary zaznam jako prvni, takze po
+    selhani vedle noveho souboru nikdy nezustane raw predchoziho capture."""
+    try:
+        write_session(session, target, **copy)
+    except OSError as error:
+        warnings.append(RAW_WRITE_WARNING.format(name=target.name, error=error))
 
 
 def _load_baseline_snapshot(path: str) -> Snapshot:
@@ -71,6 +100,7 @@ def _inventory_interfaces(path: Path) -> set[str] | None:
 
 
 def _parse_services(
+    store: RunStore,
     options: ConnectionOptions,
     port: str | None,
     inventory_path: Path,
@@ -80,14 +110,38 @@ def _parse_services(
 
     Existujici soubor se pregeneruje - konfigurace noveho boxu se meni
     kazdou vlnou a flag je explicitni umysl (revize faze 4, viz spec
-    2026-08-17). api.capture se nemeni - konfigurace pro inventory se
-    stahne pred snapshotem.
+    2026-08-17). Session se nahrava (raw retention, spec 2026-09-23);
+    inventory vznika v docasnem souboru a na misto jde az pod zamkem runu
+    spolu s raw - zamek nikdy nedrzi NETCONF session.
     """
     previous = _inventory_interfaces(inventory_path)
-
-    with connect(options) as device:
-        platform = detect_platform(device)
-        generate_inventory(device, platform, inventory_path, port)
+    scratch = inventory_path.with_name(f".tmp-{inventory_path.name}")
+    recording = SessionRecording()
+    started_at = _timestamp()
+    try:
+        with connect(options) as device:
+            recorded = RecordingDevice(device, recording)
+            platform = detect_platform(recorded)
+            generate_inventory(recorded, platform, scratch, port)
+        session = Session(
+            kind="inventory",
+            address=options.host,
+            hostname=recording.hostname,
+            facts=recording.facts,
+            calls=list(recording.calls),
+            started_at=started_at,
+            port_filter=port,
+            tool=tool_info(),
+        )
+        raw_dir = store.raw_dir(inventory_path.name)
+        with store.lock():
+            # Stary raw pryc driv, nez se nahradi YAML - jinak by vedle nove
+            # inventory zustal raw predchozi.
+            remove_session(raw_dir)
+            os.replace(scratch, inventory_path)
+            _write_raw(session, raw_dir, warnings)
+    finally:
+        scratch.unlink(missing_ok=True)
 
     current = _inventory_interfaces(inventory_path) or set()
     if previous is None:
@@ -150,7 +204,7 @@ def capture_into_run(
         inventory_path = Path(inventory)
     elif parse_services:
         inventory_path = store.inventory_path(node, port)
-        _parse_services(options, port, inventory_path, warnings)
+        _parse_services(store, options, port, inventory_path, warnings)
     else:
         inventory_path = store.inventory_path(node, port)
         if not inventory_path.exists():
@@ -159,6 +213,7 @@ def capture_into_run(
             raise ValueError("inventory nenalezena - spust s --parse-services")
 
     baselines: list[Snapshot] = []
+    baseline_names: list[str] = []
     if phase == "post":
         seen_snapshots: set[str] = set()
         records = []
@@ -175,6 +230,7 @@ def capture_into_run(
                 records.append(fallback)
         for record in records:
             baselines.append(_load_baseline_snapshot(str(store.dir / record.snapshot)))
+            baseline_names.append(record.snapshot)
         if not baselines:
             print("pre snimek nenalezen, ping cile z vlastni ARP", file=sys.stderr)
 
@@ -182,6 +238,7 @@ def capture_into_run(
     ping_count = ping_count if ping_count is not None else (profile.ping_count or PING_COUNT_DEFAULT)
     service_types = service_types if service_types is not None else profile.service_types
 
+    recording = SessionRecording()
     snapshot = api.capture(
         host,
         inventory=str(inventory_path),
@@ -193,28 +250,66 @@ def capture_into_run(
         service_types=service_types,
         on_progress=on_progress,
         profile_name=profile.name or None,
+        recorder=recording,
     )
-
-    if node not in manifest.devices:
-        manifest.devices[node] = RunDevice(
-            host=host,
-            platform=snapshot.device.platform,
-            role=_PHASE_TO_ROLE[phase],
-        )
 
     snapshot_path = store.snapshot_path(phase, node, port)
-    save_snapshot(snapshot, snapshot_path)
-    manifest.record_capture(
-        CaptureRecord(
-            phase=phase,
-            device=node,
-            port=port,
-            snapshot=store.snapshot_name(phase, node, port),
-            taken=snapshot.capture.started_at,
-        )
+    raw_dir = store.raw_dir(snapshot_path.name)
+    inventory_raw = None
+    if inventory_path.resolve().parent == store.dir.resolve():
+        candidate = store.raw_dir(inventory_path.name)
+        if has_session(candidate):
+            inventory_raw = candidate
+    session = Session(
+        kind="capture",
+        address=host,
+        hostname=recording.hostname,
+        facts=recording.facts,
+        calls=list(recording.calls),
+        started_at=snapshot.capture.started_at,
+        finished_at=snapshot.capture.finished_at,
+        params={
+            "phase": phase,
+            "port": port,
+            "collectors": collectors,
+            "ping_count": ping_count,
+            "service_types": service_types,
+            "profile_name": profile.name or None,
+        },
+        inventory={"file": inventory_path.name, "raw": inventory_raw is not None},
+        baselines=baseline_names,
+        tool=tool_info(),
     )
 
-    store.save(manifest)
+    with store.lock():
+        # Manifest znovu pod zamkem: capture trva minuty a do runu mezitim
+        # mohl zapsat capture druheho zarizeni.
+        manifest = store.load()
+        if node not in manifest.devices:
+            manifest.devices[node] = RunDevice(
+                host=host,
+                platform=snapshot.device.platform,
+                role=_PHASE_TO_ROLE[phase],
+            )
+        remove_session(raw_dir)
+        save_snapshot(snapshot, snapshot_path)
+        _write_raw(
+            session,
+            raw_dir,
+            warnings,
+            inventory_raw=inventory_raw,
+            inventory_yaml=None if inventory_raw is not None else inventory_path,
+        )
+        manifest.record_capture(
+            CaptureRecord(
+                phase=phase,
+                device=node,
+                port=port,
+                snapshot=store.snapshot_name(phase, node, port),
+                taken=snapshot.capture.started_at,
+            )
+        )
+        store.save(manifest)
 
     failed = snapshot.capture.failed_collectors()
 

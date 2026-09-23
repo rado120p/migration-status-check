@@ -32,6 +32,17 @@ from migration_validator.runs.store import RunStore
 NOW = "2026-07-24T11:40:02Z"
 
 
+class _FakeConfigDevice:
+    """Zarizeni pro --parse-services testy: RecordingDevice ted obaluje
+    kazde spojeni, potrebuje tedy alespon .rpc (facts/hostname maji default
+    pres getattr). generate_inventory je v techto testech nafejkovana, RPC
+    volani se nedeje."""
+
+    facts: dict = {}
+    hostname = None
+    rpc = object()
+
+
 def _write(tmp_path, name, address, interface, *, oper="up", pps=400):
     scope = Scope(
         id="svc:L3VPN:IPVPN",
@@ -629,7 +640,7 @@ def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
 
     @contextmanager
     def fake_connect(options):
-        yield object()
+        yield _FakeConfigDevice()
 
     def fake_detect_platform(device):
         return "junos"
@@ -664,8 +675,12 @@ def test_capture_run_parse_services_generates_inventory(tmp_path, monkeypatch):
     assert code == 0
     assert calls["platform"] == "junos"
     assert calls["port"] == "ge-0/0/0"
-    assert calls["output_path"] == tmp_path / "mig01" / "inventory_172.20.20.4_ge_0_0_0.yml"
-    assert calls["output_path"].exists()
+    # generate_inventory pise do docasneho .tmp- souboru (Task 7) - na finalni
+    # jmeno jde az pod zamkem runu spolu s raw.
+    assert calls["output_path"] == (
+        tmp_path / "mig01" / ".tmp-inventory_172.20.20.4_ge_0_0_0.yml"
+    )
+    assert (tmp_path / "mig01" / "inventory_172.20.20.4_ge_0_0_0.yml").exists()
 
 
 def test_record_command_pouziva_rpc_calls_ne_rpc_names_a_jedno_kwargs(
@@ -764,7 +779,7 @@ def test_parse_services_regenerates_existing_inventory_and_prints_delta(
 
     @contextmanager
     def fake_connect(options):
-        yield object()
+        yield _FakeConfigDevice()
 
     def fake_detect_platform(device):
         return "junos"
