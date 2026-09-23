@@ -1,7 +1,10 @@
 """mig-validate upgrade - pregenerovani runu z raw zaznamu (spec 2026-09-23, sekce 3)."""
 
 import json
+import os
 import shutil
+import threading
+import time
 from datetime import datetime, timezone
 
 from raw_run import PRE_AT, arp_with_note, build_run, record_capture
@@ -15,6 +18,8 @@ from migration_validator.raw.upgrade import (
     NO_RAW,
     NOT_REGENERABLE,
     RAW_MISMATCH,
+    RUN_CHANGED,
+    STAGING_DIR,
     UNCHANGED,
     UpgradeItem,
     UpgradeReport,
@@ -35,6 +40,12 @@ def _bytes(store):
         for path in sorted(store.dir.iterdir())
         if path.is_file() and path.name != ".lock"
     }
+
+
+def _staging_entries(store):
+    """Jmena vsech .upgrade-staging* polozek v runu (kazde spusteni ma
+    vlastni docasny adresar s nahodnou priponou)."""
+    return sorted(path.name for path in store.dir.glob(f"{STAGING_DIR}*"))
 
 
 def test_same_version_upgrade_is_unchanged(tmp_path):
@@ -94,7 +105,7 @@ def test_changed_parse_regenerates_and_backs_up(tmp_path, monkeypatch):
     assert (backup / "snapshot_pre_MX1_all.json").read_bytes() == before
     data = json.loads((store.dir / "snapshot_pre_MX1_all.json").read_text())
     assert all(entry["note"] == "v2" for entry in data["facts"]["arp"])
-    assert not (store.dir / ".upgrade-staging").exists()
+    assert _staging_entries(store) == []
 
 
 def test_post_uses_regenerated_pre_as_baseline(tmp_path, monkeypatch):
@@ -216,7 +227,7 @@ def test_dry_run_changes_nothing(tmp_path, monkeypatch):
     assert report.backup is None
     assert _bytes(store) == before
     assert not (store.dir / "backup").exists()
-    assert not (store.dir / ".upgrade-staging").exists()
+    assert _staging_entries(store) == []
 
 
 def test_crash_during_replay_leaves_run_untouched(tmp_path, monkeypatch):
@@ -245,7 +256,7 @@ def test_crash_during_replay_leaves_run_untouched(tmp_path, monkeypatch):
     assert post.reason is not None and post.reason.startswith("replay selhal")
     assert _bytes(store) == before
     assert not (store.dir / "backup").exists()
-    assert not (store.dir / ".upgrade-staging").exists()
+    assert _staging_entries(store) == []
 
 
 def test_render_report_lines():
@@ -281,3 +292,115 @@ def test_report_to_dict_shape():
             "notes": [],
         }],
     }
+
+
+def test_run_changed_during_upgrade_aborts(tmp_path, monkeypatch):
+    """Capture, ktery do runu zapise mezi replayem a vymenou, musi prezit -
+    v zaloze by nebyl. Zabiji mutanta: vymena bez kontroly fingerprintu."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    post = store.dir / "snapshot_post_PTX1_all.json"
+
+    def fresh_capture():
+        post.write_text('{"fresh": true}\n')
+
+    report = upgrade_run(store, now=NOW, before_swap=fresh_capture)
+
+    assert report.error == RUN_CHANGED
+    assert report.exit_code == 2
+    assert post.read_text() == '{"fresh": true}\n'
+    assert not (store.dir / "backup").exists()
+
+
+def test_swap_waits_for_capture_lock(tmp_path, monkeypatch):
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    result = {}
+
+    with store.lock():
+        thread = threading.Thread(target=lambda: result.update(report=upgrade_run(store, now=NOW)))
+        thread.start()
+        time.sleep(0.5)
+        assert not (store.dir / "backup").exists()
+    thread.join(10)
+
+    assert result["report"].backup == "backup/upgrade-20260923T120000Z"
+
+
+def test_apply_bumps_run_yml_mtime_only_when_something_changed(tmp_path, monkeypatch):
+    """SummaryCache GUI je klicovana mtime run.yml - bez posunu by souhrn
+    skupiny ukazoval stary verdikt."""
+    store = build_run(tmp_path)
+    old = 1_000_000_000
+    os.utime(store.manifest_path, (old, old))
+
+    upgrade_run(store, now=NOW)
+    assert store.manifest_path.stat().st_mtime == old
+
+    arp_with_note(monkeypatch)
+    upgrade_run(store, now=NOW)
+    assert store.manifest_path.stat().st_mtime > old
+
+
+def test_staging_is_per_invocation_and_removed(tmp_path):
+    """Docasny adresar dostane nahodnou priponu, aby si soubezny CLI a GUI
+    upgrade stejneho runu nemohly smazat navzajem svuj staging. Pre-created
+    literal STAGING_DIR simuluje stary pevny nazev - se sdilenym pevnym
+    nazvem by ho pocatecni rmtree teto instance smazal jeste pred behem."""
+    store = build_run(tmp_path)
+    literal = store.dir / STAGING_DIR
+    literal.mkdir()
+    (literal / "junk").write_text("literal")
+    other = store.dir / f"{STAGING_DIR}-other"
+    other.mkdir()
+    (other / "junk").write_text("other")
+
+    upgrade_run(store, dry_run=True)
+
+    assert literal.is_dir()
+    assert (literal / "junk").read_text() == "literal"
+    assert other.is_dir()
+    assert (other / "junk").read_text() == "other"
+    assert _staging_entries(store) == sorted([literal.name, other.name])
+
+
+def test_swap_failure_is_reported_with_backup_location(tmp_path, monkeypatch):
+    """Selhani vymeny se ohlasi jako chyba, ne vyjimka; soubory presunute
+    pred padem zustavaji v zaloze."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+
+    from migration_validator.raw import upgrade as upgrade_module
+
+    real_replace = upgrade_module.os.replace
+    calls = {"n": 0}
+
+    def spy(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("disk")
+        return real_replace(*args, **kwargs)
+
+    monkeypatch.setattr(upgrade_module.os, "replace", spy)
+
+    report = upgrade_run(store, now=NOW)
+
+    assert report.error.startswith("vymena selhala")
+    assert report.backup.startswith("backup/upgrade-")
+    assert report.exit_code == 2
+    backup = store.dir / report.backup
+    assert (backup / "snapshot_pre_MX1_all.json").is_file()
+
+
+def test_render_report_error_with_backup_shows_zaloha_not_beze_zmeny():
+    report = UpgradeReport(
+        run="mig01", dry_run=False,
+        backup="backup/upgrade-20260923T120000Z",
+        error="vymena selhala - OSError: disk - puvodni soubory v backup/upgrade-20260923T120000Z",
+    )
+
+    lines = render_report(report)
+
+    assert any(line.startswith("  CHYBA:") for line in lines)
+    assert not any("run zustal beze zmeny" in line for line in lines)
+    assert "  zaloha: backup/upgrade-20260923T120000Z" in lines

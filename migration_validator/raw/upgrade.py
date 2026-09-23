@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +56,7 @@ NOT_REGENERABLE = "not_regenerable"
 NO_RAW = "bez raw zaznamu (zachyceno pred zavedenim)"
 RAW_MISMATCH = "raw nepatri k tomuto snimku"
 INVENTORY_NO_RAW = "inventory bez raw zaznamu a nejde nacist"
+RUN_CHANGED = "run se behem upgradu zmenil - spust upgrade znovu"
 
 _RESULT_TEXT = {
     UNCHANGED: "pregenerovano - beze zmeny",
@@ -110,17 +112,31 @@ class _Unreadable(Exception):
     """Inventory bez raw, kterou aktualni verze nenacte."""
 
 
+def _fingerprint(store: RunStore) -> dict[str, tuple[int, int]]:
+    """mtime_ns + velikost vseho, co upgrade cte nebo nahrazuje. Zmena mezi
+    ctenim a vymenou = do runu mezitim zapsal capture."""
+    entries: dict[str, tuple[int, int]] = {}
+    for pattern in ("run.yml", "snapshot_*.json", "inventory_*.yml", "raw/*/session.json"):
+        for path in store.dir.glob(pattern):
+            stat = path.stat()
+            entries[path.relative_to(store.dir).as_posix()] = (stat.st_mtime_ns, stat.st_size)
+    return entries
+
+
 def upgrade_run(
     store: RunStore,
     *,
     dry_run: bool = False,
     now: datetime | None = None,
+    before_swap: Callable[[], None] | None = None,
 ) -> UpgradeReport:
+    """Replay (kroky 1-4) bezi bez zamku - trva sekundy, capture minuty a
+    nema cekat. Vymena bezi pod RunStore.lock() a jen kdyz se run od
+    zacatku nezmenil (souběh s capture zachyti fingerprint)."""
     report = UpgradeReport(run=store.name, dry_run=dry_run)
     manifest = store.load()
-    staging = store.dir / STAGING_DIR
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
+    fingerprint = _fingerprint(store)
+    staging = Path(tempfile.mkdtemp(prefix=f"{STAGING_DIR}-", dir=store.dir))
     try:
         try:
             staged = _regenerate(store, manifest, staging, report)
@@ -132,7 +148,26 @@ def upgrade_run(
             return report
         if dry_run or not staged:
             return report
-        report.backup = _swap(store, staging, staged, now)
+        if before_swap is not None:
+            before_swap()
+        with store.lock():
+            if _fingerprint(store) != fingerprint:
+                report.error = RUN_CHANGED
+                return report
+            backup = _backup_dir(store, now)
+            try:
+                _swap(store, staging, staged, backup)
+            except OSError as error:
+                report.backup = backup.relative_to(store.dir).as_posix()
+                report.error = (
+                    f"vymena selhala - {type(error).__name__}: {error} - "
+                    f"puvodni soubory v {report.backup}"
+                )
+                return report
+            report.backup = backup.relative_to(store.dir).as_posix()
+            # SummaryCache GUI je klicovana mtime run.yml - bez posunu by
+            # souhrn skupiny ukazoval stary verdikt az do restartu GUI.
+            os.utime(store.manifest_path)
         return report
     finally:
         shutil.rmtree(staging, ignore_errors=True)
@@ -298,19 +333,22 @@ def _compare(old: Path, new: Path, load: Callable[[str], Any]) -> str:
     return UNCHANGED if before == load(new.read_text(encoding="utf-8")) else CHANGED
 
 
-def _swap(store: RunStore, staging: Path, staged: list[str], now: datetime | None) -> str:
+def _backup_dir(store: RunStore, now: datetime | None) -> Path:
+    """Cesta k zaloze teto vymeny (jeste nevytvorena)."""
+    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    return store.dir / BACKUP_DIR / f"upgrade-{stamp}"
+
+
+def _swap(store: RunStore, staging: Path, staged: list[str], backup: Path) -> None:
     """Nahrazovane soubory do backup/upgrade-<cas>/, nove na jejich misto.
     Rada prejmenovani, ne atomicka operace - pri padu uprostred je vse
     puvodni v zaloze."""
-    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
-    backup = store.dir / BACKUP_DIR / f"upgrade-{stamp}"
     backup.mkdir(parents=True, exist_ok=True)
     for name in staged:
         current = store.dir / name
         if current.exists():
             os.replace(current, backup / name)
         os.replace(staging / name, current)
-    return backup.relative_to(store.dir).as_posix()
 
 
 def render_report(report: UpgradeReport) -> list[str]:
@@ -326,7 +364,12 @@ def render_report(report: UpgradeReport) -> list[str]:
         lines.append(f"  {label:<44} {text}")
         lines.extend(f"    ! {note}" for note in item.notes)
     if report.error is not None:
-        lines.append(f"  CHYBA: {report.error} - run zustal beze zmeny")
+        text = f"  CHYBA: {report.error}"
+        if report.backup is None:
+            text += " - run zustal beze zmeny"
+        lines.append(text)
+        if report.backup is not None:
+            lines.append(f"  zaloha: {report.backup}")
     elif report.backup is not None:
         lines.append(f"  zaloha: {report.backup}")
     return lines
