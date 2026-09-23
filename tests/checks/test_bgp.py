@@ -1,5 +1,7 @@
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bgp import (
+    ADDRESS_COLLISION,
+    NO_BASELINE_COLLISION,
     PREFIX_KEYS,
     BgpPrefixCountsCheck,
     BgpSessionStateCheck,
@@ -298,6 +300,7 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
         key=ScopeKey("L3VPN-CPE13-NNI", "IPVPN", None),
         selectors=Selectors(
             interfaces=["ge-0/0/2.113"],
+            routing_instances=["L3VPN-CPE13-NNI"],
             bgp_neighbors=[],
             bgp_neighbors_inactive=["198.11.13.9"],
         ),
@@ -934,3 +937,79 @@ def test_prefix_counts_missing_rib_carries_baseline_value():
     rows = run_check(BgpPrefixCountsCheck(), _ctx({"bgp": subject}, baseline={"bgp": {"198.11.13.2": baseline_peer}}))
     missing = _by_label(rows, "BGP prefixy (inet6.0)")
     assert missing.value == "chybi" and missing.baseline_value == "v tabulce"
+
+
+# Kolize adres (ostry beh MX -> ACX 2026-09-23): dve VRF se stejnou p2p
+# adresou peera, collector klicuje jen adresou a necha si posledni session.
+# Scope.select cizi polozku nevybere a hlasi ji v `bgp_collisions` - check
+# pak nesmi tvrdit nic, co z prepsanych dat nevi.
+
+
+def test_configured_peer_shadowed_in_subject_is_skip_not_missing_session():
+    """Junos vypisuje kazdeho nakonfigurovaneho peera, takze nase session
+    v RPC byla - 'session neexistuje' by byla fabulace."""
+    ctx = _ctx({"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}})
+
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+
+    assert row.status is Status.SKIP
+    assert row.value == ADDRESS_COLLISION
+    assert "customer-a" in row.message
+
+
+def test_peer_shadowed_in_baseline_and_missing_now_is_fail_not_unchanged():
+    """Pojistka proti falesnemu PASS: baseline nasi session nezmerila (prepsal
+    ji collector), takze 'v baseline taky nebyla' neplati a skutecna regrese
+    nesmi projit jako UNCHANGED.
+
+    Zabiji mutanta: `same=` ve vetvi bez session bez podminky na kolizi.
+    """
+    ctx = _ctx(
+        {"bgp": {}},
+        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+    )
+
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+
+    assert row.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in row.details
+    assert row.baseline_value == ADDRESS_COLLISION
+
+
+def test_established_peer_shadowed_in_baseline_names_the_collision_as_before():
+    ctx = _ctx(
+        {"bgp": {"198.11.13.2": _peer()}},
+        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+    )
+
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+
+    assert row.status is Status.PASS
+    assert row.baseline_value == ADDRESS_COLLISION
+
+
+def test_prefix_counts_with_baseline_shadowed_skip_and_say_why():
+    """Hodnota, ne jen hlaska: textovy report hlasku nevypisuje."""
+    ctx = _ctx(
+        subject={"bgp": {"198.11.13.2": _peer(rib="customer-b.inet.0")}},
+        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+    )
+
+    [row] = run_check(BgpPrefixCountsCheck(), ctx)
+
+    assert row.status is Status.SKIP
+    assert row.value == NO_BASELINE_COLLISION
+    assert "customer-a" in row.message
+
+
+def test_prefix_counts_with_subject_shadowed_skip_as_unknown():
+    ctx = _ctx(
+        subject={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+        baseline={"bgp": {"198.11.13.2": _peer()}},
+    )
+
+    [row] = run_check(BgpPrefixCountsCheck(), ctx)
+
+    assert row.status is Status.SKIP
+    assert row.value == ADDRESS_COLLISION
+    assert "customer-a" in row.message

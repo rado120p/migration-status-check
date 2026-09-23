@@ -2,6 +2,8 @@
 
 Peer patri ke sluzbe pres bgp_neighbor z inventory - parser ho doplnuje na
 zaklade shody se subnetem rozhrani, takze scope uz ma spravny seznam.
+Namerena polozka se k nemu prida jen ze spravne instance (Scope.owns_bgp_peer):
+dve VRF se stejnou p2p podsiti maji peera na stejne adrese.
 
 Pocty prefixu se porovnavaji s toleranci, ne 1:1. Presna shoda generuje
 mnozstvi FAILu kvuli rozdilu nekolika rout, coz neni signifikantni.
@@ -33,6 +35,16 @@ ESTABLISHED = "Established"
 # je uplna veta, ne kratka znacka, protoze v tabulkovem sloupci bez hlasky
 # vedle by kratka znacka "neni ve sluzbe" rikala neco jineho, nez se stalo.
 NOT_IN_SERVICE = "v baseline patril k teto sluzbe, v subjektu uz ne"
+# Stav peera/session, kterou collector prepsal cizi polozkou se stejnou
+# adresou (dve VRF se stejnou p2p podsiti, Scope.select -> bgp_collisions /
+# bfd_collisions). Sdilena s bfd.py. Je to 'nevime', ne 'neni': jako value
+# u SKIP radku, jako baseline_value tam, kde prepsana byla baseline - sloupec
+# ZMENA pak rika 'bylo neznamy (kolize adresy)' misto nepravdiveho 'bez
+# session'.
+ADDRESS_COLLISION = "neznamy (kolize adresy)"
+# Hodnota SKIP radku prefixu, kdyz se nema s cim porovnat kvuli kolizi
+# v baseline. Samotne 'bez baseline' by rikalo, ze baseline peera nemela.
+NO_BASELINE_COLLISION = "bez baseline (kolize adresy)"
 # Countery, ktere se dostanou do reportu - jeden radek na counter.
 # `suppressed` tu chybi zamerne (rozhodnuti 2026-07-29): damping se v
 # tomhle nasazeni nepouziva, takze radek by byl vzdy nulovy. Odpada s nim
@@ -106,6 +118,8 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
+        collisions: dict[str, str] = ctx.subject.get("bgp_collisions", {})
+        baseline_collisions: dict[str, str] = (ctx.baseline or {}).get("bgp_collisions", {})
         configured = list(ctx.scope.selectors.bgp_neighbors)
         inactive = [
             peer
@@ -146,6 +160,14 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                 if peer in baseline_peers
                 else None
             )
+            # Prepsana baseline neni 'bez baseline' - ZMENA ma rict proc.
+            # Porovnani (same/changed) dal jede nad baseline_state, ktery je
+            # u kolize None, takze z ni UNCHANGED ani RECOVERED vzniknout nemuze.
+            was = (
+                ADDRESS_COLLISION
+                if baseline_state is None and peer in baseline_collisions
+                else baseline_state
+            )
 
             if state != ESTABLISHED:
                 outcome = unchanged_or(
@@ -159,7 +181,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                         label=f"BGP status ({peer})",
                         family=peer_family(peer),
                         value=state,
-                        baseline_value=baseline_state,
+                        baseline_value=was,
                         baseline={"state": baseline_state} if baseline_state else None,
                         subject=subject,
                     )
@@ -186,7 +208,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     label=f"BGP status ({peer})",
                     family=peer_family(peer),
                     value=state,
-                    baseline_value=baseline_state,
+                    baseline_value=was,
                     baseline={"state": baseline_state} if baseline_state else None,
                     subject=subject,
                 )
@@ -248,7 +270,36 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
         without_session = universe - set(peers) - set(ctx.scope.selectors.bgp_neighbors_inactive)
         for peer in sorted(without_session):
             in_config = peer in configured
-            outcome = unchanged_or(Outcome.BROKEN, ctx, "bgp", same=peer not in baseline_peers)
+            baseline_value = (
+                str(baseline_peers[peer].get("state", UNKNOWN))
+                if peer in baseline_peers
+                else ADDRESS_COLLISION
+                if peer in baseline_collisions
+                else None
+            )
+            if peer in collisions:
+                # Nase session v RPC byla (Junos vypisuje kazdeho
+                # nakonfigurovaneho peera), collector ji ale prepsal polozkou
+                # cizi instance - 'session neexistuje' by byla fabulace.
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{peer}: stav nelze urcit - stejnou adresu ma peer v instanci "
+                        f"{collisions[peer]} a collector uchoval jen jeho session",
+                        label=f"BGP status ({peer})",
+                        family=peer_family(peer),
+                        value=ADDRESS_COLLISION,
+                        baseline_value=baseline_value,
+                    )
+                )
+                continue
+            # Kolize v baseline neni 'v baseline taky nebyl': baseline nasi
+            # session nezmerila, takze shoda s ni nejde tvrdit a skutecna
+            # regrese nesmi projit jako UNCHANGED.
+            outcome = unchanged_or(
+                Outcome.BROKEN, ctx, "bgp",
+                same=peer not in baseline_peers and peer not in baseline_collisions,
+            )
             value = "bez session" if in_config else NOT_IN_SERVICE
             findings.append(
                 Finding(
@@ -270,10 +321,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
                     family=peer_family(peer),
                     value=value,
                     baseline_value=(
-                        value if outcome is Outcome.UNCHANGED
-                        else str(baseline_peers[peer].get("state", UNKNOWN))
-                        if peer in baseline_peers
-                        else None
+                        value if outcome is Outcome.UNCHANGED else baseline_value
                     ),
                 )
             )
@@ -292,7 +340,8 @@ class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
 
     def run(self, ctx: CheckContext) -> list[Finding]:
         peers: dict[str, Any] = ctx.subject.get("bgp", {})
-        if not peers:
+        collisions: dict[str, str] = ctx.subject.get("bgp_collisions", {})
+        if not peers and not collisions:
             return [
                 Finding(
                     Outcome.SKIP,
@@ -302,11 +351,41 @@ class BgpPrefixCountsCheck(_AppliesToCoreLoopback, Check):
             ]
 
         baseline_peers = (ctx.baseline or {}).get("bgp", {})
+        baseline_collisions: dict[str, str] = (ctx.baseline or {}).get("bgp_collisions", {})
         tolerance = float(ctx.options(self.id)["tolerance_percent"])
 
         findings = []
+        # Peer, jehoz polozku v subjektu prepsala cizi instance, dostane radek
+        # 'nevime' - jinak by sluzba s jedinym takovym peerem hlasila 'zadna
+        # namerena BGP session', coz o zarizeni neplati.
+        for peer in sorted(set(collisions) - set(peers)):
+            findings.append(
+                Finding(
+                    Outcome.SKIP,
+                    f"{peer}: stav nelze urcit - stejnou adresu ma peer v instanci "
+                    f"{collisions[peer]} a collector uchoval jen jeho session",
+                    label="BGP prefixy",
+                    family=peer_family(peer),
+                    value=ADDRESS_COLLISION,
+                )
+            )
         for peer in sorted(peers):
             family = peer_family(peer)
+            if peer not in baseline_peers and peer in baseline_collisions:
+                # Bez teto vetve by baseline cizi sluzby (ostry beh MX -> ACX
+                # 2026-09-23) uz neprisla, ale hodnota by rikala 'bez
+                # baseline', jako by baseline peera nemela.
+                findings.append(
+                    Finding(
+                        Outcome.SKIP,
+                        f"{peer}: v baseline drzi tuto adresu peer instance "
+                        f"{baseline_collisions[peer]}, nelze porovnat",
+                        label="BGP prefixy",
+                        family=family,
+                        value=NO_BASELINE_COLLISION,
+                    )
+                )
+                continue
             if peer not in baseline_peers:
                 findings.append(
                     Finding(

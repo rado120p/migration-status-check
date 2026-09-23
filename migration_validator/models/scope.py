@@ -182,6 +182,70 @@ class Scope:
     def service_subtype(self) -> str | None:
         return self.key.service_subtype if self.key else None
 
+    @property
+    def bgp_instance(self) -> str | None:
+        """Instance, ve ktere sluzba ma sve BGP peery; None = master.
+
+        Zrcadli parsers/core.py:_assign_bgp_neighbors: IPVPN hleda peery ve
+        sve VRF, Internet a Core lo0.0 v globalnim `protocols bgp` - Internet
+        i tehdy, kdyz je jeho rozhrani v instanci (virtual-router). Pravidlo
+        'kterakoli z mych instanci nebo master' by nestacilo: IPVPN by pak
+        pohltila master peera Internet sluzby na stejne /30.
+        """
+        if self.service_type == "IPVPN" and self.selectors.routing_instances:
+            return self.selectors.routing_instances[0]
+        return None
+
+    def owns_bgp_peer(self, peer: str, data: dict[str, Any]) -> bool:
+        """Patri polozka BGP faktu (klicovana jen adresou) teto sluzbe?
+
+        Adresa nestaci: dve VRF se stejnou p2p podsiti maji peera na stejne
+        adrese a baseline jedne sluzby by jinak nesla session te druhe (ostry
+        beh MX -> ACX 2026-09-23). Rozhoduje peer-cfg-rti, ktery collector
+        uklada do `routing_instance`.
+
+        Deaktivovany peer patri scopu stejne jako aktivni. Kdyby se sem
+        jeho session nedostala, check by ho videl jako bezsessioveho a
+        rozpor 'konfigurace vypnuto, zarizeni bezi' by z reportu zmizel.
+        """
+        if (
+            peer not in self.selectors.bgp_neighbors
+            and peer not in self.selectors.bgp_neighbors_inactive
+        ):
+            return False
+        return data.get("routing_instance") == self.bgp_instance
+
+    def owns_bfd_session(self, peer: str, data: dict[str, Any]) -> bool:
+        """Patri BFD session (klicovana jen adresou) teto sluzbe?
+
+        Session patri scopu podle peeru, ne podle zameru: kdyby se vybiralo
+        podle bfd_peers, session peeru, ktereho parser do zameru nedoplnil,
+        by se sem nedostala a chyba v pruchodu hierarchii by se schovala pred
+        vystupem nastroje (AR-14). Single-hop session navic nese rozhrani a to
+        musi byt nase - adresu muze mit i peer jine VRF. Multihop rozhrani
+        nenese, tam zbyva jen adresa.
+
+        Na rozdil od owns_bgp_peer se bgp_neighbors_inactive zamerne
+        nepricita. checks/bfd.py o deaktivovanych peerech nevi - zamer si
+        bere z bfd_peers, ktery pro deaktivovaneho peera prazdny je - takze
+        vybranou session by vypsal jako WARN 'session existuje, v konfiguraci
+        sluzby neni'. To je nepravda: v konfiguraci sluzby peer je, jen
+        deaktivovany. Session proto zustava nezarazena a videt je
+        v NEZARAZENO - viz _unassigned_bfd_sessions v engine.py.
+        """
+        interface = data.get("interface")
+        if peer in self.selectors.bgp_neighbors and (
+            not interface or self.selectors.matches_interface(str(interface))
+        ):
+            return True
+        # Transit Core nema BFD zamery ani peery v konfiguraci sluzby -
+        # session na nej patri podle rozhrani (spec 2026-08-26).
+        return (
+            self.service_type == "Core"
+            and self.service_subtype == "transit"
+            and self.selectors.matches_interface(str(interface or ""))
+        )
+
     def select(
         self, facts: dict[str, Any], probes: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -213,15 +277,21 @@ class Scope:
             for entry in (facts.get("nd") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
-        # Deaktivovany peer patri scopu stejne jako aktivni. Kdyby se sem
-        # jeho session nedostala, check by ho videl jako bezsessioveho a
-        # rozpor 'konfigurace vypnuto, zarizeni bezi' by z reportu zmizel
-        # (od vlny 9 uz by to nebylo SKIP, ale stejne chybny vysledek).
+        bgp_facts = facts.get("bgp") or {}
         bgp = {
             peer: data
-            for peer, data in (facts.get("bgp") or {}).items()
-            if peer in self.selectors.bgp_neighbors
-            or peer in self.selectors.bgp_neighbors_inactive
+            for peer, data in bgp_facts.items()
+            if self.owns_bgp_peer(peer, data)
+        }
+        # Aktivni peer, jehoz adresu na zarizeni drzi cizi instance. Junos
+        # vypisuje kazdeho nakonfigurovaneho peera (i Idle), takze nase
+        # session v RPC byla - collector ji prepsal, protoze klicuje jen
+        # adresou. Stav je tedy neznamy, ne 'session neexistuje'; checky to
+        # musi umet rict (hodnota na zarizeni = nazev cizi instance).
+        bgp_collisions = {
+            peer: data.get("routing_instance") or "master"
+            for peer, data in bgp_facts.items()
+            if peer in self.selectors.bgp_neighbors and not self.owns_bgp_peer(peer, data)
         }
         evpn_vpws = {
             name: data
@@ -262,30 +332,22 @@ class Scope:
             if selected_prefixes:
                 routes[table] = selected_prefixes
 
-        # Session patri scopu podle peeru, ne podle zameru: kdyby se
-        # vybiralo podle bfd_peers, session peeru, ktereho parser do
-        # zameru nedoplnil, by se sem nedostala a chyba v pruchodu
-        # hierarchii by se schovala pred vystupem nastroje (AR-14).
-        #
-        # Na rozdil od bgp vys se tady bgp_neighbors_inactive zamerne
-        # nepricita. checks/bfd.py o deaktivovanych peerech nevi - zamer si
-        # bere z bfd_peers, ktery pro deaktivovaneho peera prazdny je -
-        # takze vybranou session by vypsal jako WARN 'session existuje,
-        # v konfiguraci sluzby neni'. To je nepravda: v konfiguraci sluzby
-        # peer je, jen deaktivovany. BFD se na teto vlne zamerne nemenilo,
-        # takze session zustava nezarazena a videt je v NEZARAZENO - viz
-        # _unassigned_bfd_sessions v engine.py.
+        bfd_facts = facts.get("bfd") or {}
         bfd = {
             peer: data
-            for peer, data in (facts.get("bfd") or {}).items()
+            for peer, data in bfd_facts.items()
+            if self.owns_bfd_session(peer, data)
+        }
+        # Single-hop session na adrese naseho peera, ale na cizim rozhrani.
+        # Na rozdil od BGP to neni dukaz, ze nase session existovala - jen
+        # ze ji collector mohl prepsat. Check proto u nakonfigurovaneho BFD
+        # rekne 'stav neznamy', ne 'session neexistuje'.
+        bfd_collisions = {
+            peer: str(data["interface"])
+            for peer, data in bfd_facts.items()
             if peer in self.selectors.bgp_neighbors
-            or (
-                # Transit Core nema BFD zamery ani peery v konfiguraci sluzby -
-                # session na nej patri podle rozhrani (spec 2026-08-26).
-                self.service_type == "Core"
-                and self.service_subtype == "transit"
-                and self.selectors.matches_interface(str(data.get("interface", "")))
-            )
+            and data.get("interface")
+            and not self.owns_bfd_session(peer, data)
         }
 
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
@@ -343,12 +405,14 @@ class Scope:
             "arp": arp,
             "nd": nd,
             "bgp": bgp,
+            "bgp_collisions": bgp_collisions,
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
             "evpn_instance": evpn_instance,
             "evpn_mac": evpn_mac,
             "routes": routes,
             "bfd": bfd,
+            "bfd_collisions": bfd_collisions,
             "optics": optics,
             "ping": ping,
             "ping_skipped": any(

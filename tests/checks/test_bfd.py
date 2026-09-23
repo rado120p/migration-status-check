@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bfd import BfdSessionStateCheck
+from migration_validator.checks.bgp import ADDRESS_COLLISION
 from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
 from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
@@ -29,13 +30,25 @@ def _scope(bfd_peers=None, bgp_neighbors=("198.11.13.2",)) -> Scope:
     )
 
 
-def _ctx(sessions, bgp_state="Established", baseline_sessions=None, scope=None):
+def _ctx(
+    sessions,
+    bgp_state="Established",
+    baseline_sessions=None,
+    scope=None,
+    collisions=None,
+    baseline_collisions=None,
+):
     baseline = (
         {"bfd": baseline_sessions, "bgp": {}} if baseline_sessions is not None else None
     )
+    if baseline is not None and baseline_collisions is not None:
+        baseline["bfd_collisions"] = baseline_collisions
+    subject = {"bfd": sessions, "bgp": {"198.11.13.2": {"state": bgp_state}}}
+    if collisions is not None:
+        subject["bfd_collisions"] = collisions
     return CheckContext(
         scope=scope or _scope(),
-        subject={"bfd": sessions, "bgp": {"198.11.13.2": {"state": bgp_state}}},
+        subject=subject,
         baseline=baseline,
         config=default_config(),
         # Pozitivni dukaz, ze baseline oblast byla zmerena (ctx.baseline_measured)
@@ -349,3 +362,50 @@ def test_device_scope_reports_state_without_intent():
 
     assert len(findings) == 1
     assert findings[0].outcome is Outcome.OK
+
+
+# Kolize adres (ostry beh MX -> ACX 2026-09-23): single-hop session na adrese
+# naseho peera, ale na cizim rozhrani. Scope.select ji nevybere a hlasi ji
+# v `bfd_collisions`; nase session mohl collector prepsat.
+
+
+def test_configured_bfd_shadowed_in_subject_is_skip_not_missing_session():
+    findings = BfdSessionStateCheck().run(
+        _ctx({}, collisions={"198.11.13.2": "ge-0/0/1.100"})
+    )
+
+    assert findings[0].outcome is Outcome.SKIP
+    assert findings[0].value == ADDRESS_COLLISION
+    assert "ge-0/0/1.100" in findings[0].message
+
+
+def test_bfd_shadowed_in_baseline_and_missing_now_is_fail_not_unchanged():
+    """Pojistka proti falesnemu PASS: 'v baseline taky nebyla' neplati, kdyz
+    baseline nasi session nezmerila.
+
+    Zabiji mutanta: `same=baseline is None` ve vetvi NO_SESSION bez podminky
+    na kolizi.
+    """
+    [row] = run_check(
+        BfdSessionStateCheck(),
+        _ctx({}, baseline_sessions={}, baseline_collisions={"198.11.13.2": "ge-0/0/1.100"}),
+    )
+
+    assert row.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in row.details
+    assert row.baseline_value == ADDRESS_COLLISION
+
+
+def test_bfd_up_with_baseline_shadowed_does_not_claim_baseline_had_no_session():
+    """Bez kolize by baseline_value rikal 'bez session' - tvrzeni o baseline,
+    ktere z prepsanych dat nevyplyva."""
+    findings = BfdSessionStateCheck().run(
+        _ctx(
+            {"198.11.13.2": {"state": "Up"}},
+            baseline_sessions={},
+            baseline_collisions={"198.11.13.2": "ge-0/0/1.100"},
+        )
+    )
+
+    assert findings[0].outcome is Outcome.OK
+    assert findings[0].baseline_value == ADDRESS_COLLISION

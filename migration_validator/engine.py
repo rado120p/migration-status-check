@@ -471,17 +471,11 @@ def _unassigned_bgp_peers(
             return instance in _scope_instances(scopes)
         return _peer_in_scope_subnets(peer, scopes)
 
-    # Deaktivovany peer je porad peer sve sluzby. Kdyz pro nej presto prijde
-    # session, je to nalez o teto sluzbe - do NEZARAZENO patri jen peer,
-    # ktery ke zadne sluzbe nesedi.
-    assigned = {
-        peer
-        for scope in scopes
-        for peer in (
-            *scope.selectors.bgp_neighbors,
-            *scope.selectors.bgp_neighbors_inactive,
-        )
-    }
+    # Stejne pravidlo clenstvi jako Scope.select (Scope.owns_bgp_peer), vcetne
+    # deaktivovanych peeru: kdyz pro takoveho peera presto prijde session, je
+    # to nalez o jeho sluzbe. Porovnani jen adresou by polozku cizi VRF na
+    # adrese naseho peera nevypsalo nikde - sluzba ji nevybere a tady by
+    # platila za zarazenou.
     if any(scope.is_device for scope in scopes):
         return []
     return [
@@ -491,7 +485,8 @@ def _unassigned_bgp_peers(
             "snapshot": "subject",
         }
         for peer, data in sorted((subject.facts.get("bgp") or {}).items())
-        if peer not in assigned and _on_port(peer, data)
+        if not any(scope.owns_bgp_peer(peer, data) for scope in scopes)
+        and _on_port(peer, data)
     ]
 
 
@@ -570,25 +565,18 @@ def _unassigned_bfd_sessions(
     # Core scope vubec nebezi (checks/bfd.py) a bfd_transit_state se tyka jen
     # transitu. Vedome odlozene rozhodnuti (2026-08-26, nalez finalniho
     # review): session zustava v NEZARAZENO, dokud nevznikne loopback BFD
-    # zamer. Kdyby se peer presto pripsal do `assigned`, session by z reportu
-    # zmizela uplne.
-    assigned = {
-        peer
+    # zamer. Kdyby se peer presto pripsal k Core-loopback scopu, session by
+    # z reportu zmizela uplne.
+    #
+    # Jinak stejne pravidlo clenstvi jako Scope.select (Scope.owns_bfd_session):
+    # single-hop session na cizim rozhrani nepatri sluzbe, i kdyz ma adresu
+    # jejiho peera, a Core transit si session bere podle rozhrani. Jine
+    # pravidlo tady by takovou session vypsalo dvakrat, nebo vubec.
+    owners = [
+        scope
         for scope in scopes
         if not (scope.service_type == "Core" and scope.service_subtype == "loopback")
-        for peer in scope.selectors.bgp_neighbors
-    }
-    bfd_facts = subject.facts.get("bfd") or {}
-    # Core transit nema BGP peery ani BFD zamer - Scope.select (models/scope.py)
-    # session zarazuje podle rozhrani. Stejne pravidlo tady, jinak by se
-    # takova session objevila v reportu podruhe (u sluzby i v NEZARAZENO).
-    for scope in scopes:
-        if scope.service_type == "Core" and scope.service_subtype == "transit":
-            assigned |= {
-                peer
-                for peer, data in bfd_facts.items()
-                if scope.selectors.matches_interface(str(data.get("interface", "")))
-            }
+    ]
     if any(scope.is_device for scope in scopes):
         return []
     return [
@@ -598,8 +586,8 @@ def _unassigned_bfd_sessions(
             "state": data.get("state"),
             "snapshot": "subject",
         }
-        for peer, data in sorted(bfd_facts.items())
-        if peer not in assigned
+        for peer, data in sorted((subject.facts.get("bfd") or {}).items())
+        if not any(scope.owns_bfd_session(peer, data) for scope in owners)
         and (port is None or _interface_on_port(str(data.get("interface", "")), port, scopes))
     ]
 

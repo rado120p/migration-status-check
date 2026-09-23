@@ -21,8 +21,8 @@ FACTS = {
         {"ip": "2001:db8::9", "interface": "ge-0/0/9.0"},
     ],
     "bgp": {
-        "198.11.13.2": {"state": "Established"},
-        "10.9.9.2": {"state": "Active"},
+        "198.11.13.2": {"state": "Established", "routing_instance": "L3VPN-CPE13-NNI"},
+        "10.9.9.2": {"state": "Active", "routing_instance": None},
     },
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"status": "Up"}},
     "evpn_esi": {"00:11": {"status": "Up", "interface": "ge-0/0/2.113"}},
@@ -225,7 +225,9 @@ def test_bfd_sessions_are_selected_by_bgp_neighbors():
     zameru nedoplnil, by se do scope nedostala a chyba v pruchodu hierarchii
     by se schovala pred vystupem nastroje.
     """
-    scope = _scope_with(bgp_neighbors=["152.11.13.2"], bfd_peers=[])
+    scope = _scope_with(
+        interfaces=["et-0/0/8.13"], bgp_neighbors=["152.11.13.2"], bfd_peers=[]
+    )
 
     selected = scope.select({"bfd": BFD_FACTS})
 
@@ -433,3 +435,155 @@ def test_local_scope_deactivation_reason_names_bridge_domain():
     off_both = _local_scope(active=False)
     off_both.interface_active = False
     assert off_both.deactivation_reason == "bridge-domain + interface deactivated"
+
+
+# Dve VRF se stejnou p2p podsiti (ostry beh MX -> ACX 2026-09-23): collector
+# klicuje BGP i BFD jen adresou peera, takze zarizeni nese jedinou polozku
+# 192.168.1.2 - tu, kterou collector precetl posledni. Scope ji smi vzit jen
+# tehdy, kdyz je opravdu jeho (instance u BGP, rozhrani u single-hop BFD).
+SHARED_PEER = "192.168.1.2"
+
+
+def _vrf_scope(name: str, interface: str) -> Scope:
+    return Scope(
+        id=f"svc:{name}:IPVPN",
+        kind="service",
+        key=ScopeKey(name, "IPVPN", None),
+        selectors=Selectors(
+            interfaces=[interface],
+            routing_instances=[name],
+            bgp_neighbors=[SHARED_PEER],
+        ),
+    )
+
+
+def _bgp_entry(instance: str | None) -> dict:
+    return {"state": "Established", "routing_instance": instance, "ribs": {}}
+
+
+def test_ipvpn_scope_does_not_take_peer_of_another_vrf_with_same_address():
+    """Zabiji mutanta: vyber `bgp` jen podle adresy (bez porovnani instance)."""
+    facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-a")}}
+
+    assert _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)["bgp"] == {}
+    assert set(_vrf_scope("customer-a", "ge-0/0/1.100").select(facts)["bgp"]) == {SHARED_PEER}
+
+
+def test_ipvpn_and_internet_on_same_subnet_do_not_take_each_others_peer():
+    """Instance se nebere jako 'kterakoli z mych nebo master' - IPVPN by pak
+    pohltila master peera Internet sluzby na stejne /30."""
+    internet = Scope(
+        id="svc:inet:Internet",
+        kind="service",
+        key=ScopeKey("inet", "Internet", None),
+        selectors=Selectors(interfaces=["ge-0/0/3.0"], bgp_neighbors=[SHARED_PEER]),
+    )
+    master_facts = {"bgp": {SHARED_PEER: _bgp_entry(None)}}
+    vrf_facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-b")}}
+
+    assert _vrf_scope("customer-b", "ge-0/0/2.200").select(master_facts)["bgp"] == {}
+    assert internet.select(vrf_facts)["bgp"] == {}
+    assert set(internet.select(master_facts)["bgp"]) == {SHARED_PEER}
+
+
+def test_internet_scope_in_virtual_router_takes_master_peer():
+    """Zrcadli parsers/core.py:_assign_bgp_neighbors - Internet sluzba bere
+    peery z globalniho `protocols bgp`, i kdyz je rozhrani v instanci."""
+    scope = Scope(
+        id="svc:inet:Internet",
+        kind="service",
+        key=ScopeKey("inet", "Internet", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/3.0"],
+            routing_instances=["VR-INET"],
+            bgp_neighbors=[SHARED_PEER],
+        ),
+    )
+
+    selected = scope.select({"bgp": {SHARED_PEER: _bgp_entry(None)}})
+
+    assert set(selected["bgp"]) == {SHARED_PEER}
+
+
+def test_core_loopback_takes_master_ibgp_peer():
+    scope = Scope(
+        id="svc:lo0:Core",
+        kind="service",
+        key=ScopeKey("lo0", "Core", "loopback"),
+        selectors=Selectors(interfaces=["lo0.0"], bgp_neighbors=["150.0.0.1"]),
+    )
+
+    selected = scope.select({"bgp": {"150.0.0.1": _bgp_entry(None)}})
+
+    assert set(selected["bgp"]) == {"150.0.0.1"}
+
+
+def test_configured_peer_shadowed_by_another_instance_is_a_bgp_collision():
+    """Junos vypisuje kazdeho nakonfigurovaneho peera (i Idle/Active), takze
+    cizi polozka na adrese naseho aktivniho peera znamena, ze collector nasi
+    session prepsal. Check z toho musi umet rict 'stav neznamy', ne 'session
+    neexistuje'."""
+    facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-a")}}
+
+    assert _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)["bgp_collisions"] == {
+        SHARED_PEER: "customer-a"
+    }
+    assert _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)["bgp_collisions"] == {}
+
+
+def test_master_entry_shadowing_vrf_peer_names_master():
+    facts = {"bgp": {SHARED_PEER: _bgp_entry(None)}}
+
+    selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
+
+    assert selected["bgp_collisions"] == {SHARED_PEER: "master"}
+
+
+def test_deactivated_peer_is_never_a_bgp_collision():
+    """Deaktivovany peer se ve vypisu Junosu neobjevi, takze cizi polozka na
+    jeho adrese nic neprepsala - je to proste peer jine VRF."""
+    scope = Scope(
+        id="svc:customer-b:IPVPN",
+        kind="service",
+        key=ScopeKey("customer-b", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.200"],
+            routing_instances=["customer-b"],
+            bgp_neighbors_inactive=[SHARED_PEER],
+        ),
+    )
+
+    selected = scope.select({"bgp": {SHARED_PEER: _bgp_entry("customer-a")}})
+
+    assert selected["bgp"] == {}
+    assert selected["bgp_collisions"] == {}
+
+
+def test_bfd_session_on_foreign_interface_is_not_selected():
+    """Zabiji mutanta: vyber `bfd` jen podle adresy (bez porovnani rozhrani)."""
+    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}}
+
+    selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
+
+    assert selected["bfd"] == {}
+    assert selected["bfd_collisions"] == {SHARED_PEER: "ge-0/0/1.100"}
+
+
+def test_bfd_session_on_own_interface_is_selected():
+    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}}
+
+    selected = _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)
+
+    assert set(selected["bfd"]) == {SHARED_PEER}
+    assert selected["bfd_collisions"] == {}
+
+
+def test_multihop_bfd_session_without_interface_is_selected_by_peer():
+    """Multihop session rozhrani nenese (laborka: 198.11.14.4 v L3VPN-CPE14-UNI),
+    takze zbyva jen adresa - znama mezera, kterou resi az zmena klicovani."""
+    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": None}}}
+
+    selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
+
+    assert set(selected["bfd"]) == {SHARED_PEER}
+    assert selected["bfd_collisions"] == {}

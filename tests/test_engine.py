@@ -838,7 +838,7 @@ def test_bfd_session_of_unknown_peer_lands_in_unassigned():
 
 def test_bfd_session_of_known_peer_is_not_unassigned():
     subject = _new()
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/8.113"}}
     subject.scopes[0].selectors.bgp_neighbors = ["10.1.1.1"]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
@@ -1727,3 +1727,178 @@ def test_per_port_bfd_session_on_own_port_stays_unassigned():
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
     assert [s["peer"] for s in result.unassigned["bfd_sessions"]] == ["152.11.13.2"]
+
+
+# Dve VRF se stejnou p2p adresou peera (ostry beh MX -> ACX 2026-09-23).
+# NEZARAZENO musi pouzit stejne pravidlo clenstvi jako Scope.select, jinak by
+# polozka cizi VRF na adrese naseho peera nebyla nikde: sluzba ji nevybere
+# (cizi instance / rozhrani) a NEZARAZENO by ji povazovalo za zarazenou.
+SHARED_PEER = "192.168.1.2"
+
+
+def _customer_b_scope() -> Scope:
+    return Scope(
+        id="svc:customer-b:IPVPN",
+        kind="service",
+        key=ScopeKey("customer-b", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.200"],
+            physical_interfaces=["ge-0/0/2"],
+            routing_instances=["customer-b"],
+            bgp_neighbors=[SHARED_PEER],
+        ),
+    )
+
+
+def _snapshot_with_facts(facts: dict, scopes: list[Scope]) -> Snapshot:
+    return Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase="pre-migration",
+            collectors={"interfaces": {"status": "ok"}},
+        ),
+        facts=facts,
+        probes={},
+        scopes=scopes,
+        inventory=[],
+    )
+
+
+def test_foreign_vrf_peer_on_shared_address_is_unassigned():
+    """Zabiji mutanta: `assigned` v `_unassigned_bgp_peers` jen podle adresy."""
+    scope = _customer_b_scope()
+    snapshot = _snapshot_with_facts(
+        {"bgp": {SHARED_PEER: {"state": "Established", "routing_instance": "customer-a"}}},
+        [scope],
+    )
+
+    assert _unassigned_bgp_peers(snapshot, [scope]) == [
+        {"peer": SHARED_PEER, "routing_instance": "customer-a", "snapshot": "subject"}
+    ]
+    # Per-port snimek: cizi VRF patri jinemu kroku migrace.
+    assert _unassigned_bgp_peers(snapshot, [scope], port="ge-0/0/2") == []
+
+
+def test_foreign_interface_bfd_session_on_shared_address_is_unassigned():
+    """Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` jen podle adresy."""
+    scope = _customer_b_scope()
+    snapshot = _snapshot_with_facts(
+        {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}},
+        [scope],
+    )
+
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == [
+        {
+            "peer": SHARED_PEER,
+            "interface": "ge-0/0/1.100",
+            "state": "Up",
+            "snapshot": "subject",
+        }
+    ]
+    assert _unassigned_bfd_sessions(snapshot, [scope], port="ge-0/0/2") == []
+
+
+def test_own_peer_and_session_on_shared_address_stay_assigned():
+    scope = _customer_b_scope()
+    snapshot = _snapshot_with_facts(
+        {
+            "bgp": {SHARED_PEER: {"state": "Established", "routing_instance": "customer-b"}},
+            "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/2.200"}},
+        },
+        [scope],
+    )
+
+    assert _unassigned_bgp_peers(snapshot, [scope]) == []
+    assert _unassigned_bfd_sessions(snapshot, [scope]) == []
+
+
+def _customer_scope(name: str, interface: str, bfd: bool) -> Scope:
+    return Scope(
+        id=f"svc:{name}:IPVPN",
+        kind="service",
+        key=ScopeKey(name, "IPVPN", None),
+        selectors=Selectors(
+            interfaces=[interface],
+            routing_instances=[name],
+            bgp_neighbors=[SHARED_PEER],
+            bfd_peers=[{"peer": SHARED_PEER, "multiplier": 3}] if bfd else [],
+        ),
+    )
+
+
+def _customer_peer(instance: str, received: int) -> dict:
+    counters = {
+        "received": received,
+        "accepted": received,
+        "advertised": 2,
+        "active": received,
+        "suppressed": 0,
+    }
+    return {
+        "state": "Established",
+        "routing_instance": instance,
+        "ribs": {f"{instance}.inet.0": counters},
+    }
+
+
+def _collision_snapshot(address, phase, facts, scopes) -> Snapshot:
+    return Snapshot(
+        device=DeviceMeta(address=address),
+        capture=CaptureMeta(
+            started_at=NOW,
+            finished_at=NOW,
+            phase=phase,
+            collectors={area: {"status": "ok"} for area in ("interfaces", "bgp", "bfd")},
+        ),
+        facts=facts,
+        probes={},
+        scopes=scopes,
+        inventory=[],
+    )
+
+
+def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_service():
+    """Ostry beh MX -> ACX 2026-09-23: customer-a (BFD, nemigrovana) a
+    customer-b (bez BFD, migrovana) maji peera na 192.168.1.2. MX collector
+    si nechal customer-a polozku, takze baseline customer-b nesla cizi RIB
+    a cizi BFD session:
+
+        WARN BGP prefixy (customer-a.inet.0)  chybi  | bylo v tabulce
+        FAIL BFD (192.168.1.2)  v baseline patril k teto sluzbe, v subjektu uz ne
+
+    Ani jeden radek o customer-a do bloku customer-b nepatri. Srovnani
+    prefixu nejde - baseline nasi session nezmerila - a report to ma rict.
+    """
+    baseline = _collision_snapshot(
+        "172.20.20.4",
+        "pre-migration",
+        {
+            "bgp": {SHARED_PEER: _customer_peer("customer-a", 12)},
+            "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}},
+        },
+        [
+            _customer_scope("customer-a", "ge-0/0/1.100", bfd=True),
+            _customer_scope("customer-b", "ge-0/0/2.200", bfd=False),
+        ],
+    )
+    subject = _collision_snapshot(
+        "172.20.20.5",
+        "post-migration",
+        {"bgp": {SHARED_PEER: _customer_peer("customer-b", 7)}, "bfd": {}},
+        [_customer_scope("customer-b", "et-0/0/2.200", bfd=False)],
+    )
+
+    result = evaluate_snapshots(subject, baseline=baseline, now=NOW)
+
+    [block] = [scope for scope in result.scopes if scope.scope_id == "svc:customer-b:IPVPN"]
+    rows = {(check.id, check.label): check for check in block.checks}
+    assert not any("customer-a.inet.0" in label for _, label in rows), sorted(rows)
+    assert ("bfd_session_state", f"BFD ({SHARED_PEER})") not in rows
+    prefixes = rows[("bgp_prefix_counts", "BGP prefixy")]
+    assert prefixes.status is Status.SKIP
+    assert prefixes.value == "bez baseline (kolize adresy)"
+    status = rows[("bgp_session_state", f"BGP status ({SHARED_PEER})")]
+    assert status.status is Status.PASS
+    assert status.baseline_value == "neznamy (kolize adresy)"

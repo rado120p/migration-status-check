@@ -16,7 +16,12 @@ from typing import Any
 
 from migration_validator.checks.base import Check, CheckContext, Mode
 from migration_validator.checks.baseline import UNKNOWN, suffix, unchanged_or
-from migration_validator.checks.bgp import ESTABLISHED, NOT_IN_SERVICE, peer_family
+from migration_validator.checks.bgp import (
+    ADDRESS_COLLISION,
+    ESTABLISHED,
+    NOT_IN_SERVICE,
+    peer_family,
+)
 from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
@@ -72,8 +77,13 @@ class BfdSessionStateCheck(Check):
         }
         sessions: dict[str, Any] = ctx.subject.get("bfd", {})
         baseline_sessions: dict[str, Any] = (ctx.baseline or {}).get("bfd", {})
+        collisions: dict[str, str] = ctx.subject.get("bfd_collisions", {})
+        baseline_collisions: dict[str, str] = (ctx.baseline or {}).get("bfd_collisions", {})
         bgp: dict[str, Any] = ctx.subject.get("bgp", {})
 
+        # Kolize samy radek nezakladaji: session cizi sluzby na adrese naseho
+        # peera, ktery BFD nema, neni o teto sluzbe nic (ostry beh MX -> ACX
+        # 2026-09-23 - odtud FAIL 'v baseline patril k teto sluzbe').
         findings = []
         for peer in sorted(set(intent) | set(sessions) | set(baseline_sessions)):
             findings.append(
@@ -85,6 +95,8 @@ class BfdSessionStateCheck(Check):
                     bgp_state=str((bgp.get(peer) or {}).get("state", "")),
                     is_device=ctx.scope.is_device,
                     ctx=ctx,
+                    collision=collisions.get(peer),
+                    baseline_collided=peer in baseline_collisions,
                 )
             )
         return findings
@@ -98,6 +110,8 @@ class BfdSessionStateCheck(Check):
         bgp_state: str,
         is_device: bool,
         ctx: CheckContext,
+        collision: str | None = None,
+        baseline_collided: bool = False,
     ) -> Finding:
         label = f"{self.label} ({peer})"
         family = peer_family(peer)
@@ -105,8 +119,14 @@ class BfdSessionStateCheck(Check):
         # subjektu), takze baseline_value mluvi slovnikem radku (R-5). Plati
         # jen pro vetve, ktere se MOHOU stat UNCHANGED (porovnavaji se) -
         # SESSION_GONE/NOT_IN_SERVICE nize maji vlastni `was_measured`.
+        #
+        # Baseline, jejiz session na adrese peera patrila cizimu rozhrani, nasi
+        # session nezmerila - _session_value(None, ...) by o ni tvrdil 'bez
+        # session', coz z prepsanych dat nevyplyva.
         was = (
-            _session_value(baseline, configured, is_device, bgp_state)
+            ADDRESS_COLLISION
+            if baseline is None and baseline_collided
+            else _session_value(baseline, configured, is_device, bgp_state)
             if ctx.has_baseline
             else None
         )
@@ -198,6 +218,20 @@ class BfdSessionStateCheck(Check):
                 baseline=baseline,
             )
 
+        if collision is not None:
+            # Na adrese peera je session cizi sluzby - nasi mohl collector
+            # prepsat, takze 'session neexistuje' nejde tvrdit. Pred BGP
+            # vetvi: BGP polozka mohla kolizi prezit, BFD ne.
+            return Finding(
+                Outcome.SKIP,
+                f"{peer}: stav BFD nelze urcit - na stejne adrese je session na "
+                f"rozhrani {collision} a collector uchoval jen ji",
+                label=label,
+                family=family,
+                value=ADDRESS_COLLISION,
+                baseline_value=was,
+            )
+
         if bgp_state != ESTABLISHED:
             return Finding(
                 Outcome.SKIP,
@@ -208,7 +242,11 @@ class BfdSessionStateCheck(Check):
                 baseline_value=was,
             )
 
-        outcome = unchanged_or(Outcome.BROKEN, ctx, "bfd", same=baseline is None)
+        # Kolize v baseline neni 'v baseline taky nebyla' - jinak by skutecna
+        # regrese prosla jako UNCHANGED.
+        outcome = unchanged_or(
+            Outcome.BROKEN, ctx, "bfd", same=baseline is None and not baseline_collided
+        )
         return Finding(
             outcome,
             f"{peer}: BFD nakonfigurovano, BGP bezi, ale session neexistuje{suffix(outcome)}",
