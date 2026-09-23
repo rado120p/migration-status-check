@@ -75,8 +75,10 @@ S tím v provozu je bump schématu kvůli vrstvě 2 bezpečný: snapshoty se
 přegenerují z raw XML novým collectorem, a to včetně session, kterou dnešní
 collector zahazuje (v XML je obě).
 
-**Otevřená otázka pro spec:** snapshoty zachycené před zavedením raw XML
-(včetně dnešního běhu MX → ACX) přegenerovat nepůjdou. Buď jednorázový shim
-13 → 14 (překlíčování je u bgp/bfd mechanické – `routing_instance` i
-`interface` v datech už jsou; ztracené session zůstanou ztracené), nebo
-přijmout, že takové snapshoty nová verze nenačte.
+**Rozhodnuto 2026-09-23 (spec
+`docs/superpowers/specs/2026-09-23-raw-retention-a-upgrade-design.md`):**
+snapshoty zachycené před zavedením raw XML (včetně běhu MX → ACX
+z 2026-09-23) se nepřevádějí – **žádný shim 13 → 14 ve vrstvě 2**. Po bumpu
+je nová verze nenačte a `mig-validate upgrade` je vypíše jako „nelze – bez
+raw záznamu“. Služby i konfigurace z MX už jsou pryč, kontroly toho běhu
+jsou hotové; uživatel to přijal.

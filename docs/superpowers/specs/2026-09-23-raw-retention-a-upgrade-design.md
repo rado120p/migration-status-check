@@ -87,6 +87,11 @@ dostane kořen `configuration` jen s hierarchiemi, o které žádal
 (`CONFIG_HIERARCHIES`). Bez ořezu by parser, který hledá elementy podle
 jména, mohl sebrat `class-of-service interfaces interface` jako rozhraní.
 
+Záznam volání `get_config` nese seznam hierarchií, které filtr žádal
+(`"filter": [...]`), ne serializovaný element. Junos prázdnou hierarchii
+v odpovědi vynechá, takže samotná odpověď neříká, co se žádalo — rozlišit
+„žádáno a prázdné“ od „nikdy nežádáno“ jde jen podle filtru (sekce 2).
+
 Obě platformy musí rozšířený filtr přijmout — NETCONF odmítne hierarchii,
 kterou schéma platformy nezná (`vlans` na MX, `b01078f`). Ověří se
 v laborce (sekce 8).
@@ -134,7 +139,7 @@ případně použít jako zdroj fixtures.
   "params": {
     "phase": "post",
     "port": "et-0/0/8",
-    "collectors": ["interfaces", "arp", …],   // rozřešené, ne odkaz na profil
+    "collectors": null,                      // jak zadáno; null = všechny pro platformu
     "ping_count": 5,
     "service_types": ["IPVPN", "Internet"],
     "profile_name": "core"
@@ -152,10 +157,23 @@ případně použít jako zdroj fixtures.
 
 Session `inventory` má místo `params`/`baselines`/`inventory` pole
 `port_filter` (port, se kterým `generate_inventory` filtroval; `null` =
-celý box) a nemá `finished_at`.
+celý box) a nemá `finished_at`. Její volání `get_config` vypadá takto:
+
+```jsonc
+{"seq": 1, "rpc": "get_config",
+ "filter": ["interfaces", "routing-options", "routing-instances", "protocols",
+            "bridge-domains", "switch-options",
+            "policy-options", "firewall", "class-of-service"],
+ "kwargs": {"options": {"database": "committed", "inherit": ""}},
+ "reply": "0001-get_config.xml.gz"}
+```
 
 - **Parametry rozřešené, ne odkaz na profil** — profil se po capture může
-  změnit.
+  změnit. Výjimka je `collectors`: ukládá se tak, jak byl capture zadán
+  (`null` = všechny collectory platformy). Při replayi pak `null` znamená
+  všechny collectory *aktuální* verze — nový collector nemá nahrávku,
+  skončí status `error` „není v raw záznamu“ a jeho checky SKIP, místo
+  aby oblast ve snapshotu tiše chyběla.
 - **`baselines`** jsou snímky, které post capture skutečně použil pro ping
   cíle (výstup `mapped_olds` / `find_pre_baseline` v okamžiku capture).
 - **`inventory.file`** je soubor, ze kterého capture opravdu četl (včetně
@@ -221,12 +239,20 @@ capture, nic odvozeného.
   (např. `get_instance_information`, které volají dva multicast collectory).
 - **Nahraná chyba** se vyhodí znovu jako výjimka se stejným jménem třídy
   a textem (dynamická podtřída `RecordedRpcError`), aby text statusu
-  collectoru vyšel stejně jako při živém capture.
-- **`get_config`** se páruje jen jménem. Vrátí nahranou konfiguraci
-  ořezanou na hierarchie, o které filtr žádá. Žádá-li filtr hierarchii,
-  která v nahrávce není, vyhodí `NotRecorded("konfigurace nemá hierarchii
-  X")` — upgrade z toho udělá „nelze“, nikdy inventory z neúplné
-  konfigurace.
+  collectoru vyšel stejně jako při živém capture. Funguje to díky
+  invariantu, který dnes platí a musí platit dál: collectory
+  (`collectors/base.py`, `interfaces.py`, `routes.py`, `evpn.py`,
+  `multicast.py`) i `run_ping` chytají `Exception` a nevětví se podle typu
+  výjimky PyEZ. Jediné `except RpcError` je v samostatném `main()` parseru
+  (`parsers/core.py`), mimo capture.
+- **`get_config`** se páruje jen jménem, rozhoduje nahraný `filter`:
+  - každá hierarchie, o kterou replay žádá, byla v nahraném filtru →
+    vrátí nahranou odpověď ořezanou na požadované hierarchie. Hierarchie,
+    která byla žádaná, ale v odpovědi chybí, je prostě prázdná konfigurace
+    (Junos prázdné hierarchie vynechává) — ne chyba.
+  - žádá-li replay hierarchii, která v nahraném filtru **nebyla** →
+    `NotRecorded("konfigurace nemá hierarchii X")`. Upgrade z toho udělá
+    „nelze“, nikdy inventory z neúplné konfigurace.
 
 ### Co v nahrávce není, se nikdy nevydává za výsledek
 
@@ -244,6 +270,13 @@ Nový collector, změněné argumenty RPC, nový ping cíl → `NotRecorded`:
   Snapshot nedostává nové pole.
 
 `NotRecorded` bydlí v `raw/replay.py`; `probes/ping.py` ji importuje.
+
+**Zmizelý collector.** `_select_collectors` dnes na neznámé jméno vyhodí
+`ValueError`. Collector přejmenovaný nebo odstraněný v pozdější verzi by
+tak shodil replay a upgrade by ho četl jako chybu nástroje. Při replayi se
+proto neznámá jména z nahraného seznamu vypustí a report k capture připíše
+poznámku „collector X v této verzi neexistuje“. Živý capture se nemění
+(neznámé jméno dál chyba).
 
 ## 3. `mig-validate upgrade`
 
@@ -266,11 +299,34 @@ Postup pro jeden run:
    Spadne-li replay (výjimka jiná než `NotRecorded`/nahraná chyba = chyba
    nástroje), upgrade runu se zastaví, staging se smaže a v runu se nic
    nezmění.
-5. **Výměna.** Nahrazované soubory se přesunou do
-   `runs/<run>/backup/upgrade-<timestamp>/`, nové na jejich místo.
-   `run.yml` se nemění (`taken` = původní `started_at`). Výměna je řada
-   přejmenování, ne atomická operace; při pádu uprostřed je všechno
-   původní v záloze.
+5. **Výměna** pod zámkem runu (viz níže). Nejdřív kontrola, že se run od
+   začátku upgradu nezměnil: každý nahrazovaný soubor i jeho raw adresář
+   má stejné `mtime_ns` a velikost jako při čtení a seznam `captures`
+   v `run.yml` je stejný. Změnil-li se (mezitím doběhl capture), upgrade
+   runu skončí bez zásahu: „run se během upgradu změnil – spusť upgrade
+   znovu“. Jinak se nahrazované soubory přesunou do
+   `runs/<run>/backup/upgrade-<timestamp>/` a nové na jejich místo. Výměna
+   je řada přejmenování, ne atomická operace; při pádu uprostřed je
+   všechno původní v záloze.
+6. **`run.yml` se obsahově nemění** (`taken` = původní `started_at`), ale
+   dostane `os.utime` (jen posun mtime, žádný přepis). `SummaryCache`
+   v GUI je klíčovaná mtime `run.yml` a profilu — bez posunu by souhrn
+   skupiny ukazoval starý verdikt až do restartu GUI, a to i po upgradu
+   z CLI při běžícím GUI.
+
+**Zámek runu na disku.** Zámek v paměti GUI (sekce 4) CLI upgrade nevidí;
+GUI capture, který by dopadl na stejnou fázi/node/port mezi „staré →
+záloha“ a „nové → na místo“, by se přepsal a v záloze by nebyl — jediná
+cesta, kde by upgrade ztratil skutečné měření. Proto `runs/<run>/.lock`
+s `fcntl.flock` (exkluzivní):
+
+- `capture_into_run` ho drží během zápisové fáze (inventory, snapshot,
+  raw, `run.yml`),
+- upgrade ho drží během kontroly a výměny (krok 5–6),
+- flock se uvolní i při pádu procesu, takže nevzniká zatuchlý zámek.
+
+Replay samotný (kroky 1–4) zámek nedrží — trvá sekundy, ale capture
+minuty a nemá čekat; souběh zachytí kontrola v kroku 5.
 
 Capture, které přegenerovat nejde, zůstávají beze změny a upgrade ostatních
 nezastaví. Důvody:
@@ -279,6 +335,9 @@ nezastaví. Důvody:
 - `konfigurace nemá hierarchii <X>`
 - `inventory bez raw záznamu a nejde načíst`
 - `raw nepatří k tomuto snímku` (nesouhlasí `started_at` / `taken`)
+
+Celý run beze změny (a návratový kód `2`) skončí, když replay spadne na
+chybu nástroje nebo když se run během upgradu změnil (krok 5).
 
 Report, řádek na capture (a na inventory):
 
@@ -304,8 +363,8 @@ Návratové kódy: `0` vše přegenerováno; `1` (`EXIT_FAILED_CHECKS`) někter�
 capture přegenerovat nešlo; `2` (`EXIT_TOOL_ERROR`) upgrade některého runu
 spadl a run zůstal beze změny.
 
-Adresáře `raw/`, `backup/` a `.upgrade-staging/` uvnitř runu nic jiného
-nečte; archivace runu je přesouvá s ním.
+Adresáře `raw/`, `backup/`, `.upgrade-staging/` a soubor `.lock` uvnitř
+runu nic jiného nečte; archivace runu je přesouvá s ním.
 
 ## 4. GUI
 
@@ -368,9 +427,11 @@ Odpověď:
 - Selhání jednoho runu ostatní nezastaví.
 - Odmítne 409, má-li kterýkoliv run skupiny aktivní capture (jako archive).
 
-### Zámek runu
+### Zámek runu v GUI
 
-`CaptureManager` dostane per-run příznak údržby (`maintenance(run)` jako
+Správnost zajišťuje zámek na disku (sekce 3); tenhle příznak v paměti je
+jen proto, aby GUI odmítlo srozumitelnou 409 dřív, než capture vůbec
+zařadí do fronty. `CaptureManager` dostane per-run příznak údržby (`maintenance(run)` jako
 context manager):
 
 - vstup odmítne (409), když na runu čeká nebo běží capture, nebo když už
@@ -397,7 +458,9 @@ do odpovědi jako `error` a skupina pokračuje dalším runem.
   (serializace bez ztráty textových uzlů); nahraná chyba se vrátí se
   stejným jménem třídy a textem; opakovaná stejná volání v pořadí, poslední
   se opakuje; nenahrané volání → `NotRecorded`; `get_config` ořez na
-  požadované hierarchie; chybějící hierarchie → `NotRecorded`.
+  požadované hierarchie; hierarchie žádaná, ale v odpovědi chybějící =
+  prázdná konfigurace (ne chyba); hierarchie mimo nahraný filtr →
+  `NotRecorded`.
 - **Round-trip identita** na MX i EVO fixtures: `generate_inventory`
   a `capture_device` přes `RecordingDevice`, zápis bundlu, replay → shodná
   inventory i snapshot. Hlavní pojistka, že replay neodbočí od živého
@@ -407,6 +470,9 @@ do odpovědi jako `error` a skupina pokračuje dalším runem.
     nikdy BROKEN. Implementer ověří spuštěním mutantu (miss propadne do
     catch-all v `run_ping`), že test selže.
   - collector bez nahrávky → status `error` → jeho checky SKIP.
+  - `collectors: null` v nahrávce + nový collector v aktuální verzi →
+    status `error` „není v raw záznamu“; nahraný seznam s dnes neznámým
+    jménem → jméno vypuštěno, poznámka v reportu, žádný pád.
 - **Retrieve configuration:** parser dostane jen své hierarchie i když
   odpověď nese `class-of-service interfaces interface`.
 - **Životní cyklus bundlu:** přepis post/pre odstraní starý raw; selhání
@@ -416,12 +482,20 @@ do odpovědi jako `error` a skupina pokračuje dalším runem.
   capture bez raw, jedna inventory bez raw): post dostane přegenerovanou
   pre jako baseline; staging, záloha, report; `--dry-run` nic nezmění; pád
   replaye nechá run nedotčený; capture bez raw se vypíše a soubor se
-  nezmění; nesouhlasící `started_at`/`taken` → „nelze“; návratové kódy.
+  nezmění; nesouhlasící `started_at`/`taken` → „nelze“; návratové kódy;
+  capture zapsaný do runu mezi replayem a výměnou → upgrade runu skončí
+  bez zásahu a nový snímek zůstane; `capture_into_run` čeká na `.lock`
+  držený upgradem; po upgradu posunutá mtime `run.yml`.
 - **GUI:** dry-run i apply; 409 při běžícím capture; capture odmítnutý
   během upgradu; druhý upgrade téhož runu 409; „Upgrade group“ pokračuje
   po selhání jednoho runu; 422 `schema_outdated` místo 500 u obou
   evaluačních endpointů; řádek souhrnu skupiny s `error` místo pádu;
-  `schema_version` a `has_raw` v detailu runu.
+  `schema_version` a `has_raw` v detailu runu; souhrn skupiny po upgradu
+  ukáže nový verdikt (`SummaryCache` invalidovaná mtime `run.yml`).
+- **Fixtures konfigurace.** Celobox konfigurace MX a EVO jako XML dnes
+  v testech není (parser testy mají inline konfigurace). Pro round-trip
+  inventory se nahraje z laborky (MX1-POP1, PTX1-POP1) novým recorderem
+  jako součást vlny.
 
 ## 7. Dokumentace
 
