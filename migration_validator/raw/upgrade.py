@@ -9,6 +9,7 @@ pregenerovat nejde, zustavaji beze zmeny a upgrade ostatnich nezastavi.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -163,6 +164,11 @@ def upgrade_run(
                     f"vymena selhala - {type(error).__name__}: {error} - "
                     f"puvodni soubory v {report.backup}"
                 )
+                # Castecna vymena uz mohla zmenit soubory na disku -
+                # SummaryCache GUI je klicovana mtime run.yml, takze i tady
+                # se musi posunout (utime nesmi zamaskovat chybu vymeny).
+                with contextlib.suppress(OSError):
+                    os.utime(store.manifest_path)
                 return report
             report.backup = backup.relative_to(store.dir).as_posix()
             # SummaryCache GUI je klicovana mtime run.yml - bez posunu by

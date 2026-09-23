@@ -366,9 +366,13 @@ def test_staging_is_per_invocation_and_removed(tmp_path):
 
 def test_swap_failure_is_reported_with_backup_location(tmp_path, monkeypatch):
     """Selhani vymeny se ohlasi jako chyba, ne vyjimka; soubory presunute
-    pred padem zustavaji v zaloze."""
+    pred padem zustavaji v zaloze. run.yml mtime se posune i tady - castecna
+    vymena uz mohla zmenit soubory na disku a SummaryCache GUI je klicovana
+    mtime run.yml (spec 2026-09-23, review nalez R8 kolo 1)."""
     store = build_run(tmp_path)
     arp_with_note(monkeypatch)
+    old = 1_000_000_000
+    os.utime(store.manifest_path, (old, old))
 
     from migration_validator.raw import upgrade as upgrade_module
 
@@ -390,6 +394,7 @@ def test_swap_failure_is_reported_with_backup_location(tmp_path, monkeypatch):
     assert report.exit_code == 2
     backup = store.dir / report.backup
     assert (backup / "snapshot_pre_MX1_all.json").is_file()
+    assert store.manifest_path.stat().st_mtime > old
 
 
 def test_render_report_error_with_backup_shows_zaloha_not_beze_zmeny():
