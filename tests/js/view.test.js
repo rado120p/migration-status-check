@@ -438,6 +438,27 @@ test("upgradeCounts counts results; empty report is zeros", () => {
   assert.deepStrictEqual(MigView.upgradeCounts(null), { unchanged: 0, changed: 0, not_regenerable: 0 });
 });
 
+test("upgradeErrorText: error without backup means the run is unchanged", () => {
+  assert.strictEqual(
+    MigView.upgradeErrorText({ error: "vymena selhala - OSError: disk", backup: null }),
+    "Run nezměněn: vymena selhala - OSError: disk"
+  );
+  assert.strictEqual(MigView.upgradeErrorText({ error: null, backup: "backup/upgrade-x" }), "");
+  assert.strictEqual(MigView.upgradeErrorText(null), "");
+});
+
+test("upgradeErrorText: error with backup means a partial swap, not an unchanged run", () => {
+  const text = MigView.upgradeErrorText({
+    error: "vymena selhala - OSError: disk - puvodni soubory v backup/upgrade-20260923T120000Z",
+    backup: "backup/upgrade-20260923T120000Z",
+  });
+  assert.strictEqual(
+    text,
+    "Upgrade nedokončen: vymena selhala - OSError: disk - puvodni soubory v backup/upgrade-20260923T120000Z"
+  );
+  assert.ok(!text.includes("nezměněn"));
+});
+
 test("snapshotBadges: outdated and no raw are separate; current with raw has none", () => {
   assert.deepStrictEqual(MigView.snapshotBadges({ outdated: true, has_raw: false }), [
     { cls: "warn", text: "outdated" },

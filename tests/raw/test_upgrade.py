@@ -6,6 +6,7 @@ import shutil
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from raw_run import PRE_AT, arp_with_note, build_run, record_capture
 
@@ -103,6 +104,9 @@ def test_changed_parse_regenerates_and_backs_up(tmp_path, monkeypatch):
     assert report.backup == "backup/upgrade-20260923T120000Z"
     backup = store.dir / report.backup
     assert (backup / "snapshot_pre_MX1_all.json").read_bytes() == before
+    # T8a: nezmenene soubory se nenahrazuji ani nezalohuji.
+    assert _results(report)["inventory_MX1_all.yml"] == (UNCHANGED, None)
+    assert not (backup / "inventory_MX1_all.yml").exists()
     data = json.loads((store.dir / "snapshot_pre_MX1_all.json").read_text())
     assert all(entry["note"] == "v2" for entry in data["facts"]["arp"])
     assert _staging_entries(store) == []
@@ -490,6 +494,79 @@ def test_swap_failure_is_reported_with_backup_location(tmp_path, monkeypatch):
     backup = store.dir / report.backup
     assert (backup / "snapshot_pre_MX1_all.json").is_file()
     assert store.manifest_path.stat().st_mtime > old
+
+
+def _fail_rename_into_backup(monkeypatch):
+    """os.replace selze pri presunu originalu do backup/upgrade-<cas>/.
+    Klicovano cilem, ne poradim volani - replay sam nic neprejmenovava,
+    ale test nesmi na tom stat."""
+    from migration_validator.raw import upgrade as upgrade_module
+
+    real_replace = upgrade_module.os.replace
+
+    def spy(src, dst, *args, **kwargs):
+        if Path(dst).parent.parent.name == "backup":
+            raise OSError("disk")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(upgrade_module.os, "replace", spy)
+
+
+def test_swap_failure_before_any_rename_leaves_run_unchanged(tmp_path, monkeypatch):
+    """F3: vymena spadla driv, nez cokoli prejmenovala - run je beze zmeny,
+    prazdna zaloha se uklidi a report nesmi tvrdit 'puvodni soubory v'."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    before = _bytes(store)
+    _fail_rename_into_backup(monkeypatch)
+
+    report = upgrade_run(store, now=NOW)
+
+    assert report.error == "vymena selhala - OSError: disk"
+    assert report.backup is None
+    assert report.exit_code == 2
+    assert "  CHYBA: vymena selhala - OSError: disk - run zustal beze zmeny" in render_report(report)
+    assert _bytes(store) == before
+    assert not (store.dir / "backup").exists()
+
+
+def test_backup_mkdir_failure_leaves_run_unchanged(tmp_path, monkeypatch):
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    before = _bytes(store)
+    real_mkdir = Path.mkdir
+
+    def mkdir(self, *args, **kwargs):
+        if self.parent.name == "backup":
+            raise PermissionError("read-only")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+
+    report = upgrade_run(store, now=NOW)
+
+    assert report.error == "vymena selhala - PermissionError: read-only"
+    assert report.backup is None
+    assert any(line.endswith("run zustal beze zmeny") for line in render_report(report))
+    assert _bytes(store) == before
+
+
+def test_swap_failure_after_placing_file_without_original_keeps_backup(tmp_path, monkeypatch):
+    """Nahrazovany soubor bez originalu (chybejici snimek, _compare = CHANGED)
+    se umisti bez presunu do zalohy. Spadne-li vymena az potom, run uz
+    zmeneny je - report nesmi rict 'run zustal beze zmeny'."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    pre = store.dir / "snapshot_pre_MX1_all.json"
+    pre.unlink()
+    _fail_rename_into_backup(monkeypatch)
+
+    report = upgrade_run(store, now=NOW)
+
+    assert pre.is_file()
+    assert report.backup == "backup/upgrade-20260923T120000Z"
+    assert report.error.startswith("vymena selhala - OSError: disk - puvodni soubory v ")
+    assert not any("run zustal beze zmeny" in line for line in render_report(report))
 
 
 def test_render_report_error_with_backup_shows_zaloha_not_beze_zmeny():

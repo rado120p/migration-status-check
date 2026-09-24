@@ -3,8 +3,9 @@ aktualni verzi nastroje (spec 2026-09-23, sekce 3).
 
 Poradi: inventory soubory, pak pre/rollback capture, pak post (baseline =
 pregenerovane pre podle session.json, ne dnesni mapping). Vse jde do
-.upgrade-staging/; pad replaye (chyba nastroje) nic nezmeni. Capture, ktere
-pregenerovat nejde, zustavaji beze zmeny a upgrade ostatnich nezastavi.
+docasneho .upgrade-staging-<nahodne>/ v runu (kazde spusteni vlastni);
+pad replaye (chyba nastroje) nic nezmeni. Capture, ktere pregenerovat
+nejde, zustavaji beze zmeny a upgrade ostatnich nezastavi.
 """
 
 from __future__ import annotations
@@ -159,15 +160,22 @@ def upgrade_run(
                 report.error = RUN_CHANGED
                 return report
             backup = _backup_dir(store, now)
+            renamed: list[str] = []
             try:
-                _swap(store, staging, staged, backup)
+                _swap(store, staging, staged, backup, renamed)
             except OSError as error:
+                failure = f"vymena selhala - {type(error).__name__}: {error}"
+                if not renamed:
+                    # Nic se neprejmenovalo - run je beze zmeny; prazdna
+                    # zaloha (i prazdny backup/) pryc, report.backup None.
+                    for empty in (backup, backup.parent):
+                        with contextlib.suppress(OSError):
+                            empty.rmdir()
+                    report.error = failure
+                    return report
                 report.backup = backup.relative_to(store.dir).as_posix()
-                report.error = (
-                    f"vymena selhala - {type(error).__name__}: {error} - "
-                    f"puvodni soubory v {report.backup}"
-                )
-                # Castecna vymena uz mohla zmenit soubory na disku -
+                report.error = f"{failure} - puvodni soubory v {report.backup}"
+                # Castecna vymena uz zmenila soubory na disku -
                 # SummaryCache GUI je klicovana mtime run.yml, takze i tady
                 # se musi posunout (utime nesmi zamaskovat chybu vymeny).
                 with contextlib.suppress(OSError):
@@ -358,16 +366,23 @@ def _backup_dir(store: RunStore, now: datetime | None) -> Path:
     return store.dir / BACKUP_DIR / f"upgrade-{stamp}"
 
 
-def _swap(store: RunStore, staging: Path, staged: list[str], backup: Path) -> None:
+def _swap(
+    store: RunStore, staging: Path, staged: list[str], backup: Path, renamed: list[str]
+) -> None:
     """Nahrazovane soubory do backup/upgrade-<cas>/, nove na jejich misto.
-    Rada prejmenovani, ne atomicka operace - pri padu uprostred je vse
-    puvodni v zaloze."""
+    Rada prejmenovani, ne atomicka operace - pri padu uprostred jsou
+    v zaloze jen originaly, ktere se stihly presunout; zbytek zustal na
+    miste. `renamed` dostane jmeno souboru po kazdem dokoncenem
+    prejmenovani (i noveho souboru, ktery original nemel a na misto sel bez
+    zalohy) - prazdny = run se nezmenil."""
     backup.mkdir(parents=True, exist_ok=True)
     for name in staged:
         current = store.dir / name
         if current.exists():
             os.replace(current, backup / name)
+            renamed.append(name)
         os.replace(staging / name, current)
+        renamed.append(name)
 
 
 def render_report(report: UpgradeReport) -> list[str]:

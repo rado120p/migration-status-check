@@ -519,8 +519,9 @@ class App {
       el("table", { className: "upgrade-report", children: [el("tbody", { children: rows })] }),
     ];
     if (report.error) {
-      children.push(el("div", { className: "notice notice-fail", text: `Run nezměněn: ${report.error}` }));
-    } else if (report.backup) {
+      children.push(el("div", { className: "notice notice-fail", text: MigView.upgradeErrorText(report) }));
+    }
+    if (report.backup) {
       children.push(
         el("p", {
           children: [document.createTextNode("Záloha: "), el("span", { className: "mono", text: report.backup })],

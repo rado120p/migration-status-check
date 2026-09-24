@@ -361,6 +361,14 @@ function upgradeCounts(report) {
   return counts;
 }
 
+// An upgrade error with a backup means the swap stopped midway (the run has
+// already changed, moved originals are in the backup); without one the run is
+// unchanged.
+function upgradeErrorText(report) {
+  if (!report || !report.error) return "";
+  return report.backup ? `Upgrade nedokončen: ${report.error}` : `Run nezměněn: ${report.error}`;
+}
+
 function snapshotBadges(snap) {
   const badges = [];
   if (snap.outdated) badges.push({ cls: "warn", text: "outdated" });
@@ -400,6 +408,7 @@ const MigView = {
   snapshotLabel,
   upgradeItemRow,
   upgradeCounts,
+  upgradeErrorText,
   snapshotBadges,
   errorDetail,
 };
