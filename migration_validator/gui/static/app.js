@@ -3342,7 +3342,16 @@ class App {
     this.mainEl.appendChild(
       el("div", { className: "subsection-title", text: `Results — ${entries.length} služeb` })
     );
-    this.mainEl.appendChild(this.buildResultsTable(entries, { singlePort: true }));
+    if (result.no_services === true) {
+      this.mainEl.appendChild(
+        el("div", {
+          className: "pairing-notice",
+          text: "No migrated services in the inventory — checks did not run",
+        })
+      );
+    } else {
+      this.mainEl.appendChild(this.buildResultsTable(entries, { singlePort: true }));
+    }
 
     const unassigned = result.unassigned || {};
     const unassignedCount = Object.values(unassigned).reduce((n, list) => n + list.length, 0);

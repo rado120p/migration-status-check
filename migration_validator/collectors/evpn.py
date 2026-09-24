@@ -160,8 +160,10 @@ class EvpnInstanceCollector(Collector):
         "junos-evo": "get_mac_vrf_instance_information",
     }
 
-    # Interni instance boxu - neni sluzba, nema local interfaces a check
-    # by na ni v device scope trvale hlasil FAIL.
+    # Interni control-plane instance boxu - neni sluzba, nema local
+    # interfaces a zadny scope na ni nikdy nevyjde (routing_instance
+    # selektor sluzby se na ni nemuze shodovat). Bez vylouceni by jen
+    # zustala v ulozenych faktech (snapshot JSON) jako sum.
     SYSTEM_INSTANCES = frozenset({"__default_evpn__"})
 
     def rpc_name(self, platform: str) -> str:

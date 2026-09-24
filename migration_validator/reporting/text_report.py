@@ -440,7 +440,9 @@ def _unassigned_lines(result: RunResult) -> list[str]:
     docstring filter_result u NESPAROVANO.
 
     '(jen subject)' v nadpisu neni kosmetika: engine plni vsechny tri
-    seznamy jen ze subjectu a v device scope vraci prazdno. Bez teto
+    seznamy jen ze subjectu, ne z pairu se baseline. Bez scopu (subjekt
+    nema migrovane sluzby) sem spada vsechno, co nepatri zadnemu scopu;
+    pri per-port snapshotu (port=) jen to, co patri danemu portu. Bez teto
     poznamky by prazdna sekce tvrdila 'nic nezarazeneho neni', zatimco se
     ve skutecnosti nesbiralo.
     """
