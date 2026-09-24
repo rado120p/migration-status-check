@@ -421,11 +421,16 @@ nebo `nelze - <důvod>` (snímek bez raw záznamu, konfigurace bez potřebné hi
 raw nepatří ke snímku). Co přegenerovat nejde, zůstává beze změny. Co v raw záznamu
 není (nový collector, nový ping cíl), se nikdy nevydává za výsledek: collector má
 status error a jeho checky SKIP, ping „neodeslan (neni v raw zaznamu)".
+Post capture, jehož baseline pre byla po něm znovu zachycena, se přegeneruje bez
+této baseline a report k němu připíše
+`baseline <jméno> se od capture zmenila - ping cile bez ni`.
 
 Návratový kód: 0 vše přegenerováno, 1 některé soubory nejdou, 2 upgrade runu
-spadl. Selže-li replay (chyba nástroje), run zůstal beze změny; selže-li až
-výměna souborů na disku, run je **částečně přegenerovaný** — originály už
-vyměněných souborů jsou v `backup/upgrade-<čas>/` a report tu cestu uvádí.
+spadl. Selže-li replay (chyba nástroje), run zůstal beze změny. Selže-li výměna
+souborů na disku dřív, než se nahradil jakýkoli soubor, run zůstal také beze
+změny (návratový kód 2, žádná záloha); selže-li až po nahrazení některých
+souborů, run je **částečně přegenerovaný** — originály už vyměněných souborů
+jsou v `backup/upgrade-<čas>/` a report tu cestu uvádí.
 Při víc runech nebo `--group` selhání jednoho runu (neznámý run, chyba disku)
 vypíše na stderr `chyba: run <jméno>: ...`, počítá se jako 2, a zbylé runy se
 přesto spustí. V GUI stejné dělají tlačítka **Upgrade run**

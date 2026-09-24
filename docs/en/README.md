@@ -292,12 +292,16 @@ The report has one line per file: `pregenerovano - beze zmeny` (unchanged),
 without a needed hierarchy, raw does not belong to the snapshot). Whatever cannot be
 regenerated stays untouched. What the recording lacks (a new collector, a new ping
 target) is never passed off as a result: the collector gets status error and its
-checks SKIP, the ping reads "neodeslan (neni v raw zaznamu)".
+checks SKIP, the ping reads "neodeslan (neni v raw zaznamu)". A post capture whose
+baseline pre was re-captured after it is regenerated without that baseline, and the
+report notes `baseline <name> se od capture zmenila - ping cile bez ni`.
 
 Exit code: 0 everything regenerated, 1 some files cannot be, 2 the run's upgrade
-failed. If replay fails (a tool error), the run is left unchanged; if the swap of
-files on disk fails, the run is **partially upgraded** — the originals of the files
-already replaced are in `backup/upgrade-<time>/`, and the report gives that path.
+failed. If replay fails (a tool error), the run is left unchanged. If the swap of
+files on disk fails before any file was replaced, the run is also left unchanged
+(exit 2, no backup); if it fails after some files were already replaced, the run is
+**partially upgraded** — the originals of the files already replaced are in
+`backup/upgrade-<time>/`, and the report gives that path.
 With several runs or `--group`, one run failing (unknown run, disk error) prints
 `chyba: run <name>: ...` on stderr, counts as 2, and the remaining runs still run.
 In the GUI the **Upgrade run** and **Upgrade
