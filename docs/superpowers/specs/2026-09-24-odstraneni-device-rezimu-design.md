@@ -23,9 +23,10 @@ Formát snapshotu ani inventory se **nemění** (schéma zůstává 13 / 10).
 - **Device režim jako vyhodnocovací režim zaniká.** Nástroj se používá
   hlavně přes GUI a všechny run cesty (GUI i CLI `--run`) inventory
   vyžadují (`capture_into_run`: „inventory nenalezena - spust s
-  --parse-services“). Rozhodnutí AR-10 (`evaluate --snapshot X` bez
-  inventory jako prohlížení jednoho zařízení) a AR-17 (bez inventory se
-  nehlásí chybějící konfigurace) tím padají.
+  --parse-services“). Rozhodnutí AR-17 (bez inventory se nehlásí chybějící
+  konfigurace) tím padá. AR-10 (`evaluate --snapshot X` bez `--baseline`
+  jako výpis stavu jednoho zařízení) platí dál — týká se chybějící
+  baseline, ne chybějící inventory.
 - **Dnešní skrytá cesta do device režimu se ruší taky.** `engine._scopes_of`
   padá do device scope u *každého* snímku bez scopů — i u per-port capture
   portu, který nenese žádnou migrovanou službu (`build_scopes()` vrátí `[]`,
@@ -106,7 +107,7 @@ nemění nic — test to jen zafixuje.
 | `checks/routes.py` | jen komentáře o device scope / AR-17 v modulu a u `subject is None`; větev sama zůstává (routa v baseline, v subjektu chybí — platí pro služby) |
 | `probes/ping.py` | `scope.is_device` v `resolve_targets`, docstring modulu („Ping bezi jen v service rezimu…“) |
 | `scoping/linker.py` | čtyři `scope.is_device` podmínky |
-| `engine.py` | `device_scope` import a fallback v `_scopes_of`, tři `is_device` návraty v `_unassigned_*`, komentář AR-10 v `_identity` |
+| `engine.py` | `device_scope` import a fallback v `_scopes_of`, tři `is_device` návraty v `_unassigned_*` (komentář AR-10 v `_identity` zůstává — mluví o běhu bez baseline) |
 | `gui/static/run_results.js` | `DEVICE_SCOPE_ID` a klasifikace `"device"`; nový neutrální stav pro `no_services` (a jeho render v `app.js`) |
 
 `describe()` / `/api/checks` / `mig-validate checks` ztratí klíč
