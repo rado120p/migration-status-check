@@ -162,8 +162,6 @@ scope.select(facts, probes) -> dict   # klíče: interfaces, arp, nd, bgp,
 ```
 
 Modulová konstanta **`FACT_AREAS`** vyjmenovává oblasti, které smí ve faktech být.
-Device scope podle ní vrací všechny oblasti beze změny, takže **oblast zapomenutá v tomhle
-seznamu by v režimu bez inventory zmizela**.
 
 Filtrování per oblast:
 
@@ -180,7 +178,7 @@ Filtrování per oblast:
 | `bfd` | `peer ∈ selectors.bgp_neighbors`, **plus** (vlna 2026-08-26) `matches_interface(data["interface"])` na Core scope se `service_subtype == "transit"` — druhá cesta vedle stávající peer-adresové, protože tranzitní Core nemá BFD záměry ani peery v konfiguraci služby; session tam patří podle rozhraní |
 | `optics` | `matches_interface(název)` nebo `název ∈ selectors.lag_members` |
 | `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface` | `matches_interface(název)` — stejně jako `interfaces`/`optics` (vlna 2026-08-26) |
-| `isis_overview` | **device-global fakt**, ne per-rozhraní — dostane ho jen Core scope se `service_subtype == "loopback"` (jinak prázdný dict); device scope propouští vše beze změny (vlna 2026-08-26) |
+| `isis_overview` | **device-global fakt**, ne per-rozhraní — dostane ho jen Core scope se `service_subtype == "loopback"` (jinak prázdný dict) (vlna 2026-08-26) |
 | `multicast_route`, `pim_join` | **patří instanci, ne rozhraní** (`_instance_table()`): scope bez RI dostane `master`, scope s RI svou tabulku — jen role, které multicast měří (Internet, IPVPN, Core/loopback); jinak prázdný dict. Filtr per (S,G) / per rozhraní (upstream i downstream) dělá až check (`pim_join` podle instance stejně jako `multicast_route`, spec 2026-09-07) |
 | `ping` | `probe["scope_id"] == scope.id` |
 
@@ -193,13 +191,11 @@ Dvě věci, které stojí za zdůraznění:
   záměru, session peeru, kterého parser do záměru nedoplnil, by se do scope nedostala —
   a chyba v průchodu parseru by tím zmizela beze stopy.
 
-**Device scope** (`kind: "device"`, prázdné selektory) je zkratka: vrátí všechny oblasti
-beze změny. Tím se realizuje režim bez inventory tak, že checky nemají jedinou větev navíc.
-
 `select()` je odolné vůči chybějícím oblastem — `facts.get(area) or {}` vrátí prázdno místo
 výjimky, takže snapshot z běhu s vypnutými collectory se pořád dá vyhodnotit.
 
-Funkce `device_scope()` vyrobí ten jediný scope pro režim bez inventory.
+Snímek bez service scopes se nevyhodnocuje (`RunResult.no_services`, spec 2026-09-24) — scope,
+který by propouštěl všechno, neexistuje.
 
 ---
 
@@ -307,13 +303,16 @@ odkud vzít data.
 `baseline_interfaces`, `subject_interfaces`, `reason`.
 
 `RunResult`: `evaluated_at`, `subject`, `baseline`, `summary`, `scopes`, `unmatched`,
-`unassigned`, `filtered`, `schema_version`. Je to jediná věc, kterou reporting dostane —
-**spočítané je všechno předem**, takže se textový výstup a GUI nemohou rozejít.
+`unassigned`, `filtered`, `no_services`, `schema_version`. Je to jediná věc, kterou reporting
+dostane — **spočítané je všechno předem**, takže se textový výstup a GUI nemohou rozejít.
 
 `filtered` je `None` u celého běhu a slovník
 (`scopes_shown`, `scopes_total`, volitelně `text` a `statuses`) u výsledku, který prošel
 `filter_result()`. `to_dict()` ho v prvním případě do JSON vůbec nedá, takže nefiltrovaný
 výstup má přesně ten tvar, jaký měl dřív.
+
+`no_services` je aditivní — `to_dict()` ho zapíše jen když je `True`. Počítá se ze service
+scopes subjektu **před** filtrováním profilem/krokem.
 
 `count_statuses(statuses)` rozpadá libovolné stavy na pět counterů (`pass`, `warn`, `fail`,
 `skip`, `info`). Bere stavy, ne checky,

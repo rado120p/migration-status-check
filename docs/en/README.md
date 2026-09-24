@@ -89,9 +89,10 @@ Without `-o` the file is named `<hostname>.yml`. Authentication follows the same
 as the validator (`--auth key|password`, `-u/--username`, `-k/--key-file`), defaulting to an
 SSH key and the user `ansible`. Details: [files/parsers.md](files/parsers.md).
 
-**The tool also works without an inventory**, but then everything lands in a single "device"
-scope: instead of per-service results you get a device-wide summary, and ping does not run
-at all (neither the target nor the source address is known).
+**Without an inventory** `capture` only collects data (useful for debugging or a raw
+record). `evaluate` on such a snapshot runs no checks: it prints "Subjekt nema v inventory
+zadne migrovane sluzby - checky nebezely." and the NEZARAZENO section with everything on
+the box. The same applies to a per-port capture of a port that carries no migrated service.
 
 ### Steps 2 and 5 — collection (`capture`)
 
@@ -107,7 +108,7 @@ at all (neither the target nor the source address is known).
 |---|---|
 | `--device` | IP or hostname of the device (required) |
 | `--output` | where to write the snapshot (required) |
-| `--inventory` | YAML from the parser; without it, capture runs in device mode |
+| `--inventory` | YAML from the parser; without it the snapshot has no services (evaluate runs no checks on it) |
 | `--phase` | free text, stored in the snapshot and printed in the report (`pre-migration`, `post-migration`) |
 | `--collectors` | comma-separated subset of areas (`interfaces,bgp`) — for debugging |
 | `--ping-count` | ICMP packets per target, default 5 |

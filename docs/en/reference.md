@@ -434,7 +434,7 @@ Properties:
 ```jsonc
 {
   "id": "svc:L3VPN-CPE13-NNI:IPVPN",
-  "kind": "service",                      // service | device
+  "kind": "service",                      // service | layer1
   "key": {"description": "L3VPN-CPE13-NNI", "service_type": "IPVPN", "service_subtype": null},
   "selectors": {
     "interfaces":          ["ge-0/0/2.113"],
@@ -467,10 +467,10 @@ belongs to the scope when the `(rib, prefix)` pair matches); `bfd_peers` does **
 sessions are selected via `bgp_neighbors`, so that a session for a peer missing from the intent
 does not disappear without a trace.
 
-A scope is **purely a filter** and holds no measured data. The device scope has
-`kind: "device"` and empty selectors = "take everything". Addresses and virtual-gateway are
-split by family (`local_ipv4`/`local_ipv6`, `virtual_gw_v4`/`virtual_gw_v6`) — same as in the
-inventory YAML (see [files/parsers.md](files/parsers.md#output-format)).
+A scope is **purely a filter** and holds no measured data. `kind` is `service` or `layer1`.
+Addresses and virtual-gateway are split by family (`local_ipv4`/`local_ipv6`,
+`virtual_gw_v4`/`virtual_gw_v6`) — same as in the inventory YAML (see
+[files/parsers.md](files/parsers.md#output-format)).
 
 `id` is `svc:<description or interface name>:<service_type>`. If two services would produce
 the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
@@ -496,6 +496,9 @@ snapshot above); `models/result.py::RunResult.schema_version` stays `1`.
 
   // only on a result that went through a filter (--filter / --status); absent otherwise
   "filtered": {"scopes_shown": 2, "scopes_total": 11, "statuses": ["FAIL"]},
+
+  // only when the subject has no migrated services in the inventory; absent otherwise
+  "no_services": true,
 
   "scopes": [
     {
@@ -603,9 +606,9 @@ Properties:
   see.
 - **Unpaired baseline scopes get no entry in `scopes`** — they are not on the subject, so
   there is nothing to measure. They appear only in `unmatched.baseline`.
-- `unassigned` currently reports data from the **subject** only (the new device), and all
-  three lists (`bgp_peers`, `static_routes`, `bfd_sessions`) are always empty in device mode —
-  the device scope claims everything, so "unassigned" has no meaning there.
+- `unassigned` currently reports data from the **subject** only (the new device). Without
+  service scopes (the subject has no migrated services in the inventory), everything ends up
+  here; on a per-port snapshot, only what belongs to that port.
 - **`unassigned.static_routes` doubles as a safety net against parsing gaps.** Statics in the
   management instance land here (`mgmt_junos.inet.0 0.0.0.0/0` via `fxp0.0` — `fxp0.0` can
   never become a scope), but so does a route whose configuration shape the parser could not
@@ -644,6 +647,9 @@ Properties:
   within the same EVPN instance, see "L2+L3 linking" below. Without a link, the key is absent
   from the scope entirely (an additive key, same rule as the other optional fields in this
   format).
+- **`no_services` is an additive key** — `true` only when the subject has no migrated
+  services in the inventory (no service scopes); absent otherwise. It is computed from
+  service scopes **before** profile/step filtering, and `evaluate` then runs no checks.
 - **`step` and `excluded_services` are additive keys from `evaluate --run` on a migration
   step** (see [section 8](#8-run-management---run)). `step` carries
   `{"old": {"node", "port"}, "new": {"node", "port"}}`; without a step it is absent entirely.

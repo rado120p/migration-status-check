@@ -45,7 +45,6 @@ class Check(ABC):
     label: str                    # "BGP status" — the CHECK column label
     mode: Mode                    # state | compare | both
     requires: tuple[str, ...]     # areas from facts/probes, e.g. ("bgp",)
-    requires_inventory: bool
     service_types: frozenset[str] | None    # None = all
     service_subtypes: frozenset[str] | None # AND with service_types, None = no filter
     default_severity: Severity
@@ -53,8 +52,7 @@ class Check(ABC):
     def run(self, ctx) -> list[Finding]
 ```
 
-`applies_to(scope)` returns `True` for the **device scope always** (there is nothing to filter
-by) and otherwise compares `service_type` and — when set — `service_subtype` too (both must
+`applies_to(scope)` compares `service_type` and — when set — `service_subtype` too (both must
 match, it is an AND, not an alternative). It distinguishes roles within one `service_type`,
 typically Core **transit** vs. Core **loopback** (2026-08-26 wave): `service_types={"Core"}`
 alone cannot tell the two roles apart; `service_subtypes={"transit"}` keeps `isis_overview`
@@ -76,29 +74,25 @@ The gates a check passes through, in order:
 1. `config.enabled(id)` is `False` → **empty list** (the check does not appear in the report
    at all),
 2. `applies_to(scope)` is `False` → empty list,
-3. `requires_inventory` and the scope is a device scope → `SKIP`
-   (`check vyzaduje inventory, snapshot ji neobsahuje`),
-4. `mode == COMPARE` and no baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
-5. `check.id` is not `deactivation_state` and `scope.is_deactivated` is `True` → `SKIP`
-   (`sluzba je v konfiguraci deaktivovana ({reason})`) — this gate deliberately sits after
-   gate 3 (`requires_inventory`), because a device scope has no inventory and therefore has
-   nothing to read the flag from; `deactivation_state` itself is the one check that does not
-   pass through this gate — otherwise there would be nothing left to compare and the service
-   would vanish from the report into an unexplained `SKIP`,
-6. an area in `requires` is in `failed_collectors` → `SKIP` **carrying the original error
+3. `mode == COMPARE` and no baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
+4. `check.id` is not `deactivation_state` and `scope.is_deactivated` is `True` → `SKIP`
+   (`sluzba je v konfiguraci deaktivovana ({reason})`) — `deactivation_state` itself is the
+   one check that does not pass through this gate — otherwise there would be nothing left to
+   compare and the service would vanish from the report into an unexplained `SKIP`,
+5. an area in `requires` is in `failed_collectors` → `SKIP` **carrying the original error
    message from the capture**,
-7. `check.run()` raises → `SKIP` (`check selhal: ...`) — one broken check must not kill the
+6. `check.run()` raises → `SKIP` (`check selhal: ...`) — one broken check must not kill the
    whole run,
-8. otherwise every `Finding` becomes a `CheckResult` via `derive_status(outcome, severity)`.
+7. otherwise every `Finding` becomes a `CheckResult` via `derive_status(outcome, severity)`.
 
-A `SKIP` from steps 3–7 is a **full report row**: it takes the check's `label` and a short
-reason as its `value` (`bez inventory`, `bez baseline`, `RI deactivated`,
+A `SKIP` from steps 3–6 is a **full report row**: it takes the check's `label` and a short
+reason as its `value` (`bez baseline`, `RI deactivated`,
 `interface deactivated`, `RI + interface deactivated`, `collector selhal`, `check selhal`).
 The full sentence stays in `message` for the `NALEZ` column and the machine output — while
 those rows had no value the renderer reached for that sentence instead, and a failed
 collector's 190-character RPC error stretched the block to 270 characters wide.
 
-The difference between steps 1–2 (empty list) and 3–7 (`SKIP`) is deliberate: *"does not apply
+The difference between steps 1–2 (empty list) and 3–6 (`SKIP`) is deliberate: *"does not apply
 here"* should not count towards the summary, *"not measured"* should.
 
 ## `registry.py`
@@ -242,7 +236,7 @@ baseline carried no traffic at all — in which case ceasing cannot be verified.
 
 ## `optics.py` — optical levels and alarms
 
-Both checks run **only on layer1/device scope** (`service_types = frozenset()`, which never
+Both checks run **only on a layer1 scope** (`service_types = frozenset()`, which never
 matches any service). Ports iterated: the interface itself plus its sorted LAG members. A port
 absent from `optics` entirely gets a single `SKIP` (`<name>: rozhrani nevraci opticka data`,
 `value` = `bez optiky`); otherwise one row per lane.
@@ -448,8 +442,7 @@ label is `instance/vlan`, or just `instance` for vlan-based.
 ## `reachability.py`
 
 Three checks: `arp_present`, `nd_present` and `ping_reachability` — ARP is the IPv4 variant,
-ND its IPv6 counterpart. All three have `requires_inventory = True` (so they `SKIP` on a
-device scope) and run only on `Internet` and `IPVPN`. All three are knowingly
+ND its IPv6 counterpart. They run only on `Internet` and `IPVPN`. All three are knowingly
 **best-effort** — the CPE may be powered off or block ICMP — hence the default severity
 `advisory`.
 
@@ -585,7 +578,7 @@ baseline's measurement. Each closes one gap:
 | without this source | what would silently disappear |
 |---|---|
 | configuration | the "configured, not in the table" discrepancy |
-| subject measurement | there would be nothing to print in inventory-less mode |
+| subject measurement | a route the parser could not fit into a selector (unknown configuration shape) would silently vanish |
 | baseline measurement | a route removed from the configuration — it never reaches the subject's selectors, so no scope would ever ask about it being gone |
 
 **A route's identity is the pair (RIB, prefix); the next hop is the value.** That way a
@@ -617,7 +610,7 @@ that is not an inconsistency but two different roles.
 | in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
 | in the table but unstarred, baseline record present but silent on activity (message adds `; baseline aktivitu neuvadi`, `baseline_value` stays `None`, not fabricated) | `degraded` | WARN | `neni aktivni` |
 | in the table but unstarred, no baseline record at all | `degraded` | WARN | `neni aktivni` |
-| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) — applies in device scope too | `broken` | FAIL | `neni v tabulce` |
+| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) | `broken` | FAIL | `neni v tabulce` |
 | absent from the table, present in baseline measurement | `broken` | FAIL | `chybi` |
 
 A route that is **in the table but unstarred** is not forwarding — Junos does not drop it
@@ -627,12 +620,10 @@ from the listing, another source has just outranked it. That is a different situ
 to tell whether it was already inactive before, so per R‑2 the ambiguity is not escalated to
 FAIL — it stays at WARN.
 
-What separates the last two rows is **whether the baseline measured the route**, not the
-scope kind: a baseline record present means "it was there, now it is gone" (`chybi`); no
-baseline record at all means only the configuration claims the route belongs in the table,
-and the table itself says it does not (`neni v tabulce`) — this holds in device scope too,
-since it is a statement about what the table shows, not about intent the device scope cannot
-see (AR‑17).
+What separates the last two rows is **whether the baseline measured the route**: a baseline
+record present means "it was there, now it is gone" (`chybi`); no baseline record at all
+means only the configuration claims the route belongs in the table, and the table itself
+says it does not (`neni v tabulce`).
 
 The label is `<RIB> <prefix>` and the identity goes into `group="Staticke routy"` — routes
 from different RIBs end up in one named row group instead of separate sub-rows distinguished
@@ -700,7 +691,7 @@ report, even though both are still "a route in the table".
 | in the table but unstarred, baseline was active | `broken` | FAIL | `neni aktivni` |
 | in the table but unstarred, baseline record present but silent on activity (message adds `; baseline aktivitu neuvadi`, `baseline_value` stays `None`, not fabricated) | `degraded` | WARN | `neni aktivni` |
 | in the table but unstarred, no baseline record at all | `degraded` | WARN | `neni aktivni` |
-| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) — applies in device scope too | `broken` | FAIL | `neni v tabulce` |
+| absent from the table, no matching baseline measurement (message `nakonfigurovana, ale neni v routovaci tabulce`) | `broken` | FAIL | `neni v tabulce` |
 | absent from the table, present in baseline measurement | `broken` | FAIL | `chybi` |
 | configured, deactivated in the configuration, and absent from the table | `deactivation_outcome(...)` | depends on baseline | `deaktivovana` |
 
@@ -740,7 +731,6 @@ check.
 | session exists, any other state (message states the expectation: `<state>, ocekavano Up`) | `broken` | FAIL | measured state (`Down`, …) |
 | session exists but is not in the service configuration (service scope) | `degraded` | WARN | `parser nenasel konfiguraci` |
 | no session and no intent, but the baseline had one (service scope) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
-| no session, but the baseline had one (device scope) — **currently unreachable, see below** | `broken` | FAIL | `session zmizela` |
 | intent present, no session, **BGP not `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | intent present, BGP running, still no session | `broken` | FAIL | `bez session` |
 
@@ -748,21 +738,6 @@ check.
 down, so without it a service with a dropped BGP session would collect two FAIL rows for one
 cause. In a live run that would repeat for every service that has not yet come up, and the
 operator would learn to skim past the listing.
-
-**`is_device` is inert here** — just like the identical-looking conjunct in `routes.py`. Only a
-peer with no session in the subject reaches the "no intent either" branch, and such a peer can
-only enter the union from the baseline. But a device scope never pairs: `device_scope()` has
-`key=None`, and every key function in `scoping/matcher.py` returns an empty list for `None`, so
-the scope ends up in `unmatched_subject` and the engine hands it no baseline at all
-(`_run_scope(..., None, None, ...)`). `baseline_sessions` is therefore always empty in a device
-scope, and the `session zmizela` row cannot currently be printed.
-
-The code stays regardless. Should a future snapshot format give a device scope a baseline, then
-without this distinction the tool would claim, for every vanished session, that it "is not
-configured in the subject" — about a configuration it cannot see in that mode at all (AR‑17).
-The difference is in the **value**, not merely in the message: the value column is what ships in
-the report (F‑7/AR‑4), while the message never appears in the text output. It is the same
-pattern as `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` in `routes.py`.
 
 **The "no session and no intent either" branch (service scope) asserts only MEMBERSHIP in the
 service, not existence on the device.** A peer this service no longer claims can still have a
@@ -1241,14 +1216,14 @@ sender PE) makes `test_mvpn_sender_pe_change_is_warn_but_tunnel_id_change_is_not
 
 A deactivated service is never dropped from the inventory — it still has to be migrated, so
 disappearing from the output would be a defect, not a fix (`models/scope.py`). Every other
-check therefore SKIPs it (gate 5 of `run_check()` above), but something still has to say
+check therefore SKIPs it (gate 4 of `run_check()` above), but something still has to say
 *what* changed against the baseline — that is this check's job. It is the **one check that
-does not pass through gate 5**: if it SKIPped like every other check, the service would
+does not pass through gate 4**: if it SKIPped like every other check, the service would
 vanish from the report into an unexplained SKIP.
 
 It has no `requires` (needs no collector) and no `service_types` restriction (applies to
-every service type). It requires inventory (`requires_inventory = True`) — without it the
-scope has no way to know whether it is deactivated.
+every service type). It requires inventory — without it the scope has no way to know
+whether it is deactivated.
 
 **A healthy service (live in both subject and baseline) gets no row at all** — not SKIP, no
 finding. Same R‑1 decision as elsewhere: what is not being checked does not appear in the

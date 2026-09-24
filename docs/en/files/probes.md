@@ -62,7 +62,7 @@ Typically: the PE is `.1`, so `.2` gets tried.
 
 The heart of the "ARP/ND → ping" phase. For each scope and each family (4, 6) it:
 
-- **skips the device scope and every service type except `Internet` and `IPVPN`.** `Core`,
+- **skips every service type except `Internet` and `IPVPN`.** `Core`,
   `E-Line` and `E-LAN` get no ping — `lo0.0` is categorised as `Core`, so it drops out
   automatically;
 - passes `routing_instance` to ping **only for `IPVPN`** (`ping <ip> routing-instance <RI>`);

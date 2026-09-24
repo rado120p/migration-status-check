@@ -124,23 +124,21 @@ each other.
 ### 3.2 `Scope.select()` is the only filter
 
 A check never sees whole-device data — it receives it pre-filtered. As a result it cannot
-accidentally reach into another service, and it has **no branch at all for "with inventory /
-without inventory"**:
+accidentally reach into another service:
 
-| mode | scope | what the check receives |
-|---|---|---|
-| no inventory | one `device` scope with empty selectors | all data, unfiltered |
-| with inventory | one scope per service | only that service's interfaces / RIs / peers / VLANs |
+| scope | what the check receives |
+|---|---|
+| one scope per service | only that service's interfaces / RIs / peers / VLANs |
 
-Without an inventory, `bgp_session_state` says "11 of 12 peers are Established"; with one,
-the same broken down per service. Same code, same JSON shape, different granularity.
+`bgp_session_state` says "11 of 12 peers are Established", broken down per service.
+
+A snapshot without service scopes is not evaluated: `evaluate` runs no checks, the result
+carries `no_services`, and the NEZARAZENO section still runs (spec 2026-09-24).
 
 ### 3.3 Facts are inventory-independent, probes are not
 
 Bulk collection runs a fixed set of RPCs per platform, so the `facts` block looks the same
-with or without an inventory. Ping, however, needs a target and a source address — both of
-which come from a scope. **In device mode it therefore does not run at all** and the snapshot
-carries `probes.ping: []`.
+with or without an inventory.
 
 ### 3.4 Interface-name alignment when comparing (AR‑6b)
 

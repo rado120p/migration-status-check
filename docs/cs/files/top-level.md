@@ -140,8 +140,8 @@ Nesahá na síť; všechna data pocházejí ze snapshotů.
 
 Průběh:
 
-1. `_scopes_of()` — vezme scopy ze snapshotu, a **když žádné nejsou, vyrobí jediný device
-   scope**. Tím se realizuje režim bez inventory bez jediné větve v checcích.
+1. `_scopes_of()` — vezme scopy ze snapshotu; prázdný seznam scopů → žádné checky se
+   nespustí, výsledek nese `no_services` (spec 2026-09-24).
 2. Bez baseline: pro každý scope se spustí `_run_scope()` bez baseline dat.
 3. S baseline: `match_scopes()` spáruje scopy a pak
    - spárované dvojice se vyhodnotí **proti baseline**,
@@ -152,7 +152,7 @@ Průběh:
 4. Sečte se `summary` přes všechny checky všech scopů (`count_statuses()` z `models/result.py`,
    táž funkce, kterou používá filtr při přepočtu i renderer na počty služeb).
 5. `_unassigned_bgp_peers()` dohledá peery ze subjektu, které nespadly do žádného scope.
-   V device režimu vrací prázdný seznam (device scope „vlastní" všechno).
+   Bez scopů vypíše každého peera, který si nenárokuje žádný scope, zúžené podle `port`.
 
 Dvě netriviální funkce:
 

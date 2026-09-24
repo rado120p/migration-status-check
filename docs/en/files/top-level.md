@@ -145,9 +145,8 @@ touches the network; all data comes from the snapshots.
 
 The flow:
 
-1. `_scopes_of()` — takes the scopes from the snapshot and, **when there are none, produces a
-   single device scope**. That is how the inventory-less mode is realised without a single
-   branch inside the checks.
+1. `_scopes_of()` — takes the scopes from the snapshot; an empty scope list means no checks
+   run and the result carries `no_services` (spec 2026-09-24).
 2. Without a baseline: `_run_scope()` runs for each scope with no baseline data.
 3. With a baseline: `match_scopes()` pairs the scopes, and then
    - matched pairs are evaluated **against the baseline**,
@@ -158,8 +157,8 @@ The flow:
 4. `summary` is totalled across every check of every scope (`count_statuses()` from
    `models/result.py` — the same function the filter uses when recomputing and the renderer
    uses for the service counts).
-5. `_unassigned_bgp_peers()` finds subject peers that fell into no scope. In device mode it
-   returns an empty list (the device scope "owns" everything).
+5. `_unassigned_bgp_peers()` finds subject peers that fell into no scope. Without scopes it
+   lists every peer not owned by a scope, narrowed by `port`.
 
 Two non-trivial functions:
 

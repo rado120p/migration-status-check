@@ -90,9 +90,10 @@ Bez `-o` se soubor jmenuje `<hostname>.yml`. Přihlášení je stejné jako u va
 (`--auth key|password`, `-u/--username`, `-k/--key-file`), výchozí je SSH klíč a uživatel
 `ansible`. Podrobnosti: [files/parsers.md](files/parsers.md).
 
-**Bez inventory nástroj funguje taky**, ale všechno je pak v jednom „device" scope: místo
-per-službu dostanete souhrn za celé zařízení a ping se nespustí vůbec (není znám cíl ani
-source adresa).
+**Bez inventory** `capture` sebere jen data (vhodné pro ladění nebo raw záznam).
+`evaluate` nad takovým snímkem žádné checky nespustí: vypíše „Subjekt nema v inventory
+zadne migrovane sluzby - checky nebezely." a sekci NEZARAZENO se vším, co na boxu je.
+Totéž platí pro per-port capture portu, který nenese žádnou migrovanou službu.
 
 ### Krok 2 a 5 — sběr (`capture`)
 
@@ -108,7 +109,7 @@ source adresa).
 |---|---|
 | `--device` | IP nebo hostname zařízení (povinné) |
 | `--output` | kam zapsat snapshot (povinné) |
-| `--inventory` | YAML z parseru; bez něj se sbírá v device režimu |
+| `--inventory` | YAML z parseru; bez něj vznikne datový snímek bez služeb (evaluate nad ním checky nespustí) |
 | `--phase` | volný text, ukládá se do snapshotu a tiskne v reportu (`pre-migration`, `post-migration`) |
 | `--collectors` | čárkou oddělený podseznam oblastí (`interfaces,bgp`) — pro ladění |
 | `--ping-count` | počet ICMP paketů na cíl, výchozí 5 |

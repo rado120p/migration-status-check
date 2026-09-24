@@ -122,21 +122,22 @@ z nahraného XML z laborky**, prožene je **skutečnými checky** a tvrdí, že 
 ### 3.2 `Scope.select()` je jediný filtr
 
 Check nikdy nevidí data celého zařízení — dostane je už profiltrovaná. Díky tomu nemůže
-omylem sáhnout na cizí službu a **nemá jedinou větev pro režim „s inventory / bez inventory"**:
+omylem sáhnout na cizí službu:
 
-| režim | scope | co check dostane |
-|---|---|---|
-| bez inventory | jeden `device` scope s prázdnými selektory | všechna data, bez filtru |
-| s inventory | jeden scope na službu | jen rozhraní / RI / peery / VLAN dané služby |
+| scope | co check dostane |
+|---|---|
+| jeden scope na službu | jen rozhraní / RI / peery / VLAN dané služby |
 
-`bgp_session_state` tedy bez inventory řekne „z 12 peerů je 11 Established", s inventory
-totéž rozpadlé na služby. Stejný kód, stejný tvar JSON, jiná granularita.
+`bgp_session_state` tedy řekne „z 12 peerů je 11 Established" rozpadlé po jednotlivých
+službách.
+
+Snímek bez service scopes se nevyhodnocuje: `evaluate` nespustí žádný check, výsledek nese
+`no_services` a sekce NEZARAZENO pořád běží (spec 2026-09-24).
 
 ### 3.3 Fakta jsou inventory-independent, probes nikoliv
 
 Bulk sběr jede pevnou sadu RPC podle platformy, takže blok `facts` vypadá stejně
-s inventory i bez ní. Ping ale potřebuje cíl a source adresu, což je informace ze scope —
-**v device režimu se proto vůbec nespouští** a snapshot má `probes.ping: []`.
+s inventory i bez ní.
 
 ### 3.4 Zarovnání názvů rozhraní při porovnání (AR‑6b)
 

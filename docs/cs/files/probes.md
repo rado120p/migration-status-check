@@ -60,7 +60,7 @@ Typicky: PE má `.1`, zkusí se `.2`.
 
 Srdce fáze „ARP/ND → ping". Pro každý scope a každou rodinu (4, 6):
 
-- **přeskočí device scope a všechny typy služeb kromě `Internet` a `IPVPN`.** `Core`,
+- **přeskočí všechny typy služeb kromě `Internet` a `IPVPN`.** `Core`,
   `E-Line` ani `E-LAN` ping nedostanou — `lo0.0` je díky kategorizaci `Core`, takže odpadá
   automaticky;
 - **přeskočí i subtypy `multicast`/`mvpn`** (`MULTICAST_SUBTYPES` z `models/scope.py`) —

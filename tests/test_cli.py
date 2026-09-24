@@ -136,6 +136,20 @@ def test_exit_code_1_when_fail_present(tmp_path):
     assert main(["evaluate", "--snapshot", str(new)]) == 1
 
 
+def test_evaluate_snapshot_without_services_exits_ok(tmp_path, capsys):
+    # Spec 2026-09-24: nic se nezkontrolovalo, nic neselhalo - exit 0
+    # i s --warn-as-error.
+    path = _write(tmp_path, "post", "172.20.20.5", "et-0/0/8.113")
+    snapshot = load_snapshot(path)
+    snapshot.scopes = []
+    save_snapshot(snapshot, path)
+
+    code = main(["evaluate", "--snapshot", str(path), "--warn-as-error"])
+
+    assert code == EXIT_OK
+    assert "zadne migrovane sluzby" in capsys.readouterr().out
+
+
 def test_warn_does_not_change_exit_code(tmp_path):
     old = _write(tmp_path, "pre", "172.20.20.4", "ge-0/0/2.113", pps=400)
     new = _write(tmp_path, "post", "172.20.20.5", "et-0/0/8.113", pps=50)

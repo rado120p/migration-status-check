@@ -43,7 +43,6 @@ class Check(ABC):
     label: str                    # "BGP status" — popisek sloupce CHECK
     mode: Mode                    # state | compare | both
     requires: tuple[str, ...]     # oblasti z facts/probes, např. ("bgp",)
-    requires_inventory: bool
     service_types: frozenset[str] | None    # None = všechny
     service_subtypes: frozenset[str] | None # AND ke service_types, None = nefiltruje
     excluded_subtypes: frozenset[str] | None # NAND ke service_types, None = nefiltruje
@@ -52,10 +51,10 @@ class Check(ABC):
     def run(self, ctx) -> list[Finding]
 ```
 
-`applies_to(scope)` vrací `True` pro **device scope vždy** (nemá podle čeho filtrovat)
-a jinak porovnává `service_type` a — je-li nastaven — i `service_subtype` (obojí musí sedět,
-je to AND, ne alternativa). Slouží k rozlišení rolí v rámci jednoho `service_type`, typicky
-Core **transit** vs. Core **loopback** (vlna 2026-08-26): `service_types={"Core"}` samo
+`applies_to(scope)` porovnává `service_type` a — je-li nastaven — i `service_subtype` (obojí
+musí sedět, je to AND, ne alternativa). Slouží k rozlišení rolí v rámci jednoho
+`service_type`, typicky Core **transit** vs. Core **loopback** (vlna 2026-08-26):
+`service_types={"Core"}` samo
 o sobě obě role nerozliší, `service_subtypes={"transit"}` je odstřihne od `isis_overview`,
 který patří jen na lo0.0.
 
@@ -83,24 +82,22 @@ Pořadí bran, kterými check projde:
 
 1. `config.enabled(id)` je `False` → **prázdný seznam** (check v reportu vůbec není),
 2. `applies_to(scope)` je `False` → prázdný seznam,
-3. `requires_inventory` a scope je device → `SKIP` (`check vyzaduje inventory, snapshot ji neobsahuje`),
-4. `mode == COMPARE` a není baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
-5. `check.id` není `deactivation_state` a `scope.is_deactivated` je `True` → `SKIP`
-   (`sluzba je v konfiguraci deaktivovana ({reason})`) — brána je záměrně až za bránou 3
-   (`requires_inventory`), protože device scope inventory nemá a nemá tedy ani z čeho
-   příznak vzít; `deactivation_state` samotný check touhle bránou neprojde, jinak by nebylo
-   co porovnat a služba by z reportu zmizela do `SKIP` bez důvodu,
-6. některá oblast z `requires` je v `failed_collectors` → `SKIP` **s původní chybovou
+3. `mode == COMPARE` a není baseline → `SKIP` (`porovnavaci check bez baseline snapshotu`),
+4. `check.id` není `deactivation_state` a `scope.is_deactivated` je `True` → `SKIP`
+   (`sluzba je v konfiguraci deaktivovana ({reason})`) — `deactivation_state` samotný check
+   touhle bránou neprojde, jinak by nebylo co porovnat a služba by z reportu zmizela do
+   `SKIP` bez důvodu,
+5. některá oblast z `requires` je v `failed_collectors` → `SKIP` **s původní chybovou
    hláškou z capture**,
-7. `check.run()` vyhodí výjimku → `SKIP` (`check selhal: ...`) — jeden rozbitý check nesmí
+6. `check.run()` vyhodí výjimku → `SKIP` (`check selhal: ...`) — jeden rozbitý check nesmí
    zabít celý běh,
-8. jinak se každý `Finding` převede na `CheckResult` přes `derive_status(outcome, severity)`.
+7. jinak se každý `Finding` převede na `CheckResult` přes `derive_status(outcome, severity)`.
 
-Rozdíl mezi bodem 1–2 (prázdný seznam) a 3–7 (`SKIP`) je záměrný: *„sem to nepatří"* se
+Rozdíl mezi bodem 1–2 (prázdný seznam) a 3–6 (`SKIP`) je záměrný: *„sem to nepatří"* se
 nemá počítat do souhrnu, *„nezměřeno"* ano.
 
-`SKIP` z bodů 3–7 je **plnohodnotný řádek reportu**: dostane `label` z checku a krátký důvod
-do `value` (`bez inventory`, `bez baseline`, `RI deactivated`, `interface deactivated`,
+`SKIP` z bodů 3–6 je **plnohodnotný řádek reportu**: dostane `label` z checku a krátký důvod
+do `value` (`bez baseline`, `RI deactivated`, `interface deactivated`,
 `RI + interface deactivated`, `collector selhal`, `check selhal`). Celá věta zůstává
 v `message` pro sloupec `NALEZ` a pro strojový výstup — dokud řádek hodnotu neměl,
 sahal renderer právě po té větě a u selhaného collectoru (věta o RPC chybě, 190 znaků)
@@ -291,7 +288,7 @@ provoz — utichnutí se pak nedá ověřit.
 
 ## `optics.py` — optické úrovně a alarmy
 
-Oba checky běží **jen na layer1/device scope** (`service_types = frozenset()`, což nesedí na
+Oba checky běží **jen na layer1 scope** (`service_types = frozenset()`, což nesedí na
 žádný service scope). Porty se iterují: rozhraní samo plus jeho seřazení LAG členové. Port,
 který v `optics` úplně chybí, dostane jediný `SKIP` (`<name>: rozhrani nevraci opticka data`,
 `value` = `bez optiky`); jinak jeden řádek na lane.
@@ -506,8 +503,7 @@ Iteruje instance a v nich domény (klíčované VLAN id, u vlan-based `"-"`). La
 ## `reachability.py`
 
 Tři checky, `arp_present`, `nd_present` a `ping_reachability` — ARP je IPv4 varianta, ND
-IPv6 protějšek. Všechny mají `requires_inventory = True` (na device scope tedy vrací `SKIP`)
-a běží jen na `Internet` a `IPVPN`, **mimo subtypy multicast a mvpn**
+IPv6 protějšek. Běží jen na `Internet` a `IPVPN`, **mimo subtypy multicast a mvpn**
 (`excluded_subtypes = MULTICAST_SUBTYPES`, rozhodnutí 2026-09-08) — na multicast službě
 ping/ARP/ND nic neměří a jen by pálily NETCONF session v produkci. Všechny jsou vědomě
 **best-effort** — CPE může být vypnuté nebo blokovat ICMP — proto default severity
@@ -644,7 +640,7 @@ měření subjektu (`facts["routes"]`) a měření baseline. Každý z nich zav�
 | bez tohoto zdroje | co by tiše zmizelo |
 |---|---|
 | konfigurace | rozpor „nakonfigurováno, není v tabulce" |
-| měření subjektu | v režimu bez inventory by nebylo co vypsat |
+| měření subjektu | tiše by zmizela routa, kterou parser do selektorů nedostal (neznámý tvar konfigurace) |
 | měření baseline | routa vyřazená z konfigurace — do selektorů subjektu se nedostane, takže by se scope na její chybění nikdy nezeptal |
 
 **Identita routy je dvojice (RIB, prefix), next-hop je hodnota.** Díky tomu se změna
@@ -675,7 +671,7 @@ nekonzistence, ale dvě různé role.
 | v tabulce, baseline měla neaktivní (routa se znovu aktivovala) | `recovered` | RECV | `v tabulce` (zpráva přidává `(v baseline nebyla aktivni)`) |
 | v tabulce, ale bez hvězdičky, baseline záznam je, ale mlčí o aktivitě (zpráva přidává `; baseline aktivitu neuvadi`, `baseline_value` zůstává `None`, ne fabulované) | `degraded` | WARN | `neni aktivni` |
 | v tabulce, ale bez hvězdičky, žádný baseline záznam | `degraded` | WARN | `neni aktivni` |
-| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) — platí i v device scope | `broken` | FAIL | `neni v tabulce` |
+| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) | `broken` | FAIL | `neni v tabulce` |
 | chybí v tabulce, v baseline měření je | `broken` | FAIL | `chybi` |
 
 Routa **v tabulce, ale bez hvězdičky** neforwarduje — Junos ji nevyhodí z výpisu, jen ji
@@ -684,11 +680,10 @@ proto samostatná hodnota `neni aktivni`, ne stejná jako u chybějící routy. 
 z čeho poznat, že neaktivní byla i předtím, takže se nejednoznačnost podle R‑2 neeskaluje na
 FAIL, ale zůstává na WARN.
 
-Poslední dva řádky rozlišuje **to, jestli baseline routu vůbec změřila**, ne druh scope: baseline
+Poslední dva řádky rozlišuje **to, jestli baseline routu vůbec změřila**: baseline
 záznam přítomen znamená „byla tam, teď chybí" (`chybi`); žádný baseline záznam znamená, že
 jen konfigurace tvrdí, že routa do tabulky patří, a tabulka sama říká, že tam není
-(`neni v tabulce`) — platí to i v device scope, protože je to tvrzení o tom, co ukazuje
-tabulka, ne o záměru, který device scope nevidí (AR‑17).
+(`neni v tabulce`).
 
 Label je `<RIB> <prefix>` a identita jde do `group="Staticke routy"` — routy z různých RIB
 tak skončí v jedné pojmenované skupině řádků, ne v samostatných podřádcích rozlišených jen
@@ -755,7 +750,7 @@ ačkoliv obojí je pořád „routa v tabulce".
 | v tabulce, ale bez hvězdičky, v baseline byla aktivní | `broken` | FAIL | `neni aktivni` |
 | v tabulce, ale bez hvězdičky, baseline záznam je, ale mlčí o aktivitě | `degraded` | WARN | `neni aktivni` |
 | v tabulce, ale bez hvězdičky, žádný baseline záznam | `degraded` | WARN | `neni aktivni` |
-| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) — platí i v device scope | `broken` | FAIL | `neni v tabulce` |
+| chybí v tabulce, žádné odpovídající baseline měření (zpráva `nakonfigurovana, ale neni v routovaci tabulce`) | `broken` | FAIL | `neni v tabulce` |
 | chybí v tabulce, v baseline měření je | `broken` | FAIL | `chybi` |
 | nakonfigurovaná, v konfiguraci deaktivovaná a není v tabulce | `deactivation_outcome(...)` | podle baseline | `deaktivovana` |
 
@@ -794,27 +789,12 @@ Check vyžaduje **dvě oblasti**: `("bfd", "bgp")`.
 | session existuje, jiný stav (hláška uvádí očekávání: `<stav>, ocekavano Up`) | `broken` | FAIL | naměřený stav (`Down`, …) |
 | session existuje, ale v konfiguraci služby není (service scope) | `degraded` | WARN | `parser nenasel konfiguraci` |
 | session není a není ani záměr, ale v baseline byla (service scope) | `broken` | FAIL | `v baseline patril k teto sluzbe, v subjektu uz ne` |
-| session není, v baseline byla (device scope) — **dnes nedosažitelné, viz níž** | `broken` | FAIL | `session zmizela` |
 | záměr je, session není, **BGP není `Established`** | `SKIP` | SKIP | `BGP neni Established` |
 | záměr je, BGP běží, session přesto není | `broken` | FAIL | `bez session` |
 
 **Vazba na stav BGP je záměrná, ne kosmetická.** BFD nemůže naběhnout, dokud neběží BGP,
 takže bez ní by služba se spadlým BGP dostala dva FAIL řádky za jednu příčinu. V ostrém běhu
 by se to opakovalo u každé nedojeté služby a operátor by si zvykl výpis přeskakovat.
-
-**`is_device` je tady nečinný — stejně jako stejně vypadající podmínka v `routes.py`.**
-Do větve „není ani záměr" spadne jen peer, který v subjektu session nemá; a takový peer se do
-sjednocení dostane jedině z baseline. Device scope se ale nikdy nespáruje: `device_scope()` má
-`key=None` a každá klíčovací funkce v `scoping/matcher.py` na `None` vrací prázdný seznam,
-takže scope skončí v `unmatched_subject` a engine mu baseline vůbec nepředá
-(`_run_scope(..., None, None, ...)`). `baseline_sessions` je proto v device scope vždy prázdné
-a řádek `session zmizela` se dnes nevypíše.
-
-Kód se přesto drží. Kdyby budoucí formát snapshotu device scope baseline dal, nástroj by bez
-tohoto rozlišení u každé zmizelé session tvrdil „v subjektu není nakonfigurované" —
-o konfiguraci, kterou v tomhle režimu vůbec nevidí (AR‑17). Rozdíl je v **hodnotě**, ne jen
-v hlášce: do reportu jde sloupec s hodnotou (F‑7/AR‑4), hlášku textový výpis nezobrazí. Je to
-týž vzorec jako `MISSING_FROM_TABLE` vs `MISSING_ENTIRELY` v `routes.py`.
 
 **Větev „session není a není ani záměr" (service scope) tvrdí jen o CLENSTVI ve službě, ne
 o existenci na zařízení.** Peer, kterého tato služba už nenárokuje, může mít na zařízení dál
@@ -1287,12 +1267,12 @@ tunnel se stejnou PE adresou by dostal falešné `DEGRADED`).
 
 Deaktivovaná služba se z inventory nikdy nevypouští — pořád se musí zmigrovat, takže zmizet
 z výstupu by byla chyba, ne oprava (`models/scope.py`). Ostatní checky nad ní proto SKIPnou
-(brána 5 v `run_check()` výše), ale nějaký řádek musí říct, *co* se změnilo proti baseline —
-a to je práce tohohle checku. Je to **jediný check, který bránou 5 neprojde**: kdyby SKIPnul
+(brána 4 v `run_check()` výše), ale nějaký řádek musí říct, *co* se změnilo proti baseline —
+a to je práce tohohle checku. Je to **jediný check, který bránou 4 neprojde**: kdyby SKIPnul
 jako všechny ostatní, služba by z reportu zmizela do SKIPu bez důvodu.
 
 Nemá `requires` (nepotřebuje žádný collector) ani `service_types` (týká se všech typů služeb).
-Vyžaduje inventory (`requires_inventory = True`) — bez ní scope neví, jestli je deaktivovaná.
+Vyžaduje inventory — bez ní scope neví, jestli je deaktivovaná.
 
 **Zdravá služba (živá v subjektu i baseline) řádek nedostane vůbec** — ne SKIP, žádný nález.
 Je to stejné rozhodnutí R‑1 jako jinde: co se nekontroluje, se v bloku neobjeví, a řádek

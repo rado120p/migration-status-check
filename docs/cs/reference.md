@@ -420,7 +420,7 @@ Vlastnosti:
 ```jsonc
 {
   "id": "svc:L3VPN-CPE13-NNI:IPVPN",
-  "kind": "service",                      // service | device
+  "kind": "service",                      // service | layer1
   "key": {"description": "L3VPN-CPE13-NNI", "service_type": "IPVPN", "service_subtype": null},
   "selectors": {
     "interfaces":          ["ge-0/0/2.113"],
@@ -453,8 +453,8 @@ selektory, které nesou hodnoty, a ne jen jména. `static_routes` slouží záro
 session se vybírají přes `bgp_neighbors`, aby session peeru chybějícího v záměru nezmizela
 beze stopy.
 
-Scope je **čistě filtr**, neobsahuje naměřená data. Device scope má `kind: "device"`
-a prázdné selektory = „ber všechno". Adresy i virtual-gateway jsou rozdělené podle rodiny
+Scope je **čistě filtr**, neobsahuje naměřená data. `kind` je `service`, nebo `layer1`.
+Adresy i virtual-gateway jsou rozdělené podle rodiny
 (`local_ipv4`/`local_ipv6`, `virtual_gw_v4`/`virtual_gw_v6`) — stejně jako v inventory YAML
 (viz [files/parsers.md](files/parsers.md#výstupní-formát)).
 
@@ -482,6 +482,9 @@ a snapshotu výš); `models/result.py::RunResult.schema_version` zůstává `1`.
 
   // jen u vysledku, ktery prosel filtrem (--filter / --status); jinak klic chybi
   "filtered": {"scopes_shown": 2, "scopes_total": 11, "statuses": ["FAIL"]},
+
+  // jen kdyz subjekt nema v inventory zadne migrovane sluzby; jinak klic chybi
+  "no_services": true,
 
   "scopes": [
     {
@@ -586,9 +589,9 @@ Vlastnosti:
   to zůstalo jen ve `Scope`, ke kterému renderer nemá přístup.
 - **Nespárované baseline scopy nemají vlastní záznam v `scopes`** — nejsou v subjektu, není
   co měřit. Jsou jen v `unmatched.baseline`.
-- `unassigned` hlásí zatím jen data ze **subjektu** (nové zařízení) a ve všech třech
-  seznamech (`bgp_peers`, `static_routes`, `bfd_sessions`) je v device režimu vždy prázdno —
-  device scope si nárokuje všechno, takže „nepřiřazené" nemá význam.
+- `unassigned` hlásí zatím jen data ze **subjektu** (nové zařízení). Bez service scopes
+  (subjekt nemá v inventory žádné migrované služby) v něm skončí úplně všechno; na per-port
+  snímku jen to, co patří danému portu.
 - **`unassigned.static_routes` je zároveň pojistka proti mezerám v parsování.** Spadne sem
   statika v management instanci (`mgmt_junos.inet.0 0.0.0.0/0` přes `fxp0.0` — `fxp0.0` se
   scopem nikdy nestane), ale i routa, jejíž konfigurační tvar parser neuměl přečíst: do
@@ -624,6 +627,9 @@ Vlastnosti:
 - **`scopes[].link` je volitelný klíč** — nese vazbu L3 (IRB) ↔ L2 (E-LAN tranzit) v téže
   EVPN instanci, viz „Vazba L2+L3" níže. Bez vazby klíč u scope chybí úplně (aditivní klíč,
   stejné pravidlo jako u ostatních volitelných polí v tomto formátu).
+- **`no_services` je aditivní klíč** — `true`, jen když subjekt nemá v inventory žádné
+  migrované služby (žádné service scopes); jinak klíč chybí úplně. Počítá se ze service
+  scopes **před** filtrováním profilem/krokem, a `evaluate` pak nespustí žádný check.
 - **`step` a `excluded_services` jsou aditivní klíče z `evaluate --run` na migračním kroku**
   (viz [oddíl 8](#8-run-management---run-fáze-4)). `step` nese
   `{"old": {"node", "port"}, "new": {"node", "port"}}`; bez kroku chybí úplně. `excluded_services`

@@ -170,9 +170,7 @@ scope.select(facts, probes) -> dict   # keys: interfaces, arp, nd, bgp,
                                       #       pim_neighbor, mpls_interface
 ```
 
-The module constant **`FACT_AREAS`** enumerates the areas allowed in facts. The device scope
-returns every area on that list unchanged, so **an area forgotten in it would vanish in
-inventory-less mode**.
+The module constant **`FACT_AREAS`** enumerates the areas allowed in facts.
 
 Filtering per area:
 
@@ -189,7 +187,7 @@ Filtering per area:
 | `bfd` | `peer ∈ selectors.bgp_neighbors`, **plus** (2026-08-26 wave) `matches_interface(data["interface"])` on a Core scope with `service_subtype == "transit"` — a second path alongside the existing peer-address one, since transit Core has neither BFD intent nor peers in the service configuration; there a session belongs by interface |
 | `optics` | `matches_interface(name)` or `name ∈ selectors.lag_members` |
 | `isis_adjacency`, `isis_interface`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface` | `matches_interface(name)` — same as `interfaces`/`optics` (2026-08-26 wave) |
-| `isis_overview` | a **device-global fact**, not per-interface — only a Core scope with `service_subtype == "loopback"` gets it (empty dict otherwise); the device scope passes everything through unchanged (2026-08-26 wave) |
+| `isis_overview` | a **device-global fact**, not per-interface — only a Core scope with `service_subtype == "loopback"` gets it (empty dict otherwise) (2026-08-26 wave) |
 | `multicast_route`, `pim_join` | **belong to the instance, not the interface** (`_instance_table()`): a scope with no RI gets `master`, a scope with an RI gets its own table — only for the roles that measure multicast (Internet, IPVPN, Core/loopback); an empty dict otherwise. Filtering per (S,G) / per interface (upstream as well as downstream) is left to the check (`pim_join` scoped by instance the same way as `multicast_route`, 2026-09-07 spec) |
 | `ping` | `probe["scope_id"] == scope.id` |
 
@@ -203,14 +201,11 @@ Two points worth stressing:
   mean a session for a peer the parser failed to record never reaches the scope — and a gap
   in the parser would disappear without a trace.
 
-The **device scope** (`kind: "device"`, empty selectors) is a shortcut: it returns every area
-unchanged. That is how the inventory-less mode is realised without a single extra branch in
-the checks.
-
 `select()` tolerates missing areas — `facts.get(area) or {}` returns empty instead of raising,
 so a snapshot taken with some collectors disabled can still be evaluated.
 
-`device_scope()` produces that single scope for the inventory-less mode.
+A snapshot without service scopes is not evaluated (`RunResult.no_services`, spec
+2026-09-24) — there is no scope that passes everything through.
 
 ---
 
@@ -317,13 +312,16 @@ virtual-gateway columns would have nowhere to read from.
 `baseline_interfaces`, `subject_interfaces`, `reason`.
 
 `RunResult`: `evaluated_at`, `subject`, `baseline`, `summary`, `scopes`, `unmatched`,
-`unassigned`, `filtered`, `schema_version`. It is the only thing reporting receives —
-**everything is computed beforehand**, so the text output and a GUI cannot disagree on the
-numbers.
+`unassigned`, `filtered`, `no_services`, `schema_version`. It is the only thing reporting
+receives — **everything is computed beforehand**, so the text output and a GUI cannot
+disagree on the numbers.
 
 `filtered` is `None` for a whole run and a dict (`scopes_shown`, `scopes_total`, optionally
 `text` and `statuses`) for a result that went through `filter_result()`. In the first case
 `to_dict()` omits the key entirely, so unfiltered output keeps exactly the shape it had.
+
+`no_services` is additive — `to_dict()` writes it only when it is `True`. It is computed
+from the subject's service scopes **before** profile/step filtering.
 
 `count_statuses(statuses)` breaks any statuses down into the four counters. It takes statuses
 rather than checks precisely so that the per-check summary (engine, filter) and the
