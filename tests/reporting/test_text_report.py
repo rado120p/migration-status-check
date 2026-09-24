@@ -563,6 +563,28 @@ def _result(scopes, *, baseline=True) -> RunResult:
     )
 
 
+def _no_services_result() -> RunResult:
+    return replace(_result([], baseline=False), no_services=True)
+
+
+def test_no_services_prints_one_line_instead_of_the_service_table():
+    output = render(_no_services_result())
+
+    assert "Subjekt nema v inventory zadne migrovane sluzby - checky nebezely." in output
+    assert "SLUZBA" not in output
+    assert "NESPAROVANO" in output
+
+
+def test_filtered_no_services_report_keeps_the_line():
+    shown = filter_result(_no_services_result(), statuses={Status.FAIL})
+
+    assert "zadne migrovane sluzby" in render(shown)
+
+
+def test_run_with_services_has_no_no_services_line():
+    assert "zadne migrovane sluzby" not in render(_result([]))
+
+
 def _linked_pair(l3_status=Status.WARN, l2_status=Status.PASS):
     l3 = ScopeResult(
         scope_id="svc:L3VPN-CPE14-UNI:IPVPN",

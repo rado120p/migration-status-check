@@ -53,6 +53,10 @@ _ANSI = {
 }
 _RESET = "\x1b[0m"
 
+# Snimek bez service scopu (port bez migrovane sluzby, capture bez
+# inventory) - spec 2026-09-24. Prazdna tabulka by nerekla proc je prazdna.
+NO_SERVICES_LINE = "Subjekt nema v inventory zadne migrovane sluzby - checky nebezely."
+
 
 def _colorize(status: Status, text: str, color: bool) -> str:
     """Obali text ANSI barvou statusu. Prazdny token se neobaluje."""
@@ -457,61 +461,12 @@ def _unassigned_lines(result: RunResult) -> list[str]:
     return lines
 
 
-def render(result: RunResult, *, detail: bool = False, color: bool = False) -> str:
+def _service_lines(
+    result: RunResult, detail: bool, has_baseline: bool, color: bool
+) -> list[str]:
+    """Tabulka sluzeb a rozbalene bloky - telo reportu mezi souhrnem a
+    NESPAROVANO."""
     lines: list[str] = []
-
-    subject = result.subject
-    baseline = result.baseline
-    has_baseline = baseline is not None
-    if has_baseline:
-        header = (
-            f"Migrace: {baseline['address']} ({baseline['phase']}) -> "
-            f"{subject['address']} ({subject['phase']})"
-        )
-    else:
-        header = f"Validace: {subject['address']} ({subject['phase']})"
-    # Profil se pripojuje na uvodni radek vzdy, kdyz je znamy - i pri behu
-    # bez service_types filtru - aby report rekl, pod jakym profilem vznikl.
-    if result.profile:
-        header += f" [profil {result.profile}]"
-    if result.step:
-        step_old = result.step["old"]
-        step_new = result.step["new"]
-        header += (
-            f" [krok {step_old['node']}:{step_old['port']}"
-            f" -> {step_new['node']}:{step_new['port']}]"
-        )
-    lines.append(header)
-    lines.append("")
-
-    lines.extend(_filter_note(result))
-
-    summary = result.summary
-    # Sluzby se pocitaji tady, ne v engine: filtr uz scopy profiltroval,
-    # takze stejny vypocet da spravne cislo v obou rezimech - za cely beh
-    # i za vyber. Souhrn za checky prepocitava filtr sam, ten se ze scopu
-    # odvodit neda bez toho, aby renderer zacal scitat checky.
-    services = count_statuses(scope.status for scope in result.scopes)
-    lines.extend(_counts_lines(services, summary, color))
-    unchanged = int(summary.get("pass_unchanged", 0))
-    if unchanged:
-        # Bez zdedenych chyb v "PASS 42" by jinak nikdo nevidel (R-3).
-        lines.append(
-            f"  z toho {unchanged} PASS beze zmeny proti baseline (chyba uz pred migraci)"
-        )
-    lines.append(
-        f"  Sparovano {summary['scopes_matched']} sluzeb, "
-        f"{summary['unmatched_baseline']} nesparovana v baseline, "
-        f"{summary['unmatched_subject']} nesparovane v subject"
-    )
-    if result.step and result.excluded_services:
-        lines.append(
-            f"  Dalsi sluzby na {result.step['new']['port']} mimo tento krok: "
-            f"{len(result.excluded_services)} "
-            f"(nesparovano s baseline {result.step['old']['port']})"
-        )
-    lines.append("")
-
     views = [(scope, build_view(scope, detail=detail)) for scope in result.scopes]
 
     # Sirky sloupcu se pocitaji z realnych dat, stejne jako v _block() -
@@ -567,6 +522,69 @@ def render(result: RunResult, *, detail: bool = False, color: bool = False) -> s
     for scope, view in views:
         if scope.scope_id in shown:
             lines.extend(_block(view, has_baseline, color))
+    return lines
+
+
+def render(result: RunResult, *, detail: bool = False, color: bool = False) -> str:
+    lines: list[str] = []
+
+    subject = result.subject
+    baseline = result.baseline
+    has_baseline = baseline is not None
+    if has_baseline:
+        header = (
+            f"Migrace: {baseline['address']} ({baseline['phase']}) -> "
+            f"{subject['address']} ({subject['phase']})"
+        )
+    else:
+        header = f"Validace: {subject['address']} ({subject['phase']})"
+    # Profil se pripojuje na uvodni radek vzdy, kdyz je znamy - i pri behu
+    # bez service_types filtru - aby report rekl, pod jakym profilem vznikl.
+    if result.profile:
+        header += f" [profil {result.profile}]"
+    if result.step:
+        step_old = result.step["old"]
+        step_new = result.step["new"]
+        header += (
+            f" [krok {step_old['node']}:{step_old['port']}"
+            f" -> {step_new['node']}:{step_new['port']}]"
+        )
+    lines.append(header)
+    lines.append("")
+
+    lines.extend(_filter_note(result))
+
+    summary = result.summary
+    # Sluzby se pocitaji tady, ne v engine: filtr uz scopy profiltroval,
+    # takze stejny vypocet da spravne cislo v obou rezimech - za cely beh
+    # i za vyber. Souhrn za checky prepocitava filtr sam, ten se ze scopu
+    # odvodit neda bez toho, aby renderer zacal scitat checky.
+    services = count_statuses(scope.status for scope in result.scopes)
+    lines.extend(_counts_lines(services, summary, color))
+    unchanged = int(summary.get("pass_unchanged", 0))
+    if unchanged:
+        # Bez zdedenych chyb v "PASS 42" by jinak nikdo nevidel (R-3).
+        lines.append(
+            f"  z toho {unchanged} PASS beze zmeny proti baseline (chyba uz pred migraci)"
+        )
+    lines.append(
+        f"  Sparovano {summary['scopes_matched']} sluzeb, "
+        f"{summary['unmatched_baseline']} nesparovana v baseline, "
+        f"{summary['unmatched_subject']} nesparovane v subject"
+    )
+    if result.step and result.excluded_services:
+        lines.append(
+            f"  Dalsi sluzby na {result.step['new']['port']} mimo tento krok: "
+            f"{len(result.excluded_services)} "
+            f"(nesparovano s baseline {result.step['old']['port']})"
+        )
+    lines.append("")
+
+    if result.no_services:
+        lines.append(NO_SERVICES_LINE)
+        lines.append("")
+    else:
+        lines.extend(_service_lines(result, detail, has_baseline, color))
 
     lines.append("NESPAROVANO")
     if not result.unmatched["baseline"] and not result.unmatched["subject"]:
