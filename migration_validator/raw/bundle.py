@@ -44,6 +44,9 @@ class Session:
     params: dict[str, Any] | None = None
     inventory: dict[str, Any] | None = None
     baselines: list[str] | None = None
+    # Identita baseline: jmeno snimku -> taken jeho zaznamu v run.yml
+    # v okamziku capture. None = bundle z doby pred zavedenim klice.
+    baseline_taken: dict[str, str] | None = None
     port_filter: str | None = None
     tool: dict[str, Any] | None = None
     raw_format: int = RAW_FORMAT
@@ -130,6 +133,7 @@ def write_session(
             "params": session.params,
             "inventory": session.inventory,
             "baselines": session.baselines,
+            "baseline_taken": session.baseline_taken,
             "port_filter": session.port_filter,
             "calls": [_call_to_json(call, tmp) for call in session.calls],
         }
@@ -184,6 +188,7 @@ def read_session(path: Path) -> Session:
             params=data.get("params"),
             inventory=data.get("inventory"),
             baselines=data.get("baselines"),
+            baseline_taken=data.get("baseline_taken"),
             port_filter=data.get("port_filter"),
             tool=data.get("tool"),
             raw_format=raw_format,

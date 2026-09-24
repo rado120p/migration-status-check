@@ -38,7 +38,9 @@ def _session(**overrides):
             "service_types": None, "profile_name": None,
         },
         inventory={"file": "inventory_MX1_all.yml", "raw": True},
-        baselines=[], tool={"version": "0.1.0", "commit": None},
+        baselines=["snapshot_pre_MX1_all.json"],
+        baseline_taken={"snapshot_pre_MX1_all.json": "2026-09-23T08:00:00Z"},
+        tool={"version": "0.1.0", "commit": None},
     )
     fields.update(overrides)
     return Session(**fields)
@@ -57,6 +59,22 @@ def test_round_trip(tmp_path):
         "error": {"type": "RpcError", "message": "boom"},
     }
     assert data["calls"][2]["value"] is True
+    assert data["baseline_taken"] == {"snapshot_pre_MX1_all.json": "2026-09-23T08:00:00Z"}
+
+
+def test_bundle_without_baseline_taken_reads_as_none(tmp_path):
+    """Bundle zapsany pred zavedenim baseline_taken (raw_format 1 bez
+    klice) se cte dal - upgrade pak kontrolu identity baseline preskoci."""
+    target = tmp_path / "raw" / "post_PTX1_all"
+    write_session(_session(), target)
+    data = json.loads((target / "session.json").read_text())
+    del data["baseline_taken"]
+    (target / "session.json").write_text(json.dumps(data))
+
+    session = read_session(target)
+
+    assert session.baseline_taken is None
+    assert session.baselines == ["snapshot_pre_MX1_all.json"]
 
 
 def test_write_replaces_old_session_completely(tmp_path):
@@ -91,7 +109,7 @@ def test_failed_write_leaves_no_old_session(tmp_path, monkeypatch):
 def test_copies_inventory_raw_into_capture_bundle(tmp_path):
     inventory_raw = tmp_path / "raw" / "inventory_MX1_ge_0_0_2"
     write_session(
-        _session(kind="inventory", params=None, inventory=None, baselines=None,
+        _session(kind="inventory", params=None, inventory=None, baselines=None, baseline_taken=None,
                  port_filter="ge-0/0/2"),
         inventory_raw,
     )

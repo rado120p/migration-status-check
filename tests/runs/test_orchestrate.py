@@ -251,6 +251,19 @@ def test_post_records_baselines_used(tmp_path, monkeypatch):
 
     session = read_session(store.raw_dir(post.snapshot_path.name))
     assert session.baselines == [pre.snapshot_path.name]
+    pre_taken = load_manifest(store.manifest_path).find_capture("pre", "MX1", "ge-0/0/1").taken
+    assert session.baseline_taken == {pre.snapshot_path.name: pre_taken}
+
+
+def test_pre_records_empty_baseline_taken(tmp_path, monkeypatch):
+    _fake_capture_recording(monkeypatch)
+    store = RunStore(root=tmp_path, name="mig01")
+
+    outcome = _capture(store)
+
+    session = read_session(store.raw_dir(outcome.snapshot_path.name))
+    assert session.baselines == []
+    assert session.baseline_taken == {}
 
 
 CONFIG = """

@@ -214,6 +214,9 @@ def capture_into_run(
 
     baselines: list[Snapshot] = []
     baseline_names: list[str] = []
+    # Identita pouzitych baseline pro upgrade: pre prepsana (--overwrite)
+    # po tomto capture uz neni ta, se kterou post meril (R11/R12).
+    baseline_taken: dict[str, str] = {}
     if phase == "post":
         seen_snapshots: set[str] = set()
         records = []
@@ -231,6 +234,7 @@ def capture_into_run(
         for record in records:
             baselines.append(_load_baseline_snapshot(str(store.dir / record.snapshot)))
             baseline_names.append(record.snapshot)
+            baseline_taken[record.snapshot] = record.taken
         if not baselines:
             print("pre snimek nenalezen, ping cile z vlastni ARP", file=sys.stderr)
 
@@ -278,6 +282,7 @@ def capture_into_run(
         },
         inventory={"file": inventory_path.name, "raw": inventory_raw is not None},
         baselines=baseline_names,
+        baseline_taken=baseline_taken,
         tool=tool_info(),
     )
 

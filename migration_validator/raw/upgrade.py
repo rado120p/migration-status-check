@@ -135,8 +135,11 @@ def upgrade_run(
     nema cekat. Vymena bezi pod RunStore.lock() a jen kdyz se run od
     zacatku nezmenil (souběh s capture zachyti fingerprint)."""
     report = UpgradeReport(run=store.name, dry_run=dry_run)
-    manifest = store.load()
+    # Fingerprint pred manifestem: capture, ktery zapise mezi nimi, se pak
+    # projevi jako zmena pri vymene (jinak by vymena bezela se zastaralym
+    # manifestem).
     fingerprint = _fingerprint(store)
+    manifest = store.load()
     staging = Path(tempfile.mkdtemp(prefix=f"{STAGING_DIR}-", dir=store.dir))
     try:
         try:
@@ -269,7 +272,7 @@ def _replay_capture(
         ping_count=params.get("ping_count", DEFAULT_COUNT),
         now=session.started_at,
         finished_at=session.finished_at,
-        baselines=_baselines(store, session.baselines or [], regenerated, item) or None,
+        baselines=_baselines(store, session, regenerated, item) or None,
         service_types=params.get("service_types"),
         profile_name=params.get("profile_name"),
     )
@@ -313,21 +316,31 @@ def _known_collectors(names: list[str] | None, item: UpgradeItem) -> list[str] |
 
 def _baselines(
     store: RunStore,
-    names: list[str],
+    session: Session,
     regenerated: dict[str, Snapshot],
     item: UpgradeItem,
 ) -> list[Snapshot]:
+    """Baseline jmenovane v session.json. Zaznamenal-li capture jejich
+    identitu (baseline_taken) a snimek ma dnes jiny started_at (pre prepsana
+    po post), post s ni nemeril - pouzije se bez ni (R11/R12). Bundle bez
+    baseline_taken kontrolu preskoci."""
+    taken = session.baseline_taken or {}
     result: list[Snapshot] = []
-    for name in names:
-        if name in regenerated:
-            result.append(regenerated[name])
+    for name in session.baselines or []:
+        resolved = regenerated.get(name)
+        if resolved is None:
+            try:
+                resolved = load_snapshot(store.dir / name)
+            except (OSError, ValueError, KeyError, TypeError, SnapshotVersionError):
+                item.notes.append(
+                    f"baseline {name} nejde pregenerovat ani nacist - ping cile bez ni"
+                )
+                continue
+        expected = taken.get(name)
+        if expected is not None and resolved.capture.started_at != expected:
+            item.notes.append(f"baseline {name} se od capture zmenila - ping cile bez ni")
             continue
-        try:
-            result.append(load_snapshot(store.dir / name))
-        except (OSError, ValueError, KeyError, TypeError, SnapshotVersionError):
-            item.notes.append(
-                f"baseline {name} nejde pregenerovat ani nacist - ping cile bez ni"
-            )
+        result.append(resolved)
     return result
 
 

@@ -145,6 +145,8 @@ def record_capture(
     )
     name = store.snapshot_name(phase, node, port)
     save_snapshot(snapshot, store.dir / name)
+    # Jako capture_into_run: identita baseline = taken jejiho zaznamu v run.yml.
+    taken = {record.snapshot: record.taken for record in store.load().captures}
     write_session(
         Session(
             kind="capture", address="172.20.20.4", hostname=recording.hostname,
@@ -156,7 +158,9 @@ def record_capture(
                 "ping_count": 5, "service_types": None, "profile_name": None,
             },
             inventory=inventory_field,
-            baselines=list(baselines), tool=tool_info(),
+            baselines=list(baselines),
+            baseline_taken={baseline: taken[baseline] for baseline in baselines},
+            tool=tool_info(),
         ),
         store.raw_dir(name),
         **session_kwargs,

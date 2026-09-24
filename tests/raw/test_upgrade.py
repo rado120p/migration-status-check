@@ -145,6 +145,101 @@ def test_missing_baseline_is_noted_and_post_still_regenerates(tmp_path):
     assert any("nejde pregenerovat ani nacist" in note for note in post.notes)
 
 
+def _post_capture_spy(monkeypatch):
+    """Zachyti baselines, se kterymi upgrade prehrava post capture."""
+    from migration_validator.raw import upgrade as upgrade_module
+
+    real = upgrade_module.capture_device
+    seen = {}
+
+    def spy(*args, **kwargs):
+        if kwargs.get("phase") == "post":
+            seen["baselines"] = kwargs.get("baselines")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(upgrade_module, "capture_device", spy)
+    return seen
+
+
+def _post_item(report):
+    return next(item for item in report.items if item.file == "snapshot_post_PTX1_all.json")
+
+
+def test_baseline_recaptured_after_post_is_not_used(tmp_path, monkeypatch):
+    """pre prepsana (--overwrite) az po post: post ji pri capture nemeril,
+    upgrade ji proto nesmi podstrcit jako baseline (R11/R12). Zabiji
+    mutanta: _baselines ignoruje baseline_taken."""
+    store = build_run(tmp_path)
+    record_capture(store, phase="pre", node="MX1", started_at="2026-09-23T10:00:00Z")
+    seen = _post_capture_spy(monkeypatch)
+
+    report = upgrade_run(store, dry_run=True)
+
+    post = _post_item(report)
+    assert post.result != NOT_REGENERABLE
+    assert post.notes == [
+        "baseline snapshot_pre_MX1_all.json se od capture zmenila - ping cile bez ni"
+    ]
+    assert not seen["baselines"]
+
+
+def test_loaded_baseline_that_changed_is_not_used(tmp_path, monkeypatch):
+    """Totez pro baseline, ktera nejde pregenerovat a nacita se z disku."""
+    store = build_run(tmp_path)
+    shutil.rmtree(store.raw_dir("snapshot_pre_MX1_all.json"))
+    pre = store.dir / "snapshot_pre_MX1_all.json"
+    data = json.loads(pre.read_text())
+    data["capture"]["started_at"] = "2026-09-23T10:00:00Z"
+    pre.write_text(json.dumps(data))
+    seen = _post_capture_spy(monkeypatch)
+
+    report = upgrade_run(store, dry_run=True)
+
+    assert _post_item(report).notes == [
+        "baseline snapshot_pre_MX1_all.json se od capture zmenila - ping cile bez ni"
+    ]
+    assert not seen["baselines"]
+
+
+def test_bundle_without_baseline_taken_keeps_baseline(tmp_path, monkeypatch):
+    """Bundle bez klice baseline_taken (zapsany pred jeho zavedenim)
+    kontrolu identity preskoci - baseline se pouzije jako dosud."""
+    store = build_run(tmp_path)
+    raw = store.raw_dir("snapshot_post_PTX1_all.json") / "session.json"
+    data = json.loads(raw.read_text())
+    del data["baseline_taken"]
+    raw.write_text(json.dumps(data))
+    seen = _post_capture_spy(monkeypatch)
+
+    report = upgrade_run(store, dry_run=True)
+
+    assert _post_item(report).notes == []
+    assert len(seen["baselines"]) == 1
+
+
+def test_capture_landing_during_manifest_read_is_detected(tmp_path, monkeypatch):
+    """T9b: fingerprint se bere pred nactenim run.yml. Capture, ktery zapise
+    mezi nactenim manifestu a fingerprintem, by jinak prosel - vymena by
+    presunula cerstvy snimek do zalohy. Zabiji mutanta: fingerprint az po
+    store.load()."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    post = store.dir / "snapshot_post_PTX1_all.json"
+    real_load = store.load
+
+    def load_then_capture():
+        manifest = real_load()
+        post.write_text('{"fresh": true}\n')
+        return manifest
+
+    monkeypatch.setattr(store, "load", load_then_capture)
+    report = upgrade_run(store, now=NOW)
+
+    assert report.error == RUN_CHANGED
+    assert post.read_text() == '{"fresh": true}\n'
+    assert not (store.dir / "backup").exists()
+
+
 def test_unknown_recorded_collector_is_dropped_with_note(tmp_path):
     store = build_run(tmp_path)
     raw = store.raw_dir("snapshot_pre_MX1_all.json") / "session.json"
