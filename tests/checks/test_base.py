@@ -11,7 +11,7 @@ from migration_validator.models.result import (
     Status,
     UNCHANGED_SINCE_BASELINE,
 )
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
 class DummyCheck(Check):
@@ -29,11 +29,6 @@ class DummyCheck(Check):
 class CompareCheck(DummyCheck):
     id = "dummy_compare"
     mode = Mode.COMPARE
-
-
-class InventoryCheck(DummyCheck):
-    id = "dummy_inventory"
-    requires_inventory = True
 
 
 class TypedCheck(DummyCheck):
@@ -102,12 +97,6 @@ def test_compare_check_without_baseline_skips():
     assert "baseline" in results[0].message
 
 
-def test_check_requiring_inventory_skips_on_device_scope():
-    results = run_check(InventoryCheck(), _ctx(scope=device_scope()))
-    assert results[0].status is Status.SKIP
-    assert "inventory" in results[0].message
-
-
 def test_failed_collector_skips_with_original_error():
     results = run_check(
         DummyCheck(), _ctx(failed_collectors={"interfaces": "RpcError: syntax error"})
@@ -119,10 +108,6 @@ def test_failed_collector_skips_with_original_error():
 def test_check_not_applicable_to_service_type_produces_no_results():
     assert run_check(TypedCheck(), _ctx(scope=_scope("Internet"))) == []
     assert run_check(TypedCheck(), _ctx(scope=_scope("IPVPN"))) != []
-
-
-def test_check_applies_to_device_scope_regardless_of_service_types():
-    assert TypedCheck().applies_to(device_scope()) is True
 
 
 def test_layer1_scope_pousti_jen_layer1_checky():
@@ -155,7 +140,6 @@ def test_check_with_service_subtypes_gates_on_subtype():
     assert check.applies_to(_core_scope("transit")) is True
     assert check.applies_to(_core_scope("loopback")) is False
     assert check.applies_to(_scope("Internet")) is False
-    assert check.applies_to(device_scope()) is True
 
 
 def test_exception_in_check_becomes_skip_not_crash():
@@ -210,7 +194,7 @@ def test_finding_without_label_borrows_the_one_from_the_check():
     tisklo.
     """
     ctx = CheckContext(
-        scope=device_scope(), subject={}, baseline=None, config=default_config()
+        scope=_scope(), subject={}, baseline=None, config=default_config()
     )
 
     result = run_check(_UnlabelledCheck(), ctx)[0]
@@ -234,13 +218,6 @@ def test_failed_collector_skip_is_a_row_not_a_veta():
     assert result.label == "Dummy radek"
     assert result.value == "collector selhal"
     assert "RpcError: syntax error" in result.message
-
-
-def test_missing_inventory_skip_is_a_row_not_a_veta():
-    result = run_check(InventoryCheck(), _ctx(scope=device_scope()))[0]
-
-    assert result.label == "Dummy radek"
-    assert result.value == "bez inventory"
 
 
 def test_compare_check_without_baseline_skips_with_a_short_value():
@@ -272,7 +249,7 @@ def test_every_registered_check_has_a_row_label():
 
 def test_run_check_propagates_presentation_fields():
     ctx = CheckContext(
-        scope=device_scope(),
+        scope=_scope(),
         subject={},
         baseline=None,
         config=default_config(),
@@ -448,3 +425,9 @@ def test_check_with_excluded_subtypes_skips_that_subtype():
     assert check.applies_to(_typed("Internet", "multicast")) is False
     assert check.applies_to(_typed("IPVPN", "mvpn")) is False
     assert check.describe()["excluded_subtypes"] == ["multicast", "mvpn"]
+
+
+def test_describe_has_no_requires_inventory_key():
+    # Spec 2026-09-24: bez device rezimu bezi kazdy check s inventory,
+    # priznak nema co rozlisovat.
+    assert "requires_inventory" not in DummyCheck().describe()

@@ -134,7 +134,6 @@ class ArpPresentCheck(Check):
     label = "ARP"
     mode = Mode.BOTH
     requires = ("arp",)
-    requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
     excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
@@ -225,7 +224,6 @@ class NdPresentCheck(Check):
     label = "ND"
     mode = Mode.BOTH
     requires = ("nd",)
-    requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
     excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
@@ -322,7 +320,6 @@ class PingReachabilityCheck(Check):
     label = "Ping"
     mode = Mode.BOTH
     requires = ("ping",)
-    requires_inventory = True
     service_types = CUSTOMER_SERVICE_TYPES
     excluded_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.ADVISORY

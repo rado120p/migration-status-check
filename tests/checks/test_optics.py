@@ -2,7 +2,7 @@ from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.optics import OpticalAlarmsCheck, OpticalLevelsCheck
 from migration_validator.config import default_config
 from migration_validator.models.result import COMPARED, UNCHANGED_SINCE_BASELINE, Outcome, Status
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
 def _lane(rx=-5.0, tx=-2.0, lane=0, alarms=None, warnings=None):
@@ -211,17 +211,3 @@ def test_alarm_escalated_from_warning_in_baseline_is_not_unchanged():
     assert row.status is Status.FAIL
     assert row.value == "rx-loss-of-signal"
     assert row.details.get(UNCHANGED_SINCE_BASELINE) is not True
-
-
-# Check.applies_to() pousti device scope na VSECHNY checky bez ohledu na
-# service_types/layer1 (base.py: `if scope.is_device: return True` je prvni
-# vetev). device_scope() ma prazdny selectors.interfaces - kdyby run()
-# indexoval [0] bez ochrany, spadl by na IndexError, ktery run_check()
-# schova do SKIPu "check selhal" (viz evaluate_snapshots, kdyz snapshot
-# nema scopy). Check tedy musi na device scope vratit prazdny seznam, ne
-# spadnout.
-def test_device_scope_bez_portu_nespada():
-    ctx = CheckContext(scope=device_scope(), subject={"optics": {}}, baseline=None,
-                        config=default_config(), failed_collectors={})
-    assert OpticalLevelsCheck().run(ctx) == []
-    assert OpticalAlarmsCheck().run(ctx) == []

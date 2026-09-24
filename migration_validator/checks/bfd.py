@@ -29,16 +29,10 @@ NO_SESSION = "bez session"
 BGP_NOT_UP = "BGP neni Established"
 PARSER_MISSED = "parser nenasel konfiguraci"
 
-# NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni,
-# a to jde rict jen v service scope. Peer, ktereho uz tato sluzba nenarokuje,
-# muze na zarizeni dal bezet pod jinou sluzbou - engine.py:_unassigned_bfd_sessions
-# by ho ukazal v NEZARAZENO. Device scope zadnou inventory
-# nema, takze `configured` je tam vzdy False a o konfiguraci nejde tvrdit nic
-# (AR-17) - zbyva ciste stav session. Rozdil musi byt v hodnote, ne jen v
-# hlasce: do reportu jde sloupec s hodnotou (F-7/AR-4), hlaska se v textovem
-# vypisu neobjevi. Konstanta je sdilena s bgp.py - stejny konstrukt, stejna
-# formulace.
-SESSION_GONE = "session zmizela"
+# NOT_IN_SERVICE je tvrzeni o CLENSTVI ve sluzbe, ne o existenci na zarizeni.
+# Peer, ktereho uz tato sluzba nenarokuje, muze na zarizeni dal bezet pod
+# jinou sluzbou - engine.py:_unassigned_bfd_sessions ho ukaze v NEZARAZENO.
+# Konstanta je sdilena s bgp.py - stejny konstrukt, stejna formulace.
 
 
 @register
@@ -93,7 +87,6 @@ class BfdSessionStateCheck(Check):
                     session=sessions.get(peer),
                     baseline=baseline_sessions.get(peer),
                     bgp_state=str((bgp.get(peer) or {}).get("state", "")),
-                    is_device=ctx.scope.is_device,
                     ctx=ctx,
                     collision=collisions.get(peer),
                     baseline_collided=peer in baseline_collisions,
@@ -108,17 +101,16 @@ class BfdSessionStateCheck(Check):
         session: dict[str, Any] | None,
         baseline: dict[str, Any] | None,
         bgp_state: str,
-        is_device: bool,
         ctx: CheckContext,
         collision: str | None = None,
         baseline_collided: bool = False,
     ) -> Finding:
         label = f"{self.label} ({peer})"
         family = peer_family(peer)
-        # Stejna funkce pro subjekt i baseline (se stejnym configured/is_device
+        # Stejna funkce pro subjekt i baseline (se stejnym configured
         # subjektu), takze baseline_value mluvi slovnikem radku (R-5). Plati
         # jen pro vetve, ktere se MOHOU stat UNCHANGED (porovnavaji se) -
-        # SESSION_GONE/NOT_IN_SERVICE nize maji vlastni `was_measured`.
+        # NOT_IN_SERVICE nize ma vlastni `was_measured`.
         #
         # Baseline, jejiz session na adrese peera patrila cizimu rozhrani, nasi
         # session nezmerila - _session_value(None, ...) by o ni tvrdil 'bez
@@ -126,13 +118,13 @@ class BfdSessionStateCheck(Check):
         was = (
             ADDRESS_COLLISION
             if baseline is None and baseline_collided
-            else _session_value(baseline, configured, is_device, bgp_state)
+            else _session_value(baseline, configured, bgp_state)
             if ctx.has_baseline
             else None
         )
-        # SESSION_GONE/NOT_IN_SERVICE jsou z definice "v baseline byla, ted
+        # NOT_IN_SERVICE je z definice "v baseline byla, ted
         # neni" - nikdy UNCHANGED, takze baseline_value tam nema mluvit
-        # slovnikem SUBJEKTOVEHO configured/is_device (`_session_value` by na
+        # slovnikem SUBJEKTOVEHO configured (`_session_value` by na
         # NOT_IN_SERVICE radku vratila PARSER_MISSED, i kdyz baseline session
         # realne mela stav). Poctivy baseline_value je to, co baseline
         # skutecne zmerila - surovy stav session.
@@ -143,11 +135,9 @@ class BfdSessionStateCheck(Check):
             # (Up)" ma mluvit o skutecnem stavu i ve vetvi PARSER_MISSED,
             # kde _session_value uz vraci znacku, ne stav.
             raw_state = str(session.get("state", UNKNOWN))
-            state = _session_value(session, configured, is_device, bgp_state)
+            state = _session_value(session, configured, bgp_state)
 
-            # Bez inventory neni zamer znam, takze se nehlasi, ze
-            # konfigurace chybi (AR-17).
-            if not configured and not is_device:
+            if not configured:
                 return Finding(
                     Outcome.DEGRADED,
                     f"{peer}: BFD session existuje ({raw_state}), ale parser ji nenasel "
@@ -184,20 +174,6 @@ class BfdSessionStateCheck(Check):
             )
 
         if not configured:
-            if is_device:
-                # Bez inventory se netvrdi, ze konfigurace chybi (AR-17) -
-                # jen ze session, ktera v baseline byla, uz neexistuje. Tato
-                # vetev je z definice "v baseline byla" - nikdy UNCHANGED.
-                return Finding(
-                    Outcome.BROKEN,
-                    f"{peer}: session byla v baseline ({was_measured}), v subjektu neexistuje",
-                    label=label,
-                    family=family,
-                    value=SESSION_GONE,
-                    baseline_value=was_measured,
-                    baseline=baseline,
-                )
-
             # Session byla v baseline, v subjektu neni ani zamer. Tvrzeni o
             # CLENSTVI, ne o existenci: peer, ktereho nenarokuje zadny
             # subjektovy scope, muze mit na zarizeni zivou BFD session -
@@ -260,20 +236,19 @@ class BfdSessionStateCheck(Check):
 def _session_value(
     session: dict[str, Any] | None,
     configured: bool,
-    is_device: bool,
     bgp_state: str,
 ) -> str:
     """Vraci presne to, co dnes konci ve `value` prislusne vetve `_finding`.
-    Pouziva se pro subjekt i pro baseline session (se stejnym configured/
-    is_device subjektu), takze baseline_value mluvi stejnym slovnikem jako
+    Pouziva se pro subjekt i pro baseline session (se stejnym configured
+    subjektu), takze baseline_value mluvi stejnym slovnikem jako
     value (R-5)."""
     if session is not None:
         state = str(session.get("state", UNKNOWN))
-        if not configured and not is_device:
+        if not configured:
             return PARSER_MISSED
         return state
     if not configured:
-        return SESSION_GONE if is_device else NOT_IN_SERVICE
+        return NOT_IN_SERVICE
     if bgp_state != ESTABLISHED:
         return BGP_NOT_UP
     return NO_SESSION

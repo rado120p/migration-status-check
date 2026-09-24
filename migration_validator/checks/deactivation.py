@@ -58,7 +58,6 @@ class DeactivationStateCheck(Check):
     title = "Stav deaktivace sluzby"
     label = "Deaktivace"
     mode = Mode.BOTH
-    requires_inventory = True
     default_severity = Severity.CRITICAL
     layer1 = True
 

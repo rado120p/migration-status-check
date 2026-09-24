@@ -45,7 +45,6 @@ class IsisAdjacencyStateCheck(Check):
     label = "IS-IS adjacency state"
     mode = Mode.BOTH
     requires = ("isis_adjacency",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit"})
     default_severity = Severity.CRITICAL
@@ -159,7 +158,6 @@ class IsisInterfaceInfoCheck(Check):
     label = "IS-IS interface"
     mode = Mode.STATE
     requires = ("isis_interface",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit", "loopback"})
     default_severity = Severity.CRITICAL
@@ -332,7 +330,6 @@ class LdpNeighborStateCheck(Check):
     label = "LDP neighbor status"
     mode = Mode.BOTH
     requires = ("ldp_neighbor",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit"})
     default_severity = Severity.CRITICAL
@@ -355,7 +352,6 @@ class PimNeighborStateCheck(Check):
     label = "PIM neighbor status"
     mode = Mode.BOTH
     requires = ("pim_neighbor",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit"})
     default_severity = Severity.CRITICAL
@@ -380,7 +376,6 @@ class MplsInterfaceStateCheck(Check):
     label = "MPLS interface status"
     mode = Mode.BOTH
     requires = ("mpls_interface",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit"})
     default_severity = Severity.CRITICAL
@@ -449,7 +444,6 @@ class IsisOverviewCheck(Check):
     label = "IS-IS overload bit"
     mode = Mode.STATE
     requires = ("isis_overview",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"loopback"})
     default_severity = Severity.ADVISORY
@@ -477,7 +471,6 @@ class BfdTransitStateCheck(Check):
     label = "BFD"
     mode = Mode.BOTH
     requires = ("bfd",)
-    requires_inventory = True
     service_types = CORE
     service_subtypes = frozenset({"transit"})
     default_severity = Severity.CRITICAL

@@ -229,7 +229,6 @@ class IgmpMembershipReportCheck(Check):
     label = "IGMP membership report"
     mode = Mode.BOTH
     requires = ("igmp_group",)
-    requires_inventory = True
     service_types = MULTICAST_TYPES
     service_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
@@ -307,7 +306,6 @@ class PimJoinCheck(Check):
     label = "PIM join"
     mode = Mode.BOTH
     requires = ("pim_join",)
-    requires_inventory = True
     service_types = MULTICAST_TYPES
     service_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
@@ -410,7 +408,6 @@ class MulticastForwardingStatusCheck(Check):
     label = "Multicast forwarding status"
     mode = Mode.BOTH
     requires = ("igmp_group", "multicast_route", "pim_join")
-    requires_inventory = True
     service_types = MULTICAST_TYPES
     service_subtypes = MULTICAST_SUBTYPES
     default_severity = Severity.CRITICAL
@@ -585,7 +582,6 @@ class CoreMulticastForwardingCheck(Check):
     label = "Multicast forwarding status"
     mode = Mode.BOTH
     requires = ("multicast_route", "routes")
-    requires_inventory = True
     service_types = frozenset({"Core"})
     service_subtypes = frozenset({"loopback"})
     default_severity = Severity.CRITICAL
@@ -727,7 +723,6 @@ class MvpnCmulticastStatusCheck(Check):
     label = "C-Multicast status"
     mode = Mode.BOTH
     requires = ("mvpn_instance", "pim_join")
-    requires_inventory = True
     service_types = frozenset({"IPVPN"})
     service_subtypes = frozenset({MVPN_SUBTYPE})
     default_severity = Severity.CRITICAL

@@ -15,7 +15,7 @@ from migration_validator.models.result import (
     Status,
     UNCHANGED_SINCE_BASELINE,
 )
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 
 def _ctx(subject, service_type="IPVPN", scope=None, baseline=None):
@@ -69,13 +69,6 @@ def test_arp_empty_warns():
 
 def test_arp_not_run_on_core_scope():
     assert run_check(ArpPresentCheck(), _ctx({"arp": []}, service_type="Core")) == []
-
-
-def test_arp_skips_on_device_scope():
-    ctx = _ctx({"arp": []}, scope=device_scope())
-    result = run_check(ArpPresentCheck(), ctx)[0]
-    assert result.status is Status.SKIP
-    assert "inventory" in result.message
 
 
 def test_arp_says_nothing_when_no_ipv4_configured():

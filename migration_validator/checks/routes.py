@@ -4,7 +4,8 @@ Iteruje pres sjednoceni tri zdroju (AR-14): konfigurace subjektu, mereni
 subjektu a mereni baseline. Kazdy z nich zavira jednu diru:
 
 - bez konfigurace by nesel poznat rozpor 'nakonfigurovano, neni v tabulce',
-- bez mereni subjektu by v rezimu bez inventory nebylo co vypsat,
+- bez mereni subjektu by tise zmizela routa, kterou parser do selektoru
+  nedostal (neznamy tvar konfigurace),
 - bez mereni baseline by tise zmizelo vsechno, co migrace odstranila -
   routa vyrazena z konfigurace se do selektoru subjektu nedostane, takze
   by se scope na jeji chybeni nikdy nezeptal.
@@ -173,12 +174,9 @@ def _presence_finding(
         )
 
     if subject is None:
-        # Bez inventory neni zamer znam, takze se rozpor nehlasi
-        # (AR-17). Rozliseni je podle toho, jestli je co srovnavat s
-        # baselinem, ne podle scope: baseline zaznam existuje -> chybi
-        # proti baselinu; baseline zaznam neni -> jen konfigurace tvrdi,
-        # ze routa ma byt v tabulce, a neni (plati i v device scope, ktery
-        # zamer nezna, ale tady jde jen o to, co rika samotna tabulka).
+        # Rozliseni je podle toho, jestli je co srovnavat s baselinem:
+        # baseline zaznam existuje -> chybi proti baselinu; baseline zaznam
+        # neni -> jen konfigurace tvrdi, ze routa ma byt v tabulce, a neni.
         if baseline is not None:
             value = MISSING_ENTIRELY
             message = f"{rib} {prefix}: v baseline byla, v subjektu neni"

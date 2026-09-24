@@ -84,7 +84,6 @@ class Check(ABC):
     label: ClassVar[str]
     mode: ClassVar[Mode] = Mode.STATE
     requires: ClassVar[tuple[str, ...]] = ()
-    requires_inventory: ClassVar[bool] = False
     service_types: ClassVar[frozenset[str] | None] = None
     # AND ke service_types - kdyz je nastaveny, musi sedet i subtype
     # (napr. Core transit vs. Core loopback). Vychozi None nic nefiltruje.
@@ -103,9 +102,6 @@ class Check(ABC):
     order: ClassVar[int] = 0
 
     def applies_to(self, scope: Scope) -> bool:
-        """Device scope dostane vsechny checky - filtrovat nema podle ceho."""
-        if scope.is_device:
-            return True
         if scope.kind == "layer1":
             return self.layer1
         if self.service_types is not None:
@@ -129,7 +125,6 @@ class Check(ABC):
             "title": self.title,
             "mode": self.mode.value,
             "requires": list(self.requires),
-            "requires_inventory": self.requires_inventory,
             "service_types": (
                 sorted(self.service_types) if self.service_types else None
             ),
@@ -206,22 +201,11 @@ def run_check(check: Check, ctx: CheckContext) -> list[CheckResult]:
 
     severity = ctx.config.severity(check.id, check.default_severity)
 
-    if check.requires_inventory and ctx.scope.is_device:
-        return _skip(
-            check,
-            severity,
-            "check vyzaduje inventory, snapshot ji neobsahuje",
-            "bez inventory",
-        )
-
     if check.mode is Mode.COMPARE and not ctx.has_baseline:
         return _skip(
             check, severity, "porovnavaci check bez baseline snapshotu", "bez baseline"
         )
 
-    # Poradi je soucast pozadavku: zkratka jde az za requires_inventory, takze
-    # v device scope preskoci uz ten - device scope inventory nema a nema tedy
-    # ani z ceho priznak vzit.
     if check.id != DEACTIVATION_CHECK_ID and ctx.scope.is_deactivated:
         reason = ctx.scope.deactivation_reason
         return _skip(

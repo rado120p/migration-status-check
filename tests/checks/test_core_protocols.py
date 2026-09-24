@@ -1106,9 +1106,7 @@ def test_old_bfd_check_does_not_apply_to_core_loopback_scope():
     assert old_check.applies_to(loopback_scope) is False
 
 
-def test_old_bfd_check_still_applies_to_internet_and_device_scope():
-    from migration_validator.models.scope import device_scope
-
+def test_old_bfd_check_still_applies_to_internet():
     old_check = BfdSessionStateCheck()
     internet_scope = Scope(
         id="svc:internet",
@@ -1118,7 +1116,6 @@ def test_old_bfd_check_still_applies_to_internet_and_device_scope():
     )
 
     assert old_check.applies_to(internet_scope) is True
-    assert old_check.applies_to(device_scope()) is True
 
 
 def test_ldp_neighbor_present_without_uptime_is_not_down():

@@ -13,7 +13,7 @@ from migration_validator.checks.bgp import ADDRESS_COLLISION
 from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
 from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 INTENT = [{"peer": "198.11.13.2", "minimum_interval": 3000, "multiplier": 3, "source": "neighbor"}]
 
@@ -133,7 +133,7 @@ def test_bfd_removed_since_baseline_is_broken():
     assert findings[0].message == "198.11.13.2: v baseline patril k teto sluzbe, v subjektu uz ne"
     # NOT_IN_SERVICE je z definice "v baseline byla, ted neni" - nikdy
     # UNCHANGED, takze baseline_value NEMLUVI slovnikem _session_value() se
-    # subjektovym configured/is_device (to by na tomto radku vratilo
+    # subjektovym configured (to by na tomto radku vratilo
     # PARSER_MISSED, i kdyz baseline session realne mela stav). Poctivy
     # baseline_value je to, co baseline skutecne zmerila (review 2026-09-08).
     assert findings[0].baseline_value == "Up"
@@ -154,7 +154,7 @@ def test_peer_only_in_baseline_value_is_full_sentence():
     assert f.value == "v baseline patril k teto sluzbe, v subjektu uz ne"
     # Stejny duvod jako v test_bfd_removed_since_baseline_is_broken - vetev
     # se nikdy nestane UNCHANGED, takze baseline_value je poctivy zmereny
-    # stav baseline, ne _session_value() se subjektovym configured/is_device.
+    # stav baseline, ne _session_value() se subjektovym configured.
     assert f.baseline_value == "Up"
 
 
@@ -229,38 +229,6 @@ def test_family_comes_from_peer_address():
     )
 
     assert findings[0].family == 6
-
-
-def test_device_scope_never_claims_anything_about_the_configuration():
-    """AR-17: bez inventory nejde tvrdit, ze BFD neni nakonfigurovane.
-
-    Device scope ma vzdy prazdne selektory, takze `configured` je False -
-    prave tudy se do vetve SESSION_GONE chodi. Hlaska pro NOT_IN_SERVICE
-    ("v baseline patril k teto sluzbe, v subjektu uz ne") tvrdi clenstvi
-    ve sluzbe - to device scope bez inventory nevi o nic vic nez o
-    konfiguraci, takze ji tu vydat nesmi stejne jako puvodni "v subjektu
-    neni nakonfigurovane".
-    Sloupec s hodnotou je to, co jde do reportu (F-7/AR-4), takze stav-only
-    musi byt hodnota, ne jen hlaska.
-
-    Toto je test, jehoz absence tu vadu propustila: routes.py stejny rozdil
-    resi dvema konstantami, bfd.py mel jen jednu.
-    """
-    ctx = CheckContext(
-        scope=device_scope(),
-        subject={"bfd": {}, "bgp": {}},
-        baseline={"bfd": {"152.11.13.2": {"state": "Up"}}, "bgp": {}},
-        config=default_config(),
-    )
-
-    findings = BfdSessionStateCheck().run(ctx)
-
-    assert len(findings) == 1
-    assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "session zmizela"
-    assert findings[0].baseline_value == "Up"
-    assert "konfigurac" not in findings[0].message
-    assert "nakonfigurovan" not in findings[0].message
 
 
 def test_intent_entry_without_peer_gets_no_row():
@@ -347,21 +315,6 @@ def test_unconfigured_session_baseline_value_is_same_sentinel():
                                                    scope=_scope(bfd_peers=[])))
     assert row.status is Status.WARN                      # zustava (mimo zamer = nalez)
     assert row.baseline_value == "parser nenasel konfiguraci"
-
-
-def test_device_scope_reports_state_without_intent():
-    """Bez inventory se nehlasi ani 'bez session', ani 'parser nenasel konfiguraci'."""
-    ctx = CheckContext(
-        scope=device_scope(),
-        subject={"bfd": {"152.11.13.2": {"state": "Up"}}, "bgp": {}},
-        baseline=None,
-        config=default_config(),
-    )
-
-    findings = BfdSessionStateCheck().run(ctx)
-
-    assert len(findings) == 1
-    assert findings[0].outcome is Outcome.OK
 
 
 # Kolize adres (ostry beh MX -> ACX 2026-09-23): single-hop session na adrese

@@ -33,8 +33,7 @@ def _optics_label(base: str, name: str, lane: int | None, port: str | None) -> s
 
 
 def _port(ctx: CheckContext) -> str | None:
-    """Port L1 scopu. None na device scope (applies_to ho pousti - vsechny
-    checky bezi na cely device - ale zadny konkretni port nenese)."""
+    """Port L1 scopu; None, kdyz scope zadne rozhrani nenese."""
     return ctx.scope.selectors.interfaces[0] if ctx.scope.selectors.interfaces else None
 
 

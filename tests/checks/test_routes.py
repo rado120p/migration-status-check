@@ -385,20 +385,12 @@ def test_service_without_static_routes_gets_no_row():
     assert findings == []
 
 
-def test_device_scope_with_baseline_record_says_missing_against_baseline():
-    """Rozliseni je podle baselinu, ne podle scope (device vs service).
-
-    Puvodne rozhodoval 'configured and not is_device' - device scope nikdy
-    nesmel rict 'neni v tabulce', protoze zamer nezna (AR-17). Ta uvaha je
-    porad spravna, ale spatne provedena: kdyz baseline mereni routu ma,
-    rozpor se hlasi proti nemu ('chybi') uplne stejne v device i service
-    scope - o zameru tu nejde nic tvrdit o nic vic ani min nez v service
-    scope se stejnym baselinem (viz test_configured_but_not_installed_is_broken).
-    """
+def test_service_scope_with_baseline_record_says_missing_against_baseline():
+    """Kdyz baseline mereni routu ma, rozpor se hlasi proti nemu ('chybi')."""
     scope = Scope(
-        id="dev:172.20.20.4",
-        kind="device",
-        key=None,
+        id="svc:X:Internet",
+        kind="service",
+        key=ScopeKey("X", "Internet", None),
         selectors=Selectors(static_routes=list(CONFIGURED)),
     )
     ctx = CheckContext(
@@ -433,32 +425,6 @@ def test_service_scope_reports_missing_from_table_without_baseline():
     assert findings[0].message == (
         "inet.0 198.62.1.0/29: nakonfigurovana, ale neni v routovaci tabulce"
     )
-
-
-def test_device_scope_configured_route_missing_is_not_blamed_on_baseline():
-    """Stejna hlaska 'neni v tabulce' plati i v device scope bez baselinu.
-
-    Device scope zamer nezna (AR-17), ale tady jde jen o to, co rika
-    samotna tabulka - baseline zaznam neni, takze neni co "chybelo".
-    """
-    scope = Scope(
-        id="dev:172.20.20.4",
-        kind="device",
-        key=None,
-        selectors=Selectors(static_routes=list(CONFIGURED)),
-    )
-    ctx = CheckContext(
-        scope=scope,
-        subject={"routes": {}},
-        baseline=None,
-        config=default_config(),
-    )
-
-    findings = StaticRouteStatusCheck().run(ctx)
-
-    assert len(findings) == 1
-    assert findings[0].outcome is Outcome.BROKEN
-    assert findings[0].value == "neni v tabulce"
 
 
 def _installed_without_active():
