@@ -120,7 +120,12 @@ def _fingerprint(store: RunStore) -> dict[str, tuple[int, int]]:
     entries: dict[str, tuple[int, int]] = {}
     for pattern in ("run.yml", "snapshot_*.json", "inventory_*.yml", "raw/*/session.json"):
         for path in store.dir.glob(pattern):
-            stat = path.stat()
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                # Smazano mezi globem a stat (soubezny capture) - chybejici
+                # polozka se pri vymene projevi jako zmena runu.
+                continue
             entries[path.relative_to(store.dir).as_posix()] = (stat.st_mtime_ns, stat.st_size)
     return entries
 
@@ -184,7 +189,9 @@ def upgrade_run(
             report.backup = backup.relative_to(store.dir).as_posix()
             # SummaryCache GUI je klicovana mtime run.yml - bez posunu by
             # souhrn skupiny ukazoval stary verdikt az do restartu GUI.
-            os.utime(store.manifest_path)
+            # Vymena uz probehla, selhani utime nesmi zahodit report.
+            with contextlib.suppress(OSError):
+                os.utime(store.manifest_path)
         return report
     finally:
         shutil.rmtree(staging, ignore_errors=True)

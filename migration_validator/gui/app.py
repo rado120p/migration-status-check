@@ -233,6 +233,10 @@ def create_app(
                 report = api.upgrade_run(run, run_root=run_root, dry_run=dry_run)
         except RunBusy as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        except Exception as error:  # noqa: BLE001 - modal ukaze text, ne holy 500
+            raise HTTPException(
+                status_code=500, detail=f"{type(error).__name__}: {error}"
+            ) from error
         return report.to_dict()
 
     @app.get("/api/runs/{run}/evaluation")

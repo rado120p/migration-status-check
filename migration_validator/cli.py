@@ -601,9 +601,10 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
     for name in names:
         try:
             report = api.upgrade_run(name, run_root=args.run_root, dry_run=args.dry_run)
-        except (OSError, ValueError) as error:
+        except Exception as error:  # noqa: BLE001 - jeden run nesmi zastavit ostatni
             # R8: pad upgradu jednoho runu nesmi zastavit zbyvajici runy ve
-            # skupine/vyctu (FileNotFoundError na neznamy run je OSError).
+            # skupine/vyctu (FileNotFoundError na neznamy run je OSError,
+            # neocekavana vyjimka nastroje taky jen exit 2).
             print(f"chyba: run {name}: {error}", file=sys.stderr)
             worst = max(worst, EXIT_TOOL_ERROR)
             continue

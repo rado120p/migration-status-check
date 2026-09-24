@@ -59,6 +59,25 @@ def test_upgrade_refused_while_capture_runs(tmp_path):
     assert "bezici capture" in res.json()["detail"]
 
 
+def test_upgrade_unexpected_exception_is_500_with_string_detail(tmp_path, monkeypatch):
+    """T9a: neocekavana vyjimka upgradu je 500 s textovym detailem (modal ho
+    ukaze pres errorDetail), ne holy traceback."""
+    build_run(tmp_path)
+
+    def boom(name, **kwargs):
+        raise RuntimeError("bug v nastroji")
+
+    monkeypatch.setattr("migration_validator.gui.app.api.upgrade_run", boom)
+    app, client = _client(tmp_path)
+
+    res = client.post("/api/runs/mig01/upgrade?dry_run=true")
+
+    assert res.status_code == 500
+    assert res.json()["detail"] == "RuntimeError: bug v nastroji"
+    with app.state.captures.maintenance("mig01"):
+        pass  # maintenance se po chybe uvolnila
+
+
 def test_upgrade_unknown_run_is_404(tmp_path):
     _, client = _client(tmp_path)
     assert client.post("/api/runs/nope/upgrade").status_code == 404

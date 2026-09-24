@@ -1662,6 +1662,31 @@ def test_upgrade_one_run_failure_does_not_stop_others(tmp_path, capsys, monkeypa
     assert "pop1-mx1" in out.err
 
 
+def test_upgrade_unexpected_exception_does_not_stop_others(tmp_path, capsys, monkeypatch):
+    """T10b: i neocekavana vyjimka (ne OSError/ValueError) jednoho runu je
+    radek 'chyba: run ...' a exit 2, ostatni runy se upgraduji dal."""
+    from raw_run import build_run
+    from migration_validator import api as api_module
+
+    build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+    real_upgrade_run = api_module.upgrade_run
+
+    def fake_upgrade_run(name, **kwargs):
+        if name == "pop1-mx1":
+            raise RuntimeError("bug v nastroji")
+        return real_upgrade_run(name, **kwargs)
+
+    monkeypatch.setattr("migration_validator.cli.api.upgrade_run", fake_upgrade_run)
+
+    code = main(["upgrade", "--group", "pop1", "--run-root", str(tmp_path), "--dry-run"])
+
+    out = capsys.readouterr()
+    assert code == 2
+    assert "chyba: run pop1-mx1: bug v nastroji" in out.err
+    assert "run pop1-mx2 (dry-run)" in out.out
+
+
 def test_capture_has_no_record_raw_flag():
     with pytest.raises(SystemExit):
         build_parser().parse_args(["capture", "--device", "x", "--record-raw", "d"])

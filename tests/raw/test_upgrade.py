@@ -569,6 +569,54 @@ def test_swap_failure_after_placing_file_without_original_keeps_backup(tmp_path,
     assert not any("run zustal beze zmeny" in line for line in render_report(report))
 
 
+def test_fingerprint_skips_file_removed_between_glob_and_stat(tmp_path, monkeypatch):
+    """Soubezny capture smaze raw session.json mezi globem a stat() - to je
+    zmena runu (projevi se pri vymene), ne pad upgradu."""
+    from migration_validator.raw.upgrade import _fingerprint
+
+    store = build_run(tmp_path)
+    gone = store.raw_dir("snapshot_post_PTX1_all.json") / "session.json"
+    real_stat = Path.stat
+    seen = []
+
+    def stat(self, *args, **kwargs):
+        if self == gone:
+            seen.append(self)
+            raise FileNotFoundError(2, "No such file or directory", str(self))
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", stat)
+
+    entries = _fingerprint(store)
+
+    assert seen == [gone]
+    assert "raw/post_PTX1_all/session.json" not in entries
+    assert "raw/pre_MX1_all/session.json" in entries
+    assert "run.yml" in entries
+
+
+def test_utime_failure_after_swap_keeps_report(tmp_path, monkeypatch):
+    """Vymena probehla - selhani posunu mtime run.yml nesmi zahodit report
+    se zalohou."""
+    store = build_run(tmp_path)
+    arp_with_note(monkeypatch)
+    from migration_validator.raw import upgrade as upgrade_module
+
+    real_utime = upgrade_module.os.utime
+
+    def utime(path, *args, **kwargs):
+        if Path(path) == store.manifest_path:
+            raise PermissionError("read-only")
+        return real_utime(path, *args, **kwargs)
+
+    monkeypatch.setattr(upgrade_module.os, "utime", utime)
+
+    report = upgrade_run(store, now=NOW)
+
+    assert report.error is None
+    assert report.backup == "backup/upgrade-20260923T120000Z"
+
+
 def test_render_report_error_with_backup_shows_zaloha_not_beze_zmeny():
     report = UpgradeReport(
         run="mig01", dry_run=False,
