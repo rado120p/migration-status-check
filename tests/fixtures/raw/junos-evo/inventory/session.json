@@ -1,0 +1,46 @@
+{
+  "raw_format": 1,
+  "kind": "inventory",
+  "tool": {
+    "version": "0.1.0",
+    "commit": "c562ddb7670f2d7e477c95498b363d5b614a8d68"
+  },
+  "address": "172.20.20.5",
+  "hostname": "172.20.20.5",
+  "facts": {
+    "hostname": "clab-pop-migration-PTX1-POP1",
+    "model": "PTX10002-36QDD",
+    "version": "25.2R1.8-EVO"
+  },
+  "started_at": "2026-09-23T21:25:27Z",
+  "finished_at": null,
+  "params": null,
+  "inventory": null,
+  "baselines": null,
+  "port_filter": null,
+  "calls": [
+    {
+      "seq": 1,
+      "rpc": "get_config",
+      "kwargs": {
+        "options": {
+          "database": "committed",
+          "inherit": ""
+        }
+      },
+      "filter": [
+        "interfaces",
+        "routing-options",
+        "routing-instances",
+        "protocols",
+        "bridge-domains",
+        "vlans",
+        "switch-options",
+        "policy-options",
+        "firewall",
+        "class-of-service"
+      ],
+      "reply": "0001-get_config.xml.gz"
+    }
+  ]
+}

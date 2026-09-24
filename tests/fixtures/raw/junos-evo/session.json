@@ -1,0 +1,365 @@
+{
+  "raw_format": 1,
+  "kind": "capture",
+  "tool": {
+    "version": "0.1.0",
+    "commit": "c562ddb7670f2d7e477c95498b363d5b614a8d68"
+  },
+  "address": "172.20.20.5",
+  "hostname": "172.20.20.5",
+  "facts": {
+    "hostname": "clab-pop-migration-PTX1-POP1",
+    "model": "PTX10002-36QDD",
+    "version": "25.2R1.8-EVO"
+  },
+  "started_at": "2026-09-23T21:25:32Z",
+  "finished_at": "2026-09-23T21:25:38Z",
+  "params": {
+    "phase": "pre",
+    "port": null,
+    "collectors": null,
+    "ping_count": 5,
+    "service_types": null,
+    "profile_name": null
+  },
+  "inventory": {
+    "file": "inventory_172.20.20.5_all.yml",
+    "raw": true
+  },
+  "baselines": [],
+  "port_filter": null,
+  "calls": [
+    {
+      "seq": 1,
+      "rpc": "get_arp_table_information",
+      "kwargs": {
+        "no_resolve": true
+      },
+      "reply": "0001-get_arp_table_information.xml.gz"
+    },
+    {
+      "seq": 2,
+      "rpc": "get_bfd_session_information",
+      "kwargs": {
+        "detail": true
+      },
+      "reply": "0002-get_bfd_session_information.xml.gz"
+    },
+    {
+      "seq": 3,
+      "rpc": "get_bgp_neighbor_information",
+      "kwargs": {},
+      "reply": "0003-get_bgp_neighbor_information.xml.gz"
+    },
+    {
+      "seq": 4,
+      "rpc": "get_evpn_instance_information",
+      "kwargs": {
+        "extensive": true
+      },
+      "reply": "0004-get_evpn_instance_information.xml.gz"
+    },
+    {
+      "seq": 5,
+      "rpc": "get_mac_vrf_instance_information",
+      "kwargs": {
+        "extensive": true
+      },
+      "reply": "0005-get_mac_vrf_instance_information.xml.gz"
+    },
+    {
+      "seq": 6,
+      "rpc": "get_mac_vrf_mac_table",
+      "kwargs": {
+        "count": true
+      },
+      "reply": "0006-get_mac_vrf_mac_table.xml.gz"
+    },
+    {
+      "seq": 7,
+      "rpc": "get_evpn_vpws_information",
+      "kwargs": {},
+      "reply": "0007-get_evpn_vpws_information.xml.gz"
+    },
+    {
+      "seq": 8,
+      "rpc": "get_igmp_group_information",
+      "kwargs": {},
+      "reply": "0008-get_igmp_group_information.xml.gz"
+    },
+    {
+      "seq": 9,
+      "rpc": "get_interface_information",
+      "kwargs": {
+        "extensive": true
+      },
+      "reply": "0009-get_interface_information.xml.gz"
+    },
+    {
+      "seq": 10,
+      "rpc": "get_interface_information",
+      "kwargs": {
+        "terse": true
+      },
+      "reply": "0010-get_interface_information.xml.gz"
+    },
+    {
+      "seq": 11,
+      "rpc": "get_isis_adjacency_information",
+      "kwargs": {
+        "detail": true
+      },
+      "reply": "0011-get_isis_adjacency_information.xml.gz"
+    },
+    {
+      "seq": 12,
+      "rpc": "get_isis_interface_information",
+      "kwargs": {
+        "detail": true
+      },
+      "reply": "0012-get_isis_interface_information.xml.gz"
+    },
+    {
+      "seq": 13,
+      "rpc": "get_isis_overview_information",
+      "kwargs": {},
+      "reply": "0013-get_isis_overview_information.xml.gz"
+    },
+    {
+      "seq": 14,
+      "rpc": "get_ldp_neighbor_information",
+      "kwargs": {
+        "detail": true
+      },
+      "reply": "0014-get_ldp_neighbor_information.xml.gz"
+    },
+    {
+      "seq": 15,
+      "rpc": "get_mpls_interface_information",
+      "kwargs": {},
+      "reply": "0015-get_mpls_interface_information.xml.gz"
+    },
+    {
+      "seq": 16,
+      "rpc": "get_multicast_route_information",
+      "kwargs": {
+        "extensive": true,
+        "instance": "all"
+      },
+      "reply": "0016-get_multicast_route_information.xml.gz"
+    },
+    {
+      "seq": 17,
+      "rpc": "get_mvpn_instance_information",
+      "kwargs": {
+        "inet": true
+      },
+      "reply": "0017-get_mvpn_instance_information.xml.gz"
+    },
+    {
+      "seq": 18,
+      "rpc": "get_ipv6_nd_information",
+      "kwargs": {},
+      "reply": "0018-get_ipv6_nd_information.xml.gz"
+    },
+    {
+      "seq": 19,
+      "rpc": "get_interface_optics_diagnostics_information",
+      "kwargs": {},
+      "reply": "0019-get_interface_optics_diagnostics_information.xml.gz"
+    },
+    {
+      "seq": 20,
+      "rpc": "get_pim_join_information",
+      "kwargs": {
+        "extensive": true,
+        "instance": "all"
+      },
+      "reply": "0020-get_pim_join_information.xml.gz"
+    },
+    {
+      "seq": 21,
+      "rpc": "get_pim_neighbors_information",
+      "kwargs": {},
+      "reply": "0021-get_pim_neighbors_information.xml.gz"
+    },
+    {
+      "seq": 22,
+      "rpc": "get_route_information",
+      "kwargs": {
+        "protocol": "static"
+      },
+      "reply": "0022-get_route_information.xml.gz"
+    },
+    {
+      "seq": 23,
+      "rpc": "get_route_information",
+      "kwargs": {
+        "protocol": "aggregate"
+      },
+      "reply": "0023-get_route_information.xml.gz"
+    },
+    {
+      "seq": 24,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "152.11.14.4",
+        "rapid": true
+      },
+      "reply": "0024-ping.xml.gz"
+    },
+    {
+      "seq": 25,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "2001:abcd:11:14::4",
+        "rapid": true
+      },
+      "reply": "0025-ping.xml.gz"
+    },
+    {
+      "seq": 26,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "198.11.14.4",
+        "rapid": true,
+        "routing_instance": "L3VPN-CPE14-UNI"
+      },
+      "reply": "0026-ping.xml.gz"
+    },
+    {
+      "seq": 27,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "2001:db8:11:14::4",
+        "rapid": true,
+        "routing_instance": "L3VPN-CPE14-UNI"
+      },
+      "reply": "0027-ping.xml.gz"
+    },
+    {
+      "seq": 28,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "152.11.13.2",
+        "rapid": true
+      },
+      "reply": "0028-ping.xml.gz"
+    },
+    {
+      "seq": 29,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "fe80::2",
+        "interface": "et-0/0/8.13",
+        "rapid": true
+      },
+      "reply": "0029-ping.xml.gz"
+    },
+    {
+      "seq": 30,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "198.11.13.2",
+        "rapid": true,
+        "routing_instance": "L3VPN-CPE13-NNI"
+      },
+      "reply": "0030-ping.xml.gz"
+    },
+    {
+      "seq": 31,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "2001:db8:11:13::b",
+        "rapid": true,
+        "routing_instance": "L3VPN-CPE13-NNI"
+      },
+      "reply": "0031-ping.xml.gz"
+    },
+    {
+      "seq": 32,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "198.11.133.2",
+        "rapid": true,
+        "routing_instance": "L3VPN-CPE13-NNI"
+      },
+      "reply": "0032-ping.xml.gz"
+    },
+    {
+      "seq": 33,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.94.2",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0033-ping.xml.gz"
+    },
+    {
+      "seq": 34,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.94.3",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0034-ping.xml.gz"
+    },
+    {
+      "seq": 35,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.94.4",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0035-ping.xml.gz"
+    },
+    {
+      "seq": 36,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.94.10",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0036-ping.xml.gz"
+    },
+    {
+      "seq": 37,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.94.252",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0037-ping.xml.gz"
+    },
+    {
+      "seq": 38,
+      "rpc": "ping",
+      "kwargs": {
+        "count": "5",
+        "host": "10.40.95.3",
+        "rapid": true,
+        "routing_instance": "MGMT"
+      },
+      "reply": "0038-ping.xml.gz"
+    }
+  ]
+}

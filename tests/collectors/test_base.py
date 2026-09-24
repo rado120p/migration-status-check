@@ -1,12 +1,25 @@
 import pytest
 from lxml import etree
 
+from migration_validator.collectors import registry as registry_module
 from migration_validator.collectors.base import Collector, CollectorError
 from migration_validator.collectors.registry import (
     all_collectors,
     collectors_for,
     register,
 )
+
+
+@pytest.fixture(autouse=True)
+def _restore_registry():
+    """`@register` pise do globalniho registru trvale - testy nize registruji
+    demo collectory jen pro sebe. Bez obnovy by zustaly v registru pro
+    zbytek behu sady a kazivalo by to napr. capture s collector_names=None
+    (vsechny registrovane collectory) v jinych testech."""
+    snapshot = dict(registry_module._REGISTRY)
+    yield
+    registry_module._REGISTRY.clear()
+    registry_module._REGISTRY.update(snapshot)
 
 
 class FakeRpcMeta:
