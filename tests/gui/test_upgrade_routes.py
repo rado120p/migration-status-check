@@ -131,6 +131,50 @@ def test_group_upgrade_refused_while_any_capture_runs(tmp_path):
     assert res.status_code == 409
 
 
+def test_archive_refused_while_run_is_upgrading(tmp_path):
+    """F5: archivace by presunula run pod rukama upgradu (vymena pod flock
+    na runs/<run>/.lock) - busy_run proto pocita i udrzbu."""
+    build_run(tmp_path)
+    app, client = _client(tmp_path)
+
+    with app.state.captures.maintenance("mig01"):
+        res = client.post("/api/runs/mig01/archive")
+
+    assert res.status_code == 409
+    assert (tmp_path / "mig01" / "run.yml").is_file()
+
+
+def test_group_archive_refused_while_member_is_upgrading(tmp_path):
+    build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+    app, client = _client(tmp_path)
+
+    with app.state.captures.maintenance("pop1-mx2"):
+        res = client.post("/api/groups/pop1/archive")
+
+    assert res.status_code == 409
+    assert (tmp_path / "pop1-mx1" / "run.yml").is_file()
+    assert (tmp_path / "pop1-mx2" / "run.yml").is_file()
+
+
+def test_group_upgrade_with_member_already_upgrading_upgrades_the_rest(tmp_path):
+    """Up-front kontrola group upgradu hlida jen bezici capture: clen, ktery
+    se prave upgraduje (soubezny upgrade runu), dostane vlastni RunBusy
+    zaznam a ostatni cleny to nezastavi (jako pred F5)."""
+    build_run(tmp_path, "pop1-mx1", group="pop1")
+    build_run(tmp_path, "pop1-mx2", group="pop1")
+    app, client = _client(tmp_path)
+
+    with app.state.captures.maintenance("pop1-mx1"):
+        res = client.post("/api/groups/pop1/upgrade?dry_run=true")
+
+    assert res.status_code == 200
+    runs = {entry["run"]: entry for entry in res.json()["runs"]}
+    assert runs["pop1-mx1"]["error"] == "RunBusy: run pop1-mx1 se uz upgraduje"
+    assert runs["pop1-mx2"]["error"] is None
+    assert runs["pop1-mx2"]["items"]
+
+
 def test_group_upgrade_unknown_group_is_404(tmp_path):
     _, client = _client(tmp_path)
     assert client.post("/api/groups/nope/upgrade").status_code == 404

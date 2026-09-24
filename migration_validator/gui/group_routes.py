@@ -176,7 +176,9 @@ def build_groups_router(
         members = api.group_runs(run_root).get(group)
         if not members:
             raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
-        if any(manager.busy_run(name) for name in members):
+        # Jen bezici capture, ne busy_run: clen, ktery se prave upgraduje,
+        # dostane vlastni RunBusy zaznam nize a ostatni cleny nezastavi.
+        if any(manager.active_task(name) is not None for name in members):
             raise HTTPException(status_code=409, detail=f"skupina '{group}' ma bezici capture")
         runs: list[dict[str, Any]] = []
         for name in members:

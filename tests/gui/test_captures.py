@@ -305,5 +305,14 @@ def test_start_refuses_run_in_maintenance():
     assert _wait_done(manager, task.id).state == "done"
 
 
+def test_busy_run_counts_maintenance():
+    manager = CaptureManager()
+    assert not manager.busy_run("mig01")
+    with manager.maintenance("mig01"):
+        assert manager.busy_run("mig01")
+        assert not manager.busy_run("mig02")
+    assert not manager.busy_run("mig01")
+
+
 def test_run_busy_is_device_busy_for_existing_handlers():
     assert issubclass(RunBusy, DeviceBusy)

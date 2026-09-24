@@ -64,8 +64,10 @@ class CaptureManager:
             return self._tasks.get(task_id)
 
     def busy_run(self, run: str) -> bool:
-        """True, dokud na runu ceka nebo bezi aspon jeden capture."""
-        return self.active_task(run) is not None
+        """True, dokud na runu ceka nebo bezi aspon jeden capture, nebo se
+        run upgraduje (archivace nesmi presunout run pod rukama upgradu)."""
+        with self._lock:
+            return run in self._maintenance or self._active_unlocked(run) is not None
 
     def active_task(self, run: str) -> CaptureTask | None:
         with self._lock:
