@@ -208,6 +208,65 @@ def test_raw_write_failure_is_warning_and_leaves_no_stale_raw(tmp_path, monkeypa
     assert len(load_manifest(store.manifest_path).captures) == 1
 
 
+def test_old_raw_removal_failure_does_not_fail_capture(tmp_path, monkeypatch):
+    """R13: selhani smazani stareho raw neshodi dokonceny capture - mereni
+    se ulozi, zaznam v run.yml vznikne, varovani rekne proc. Zbyly stary
+    bundle upgrade odmitne kontrolou started_at/taken (RAW_MISMATCH)."""
+    from migration_validator.raw.bundle import remove_session as real_remove
+
+    store = RunStore(root=tmp_path, name="mig01")
+    _fake_capture_recording(monkeypatch)
+    first = _capture(store)
+    raw_dir = store.raw_dir(first.snapshot_path.name)
+    first.snapshot_path.unlink()
+    manifest = load_manifest(store.manifest_path)
+    manifest.captures.clear()
+    store.save(manifest)
+
+    def flaky(target):
+        if Path(target) == raw_dir:
+            raise OSError("permission denied")
+        return real_remove(target)
+
+    monkeypatch.setattr("migration_validator.runs.orchestrate.remove_session", flaky)
+    outcome = _capture(store)
+
+    assert any(
+        warning.startswith(f"stary raw zaznam {raw_dir.name} se nepodarilo smazat (permission denied)")
+        and warning.endswith("upgrade ho odmitne jako cizi")
+        for warning in outcome.warnings
+    )
+    assert outcome.snapshot_path.exists()
+    records = load_manifest(store.manifest_path).captures
+    assert [record.snapshot for record in records] == [outcome.snapshot_path.name]
+
+
+def test_unexpected_raw_write_error_is_warning(tmp_path, monkeypatch):
+    """R13: raw je best effort - ani jina nez OSError vyjimka pri zapisu
+    raw neshodi capture a nenecha stary raw vedle noveho snimku."""
+    store = RunStore(root=tmp_path, name="mig01")
+    _fake_capture_recording(monkeypatch)
+    first = _capture(store)
+    raw_dir = store.raw_dir(first.snapshot_path.name)
+    assert has_session(raw_dir)
+
+    def boom(*args, **kwargs):
+        raise TypeError("Object of type bytes is not JSON serializable")
+
+    monkeypatch.setattr("migration_validator.runs.orchestrate.write_session", boom)
+    outcome = _capture(store)
+
+    assert any(
+        "nepujde pregenerovat (Object of type bytes is not JSON serializable)" in warning
+        for warning in outcome.warnings
+    )
+    assert not raw_dir.exists()
+    assert outcome.snapshot_path.exists()
+    assert [record.snapshot for record in load_manifest(store.manifest_path).captures] == [
+        outcome.snapshot_path.name
+    ]
+
+
 def test_capture_removes_old_raw_before_save_snapshot(tmp_path, monkeypatch):
     """Mutant A: capture_into_run prohodi poradi na save_snapshot(...) pred
     remove_session(raw_dir) (orchestrate.py ~294-295) - pri padu po ulozeni

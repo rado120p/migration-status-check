@@ -48,6 +48,10 @@ RAW_WRITE_WARNING = (
     "raw zaznam {name} se nepodarilo ulozit - po upgradu nastroje nepujde "
     "pregenerovat ({error})"
 )
+RAW_REMOVE_WARNING = (
+    "stary raw zaznam {name} se nepodarilo smazat ({error}) - upgrade ho "
+    "odmitne jako cizi"
+)
 
 
 def _timestamp() -> str:
@@ -55,12 +59,14 @@ def _timestamp() -> str:
 
 
 def _write_raw(session: Session, target: Path, warnings: list[str], **copy) -> None:
-    """Zapis raw je best effort: selhani = varovani, capture plati dal
-    (spec 2026-09-23). write_session maze stary zaznam jako prvni, takze po
-    selhani vedle noveho souboru nikdy nezustane raw predchoziho capture."""
+    """Zapis raw je best effort: jakekoli selhani = varovani, capture plati
+    dal (spec 2026-09-23, R13). write_session maze stary zaznam jako prvni,
+    takze po selhani zapisu vedle noveho souboru raw predchoziho capture
+    nezustane; nejde-li smazat ani on, upgrade ho odmitne kontrolou
+    started_at/taken."""
     try:
         write_session(session, target, **copy)
-    except OSError as error:
+    except Exception as error:  # noqa: BLE001 - raw je best effort (R13)
         warnings.append(RAW_WRITE_WARNING.format(name=target.name, error=error))
 
 
@@ -137,6 +143,9 @@ def _parse_services(
         with store.lock():
             # Stary raw pryc driv, nez se nahradi YAML - jinak by vedle nove
             # inventory zustal raw predchozi.
+            # Na rozdil od capture tady chyba propaguje: inventory raw nema
+            # kontrolu taken, ktera by zbyly stary raw odmitla, a capture
+            # jeste nebezel, takze se neztraci zadne mereni.
             remove_session(raw_dir)
             os.replace(scratch, inventory_path)
             _write_raw(session, raw_dir, warnings)
@@ -296,7 +305,12 @@ def capture_into_run(
                 platform=snapshot.device.platform,
                 role=_PHASE_TO_ROLE[phase],
             )
-        remove_session(raw_dir)
+        try:
+            remove_session(raw_dir)
+        except OSError as error:
+            # Mereni uz je hotove a nesmi se ztratit (R13). Zbyly stary raw
+            # upgrade odmitne kontrolou started_at/taken (RAW_MISMATCH).
+            warnings.append(RAW_REMOVE_WARNING.format(name=raw_dir.name, error=error))
         save_snapshot(snapshot, snapshot_path)
         _write_raw(
             session,
