@@ -378,7 +378,7 @@ def test_run_evaluation_sdileny_cil_dve_baseline(tmp_path):
     def services(ev):
         return sorted(
             s["identity"]["description"] for s in ev["result"]["scopes"]
-            if s["scope_id"] != "device" and s["identity"].get("service_type") != "Layer1"
+            if s["identity"].get("service_type") != "Layer1"
         )
 
     assert services(steps[0]) == ["A"]

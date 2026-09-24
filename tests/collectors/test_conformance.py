@@ -261,7 +261,7 @@ def test_esi_interface_matches_a_scope(platform):
 def test_interfaces_reach_their_scopes(platform):
     """Rozhrani z collectoru se musi potkat se selektory scopu."""
     snapshot = _snapshot(platform)
-    service_scopes = [scope for scope in snapshot.scopes if not scope.is_device]
+    service_scopes = [scope for scope in snapshot.scopes if scope.kind == "service"]
     assert service_scopes
 
     selected = [

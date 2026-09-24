@@ -128,13 +128,6 @@ def test_context_mismatch_creates_no_link():
     assert link_scopes([l3, _l2_scope()], _facts()) == []
 
 
-def test_device_scope_is_ignored():
-    from migration_validator.models.scope import device_scope
-
-    links = link_scopes([device_scope(), _l3_scope(), _l2_scope()], _facts())
-    assert len(links) == 1
-
-
 def test_l2_interface_reports_the_interface_whose_unit_matched():
     # L2 scope ma dve rozhrani, shoda unit-cisla je na druhem (ae0.15), ne
     # na prvnim (ae0.14) - vazba musi ukazovat na to, ktere skutecne nese

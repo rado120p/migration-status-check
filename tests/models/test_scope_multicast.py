@@ -1,7 +1,7 @@
 """Selekce multicast areas (spec 2026-09-02). multicast_route se vybira podle
 instance (master | RI), ne podle rozhrani - filtr per (S,G) dela check."""
 
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 FACTS = {
     "igmp_group": {
@@ -74,10 +74,3 @@ def test_pim_join_is_selected_per_instance_like_multicast_route():
 
 def test_pim_join_missing_instance_yields_empty_dict():
     assert _scope("IPVPN", "mvpn", ["irb.5"], ["OTHER-RI"]).select(FACTS)["pim_join"] == {}
-
-
-def test_device_scope_passes_everything():
-    selected = device_scope().select(FACTS)
-    assert selected["multicast_route"] == FACTS["multicast_route"]
-    assert selected["mvpn_instance"] == FACTS["mvpn_instance"]
-    assert selected["pim_join"] == FACTS["pim_join"]

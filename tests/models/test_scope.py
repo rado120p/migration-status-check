@@ -3,7 +3,6 @@ from migration_validator.models.scope import (
     Scope,
     ScopeKey,
     Selectors,
-    device_scope,
 )
 
 FACTS = {
@@ -96,27 +95,9 @@ def test_select_evpn_instance_by_routing_instance():
     assert set(scope.select(facts)["evpn_instance"]) == {"EVPN-A"}
 
 
-def test_device_scope_passes_evpn_instance():
-    facts = {"evpn_instance": {"EVPN-A": {}}}
-    assert device_scope().select(facts)["evpn_instance"] == {"EVPN-A": {}}
-
-
 def test_select_filters_ping_by_scope_id():
     selected = _service_scope().select(FACTS, PROBES)
     assert [probe["target"] for probe in selected["ping"]] == ["198.11.13.2"]
-
-
-def test_device_scope_selects_everything():
-    selected = device_scope().select(FACTS, PROBES)
-    assert selected["interfaces"] == FACTS["interfaces"]
-    assert selected["arp"] == FACTS["arp"]
-    assert selected["bgp"] == FACTS["bgp"]
-    assert len(selected["ping"]) == 2
-
-
-def test_device_scope_is_flagged():
-    assert device_scope().is_device is True
-    assert _service_scope().is_device is False
 
 
 def test_select_tolerates_missing_fact_areas():
@@ -139,13 +120,6 @@ def test_select_bez_markeru_je_false():
     assert subject["ping_skipped"] is False
 
 
-def test_device_scope_ping_skipped_je_vzdy_false():
-    """Device scope zadne sluzebni pingy nema - klic ale byt musi, aby
-    check necetl neexistujici klic."""
-    subject = device_scope().select({}, {"ping_skipped": [{"scope_id": "svc:X:IPVPN"}]})
-    assert subject["ping_skipped"] is False
-
-
 def test_scope_round_trip():
     scope = _service_scope()
     assert Scope.from_dict(scope.to_dict()) == scope
@@ -153,10 +127,19 @@ def test_scope_round_trip():
 
 def test_nd_area_is_a_list_when_missing():
     """Spatny prazdny typ by check videl jako prazdny slovnik a tise prosel."""
-    selected = device_scope().select({})
+    selected = _service_scope().select({})
 
     assert selected["nd"] == []
     assert "nd" in FACT_AREAS
+
+
+def test_device_scope_no_longer_exists():
+    # Spec 2026-09-24: jmeno `device` se pro nic noveho nepouzije.
+    import migration_validator.models.scope as scope_module
+
+    assert not hasattr(scope_module, "device_scope")
+    assert not hasattr(scope_module, "DEVICE_SCOPE_ID")
+    assert not hasattr(Scope, "is_device")
 
 
 ROUTE_FACTS = {
@@ -268,14 +251,6 @@ def test_bfd_session_of_deactivated_peer_is_not_selected():
     selected = scope.select({"bfd": BFD_FACTS})
 
     assert selected["bfd"] == {}
-
-
-def test_device_scope_sees_all_routes_and_sessions():
-    """Rezim bez inventory je podle AR-10 doporuceny zpusob prohlidky zarizeni."""
-    selected = device_scope().select({"routes": ROUTE_FACTS, "bfd": BFD_FACTS})
-
-    assert selected["routes"] == ROUTE_FACTS
-    assert selected["bfd"] == BFD_FACTS
 
 
 def test_missing_areas_come_back_as_empty_mappings():

@@ -465,12 +465,6 @@ def test_no_targets_for_core_or_elan_scopes():
     assert resolve_targets(scopes, []) == []
 
 
-def test_device_scope_produces_no_targets():
-    from migration_validator.models.scope import device_scope
-
-    assert resolve_targets([device_scope()], [{"ip": "1.2.3.4", "interface": "ge-0/0/0"}]) == []
-
-
 def test_ipv6_targets_come_from_nd():
     scope = _scope(
         interfaces=("et-0/0/8.13",), addresses=(), local_ipv6=("2001:abcd:11:13::a/127",)

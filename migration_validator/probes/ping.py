@@ -3,8 +3,8 @@
 Jediny aktivni test - proto vlastni kategorie mimo collectory. Bezi az po
 bulk sberu, protoze cile se odvozuji z ARP.
 
-Ping bezi jen v service rezimu: bez inventory neni znam cil, takze snapshot
-ma probes.ping prazdne.
+Ping bezi jen pro service scopy Internet/IPVPN - cil i zdrojova adresa se
+berou ze scopu.
 """
 
 from __future__ import annotations
@@ -224,8 +224,7 @@ def resolve_targets(
 
     for scope in scopes:
         if (
-            scope.is_device
-            or scope.service_type not in PING_SERVICE_TYPES
+            scope.service_type not in PING_SERVICE_TYPES
             or scope.service_subtype in MULTICAST_SUBTYPES
         ):
             # multicast sluzba ping nema (R-7) - jinak by capture palil

@@ -1,7 +1,7 @@
 """Selekce novych protokolovych areas. isis_overview je device-global a
 patri jen loopback scopu - transit by s nim tvrdil mereni, ktere se ho netyka."""
 
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 FACTS = {
     "isis_adjacency": {
@@ -86,10 +86,6 @@ def test_isis_overview_goes_only_to_loopback_scope():
 
     assert transit.select(FACTS)["isis_overview"] == {}
     assert loopback.select(FACTS)["isis_overview"] == {"overload_enabled": False}
-
-
-def test_isis_overview_reaches_device_scope():
-    assert device_scope().select(FACTS)["isis_overview"] == {"overload_enabled": False}
 
 
 def test_bfd_session_reaches_core_transit_scope_by_interface():

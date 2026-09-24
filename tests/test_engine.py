@@ -14,7 +14,7 @@ from migration_validator.engine import (
 )
 from migration_validator.models.inventory import Inventory, ServiceEntry
 from migration_validator.models.result import Finding, Outcome, ScopeResult, Status
-from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
+from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
 from migration_validator.scoping.builder import build_scopes
 
@@ -1040,24 +1040,6 @@ def test_identity_maps_each_address_field_to_its_own_key():
     assert identity["ipv6"] == ["2001:db8::1/64"]
     assert identity["virtual_gw_v4"] == ["192.0.2.2"]
     assert identity["virtual_gw_v6"] == ["2001:db8::2"]
-
-
-def test_identity_on_device_scope_is_empty_not_crashing():
-    identity = _identity(device_scope())
-
-    assert identity == {
-        "description": None,
-        "service_type": None,
-        "service_subtype": None,
-        "routing_instance": None,
-        "interfaces": [],
-        "physical_interfaces": [],
-        "ipv4": [],
-        "ipv6": [],
-        "virtual_gw_v4": [],
-        "virtual_gw_v6": [],
-        "l2_interfaces": [],
-    }
 
 
 def test_identity_without_routing_instance_is_none_not_indexerror():

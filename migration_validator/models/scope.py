@@ -1,16 +1,14 @@
 """Scope - filtr nad device-scoped fakty.
 
-Scope neobsahuje zadna namerena data. Bez inventory existuje jediny device
-scope s prazdnymi selektory, ktery propousti vse - diky tomu nemaji checky
-zadnou vetev pro rezim bez inventory.
+Scope neobsahuje zadna namerena data. Snimek bez service scopu se
+nevyhodnocuje (engine: `no_services`) - zadny scope, ktery by propoustel
+vsechno, neexistuje (spec 2026-09-24).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-
-DEVICE_SCOPE_ID = "device"
 
 # service_type synteticky vytvoreneho L1 scopu - jedina autoritativni definice,
 # ostatni moduly ji importuji misto vlastni kopie retezce.
@@ -141,7 +139,7 @@ class Selectors:
 @dataclass
 class Scope:
     id: str
-    kind: str  # service | device
+    kind: str  # service | layer1
     key: ScopeKey | None
     selectors: Selectors
     # Deaktivace neni selektor, je to vlastnost sluzby - proto tady, ne
@@ -150,10 +148,6 @@ class Scope:
     # zpusob, jak se to da poznat.
     routing_instance_active: bool = True
     interface_active: bool = True
-
-    @property
-    def is_device(self) -> bool:
-        return self.kind == "device"
 
     @property
     def is_deactivated(self) -> bool:
@@ -252,15 +246,6 @@ class Scope:
         """Vybere z device-scoped faktu jen to, co patri tomuto scope."""
         probes = probes or {}
         pings = list(probes.get("ping", []))
-
-        if self.is_device:
-            selected: dict[str, Any] = {area: facts.get(area, _empty(area)) for area in FACT_AREAS}
-            selected["ping"] = pings
-            selected["ping_skipped"] = any(
-                entry.get("scope_id") == self.id
-                for entry in probes.get("ping_skipped", [])
-            )
-            return selected
 
         interfaces = {
             name: data
@@ -459,12 +444,3 @@ class Scope:
             routing_instance_active=data.get("routing_instance_active", True),
             interface_active=data.get("interface_active", True),
         )
-
-
-def _empty(area: str) -> Any:
-    return [] if area in ("arp", "nd") else {}
-
-
-def device_scope() -> Scope:
-    """Jediny scope pro rezim bez inventory - propousti vsechna data."""
-    return Scope(id=DEVICE_SCOPE_ID, kind="device", key=None, selectors=Selectors())

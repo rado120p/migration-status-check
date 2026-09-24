@@ -71,7 +71,7 @@ def link_scopes(
 ) -> list[ScopeLink]:
     l3_by_interface: dict[str, list[Scope]] = {}
     for scope in scopes:
-        if scope.is_device or scope.service_type not in L3_SERVICE_TYPES:
+        if scope.service_type not in L3_SERVICE_TYPES:
             continue
         for iface in scope.selectors.interfaces:
             l3_by_interface.setdefault(iface, []).append(scope)
@@ -79,7 +79,7 @@ def link_scopes(
     links: list[ScopeLink] = []
     linked_l2: set[str] = set()
     for scope in scopes:
-        if scope.is_device or scope.service_type != L2_SERVICE_TYPE:
+        if scope.service_type != L2_SERVICE_TYPE:
             continue
         if scope.service_subtype == LOCAL_L2_SUBTYPE:
             continue
@@ -136,14 +136,10 @@ def _link_local_scopes(scopes: list[Scope]) -> list[ScopeLink]:
     `l2_interfaces`. Pravidlo 'prave jeden kandidat' plati stejne jako
     u EVPN - spatny odkaz je horsi nez zadny (spec 2026-09-09).
     """
-    l3_scopes = [
-        scope
-        for scope in scopes
-        if not scope.is_device and scope.service_type in L3_SERVICE_TYPES
-    ]
+    l3_scopes = [scope for scope in scopes if scope.service_type in L3_SERVICE_TYPES]
     links: list[ScopeLink] = []
     for scope in scopes:
-        if scope.is_device or scope.service_type != L2_SERVICE_TYPE:
+        if scope.service_type != L2_SERVICE_TYPE:
             continue
         if scope.service_subtype != LOCAL_L2_SUBTYPE or not scope.selectors.interfaces:
             continue

@@ -103,7 +103,7 @@ class FakeDevice:
         self.rpc = FakeRpc(failing)
 
 
-def test_capture_without_inventory_has_device_scope_and_no_ping():
+def test_capture_without_inventory_has_no_scopes_and_no_ping():
     snapshot = capture_device(FakeDevice(), "172.20.20.4", now=NOW)
 
     assert snapshot.inventory is None
