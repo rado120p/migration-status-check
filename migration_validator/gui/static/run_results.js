@@ -8,11 +8,9 @@ const SERVICE_TYPE_ORDER = ["Internet", "IPVPN", "E-Line", "E-LAN", "Core"];
 const ALL_TYPES = "All";
 const UNKNOWN_TYPE = "Unknown";
 const LAYER1_TYPE = "Layer1";
-const DEVICE_SCOPE_ID = "device";
 const STATUS_KEYS = ["pass", "recv", "warn", "fail", "skip", "info"];
 
 function classifyScope(scope) {
-  if (scope.scope_id === DEVICE_SCOPE_ID) return "device";
   const identity = scope.identity || {};
   const key = scope.key || {};
   if (identity.service_type === LAYER1_TYPE || key.service_type === LAYER1_TYPE) return "layer1";
@@ -81,6 +79,7 @@ function buildEvaluationModel(evaluation, index, snapshots, sectionKey) {
     unmatchedSubject: unmatched.subject || [],
     excludedCount: (result.excluded_services || []).length,
     filtered: result.filtered || null,
+    noServices: result.no_services === true,
   };
 }
 

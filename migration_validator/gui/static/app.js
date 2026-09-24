@@ -3093,6 +3093,7 @@ class App {
     };
     if (group.metadataMismatch) notice("warn", "Not in run mapping");
     for (const m of group.evaluations) {
+      if (m.noServices) notice("neutral", "No migrated services");
       if (!m.hasBaseline) notice("warn", "No baseline — service ownership unverified");
       else if (m.wholeDeviceBaseline) notice("warn", "Whole-device baseline");
       else if (m.baselineMetaMissing) notice("warn", "Baseline metadata unavailable");
@@ -3149,7 +3150,9 @@ class App {
 
     const shown = R.filterServiceEntries(model.serviceEntries, filterType);
     if (model.serviceEntries.length === 0) {
-      panel.appendChild(el("div", { className: "pairing-notice", text: "No service results in this evaluation" }));
+      panel.appendChild(el("div", { className: "pairing-notice", text: model.noServices
+        ? "No migrated services in the inventory — checks did not run"
+        : "No service results in this evaluation" }));
     } else if (shown.visible.length === 0) {
       panel.appendChild(el("div", { className: "pairing-notice", text: `No ${filterType} services in this pairing` }));
     } else {
@@ -3183,7 +3186,9 @@ class App {
       if (entries.length) {
         section.appendChild(el("div", { className: "table-scroll", children: [this.buildResultsTable(entries, { singlePort: !!opts.singlePort })] }));
       } else {
-        section.appendChild(el("div", { className: "pairing-notice", text: "No service results in this evaluation" }));
+        section.appendChild(el("div", { className: "pairing-notice", text: m.noServices
+          ? "No migrated services in the inventory — checks did not run"
+          : "No service results in this evaluation" }));
       }
       const items = this.unmatchedItems(m);
       if (items.length) {

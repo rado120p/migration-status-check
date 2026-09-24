@@ -14,7 +14,6 @@ function scope(id, type, extra) {
   };
 }
 const L1 = (port) => scope(`l1:${port}`, "Layer1", { identity: { service_type: "Layer1", interfaces: [port] } });
-const DEVICE = { scope_id: "device", key: null, identity: { service_type: null }, status: "PASS", checks: [] };
 
 const step = (oldPort, newPort) => ({
   old: { node: "MX1", port: oldPort },
@@ -39,8 +38,7 @@ function evaluation(subject, baseline, stepValue, scopes, extra) {
   };
 }
 
-test("classifyScope: device by id, layer1 by raw type, everything else service", () => {
-  assert.strictEqual(R.classifyScope(DEVICE), "device");
+test("classifyScope: layer1 by raw type, everything else service", () => {
   assert.strictEqual(R.classifyScope(L1("ae0")), "layer1");
   assert.strictEqual(R.classifyScope(scope("A", "IPVPN")), "service");
   assert.strictEqual(R.classifyScope({ scope_id: "x", key: { service_type: "Layer1" }, identity: {} }), "layer1");
@@ -150,6 +148,20 @@ test("buildEvaluationModel: missing baseline, missing baseline metadata, exclude
   assert.strictEqual(m2.excludedCount, 2);
   assert.strictEqual(R.evaluationLabel(noBaseline), "MX1:ge-0/0/4 -> PTX1:ae0");
   assert.strictEqual(R.evaluationLabel({ subject: "x.json", baseline: null, step: null }), "x.json");
+});
+
+test("buildEvaluationModel: noServices follows result.no_services, never attention", () => {
+  const empty = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), []);
+  empty.result.no_services = true;
+  const normal = evaluation("post-ae0.json", "pre-ge4.json", step("ge-0/0/4", "ae0"), [scope("A", "Internet")]);
+
+  assert.strictEqual(R.buildEvaluationModel(empty, 0, SNAPSHOTS, "s").noServices, true);
+  assert.strictEqual(R.buildEvaluationModel(normal, 0, SNAPSHOTS, "s").noServices, false);
+
+  const group = R.buildPairingGroups({
+    runName: "r", rows: [row("ge-0/0/4", "ae0")], evaluations: [empty], snapshots: SNAPSHOTS,
+  }).groups[0];
+  assert.strictEqual(R.groupNeedsAttention(group, R.ALL_TYPES), false);
 });
 
 test("buildPairingGroups: payload is not mutated", () => {
