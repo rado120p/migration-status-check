@@ -23,7 +23,7 @@ from migration_validator.models.result import (
     count_statuses,
     count_unchanged,
 )
-from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope, device_scope
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.scoping.linker import ScopeLink, link_scopes
 from migration_validator.scoping.mapping import Mapping, empty_mapping
@@ -51,7 +51,7 @@ def _snapshot_meta(snapshot: Snapshot) -> dict[str, Any]:
 
 
 def _scopes_of(snapshot: Snapshot) -> list[Scope]:
-    return snapshot.scopes if snapshot.scopes else [device_scope()]
+    return list(snapshot.scopes)
 
 
 def _unmatched_entry(scope: Scope, reason: str) -> dict[str, Any]:
@@ -481,8 +481,6 @@ def _unassigned_bgp_peers(
     # to nalez o jeho sluzbe. Porovnani jen adresou by polozku cizi VRF na
     # adrese naseho peera nevypsalo nikde - sluzba ji nevybere a tady by
     # platila za zarazenou.
-    if any(scope.is_device for scope in scopes):
-        return []
     return [
         {
             "peer": peer,
@@ -528,8 +526,6 @@ def _unassigned_static_routes(
         instance = _rib_instance(table)
         return instance is not None and instance in _scope_instances(scopes)
 
-    if any(scope.is_device for scope in scopes):
-        return []
     return [
         {
             "rib": table,
@@ -582,8 +578,6 @@ def _unassigned_bfd_sessions(
         for scope in scopes
         if not (scope.service_type == "Core" and scope.service_subtype == "loopback")
     ]
-    if any(scope.is_device for scope in scopes):
-        return []
     return [
         {
             "peer": peer,
@@ -618,8 +612,8 @@ def evaluate_snapshots(
     service_types_set = set(service_types) if service_types is not None else None
 
     def _in_profile(scope: Scope) -> bool:
-        # Filtr je jen na service typy: device a layer1 scopy jsou
-        # infrastruktura, ne sluzba, a v reportu zustavaji vzdy.
+        # Filtr je jen na service typy: layer1 scopy jsou infrastruktura,
+        # ne sluzba, a v reportu zustavaji vzdy.
         if service_types_set is None or scope.kind != "service":
             return True
         return scope.service_type in service_types_set
@@ -764,4 +758,5 @@ def evaluate_snapshots(
         profile=profile_name,
         step=step,
         excluded_services=excluded if (step is not None and baseline is not None) else None,
+        no_services=not any(scope.kind == "service" for scope in subject_scopes),
     )

@@ -876,19 +876,6 @@ def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
     ]
 
 
-def test_device_scope_reports_nothing_as_unassigned():
-    """Device scope propousti vsechno, takze nic neprirazene byt nemuze."""
-    subject = _new()
-    subject.facts["routes"] = MGMT_ROUTE
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
-    subject.scopes = []
-
-    result = api.evaluate(subject, now=NOW)
-
-    assert result.unassigned["static_routes"] == []
-    assert result.unassigned["bfd_sessions"] == []
-
-
 def test_failed_collector_produces_skip_not_pass():
     subject = _new()
     subject.capture.collectors["interfaces"] = {
@@ -903,15 +890,102 @@ def test_failed_collector_produces_skip_not_pass():
     assert "RpcError: timeout" in state[0].message
 
 
-def test_snapshot_without_scopes_falls_back_to_device_scope():
+def test_snapshot_without_scopes_runs_no_checks_and_says_so():
+    # Spec 2026-09-24: snimek bez sluzeb uz nepada do device scope - zadne
+    # checky, explicitni priznak ve vysledku.
     subject = _new()
     subject.scopes = []
     subject.inventory = None
 
     result = api.evaluate(subject, now=NOW)
 
-    assert len(result.scopes) == 1
-    assert result.scopes[0].scope_id == "device"
+    assert result.scopes == []
+    assert result.no_services is True
+    assert result.to_dict()["no_services"] is True
+    assert result.summary["fail"] == 0
+    assert result.summary["warn"] == 0
+
+
+def test_snapshot_without_scopes_still_lists_unassigned():
+    # NEZARAZENO bezi i bez scopu - celoboxovy datovy capture tak aspon
+    # ukaze, co na boxu je.
+    subject = _new()
+    subject.scopes = []
+    subject.facts["routes"] = MGMT_ROUTE
+    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.facts["bgp"] = {
+        "10.1.1.1": {"state": "Established", "routing_instance": None, "ribs": {}}
+    }
+
+    result = api.evaluate(subject, now=NOW)
+
+    assert [r["prefix"] for r in result.unassigned["static_routes"]] == ["0.0.0.0/0"]
+    assert [s["peer"] for s in result.unassigned["bfd_sessions"]] == ["10.1.1.1"]
+    assert [p["peer"] for p in result.unassigned["bgp_peers"]] == ["10.1.1.1"]
+
+
+def test_per_port_snapshot_without_scopes_narrows_unassigned_to_its_port():
+    # Port bez migrovane sluzby: NEZARAZENO nesmi vypsat cely box.
+    subject = _new()
+    subject.scopes = []
+    subject.facts["bfd"] = {
+        "10.1.1.1": {"state": "Up", "interface": "et-0/0/8.200"},
+        "10.2.2.2": {"state": "Up", "interface": "et-0/0/9.0"},
+    }
+    subject.facts["bgp"] = {
+        "10.9.9.9": {"state": "Established", "routing_instance": "CUST-B", "ribs": {}}
+    }
+
+    result = api.evaluate(subject, now=NOW, port="et-0/0/8")
+
+    assert [s["peer"] for s in result.unassigned["bfd_sessions"]] == ["10.1.1.1"]
+    assert result.unassigned["bgp_peers"] == []
+
+
+def test_layer1_only_subject_counts_as_no_services():
+    # no_services se pocita ze service scopu, ne ze vsech - budouci
+    # box-level scope by jinak tuhle logiku rozbil (spec, Mimo rozsah).
+    subject = _new()
+    subject.scopes = [
+        Scope(
+            id="l1:et-0/0/8",
+            kind="layer1",
+            key=ScopeKey(None, "Layer1", "physical-port"),
+            selectors=Selectors(interfaces=["et-0/0/8"]),
+        )
+    ]
+
+    result = api.evaluate(subject, now=NOW)
+
+    assert result.no_services is True
+
+
+def test_run_with_services_has_no_no_services_key():
+    result = api.evaluate(_new(), now=NOW)
+
+    assert result.no_services is False
+    assert "no_services" not in result.to_dict()
+
+
+def test_profile_filter_hiding_all_services_is_not_no_services():
+    # Subjekt sluzby ma, jen je profil vyfiltroval - report nesmi tvrdit,
+    # ze inventory je prazdna.
+    result = api.evaluate(_new(), now=NOW, service_types=["E-LAN"])
+
+    assert result.scopes == []
+    assert result.no_services is False
+
+
+def test_baseline_without_scopes_leaves_subject_services_unmatched():
+    # Stary baseline zachyceny bez inventory: sluzby subjektu nemaji s cim
+    # se sparovat, zadna zvlastni vetev.
+    baseline = _old()
+    baseline.scopes = []
+
+    result = api.evaluate(_new(), baseline=baseline, now=NOW)
+
+    assert [item["description"] for item in result.unmatched["subject"]] == ["L3VPN"]
+    assert result.no_services is False
 
 
 def test_summary_counts_every_check():

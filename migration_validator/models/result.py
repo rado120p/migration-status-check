@@ -271,6 +271,12 @@ class RunResult:
     # Sluzby subjektu potlacene filtrem pres baseline (cizi vlny na LAGu).
     # Plni se jen se `step` - i prazdny seznam rika "filtr bezel".
     excluded_services: list[dict[str, Any]] | None = None
+    # Subjekt nema zadny service scope (port bez migrovane sluzby, capture
+    # bez inventory) - checky nebezely. Pocita se ze service scopu pred
+    # filtrem profilu/kroku, takze vyfiltrovane sluzby tohle nenastavi.
+    # Aditivni klic jako `filtered`: zapisuje se jen kdyz plati (spec
+    # 2026-09-24, odstraneni device rezimu).
+    no_services: bool = False
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -296,4 +302,6 @@ class RunResult:
             payload["step"] = self.step
         if self.excluded_services is not None:
             payload["excluded_services"] = self.excluded_services
+        if self.no_services:
+            payload["no_services"] = True
         return payload
