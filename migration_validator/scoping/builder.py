@@ -44,6 +44,10 @@ def _label(entry: ServiceEntry) -> str:
     return entry.description or entry.interface
 
 
+def _base_id(entry: ServiceEntry) -> str:
+    return f"svc:{_label(entry)}:{entry.service_type}"
+
+
 def _is_eligible(entry: ServiceEntry) -> bool:
     return entry.service_type in MIGRATED_SERVICE_TYPES and not is_management(entry.interface)
 
@@ -63,13 +67,18 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
     }
     eligible = [entry for entry in inventory.entries if _is_eligible(entry)]
 
-    key_counts = Counter(_key(entry) for entry in eligible)
+    # Pocita se presne to, co je v id - ne cely ScopeKey. Subtype v id neni,
+    # takze dve sluzby se stejnym popisem a typem, ale jinym subtypem (unit
+    # dedi popis portu: IPVPN + mvpn, E-LAN vlan-based + vlan-aware), by
+    # jinak dostaly stejne id a vazby, razeni i GUI klicovane id by je slily
+    # (revize 2026-09-24, E1).
+    id_counts = Counter(_base_id(entry) for entry in eligible)
 
     scopes: list[Scope] = []
     for entry in eligible:
         key = _key(entry)
-        scope_id = f"svc:{_label(entry)}:{entry.service_type}"
-        if key_counts[key] > 1:
+        scope_id = _base_id(entry)
+        if id_counts[scope_id] > 1:
             scope_id = f"{scope_id}:{entry.interface}"
 
         parents = [entry.physical_name] if entry.physical_name in physical_names else []

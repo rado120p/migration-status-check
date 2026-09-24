@@ -12,9 +12,11 @@ from migration_validator.engine import (
     _unassigned_bgp_peers,
     evaluate_snapshots,
 )
+from migration_validator.models.inventory import Inventory, ServiceEntry
 from migration_validator.models.result import Finding, Outcome, ScopeResult, Status
 from migration_validator.models.scope import Scope, ScopeKey, Selectors, device_scope
 from migration_validator.models.snapshot import CaptureMeta, DeviceMeta, Snapshot
+from migration_validator.scoping.builder import build_scopes
 
 NOW = "2026-07-24T11:40:02Z"
 
@@ -1177,6 +1179,42 @@ def test_linked_scopes_carry_link_payload():
         "peer_instance": "L3VPN-CPE14-UNI",
     }
     assert by_id["svc:OTHER:Internet"].link is None
+
+
+def test_same_description_trunk_scopes_do_not_share_irb_link():
+    # Revize 2026-09-24, E1: dva E-LAN scopy se stejnym popisem a typem, ale
+    # jinym subtypem, dostavaly stejne id. _link_payloads je klicovany id,
+    # takze vazbu na irb.15 dostal i ae0.16, ktery s nim nema nic spolecneho,
+    # a jeho blok pak cetl cizi IRB. Scopy se stavi z inventory, protoze chyba
+    # je ve stavbe id, ne v linkeru.
+    inventory = Inventory(
+        device="172.20.20.4",
+        entries=[
+            ServiceEntry.from_dict({
+                "interface": "irb.15", "description": "L3VPN-CPE14-UNI",
+                "service_type": "IPVPN", "routing_instance": "L3VPN-CPE14-UNI",
+            }),
+            ServiceEntry.from_dict({
+                "interface": "ae0.15", "description": "TRUNK",
+                "service_type": "E-LAN", "service_subtype": "vlan-aware",
+                "routing_instance": "EVPN-VLAN-AWARE-POP1", "customer_vlan": ["15"],
+            }),
+            ServiceEntry.from_dict({
+                "interface": "ae0.16", "description": "TRUNK",
+                "service_type": "E-LAN", "service_subtype": "vlan-based",
+                "routing_instance": "EVPN-VLAN-BASED-16", "customer_vlan": ["16"],
+            }),
+        ],
+    )
+    snapshot = _linked_snapshot()
+    snapshot.scopes = build_scopes(inventory)
+
+    result = evaluate_snapshots(snapshot)
+    by_interface = {scope.identity["interfaces"][0]: scope for scope in result.scopes}
+
+    assert len({scope.scope_id for scope in result.scopes}) == len(result.scopes)
+    assert by_interface["ae0.15"].link["peer_interface"] == "irb.15"
+    assert by_interface["ae0.16"].link is None
 
 
 def _fanout_snapshot():

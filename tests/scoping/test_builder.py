@@ -125,6 +125,59 @@ def test_duplicate_key_gets_interface_suffix():
     ]
 
 
+@pytest.mark.parametrize(
+    "service_type,subtypes",
+    [
+        ("IPVPN", [None, "mvpn"]),
+        ("Internet", [None, "multicast"]),
+        ("E-LAN", ["vlan-based", "vlan-aware"]),
+    ],
+)
+def test_same_description_and_type_with_different_subtype_get_distinct_ids(
+    service_type, subtypes
+):
+    # Unit bez vlastniho popisu dedi popis portu, takze dve sluzby na jednom
+    # portu se lisi jen subtypem. Subtype v id neni - pocitat se musi to,
+    # co v id je, jinak obe dostanou svc:TRUNK:<typ> (revize 2026-09-24, E1).
+    inventory = Inventory(
+        device="172.20.20.4",
+        entries=[
+            _entry(
+                interface=f"ae0.{100 + index}",
+                description="TRUNK",
+                service_type=service_type,
+                service_subtype=subtype,
+            )
+            for index, subtype in enumerate(subtypes)
+        ],
+    )
+
+    scopes = build_scopes(inventory)
+
+    assert [scope.id for scope in scopes] == [
+        f"svc:TRUNK:{service_type}:ae0.100",
+        f"svc:TRUNK:{service_type}:ae0.101",
+    ]
+
+
+def test_unique_description_and_type_keep_id_without_suffix():
+    # Id, ktere dnes kolizi nema, se nemeni - je ulozene ve snapshotech
+    # a JSON vystupech.
+    inventory = Inventory(
+        device="172.20.20.4",
+        entries=[
+            _entry(interface="ae0.100", description="TRUNK", service_type="E-LAN",
+                   service_subtype="vlan-based"),
+            _entry(interface="ae0.200", description="OTHER", service_type="E-LAN",
+                   service_subtype="vlan-aware"),
+        ],
+    )
+
+    scopes = build_scopes(inventory)
+
+    assert [scope.id for scope in scopes] == ["svc:TRUNK:E-LAN", "svc:OTHER:E-LAN"]
+
+
 def test_irb_virtual_gw_lands_in_selectors():
     inventory = Inventory(
         device="172.20.20.5",
