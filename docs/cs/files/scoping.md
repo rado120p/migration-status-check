@@ -42,9 +42,11 @@ která přes něj jede.
 ### Tvorba id
 
 `svc:<description nebo název rozhraní>:<service_type>`, například
-`svc:L3VPN-CPE13-NNI:IPVPN`. Když by na stejný `ScopeKey` vyšlo víc záznamů (`Counter` nad
-klíči), přidá se na konec ještě název rozhraní: `svc:et-0/0/10.0:IPVPN`. Bez toho by dvě
-různé služby sdílely jedno id.
+`svc:L3VPN-CPE13-NNI:IPVPN`. Název rozhraní se přidá na konec (`svc:et-0/0/10.0:IPVPN`), když se
+opakuje jedno ze dvou: celý `ScopeKey` (popis, typ a subtyp společně — samo id subtyp nenese,
+takže dvě jednotky se stejným popisem a typem, ale jiným subtypem, např. IPVPN a IPVPN+mvpn na
+jednom portu, by se jinak slily), nebo výše sestavené id (např. bezpopisková unit, jejíž název
+rozhraní se shoduje s popisem jiné služby). Bez toho by dvě různé služby sdílely jedno id.
 
 ### Naplnění selektorů
 

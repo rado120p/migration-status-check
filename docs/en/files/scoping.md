@@ -42,9 +42,12 @@ service running over it.
 ### Id construction
 
 `svc:<description or interface name>:<service_type>`, for example
-`svc:L3VPN-CPE13-NNI:IPVPN`. If several entries would land on the same `ScopeKey` (a `Counter`
-over the keys), the interface name is appended: `svc:et-0/0/10.0:IPVPN`. Without that, two
-different services would share one id.
+`svc:L3VPN-CPE13-NNI:IPVPN`. The interface name is appended (`svc:et-0/0/10.0:IPVPN`) when
+either of two things repeats: the full `ScopeKey` (description, type and subtype together —
+the id itself doesn't carry the subtype, so two units with the same description and type but a
+different subtype, e.g. IPVPN plain and IPVPN+mvpn on one port, would otherwise collide), or the
+id built above (e.g. a description-less unit whose interface name matches another service's
+description). Without that, two different services would share one id.
 
 ### Populating the selectors
 

@@ -472,8 +472,10 @@ Addresses and virtual-gateway are split by family (`local_ipv4`/`local_ipv6`,
 `virtual_gw_v4`/`virtual_gw_v6`) — same as in the inventory YAML (see
 [files/parsers.md](files/parsers.md#output-format)).
 
-`id` is `svc:<description or interface name>:<service_type>`. If two services would produce
-the same key, the interface name is appended (`svc:et-0/0/10.0:IPVPN`).
+`id` is `svc:<description or interface name>:<service_type>`. The interface name is appended
+(`svc:et-0/0/10.0:IPVPN`) when either the `ScopeKey` repeats or the id itself would repeat
+(the id doesn't carry the subtype, so same description+type with a different subtype needs
+this too).
 
 ---
 

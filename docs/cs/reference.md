@@ -458,8 +458,9 @@ Adresy i virtual-gateway jsou rozdělené podle rodiny
 (`local_ipv4`/`local_ipv6`, `virtual_gw_v4`/`virtual_gw_v6`) — stejně jako v inventory YAML
 (viz [files/parsers.md](files/parsers.md#výstupní-formát)).
 
-`id` je `svc:<description nebo název rozhraní>:<service_type>`. Když by dvě služby vyšly na
-stejný klíč, přidá se za něj ještě název rozhraní (`svc:et-0/0/10.0:IPVPN`).
+`id` je `svc:<description nebo název rozhraní>:<service_type>`. Název rozhraní se přidá
+(`svc:et-0/0/10.0:IPVPN`), když se opakuje buď `ScopeKey`, nebo samo id (to subtyp nenese,
+takže stejný popis+typ s jiným subtypem to potřebuje taky).
 
 ---
 

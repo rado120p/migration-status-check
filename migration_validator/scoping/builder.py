@@ -67,18 +67,23 @@ def build_scopes(inventory: Inventory) -> list[Scope]:
     }
     eligible = [entry for entry in inventory.entries if _is_eligible(entry)]
 
-    # Pocita se presne to, co je v id - ne cely ScopeKey. Subtype v id neni,
-    # takze dve sluzby se stejnym popisem a typem, ale jinym subtypem (unit
-    # dedi popis portu: IPVPN + mvpn, E-LAN vlan-based + vlan-aware), by
-    # jinak dostaly stejne id a vazby, razeni i GUI klicovane id by je slily
-    # (revize 2026-09-24, E1).
+    # Dva Countery, dva ruzne duvody pro suffix:
+    # - key_counts (cely ScopeKey) drzi puvodni pravidlo z doby pred fcc4371 -
+    #   ids jsou ulozene ve snapshotech/JSON a jsou GUI label bezpopiskove
+    #   sluzby, takze suffix, ktery uz existoval, se nesmi ztratit jen proto,
+    #   ze base id (bez subtypu) vyslo jine.
+    # - id_counts (jen to, co je v id) chyta, co key_counts propasne: stejny
+    #   popis+typ, jiny subtype (unit dedi popis portu: IPVPN + mvpn, E-LAN
+    #   vlan-based + vlan-aware - revize 2026-09-24, E1) a bezpopiskovou unit,
+    #   jejiz nazev rozhrani je stejny jako popis jine sluzby.
+    key_counts = Counter(_key(entry) for entry in eligible)
     id_counts = Counter(_base_id(entry) for entry in eligible)
 
     scopes: list[Scope] = []
     for entry in eligible:
         key = _key(entry)
         scope_id = _base_id(entry)
-        if id_counts[scope_id] > 1:
+        if key_counts[key] > 1 or id_counts[scope_id] > 1:
             scope_id = f"{scope_id}:{entry.interface}"
 
         parents = [entry.physical_name] if entry.physical_name in physical_names else []

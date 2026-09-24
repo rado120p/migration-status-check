@@ -178,6 +178,49 @@ def test_unique_description_and_type_keep_id_without_suffix():
     assert [scope.id for scope in scopes] == ["svc:TRUNK:E-LAN", "svc:OTHER:E-LAN"]
 
 
+def test_description_less_pair_same_type_and_subtype_keeps_interface_suffix():
+    # Bez popisu se za label pouzije nazev rozhrani, takze base id uz je
+    # samo o sobe jedinecne (svc:ae0.100:IPVPN vs svc:ae0.200:IPVPN) - id_counts
+    # by suffix nepridal. Ale ScopeKey (None, IPVPN, None) je pro obe zaznamy
+    # stejny, a suffix na tomto klici stoji uz od doby pred fcc4371 - je
+    # ulozeny ve snapshotech, tak se nesmi ztratit (revize 2026-09-24, F-I1).
+    inventory = Inventory(
+        device="172.20.20.4",
+        entries=[
+            _entry(interface="ae0.100", service_type="IPVPN"),
+            _entry(interface="ae0.200", service_type="IPVPN"),
+        ],
+    )
+
+    scopes = build_scopes(inventory)
+
+    assert [scope.id for scope in scopes] == [
+        "svc:ae0.100:IPVPN:ae0.100",
+        "svc:ae0.200:IPVPN:ae0.200",
+    ]
+
+
+def test_description_less_unit_next_to_service_named_after_its_interface():
+    # Zaznam bez popisu dostane za label nazev rozhrani "ae0.100"; jiny
+    # zaznam ma popis literalne "ae0.100" - base id oboum vyjde
+    # "svc:ae0.100:IPVPN" a musi se rozlisit suffixem, i kdyz jejich
+    # ScopeKey se lisi (F-I1).
+    inventory = Inventory(
+        device="172.20.20.4",
+        entries=[
+            _entry(interface="ae0.100", service_type="IPVPN"),
+            _entry(interface="ae0.200", description="ae0.100", service_type="IPVPN"),
+        ],
+    )
+
+    scopes = build_scopes(inventory)
+
+    assert [scope.id for scope in scopes] == [
+        "svc:ae0.100:IPVPN:ae0.100",
+        "svc:ae0.100:IPVPN:ae0.200",
+    ]
+
+
 def test_irb_virtual_gw_lands_in_selectors():
     inventory = Inventory(
         device="172.20.20.5",
