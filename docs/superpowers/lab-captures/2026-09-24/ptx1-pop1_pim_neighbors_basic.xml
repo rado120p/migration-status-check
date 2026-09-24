@@ -1,0 +1,69 @@
+<!-- PTX1-POP1 (junos-evo 25.2R1.8), `show pim neighbors | display xml`, poslal uzivatel 2026-09-24.
+     Kazda rodina ma vlastni pim-interface se stejnym jmenem rozhrani; v6 blok je az za v4. -->
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/25.2R1.8-EVO/junos">
+    <pim-neighbors-information junos:style="basic">
+        <neighbor-option-banner>
+            <banner-first/>
+            <banner-second/>
+            <banner-third/>
+            <banner-fourth/>
+            <banner-fifth/>
+        </neighbor-option-banner>
+        <pim-instance>PIM.master</pim-instance>
+        <pim-interface>
+            <pim-neighbor>
+                <pim-interface-name>et-0/0/0.0</pim-interface-name>
+                <ip-protocol-version>4</ip-protocol-version>
+                <protocol-version>2</protocol-version>
+                <pim-neighbor-flags>
+                    <pim-neighbor-hold-time-flag/>
+                    <pim-neighbor-priority-flag/>
+                    <pim-neighbor-lan-prune-flag/>
+                    <pim-neighbor-generation-id-flag/>
+                    <pim-neighbor-t-bit-flag/>
+                    <pim-neighbor-a-bit-flag/>
+                    <pim-neighbor-interface-id-flag/>
+                </pim-neighbor-flags>
+                <pim-neighbor-uptime junos:seconds="87773">1d 00:22:53</pim-neighbor-uptime>
+                <pim-neighbor-address>10.1.1.2</pim-neighbor-address>
+            </pim-neighbor>
+        </pim-interface>
+        <pim-interface>
+            <pim-neighbor>
+                <pim-interface-name>et-0/0/1.0</pim-interface-name>
+                <ip-protocol-version>4</ip-protocol-version>
+                <protocol-version>2</protocol-version>
+                <pim-neighbor-flags>
+                    <pim-neighbor-hold-time-flag/>
+                    <pim-neighbor-priority-flag/>
+                    <pim-neighbor-lan-prune-flag/>
+                    <pim-neighbor-generation-id-flag/>
+                    <pim-neighbor-t-bit-flag/>
+                    <pim-neighbor-a-bit-flag/>
+                </pim-neighbor-flags>
+                <pim-neighbor-uptime junos:seconds="87773">1d 00:22:53</pim-neighbor-uptime>
+                <pim-neighbor-address>10.1.0.4</pim-neighbor-address>
+            </pim-neighbor>
+        </pim-interface>
+        <pim-interface>
+            <pim-neighbor>
+                <pim-interface-name>et-0/0/1.0</pim-interface-name>
+                <ip-protocol-version>6</ip-protocol-version>
+                <protocol-version>2</protocol-version>
+                <pim-neighbor-flags>
+                    <pim-neighbor-hold-time-flag/>
+                    <pim-neighbor-priority-flag/>
+                    <pim-neighbor-lan-prune-flag/>
+                    <pim-neighbor-generation-id-flag/>
+                    <pim-neighbor-t-bit-flag/>
+                    <pim-neighbor-a-bit-flag/>
+                </pim-neighbor-flags>
+                <pim-neighbor-uptime junos:seconds="14">00:00:14</pim-neighbor-uptime>
+                <pim-neighbor-address>fe80::e00:34ff:fe2e:e602</pim-neighbor-address>
+            </pim-neighbor>
+        </pim-interface>
+    </pim-neighbors-information>
+    <cli>
+        <banner>[edit]</banner>
+    </cli>
+</rpc-reply>
