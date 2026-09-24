@@ -7,7 +7,7 @@ nahraji z laborky znovu (Task 14 planu 2026-09-23-raw-retention-a-upgrade)
 - jinak by upgrade starsich capture tise hlasil 'neni v raw zaznamu'.
 
 authentication-key hodnoty v konfiguraci fixtures jsou nahrazeny literalem
-REDACTED (puvodni $9$ hodnoty nikdy neopustily laborku).
+REDACTED.
 """
 
 from pathlib import Path
