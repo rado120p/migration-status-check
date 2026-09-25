@@ -232,7 +232,9 @@ pravidla víc než jeden kandidát, pár pod ním nevznikne. Nejednoznačnost al
 **nevyřadí natrvalo** (E5, spec 2026-09-25): pozdější, slabší pravidlo (`routing_instance`,
 `subnet`, `vlan`) ho pořád smí spárovat, pokud tam pod ním existuje jednoznačná shoda 1:1.
 Pro scope, který nakonec nespárovalo žádné pravidlo, se zaznamenává **každá** jeho
-nejednoznačnost (v pořadí pravidel), ne jen první. Přesné pravidlo pro výsledný důvod
+nejednoznačnost (v pořadí pravidel), ne jen první. Za nejednoznačnost se počítá i
+**blokovaná** shoda 1:1 — kandidát, jehož jediný protějšek je nejednoznačný (final review
+I-1); soupeřem je ten protějšek. Přesné pravidlo pro výsledný důvod
 (`_reason()` v `matcher.py`): projdi zapamatované nejednoznačnosti v pořadí pravidel a
 vrať `ambiguous: N kandidatu (...)` **té první, u které je pořád aspoň jeden zapamatovaný
 soupeř nespárovaný**. Když žádná taková není (u všech nejednoznačností mají všichni soupeři

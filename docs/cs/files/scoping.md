@@ -112,6 +112,15 @@ nezávisí na pořadí (klíčů ve scope ani scopů v seznamu):
    víc klíčů na jeden scope).
 3. **Druhý průchod** spáruje jen ty, co po prvním průchodu zůstaly jednoznačné na obou
    stranách.
+4. **Blokovaný kandidát** (final review I-1): 1:1 shoda, jejíž jeden konec je nejednoznačný
+   (bod 1 nebo 2), se ve druhém průchodu nespáruje. Oba její konce si proto zapamatují
+   nejednoznačnost, kde soupeřem je druhý konec hrany; důvod vyjmenuje všechny kandidáty
+   nejednoznačného scope pod tímto pravidlem. Příklad: baseline B má vlany 10 a 20, subjekt
+   S1 jen 10, S2 a S3 oba 20. B je nejednoznačný (vlan 20), S1 je jeho jediný 1:1 kandidát.
+   S1 dostane `ambiguous: 3 kandidatu (S1, S2, S3)`, ne `nova sluzba, chybi baseline` —
+   jinak by ho step běh tiše vyřadil do `excluded_services`, přestože jeho kandidát B zůstal
+   nespárovaný. Když B později spáruje slabší pravidlo, nejednoznačnost S1 přestane trvat
+   a S1 dostane `nova sluzba` jako dřív.
 
 ### Nespárovaný scope na konci
 

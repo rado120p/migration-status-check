@@ -273,7 +273,8 @@ Klíč je vždy **složený**, ne samotná description: jedna description může
 **Nejednoznačnost pod jedním automatickým pravidlem nevyřadí scope z poolu natrvalo**
 (E5, spec 2026-09-25) — pozdější, slabší pravidlo ho pořád smí spárovat, pokud pod ním
 existuje jednoznačná shoda 1:1. Scope se `ambiguous` důvodem skončí v `unmatched`, jen
-pokud i na konci zůstal nespárovaný aspoň jeden z kandidátů, se kterými soupeřil; jinak
+pokud i na konci zůstal nespárovaný aspoň jeden z kandidátů, se kterými soupeřil (soupeřem
+je i nejednoznačný protějšek, který scope zablokoval v jinak jednoznačné shodě 1:1); jinak
 dostane `zadny kandidat na subject` / `nova sluzba, chybi baseline` (nejednoznačnost se
 v praxi rozhodla ve prospěch spárovaného kandidáta). Detaily dvouprůchodového vyhodnocení
 a pojistky proti víceklíčovým pravidlům: [files/scoping.md](files/scoping.md).

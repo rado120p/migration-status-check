@@ -182,7 +182,11 @@ v praxi tedy odpadá.
    než jednoho odlišného kandidáta, je taky nejednoznačný – i když byl
    každý dílčí klíč sám o sobě 1:1, pravidlo nesmí hádat, který kandidát je
    ten pravý. Teprve druhý průchod spáruje ty, co po prvním průchodu
-   zůstaly jednoznačné na obou stranách.
+   zůstaly jednoznačné na obou stranách. 1:1 shoda, jejíž jeden konec je
+   nejednoznačný, se nespáruje – a oba její konce si zapamatují
+   nejednoznačnost se soupeřem = druhý konec (final review I-1). Jinak by
+   blokovaný kandidát dostal `nova sluzba` a step běh by ho tiše vyřadil,
+   přestože jeho jediný kandidát zůstal nespárovaný.
 2. **Seznam nespárovaných se staví až na konci.** Když je scope pod
    klíčem (nebo napříč klíči, viz bod 1) nejednoznačný, zapamatuje se
    důvod a scopy **druhé strany**, se kterými soupeřil (u subjektového
