@@ -484,18 +484,33 @@ def _cmd_gui(args: argparse.Namespace) -> int:
     try:
         import uvicorn
     except ImportError as error:
-        raise ToolError(
-            "GUI vyzaduje 'pip install migration-validator[gui]'"
-        ) from error
-    from migration_validator.auth import load_settings
+        raise ToolError("GUI vyzaduje 'pip install migration-validator[gui]'") from error
+    from migration_validator.auth import load_auth_settings, load_settings
     from migration_validator.gui.app import create_app
+    from migration_validator.gui.audit import configure_audit_logging
+    from migration_validator.users import UserStore
 
+    if bool(args.ssl_certfile) != bool(args.ssl_keyfile):
+        raise ToolError("--ssl-certfile a --ssl-keyfile se zadavaji spolu")
+    users = UserStore(load_auth_settings(args.settings).users_file)
+    if not users.load():
+        raise ToolError(
+            f"zadni uzivatele v {users.path} - zaloz admina: "
+            "mig-validate user add <jmeno> --role admin"
+        )
     app = create_app(
         run_root=args.run_root, profile_path=args.profile,
         profiles_root=args.profiles_root,
-        capture_pool=load_settings().capture_pool,
+        capture_pool=load_settings(args.settings).capture_pool,
+        users=users,
     )
-    uvicorn.run(app, host=args.host, port=args.gui_port)
+    configure_audit_logging()
+    options = {"host": args.host, "port": args.gui_port}
+    if args.ssl_certfile:
+        options.update(ssl_certfile=args.ssl_certfile, ssl_keyfile=args.ssl_keyfile)
+    if args.forwarded_allow_ips:
+        options["forwarded_allow_ips"] = args.forwarded_allow_ips
+    uvicorn.run(app, **options)
     return EXIT_OK
 
 
@@ -826,6 +841,12 @@ def build_parser() -> argparse.ArgumentParser:
     gui.add_argument(
         "--profile", "--config", dest="profile", help="profil YAML (--config je alias)"
     )
+    gui.add_argument("--settings", type=Path, default=None,
+                     help="settings.yml (default config/settings.yml)")
+    gui.add_argument("--ssl-certfile", default=None, help="TLS certifikat (HTTPS bez reverse proxy)")
+    gui.add_argument("--ssl-keyfile", default=None, help="TLS privatni klic")
+    gui.add_argument("--forwarded-allow-ips", default=None,
+                     help="IP reverse proxy, ktere veri X-Forwarded-For (pro login throttle)")
     gui.set_defaults(func=_cmd_gui)
 
     run = sub.add_parser("run", help="sprava run adresaru")
