@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from migration_validator.gui.audit import record
@@ -53,14 +53,23 @@ def build_inventory_router(
             return [], f"{filters.path}: {error.strerror or error}"
 
     @router.get("")
-    def search(q: str = "", actor: Actor = require(Permission.VIEW)) -> dict:
+    def search(
+        q: str = "",
+        exclude: list[str] = Query(default=[]),
+        actor: Actor = require(Permission.VIEW),
+    ) -> dict:
         hosts, _, error = _hosts()
         if error is None:
             allow, error = _load_filter()
         if error is not None:
             return {"items": [], "total": 0, "enabled": inventory is not None, "error": error}
         needle = q.strip().lower()
-        matches = [h for h in hosts if is_visible(h.node, allow) and needle in h.node.lower()]
+        # Uzly uz pouzite v jinych radcich formulare se nenabizi znovu.
+        used = {name.strip().lower() for name in exclude if name.strip()}
+        matches = [
+            h for h in hosts
+            if is_visible(h.node, allow) and needle in h.node.lower() and h.node.lower() not in used
+        ]
         return {
             "items": [{"node": h.node, "host": h.host} for h in matches[:SEARCH_LIMIT]],
             "total": len(matches),

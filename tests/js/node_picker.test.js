@@ -65,3 +65,20 @@ test("shouldBrowseOnArrowDown: only an empty query with nothing shown", () => {
   assert.strictEqual(P.shouldBrowseOnArrowDown("mx", 0), false);
   assert.strictEqual(P.shouldBrowseOnArrowDown("", 3), false);
 });
+
+test("excludeFor: other rows' nodes plus extras, trimmed, case-insensitive dedupe, own row skipped", () => {
+  const rows = [
+    { node: "MX-POP1", host: "1" },
+    { node: "  ptx-pop1 ", host: "2" },
+    { node: "", host: "" },
+    { node: "mx-pop1", host: "3" },
+  ];
+  assert.deepStrictEqual(P.excludeFor(rows, 0, []), ["ptx-pop1", "mx-pop1"]);
+  assert.deepStrictEqual(P.excludeFor(rows, 2, ["CORE1", "core1", null, ""]), ["MX-POP1", "ptx-pop1", "CORE1"]);
+  assert.deepStrictEqual(P.excludeFor([{ node: "A" }], 0), []);
+});
+
+test("searchUrl: query plus repeated exclude params, encoded", () => {
+  assert.strictEqual(P.searchUrl("ptx", []), "/api/inventory?q=ptx");
+  assert.strictEqual(P.searchUrl("a b", ["MX-POP1", "X&Y"]), "/api/inventory?q=a%20b&exclude=MX-POP1&exclude=X%26Y");
+});

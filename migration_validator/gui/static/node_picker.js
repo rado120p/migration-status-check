@@ -70,6 +70,31 @@ function shouldBrowseOnArrowDown(query, itemsShown) {
   return itemsShown === 0 && query.trim() === "";
 }
 
+// Nodes the search must not offer to row `index`: every other row's node
+// (picked or typed) plus `extra` (e.g. the group's existing members),
+// trimmed and de-duplicated case-insensitively - the server compares the
+// same way.
+function excludeFor(devices, index, extra = []) {
+  const out = [];
+  const seen = new Set();
+  const add = (name) => {
+    const value = (name || "").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) return;
+    seen.add(key);
+    out.push(value);
+  };
+  devices.forEach((device, i) => { if (i !== index) add(device.node); });
+  extra.forEach(add);
+  return out;
+}
+
+function searchUrl(query, exclude) {
+  const params = [`q=${encodeURIComponent(query)}`];
+  for (const name of exclude) params.push(`exclude=${encodeURIComponent(name)}`);
+  return `/api/inventory?${params.join("&")}`;
+}
+
 const MigPicker = {
   pickerMode,
   applyPick,
@@ -81,6 +106,8 @@ const MigPicker = {
   unavailableNotice,
   searchErrorNote,
   shouldBrowseOnArrowDown,
+  excludeFor,
+  searchUrl,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = MigPicker;

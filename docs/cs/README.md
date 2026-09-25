@@ -738,6 +738,8 @@ obrazovce Settings. Soubor se znovu čte při každé změně na disku — resta
 **New run / Bulk.** Každý řádek zařízení dostane vyhledávací pole: napiš část jména uzlu,
 vyber shodu, node i host se vyplní needitovatelně s "×" na vymazání. Zaškrtávátko **Manual** u
 řádku přepne zpět na dnešní volná pole node/host — použij ho pro box, který v inventáři není.
+Vyhledávání nikdy nenabídne uzel, který už je ve formuláři použitý jinde: v jiném bulk řádku,
+jako druhé zařízení migračního runu nebo (v Add devices) box, který už ve skupině je.
 Když je inventář vypnutý, je manuální rovnou celý řádek a zaškrtávátko se neukazuje. Když je
 nakonfigurovaný, ale nedostupný (nečitelný soubor, chyba parsování), formulář stejně spadne na
 manuální, ale navíc nad řádky zařízení ukáže varování: "Inventory unavailable: `<error>` —

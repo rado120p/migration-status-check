@@ -145,3 +145,18 @@ def test_filter_save_os_error_is_500_without_audit(tmp_path, caplog):
     assert "No space left on device" in resp.json()["detail"]
     assert "filter-edit" not in caplog.text
     assert not (root / "hostname_filter.yml").exists()
+
+
+def test_search_excludes_already_used_nodes(tmp_path):
+    client, _ = _client(tmp_path)
+    body = client.get("/api/inventory", params={"q": "pop1", "exclude": ["mx-pop1", "PTX-POP1"]}).json()
+    # MX-POP1 and PTX-POP1 excluded case-insensitively; MX-POP10..19 still match "pop1"
+    nodes = [i["node"] for i in body["items"]]
+    assert "MX-POP1" not in nodes and "PTX-POP1" not in nodes
+    assert nodes[0] == "MX-POP10"
+    assert body["total"] == 10  # MX-POP10..MX-POP19
+
+
+def test_search_without_exclude_unchanged(tmp_path):
+    client, _ = _client(tmp_path)
+    assert client.get("/api/inventory", params={"q": "pop1"}).json()["total"] == 12

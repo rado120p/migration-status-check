@@ -789,6 +789,12 @@ class App {
     );
   }
 
+  // Nodes already in the open group - the server rejects them in Add devices.
+  groupMemberNodes() {
+    const summary = this.cache.groupSummary;
+    return ((summary && summary.runs) || []).map((row) => row.node).filter(Boolean);
+  }
+
   renderAddDevicesModal(root) {
     const modal = this.state.addDevicesModal;
     const children = [el("h3", { text: "Add devices" })];
@@ -799,7 +805,7 @@ class App {
         const had = Object.keys(modal.rowErrors).length > 0;
         modal.rowErrors = {};
         if (had) this.render();
-      })
+      }, this.groupMemberNodes())
     );
     if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
     children.push(
@@ -3876,7 +3882,7 @@ class App {
   // rebuilt in place from the fetch response. A per-picker request counter
   // (`seq`) ignores stale responses from an earlier, superseded query.
   buildNodePicker(device, opts) {
-    const { onPicked, focusKey } = opts;
+    const { onPicked, focusKey, exclude } = opts;
     const mode = MigPicker.pickerMode(device, this.inventoryAvailable());
     if (mode === "manual") return null;
 
@@ -3962,7 +3968,7 @@ class App {
     const runSearch = async (q) => {
       const mySeq = ++seq;
       try {
-        const res = await fetch(`/api/inventory?q=${encodeURIComponent(q)}`);
+        const res = await fetch(MigPicker.searchUrl(q, exclude ? exclude() : []));
         const body = await res.json().catch(() => ({}));
         if (mySeq !== seq || !input.isConnected) return;
         if (!res.ok) {
@@ -4038,7 +4044,7 @@ class App {
     ] });
   }
 
-  buildDeviceSubform(title, device, touched) {
+  buildDeviceSubform(title, device, touched, others = []) {
     const wrap = el("div", { className: "device-subform" });
     wrap.appendChild(el("div", { className: "device-subform-title", text: title }));
 
@@ -4049,7 +4055,10 @@ class App {
     }
 
     const focusKey = `newrun-picker-${title}`;
-    const picker = this.buildNodePicker(device, { focusKey });
+    const picker = this.buildNodePicker(device, {
+      focusKey,
+      exclude: () => MigPicker.excludeFor([], -1, others.map((d) => d.node)),
+    });
     if (picker) {
       const nodeField = [el("label", { className: "field-label", text: "Node" }), picker];
       if (touched && !device.node.trim()) {
@@ -4129,7 +4138,7 @@ class App {
      is independently in pick or manual mode, so a group can mix both. The
      Manual column only exists when inventory is available - otherwise the
      table keeps today's 4-column layout untouched. */
-  buildBulkDeviceRows(devices, touched, rowErrors, onChange) {
+  buildBulkDeviceRows(devices, touched, rowErrors, onChange, extraExclude = []) {
     // finding #7: same first-open race as buildDeviceSubform - render every
     // row disabled until we know whether inventory is available, instead of
     // guessing manual and swapping to a picker under the user later.
@@ -4165,7 +4174,11 @@ class App {
       if (dup) errors.push(`duplicate node (row ${seen.get(key) + 1})`);
       if (rowErrors[i]) errors.push(rowErrors[i]);
 
-      const picker = withPicker ? this.buildNodePicker(device, { onPicked: onChange, focusKey: `bulk-picker-${i}` }) : null;
+      const picker = withPicker ? this.buildNodePicker(device, {
+        onPicked: onChange,
+        focusKey: `bulk-picker-${i}`,
+        exclude: () => MigPicker.excludeFor(devices, i, extraExclude),
+      }) : null;
       const cells = [];
       if (picker) {
         picker.style.gridColumn = "1 / 3";
@@ -4418,8 +4431,8 @@ class App {
       : el("div", {
           className: "devices-grid",
           children: [
-            this.buildDeviceSubform("Old device", form.old, form.touched),
-            this.buildDeviceSubform("New device", form.new, form.touched),
+            this.buildDeviceSubform("Old device", form.old, form.touched, [form.new]),
+            this.buildDeviceSubform("New device", form.new, form.touched, [form.old]),
           ],
         });
     const devicesCardChildren = [

@@ -634,6 +634,8 @@ whenever it changes on disk — no GUI restart needed.
 **New run / Bulk.** Each device row gets a search box: type part of a node name, pick a match,
 and node + host fill in read-only with a "×" to clear. A **Manual** checkbox on the row swaps
 back to today's free-text node/host inputs — use it for a box that is not in the inventory.
+The search never offers a node that is already used elsewhere in the form: another bulk row,
+the other device of a migration run, or (in Add devices) a box already in the group.
 When the inventory is disabled, every row is already manual and the checkbox is hidden. When
 it is configured but failing (unreadable file, parse error), the form falls back to manual the
 same way, but now shows a warning above the device rows: "Inventory unavailable: `<error>` —
