@@ -68,19 +68,24 @@ def parse_inventory(text: str) -> Inventory:
 
 
 class InventorySource:
-    """Soubor inventare s cache podle (mtime_ns, size) - zmena souboru
-    se projevi bez restartu GUI."""
+    """Soubor inventare s cache podle (mtime_ns, size, ino) - zmena souboru
+    se projevi bez restartu GUI. ino je nutne navic k (mtime_ns, size):
+    atomicka vymena (os.replace) muze dopadnout na stejny mtime_ns i size
+    (stejne dlouhy obsah, nebo hruba FS hodina / dva zapisy ve stejnem
+    tiku) - novy inode ale pozna vzdy, stejne jako u UserStore."""
 
     def __init__(self, path: Path):
         self.path = Path(path)
-        self._key: tuple[int, int] | None = None
-        self._cached: Inventory | None = None
+        # Jeden (key, inventory) tuple - atomicka vymena, zadne okno mezi
+        # aktualizaci klice a dat.
+        self._cache: tuple[tuple[int, int, int] | None, Inventory] | None = None
 
     def load(self) -> Inventory:
         st = self.path.stat()  # OSError kdyz soubor chybi / neni citelny
-        key = (st.st_mtime_ns, st.st_size)
-        if self._cached is None or key != self._key:
+        key = (st.st_mtime_ns, st.st_size, st.st_ino)
+        cache = self._cache
+        if cache is None or cache[0] != key:
             text = self.path.read_text(encoding="utf-8", errors="replace")
-            self._cached = parse_inventory(text)
-            self._key = key
-        return self._cached
+            cache = (key, parse_inventory(text))
+            self._cache = cache
+        return cache[1]

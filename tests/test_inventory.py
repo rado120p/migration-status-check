@@ -64,3 +64,24 @@ def test_source_reloads_on_change(tmp_path):
 def test_source_missing_file_raises(tmp_path):
     with pytest.raises(OSError):
         InventorySource(tmp_path / "nope").load()
+
+
+def test_source_detects_atomic_swap_with_same_mtime_and_size(tmp_path):
+    # finding #3: an atomic os.replace() that lands on the same mtime_ns and
+    # the same byte size (same-length replacement content, or a coarse FS
+    # clock / two writes in one tick) must still be picked up - key on inode
+    # too, as UserStore already does.
+    path = tmp_path / "hosts"
+    path.write_text("A1 ansible_host=10.0.0.1\n")
+    source = InventorySource(path)
+    assert [h.node for h in source.load().hosts] == ["A1"]
+
+    st = path.stat()
+    replacement = tmp_path / "hosts.new"
+    replacement.write_text("A1 ansible_host=10.0.0.9\n")  # same length, new inode
+    os.utime(replacement, ns=(st.st_atime_ns, st.st_mtime_ns))
+    os.replace(replacement, path)
+    assert path.stat().st_mtime_ns == st.st_mtime_ns
+    assert path.stat().st_size == st.st_size
+
+    assert [h.host for h in source.load().hosts] == ["10.0.0.9"]
