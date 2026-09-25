@@ -2065,8 +2065,8 @@ def _collision_snapshot(address, phase, facts, scopes) -> Snapshot:
 def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_service():
     """Ostry beh MX -> ACX 2026-09-23: customer-a (BFD, nemigrovana) a
     customer-b (bez BFD, migrovana) maji peera na 192.168.1.2. Od schematu 14
-    (kolize klicu, spec 2026-09-25) BGP fakta nesou oba zaznamy zvlast, takze
-    zadna kolize adresy uz nevznika - customer-b proste nikdy nemel svuj
+    (kolize klicu, spec 2026-09-25) BGP fakta nesou oba zaznamy zvlast, kazdy
+    se svou vlastni routing_instance - customer-b proste nikdy nemel svuj
     zaznam v baseline (byl tam jen zaznam customer-a, ktery mu nepatri):
 
         SKIP BGP prefixy  bez baseline
@@ -2105,6 +2105,99 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
     status = rows[("bgp_session_state", f"BGP status ({SHARED_PEER})")]
     assert status.status is Status.PASS
     assert status.baseline_value is None
+
+
+def _production_scope(name: str, interface: str) -> Scope:
+    return Scope(
+        id=f"svc:{name}:IPVPN",
+        kind="service",
+        key=ScopeKey(name, "IPVPN", None),
+        selectors=Selectors(
+            interfaces=[interface],
+            routing_instances=[name],
+            bgp_neighbors=[SHARED_PEER],
+            bfd_peers=[{"peer": SHARED_PEER, "multiplier": 3}],
+        ),
+    )
+
+
+def _production_bgp_record(instance, interface, state, ribs):
+    return bgp_record(
+        SHARED_PEER,
+        routing_instance=instance,
+        local_interface=interface,
+        state=state,
+        ribs=ribs,
+    )
+
+
+def test_production_mx_to_acx_customer_a_customer_b_shared_peer_end_to_end():
+    """Ostry pripad MX -> ACX: customer-a a customer-b sdileji adresu peera
+    192.168.1.2 na ruznych VRF, kazda sluzba na svem rozhrani. Od schematu 14
+    ma kazda VRF svuj vlastni BGP/BFD zaznam - customer-a v subjektu selze
+    (BGP Idle, BFD Down), customer-b zustava zdravy a nesmi videt nic z
+    customer-a."""
+    baseline = _collision_snapshot(
+        "172.20.20.4",
+        "pre-migration",
+        {
+            "bgp": [
+                _production_bgp_record(
+                    "customer-a", "ae0.100", "Established",
+                    {"customer-a.inet.0": {"received": 3, "accepted": 3, "advertised": 3, "active": 5}},
+                ),
+                _production_bgp_record(
+                    "customer-b", "ae0.200", "Established",
+                    {"customer-b.inet.0": {"received": 3, "accepted": 3, "advertised": 3, "active": 5}},
+                ),
+            ],
+            "bfd": [
+                bfd_record(SHARED_PEER, interface="ae0.100", state="Up"),
+                bfd_record(SHARED_PEER, interface="ae0.200", state="Up"),
+            ],
+        },
+        [
+            _production_scope("customer-a", "ae0.100"),
+            _production_scope("customer-b", "ae0.200"),
+        ],
+    )
+    subject = _collision_snapshot(
+        "172.20.20.5",
+        "post-migration",
+        {
+            "bgp": [
+                _production_bgp_record("customer-a", "et-0/0/1.100", "Idle", {}),
+                _production_bgp_record(
+                    "customer-b", "et-0/0/1.200", "Established",
+                    {"customer-b.inet.0": {"received": 3, "accepted": 3, "advertised": 3, "active": 5}},
+                ),
+            ],
+            "bfd": [
+                bfd_record(SHARED_PEER, interface="et-0/0/1.100", state="Down"),
+                bfd_record(SHARED_PEER, interface="et-0/0/1.200", state="Up"),
+            ],
+        },
+        [
+            _production_scope("customer-a", "et-0/0/1.100"),
+            _production_scope("customer-b", "et-0/0/1.200"),
+        ],
+    )
+
+    result = evaluate_snapshots(subject, baseline=baseline, now=NOW)
+
+    b = next(r for r in result.scopes if "customer-b" in r.scope_id)
+    a = next(r for r in result.scopes if "customer-a" in r.scope_id)
+    assert b.status is Status.PASS
+    assert not any("customer-a" in (c.label or "") for c in b.checks)
+    assert not any(
+        c.value == "v baseline patril k teto sluzbe, v subjektu uz ne" for c in b.checks
+    )
+    assert a.status is Status.FAIL
+    assert any(
+        c.label == "BGP status (192.168.1.2)" and c.value == "Idle" for c in a.checks
+    )
+    assert result.unassigned["bgp_peers"] == []
+    assert result.unassigned["bfd_sessions"] == []
 
 
 def test_master_peer_on_shared_subnet_does_not_leak_into_vrf_port_unassigned():

@@ -55,6 +55,16 @@ A **dopad na formát snapshotu**:
 | E11 | linker | IRB unit == VLAN heuristika | K | E | cizí IRB link |
 | E12 | evpn_* | žádné NEZARAZENO ani kolizní značky | K | E | ztráta je neviditelná |
 
+**Stav po vrstvě 2 (větev `vrstva-2-kolize-klicu`, 2026-09-25):** F1 (bgp),
+F2 (bfd), F3 (evpn_esi) a F8 (routes) vyřešeny – fakta jsou seznamy
+záznamů klíčovaných celou identitou (instance, adresa/rozhraní), `Scope.select`
+je skládá zpět a hlásí `bgp_ambiguous`/`bfd_ambiguous` místo tichého přepisu.
+F5 (pim_neighbor) vyřešeno omezeně: collector teď drží jen IPv4 souseda, takže
+v4/v6 kolize na stejném rozhraní nevzniká; víc IPv4 sousedů na jednom rozhraní
+řešeno nebylo. F4 (pim_join), F6 (isis_adjacency) a F7 (ldp_neighbor) zůstávají
+mimo rozsah – rozhodnutím uživatele (viz „Ověření v laborce“ níže: F4 a F6 se
+nedělají, F7 je teoretické a zůstává neřešené).
+
 ## Nálezy podrobně
 
 ### F1 – bgp: klíč jen adresa (známé, vrstva 2)

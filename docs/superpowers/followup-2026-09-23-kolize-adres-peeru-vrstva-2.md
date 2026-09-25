@@ -1,8 +1,7 @@
 # Follow-up: kolize adres peerů – vrstva 2 (2026-09-23)
 
-**Stav: vrstva 1 je hotová a na main (3065a8c, 9defa07). Vrstva 2 není
-implementovaná. Pořadí dohodnuté 2026-09-23: nejdřív spec „raw XML + replay“
-(rozhodnutí z 2026-09-09), vrstva 2 až na něm.**
+**Stav: vrstva 2 implementovaná na větvi `vrstva-2-kolize-klicu` (2026-09-25),
+spec `docs/superpowers/specs/2026-09-25-kolize-klicu-vrstva-2-design.md`.**
 
 ## Co se stalo
 

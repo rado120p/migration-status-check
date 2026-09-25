@@ -20,10 +20,13 @@ UP = "Up"
 
 
 def _is_up(status: str) -> bool:
-    """Junos hlasi stav i s doplnkem za lomitkem.
+    """Junos umi hlasit stav i s doplnkem za lomitkem.
 
-    Lokalni rozhrani v ESI je 'Up/Forwarding', VPWS rozhrani jen 'Up'.
-    Porovnani na presnou rovnost by to prvni oznacilo za rozbite.
+    ESI lokalni rozhrani od Tasku 3 nese stav z per-IFL
+    'evpn-interface-status-table' (hodnota 'Up'), VPWS rozhrani hlasi
+    take jen 'Up'. Funkce prijima i tvar 'Up/Forwarding' pro pripad
+    starsiho vystupu - porovnani na presnou rovnost by ho oznacilo za
+    rozbite.
     """
     return status.split("/", 1)[0].strip() == UP
 
