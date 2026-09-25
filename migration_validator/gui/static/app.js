@@ -175,6 +175,7 @@ class App {
       groupSummary: null,
       groupError: null,
       groupTasks: {},
+      inventory: null,
     };
     this.capturePollTimer = null;
     this.groupPollTimer = null;
@@ -1552,10 +1553,12 @@ class App {
 
   // -- add devices modal -----------------------------------------------------
 
-  openAddDevicesModal() {
+  async openAddDevicesModal() {
     this.state.addDevicesModal = {
       devices: [{ node: "", host: "", platform: "junos" }], submitting: false, error: null, rowErrors: {}, touched: false,
     };
+    this.render();
+    await this.loadInventoryAvailability();
     this.render();
   }
 
@@ -1988,6 +1991,28 @@ class App {
     } catch (err) {
       this.cache.profilesError = { status: 0, detail: String(err) };
     }
+  }
+
+  // Node picker: fetched once when a form that offers it opens, cached for
+  // the lifetime of that form so per-row/per-device pickers all share one
+  // availability check instead of one request each.
+  async loadInventoryAvailability() {
+    try {
+      const res = await fetch("/api/inventory/filter");
+      if (res.ok) {
+        const body = await res.json();
+        this.cache.inventory = { enabled: !!body.enabled, error: body.error || null };
+      } else {
+        this.cache.inventory = { enabled: false, error: `inventory ${res.status}` };
+      }
+    } catch (err) {
+      this.cache.inventory = { enabled: false, error: String(err) };
+    }
+  }
+
+  inventoryAvailable() {
+    const inv = this.cache.inventory;
+    return !!(inv && inv.enabled && !inv.error);
   }
 
   presetCaptureFormDevice() {
@@ -3794,33 +3819,187 @@ class App {
     return card;
   }
 
+  // Manual checkbox is deliberately built outside buildNodePicker: it must
+  // stay visible in both pick and manual mode (inventory available) so a
+  // user who ticks it can always untick it again. buildNodePicker itself
+  // only ever returns the pick-mode UI or null.
+  buildManualCheckbox(device, onChange) {
+    const checkbox = el("input", { attrs: { type: "checkbox" } });
+    checkbox.checked = device.manual === true;
+    checkbox.addEventListener("change", (e) => {
+      MigPicker.setManual(device, e.target.checked);
+      device.query = "";
+      if (onChange) onChange();
+      this.render();
+    });
+    return el("label", { className: "checkbox-row picker-manual", children: [checkbox, document.createTextNode(" Manual")] });
+  }
+
+  // Node picker (wave B). Returns null in manual mode (caller renders
+  // today's node/host inputs unchanged) or an element for pick mode: either
+  // the read-only picked row, or the search input + dropdown.
+  //
+  // Review focus: typing must never call this.render() - the dropdown is
+  // rebuilt in place from the fetch response. A per-picker request counter
+  // (`seq`) ignores stale responses from an earlier, superseded query.
+  buildNodePicker(device, opts) {
+    const { onPicked, focusKey } = opts;
+    const mode = MigPicker.pickerMode(device, this.inventoryAvailable());
+    if (mode === "manual") return null;
+
+    if (device.picked) {
+      return el("div", { className: "picker picker-picked", children: [
+        el("span", { className: "mono", text: device.node }),
+        el("span", { className: "picker-picked-host", text: device.host }),
+        el("button", { className: "btn btn-secondary picker-clear", text: "×", attrs: { type: "button", title: "clear" },
+          onClick: () => {
+            MigPicker.clearPick(device);
+            device.query = "";
+            if (onPicked) onPicked();
+            this.pendingFocus = focusKey;
+            this.render();
+          } }),
+      ] });
+    }
+
+    const wrap = el("div", { className: "picker" });
+    const input = el("input", {
+      className: "form-input",
+      attrs: { type: "text", placeholder: "Search inventory…", autocomplete: "off", "data-focus-key": focusKey },
+    });
+    input.value = device.query || "";
+    const dropdown = el("div", { className: "picker-dropdown", attrs: { role: "listbox" } });
+    dropdown.hidden = true;
+    wrap.appendChild(input);
+    wrap.appendChild(dropdown);
+
+    let items = [];
+    let highlighted = -1;
+    let lastTotal = 0;
+    let seq = 0;
+    let debounceTimer = null;
+
+    const closeDropdown = () => {
+      clear(dropdown);
+      dropdown.hidden = true;
+      items = [];
+      highlighted = -1;
+    };
+
+    const pick = (item) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      MigPicker.applyPick(device, item);
+      device.query = "";
+      if (onPicked) onPicked();
+      this.render();
+    };
+
+    const renderDropdown = (note) => {
+      clear(dropdown);
+      items.forEach((item, i) => {
+        const row = el("div", {
+          className: "picker-item" + (i === highlighted ? " active" : ""),
+          attrs: { role: "option" },
+          text: MigPicker.itemLabel(item),
+        });
+        row.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          pick(item);
+        });
+        dropdown.appendChild(row);
+      });
+      const more = MigPicker.moreLabel(lastTotal, items.length);
+      if (more) dropdown.appendChild(el("div", { className: "picker-note", text: more }));
+      if (note) dropdown.appendChild(el("div", { className: "picker-note", text: note }));
+      dropdown.hidden = !(items.length || more || note);
+    };
+
+    const runSearch = async (q) => {
+      const mySeq = ++seq;
+      try {
+        const res = await fetch(`/api/inventory?q=${encodeURIComponent(q)}`);
+        const body = await res.json().catch(() => ({}));
+        if (mySeq !== seq || !input.isConnected) return;
+        items = body.items || [];
+        lastTotal = body.total || 0;
+        highlighted = items.length ? 0 : -1;
+        renderDropdown(body.error || null);
+      } catch (err) {
+        if (mySeq !== seq || !input.isConnected) return;
+        items = [];
+        lastTotal = 0;
+        highlighted = -1;
+        renderDropdown(String(err));
+      }
+    };
+
+    input.addEventListener("input", (e) => {
+      device.query = e.target.value;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => runSearch(device.query), 200);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (items.length) { highlighted = MigPicker.moveHighlight(highlighted, 1, items.length); renderDropdown(null); }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (items.length) { highlighted = MigPicker.moveHighlight(highlighted, -1, items.length); renderDropdown(null); }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (highlighted >= 0 && items[highlighted]) pick(items[highlighted]);
+      } else if (e.key === "Escape") {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        closeDropdown();
+      }
+    });
+    input.addEventListener("blur", () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      closeDropdown();
+    });
+
+    return wrap;
+  }
+
   buildDeviceSubform(title, device, touched) {
     const wrap = el("div", { className: "device-subform" });
     wrap.appendChild(el("div", { className: "device-subform-title", text: title }));
 
-    const nodeInput = el("input", { className: "form-input mono", attrs: { type: "text" } });
-    nodeInput.value = device.node;
-    nodeInput.addEventListener("input", (e) => {
-      device.node = e.target.value;
-    });
-    nodeInput.addEventListener("blur", () => this.render());
-    const nodeField = [el("label", { className: "field-label", text: "Node" }), nodeInput];
-    if (touched && !device.node.trim()) {
-      nodeField.push(el("div", { className: "field-error", text: "node is required" }));
-    }
-    wrap.appendChild(el("div", { className: "form-field", children: nodeField }));
+    const focusKey = `newrun-picker-${title}`;
+    const picker = this.buildNodePicker(device, { focusKey });
+    if (picker) {
+      const nodeField = [el("label", { className: "field-label", text: "Node" }), picker];
+      if (touched && !device.node.trim()) {
+        nodeField.push(el("div", { className: "field-error", text: "node is required" }));
+      }
+      wrap.appendChild(el("div", { className: "form-field", children: nodeField }));
+    } else {
+      const nodeInput = el("input", { className: "form-input mono", attrs: { type: "text" } });
+      nodeInput.value = device.node;
+      nodeInput.addEventListener("input", (e) => {
+        device.node = e.target.value;
+      });
+      nodeInput.addEventListener("blur", () => this.render());
+      const nodeField = [el("label", { className: "field-label", text: "Node" }), nodeInput];
+      if (touched && !device.node.trim()) {
+        nodeField.push(el("div", { className: "field-error", text: "node is required" }));
+      }
+      wrap.appendChild(el("div", { className: "form-field", children: nodeField }));
 
-    const hostInput = el("input", { className: "form-input", attrs: { type: "text" } });
-    hostInput.value = device.host;
-    hostInput.addEventListener("input", (e) => {
-      device.host = e.target.value;
-    });
-    hostInput.addEventListener("blur", () => this.render());
-    const hostField = [el("label", { className: "field-label", text: "Host" }), hostInput];
-    if (touched && !device.host.trim()) {
-      hostField.push(el("div", { className: "field-error", text: "host is required" }));
+      const hostInput = el("input", { className: "form-input", attrs: { type: "text" } });
+      hostInput.value = device.host;
+      hostInput.addEventListener("input", (e) => {
+        device.host = e.target.value;
+      });
+      hostInput.addEventListener("blur", () => this.render());
+      const hostField = [el("label", { className: "field-label", text: "Host" }), hostInput];
+      if (touched && !device.host.trim()) {
+        hostField.push(el("div", { className: "field-error", text: "host is required" }));
+      }
+      wrap.appendChild(el("div", { className: "form-field", children: hostField }));
     }
-    wrap.appendChild(el("div", { className: "form-field", children: hostField }));
+
+    if (this.inventoryAvailable()) wrap.appendChild(this.buildManualCheckbox(device));
 
     const platformSelect = el("select", {
       className: "form-select",
@@ -3863,12 +4042,17 @@ class App {
   }
 
   /* Bulk device table: one buildDeviceSubform-compatible object per row,
-     rendered inline. rowErrors = {index: message} from the server. */
+     rendered inline. rowErrors = {index: message} from the server. Each row
+     is independently in pick or manual mode, so a group can mix both. The
+     Manual column only exists when inventory is available - otherwise the
+     table keeps today's 4-column layout untouched. */
   buildBulkDeviceRows(devices, touched, rowErrors, onChange) {
-    const table = el("div", { className: "bulk-table" });
-    table.appendChild(el("div", { className: "bulk-row bulk-head", children: [
-      el("span", { text: "Node" }), el("span", { text: "Host" }), el("span", { text: "Platform" }), el("span", { text: "" }),
-    ] }));
+    const withPicker = this.inventoryAvailable();
+    const table = el("div", { className: "bulk-table" + (withPicker ? " with-picker" : "") });
+    const headCells = [el("span", { text: "Node" }), el("span", { text: "Host" })];
+    if (withPicker) headCells.push(el("span", { text: "Manual" }));
+    headCells.push(el("span", { text: "Platform" }), el("span", { text: "" }));
+    table.appendChild(el("div", { className: "bulk-row bulk-head", children: headCells }));
     const seen = new Map();
     devices.forEach((device, i) => {
       const key = device.node.trim().toLowerCase();
@@ -3890,12 +4074,24 @@ class App {
       if (touched && !device.host.trim()) errors.push("host is required");
       if (dup) errors.push(`duplicate node (row ${seen.get(key) + 1})`);
       if (rowErrors[i]) errors.push(rowErrors[i]);
-      table.appendChild(el("div", { className: "bulk-row" + (errors.length ? " has-error" : ""), children: [
-        field("node", true), field("host", false), platform,
+
+      const picker = withPicker ? this.buildNodePicker(device, { onPicked: onChange, focusKey: `bulk-picker-${i}` }) : null;
+      const cells = [];
+      if (picker) {
+        picker.style.gridColumn = "1 / 3";
+        cells.push(picker);
+      } else {
+        cells.push(field("node", true), field("host", false));
+      }
+      if (withPicker) cells.push(this.buildManualCheckbox(device, onChange));
+      cells.push(platform);
+      cells.push(
         el("button", { className: "btn btn-secondary bulk-remove", text: "×", attrs: { type: "button", title: "remove row" },
-          onClick: () => { devices.splice(i, 1); onChange(); this.render(); } }),
-        errors.length ? el("div", { className: "field-error bulk-row-error", text: errors.join(" · ") }) : null,
-      ] }));
+          onClick: () => { devices.splice(i, 1); onChange(); this.render(); } })
+      );
+      if (errors.length) cells.push(el("div", { className: "field-error bulk-row-error", text: errors.join(" · ") }));
+
+      table.appendChild(el("div", { className: "bulk-row" + (errors.length ? " has-error" : ""), children: cells }));
     });
     table.appendChild(el("button", { className: "btn btn-secondary", text: "+ add device", attrs: { type: "button" },
       onClick: () => { devices.push({ node: "", host: "", platform: "junos" }); this.render(); } }));
@@ -3933,7 +4129,7 @@ class App {
       submitError: null,
     };
     this.render();
-    await this.loadProfiles();
+    await Promise.all([this.loadProfiles(), this.loadInventoryAvailability()]);
     this.render();
   }
 
