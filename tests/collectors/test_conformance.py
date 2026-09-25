@@ -239,7 +239,7 @@ def test_evpn_instances_are_keyed_by_routing_instance(platform):
 
 @pytest.mark.parametrize("platform", ("junos", "junos-evo"))
 def test_esi_interface_matches_a_scope(platform):
-    """evpn_esi.interface musi byt nazev, ktery scope matchne (spec: krehke misto)."""
+    """evpn_esi[].interfaces musi byt nazvy, ktere scope matchne (spec: krehke misto)."""
     facts = _facts_from_recorded_xml(platform)
     entries = facts["evpn_esi"]
     if not entries:
@@ -250,11 +250,14 @@ def test_esi_interface_matches_a_scope(platform):
     _, inventory_path = DEVICES[platform]
     scopes = build_scopes(load_inventory(str(inventory_path)))
 
-    for esi, data in entries.items():
-        interface = str(data["interface"])
-        assert any(
-            scope.selectors.matches_interface(interface) for scope in scopes
-        ), f"{platform}: ESI {esi} hlasi rozhrani {interface!r}, ktere zadny scope nematchne"
+    for record in entries:
+        for interface in record["interfaces"]:
+            assert any(
+                scope.selectors.matches_interface(interface) for scope in scopes
+            ), (
+                f"{platform}: ESI {record['esi']} hlasi rozhrani {interface!r}, "
+                "ktere zadny scope nematchne"
+            )
 
 
 @pytest.mark.parametrize("platform", ("junos", "junos-evo"))

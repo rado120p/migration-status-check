@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from lxml import etree
 
@@ -9,6 +11,12 @@ from migration_validator.collectors.evpn import (
 )
 
 PLATFORMS = ("junos", "junos-evo")
+
+CASES = Path(__file__).resolve().parents[1] / "fixtures" / "cases"
+
+
+def _case(name):
+    return etree.parse(str(CASES / name)).getroot()
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
@@ -62,9 +70,11 @@ def test_vpws_empty_pe_table_gives_empty_peers():
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_esi_schema(rpc_fixture, platform):
     result = EvpnEsiCollector().parse(rpc_fixture(platform, "evpn_esi"), platform)
-    assert isinstance(result, dict)
-    for esi, data in result.items():
-        assert set(data) == {"status", "df_role", "interface", "resolved_status"}
+    assert isinstance(result, list)
+    for record in result:
+        assert set(record) == {"instance", "esi", "resolved_status", "df_role", "interfaces"}
+        for state in record["interfaces"].values():
+            assert set(state) == {"status", "mode"}
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
@@ -145,6 +155,15 @@ def test_esi_emits_logical_unit_as_interface():
         """
         <evpn-instance-information>
           <evpn-instance>
+            <evpn-instance-name>EVPN-X</evpn-instance-name>
+            <evpn-interface-status-table>
+              <evpn-interface>
+                <evpn-interface-name>ae0.14</evpn-interface-name>
+                <evpn-interface-esi>00:11:12:13:14:00:00:00:00:00</evpn-interface-esi>
+                <evpn-interface-mode>all-active</evpn-interface-mode>
+                <evpn-interface-status>Up/Forwarding</evpn-interface-status>
+              </evpn-interface>
+            </evpn-interface-status-table>
             <evpn-esi>
               <evpn-esi-value>00:11:12:13:14:00:00:00:00:00</evpn-esi-value>
               <evpn-esi-status>Resolved by IFL ae0.14</evpn-esi-status>
@@ -162,14 +181,42 @@ def test_esi_emits_logical_unit_as_interface():
     )
     result = EvpnEsiCollector().parse(xml, "junos-evo")
 
-    assert result == {
-        "00:11:12:13:14:00:00:00:00:00": {
-            "status": "Up/Forwarding",
-            "df_role": "150.0.0.2",
-            "interface": "ae0.14",
+    assert result == [
+        {
+            "instance": "EVPN-X",
+            "esi": "00:11:12:13:14:00:00:00:00:00",
             "resolved_status": "Resolved by IFL ae0.14",
+            "df_role": "150.0.0.2",
+            "interfaces": {
+                "ae0.14": {"status": "Up/Forwarding", "mode": "all-active"},
+            },
         }
+    ]
+
+
+def test_esi_same_value_in_two_instances_keeps_both():
+    records = EvpnEsiCollector().parse(_case("evpn_esi_two_instances.xml"), "junos-evo")
+    by_instance = {r["instance"]: r for r in records if r["esi"] == "00:11:12:13:14:00:00:00:00:00"}
+    assert set(by_instance) == {"EVPN-VLAN-AWARE-4093", "EVPN-VLAN-AWARE-POP1"}
+    assert set(by_instance["EVPN-VLAN-AWARE-4093"]["interfaces"]) == {"ae0.4093"}
+    assert set(by_instance["EVPN-VLAN-AWARE-POP1"]["interfaces"]) == {"ae0.4094"}
+
+
+def test_esi_two_ifls_one_instance_lists_both():
+    records = EvpnEsiCollector().parse(_case("evpn_esi_two_ifls_one_instance.xml"), "junos-evo")
+    (record,) = [r for r in records if r["esi"] == "00:11:12:13:14:00:00:00:00:00"]
+    assert record["interfaces"] == {
+        "ae0.4093": {"status": "Up", "mode": "all-active"},
+        "ae0.4094": {"status": "Up", "mode": "all-active"},
     }
+    assert record["resolved_status"] == "Resolved by IFL ae0.4093"
+
+
+def test_esi_single_homed_ifls_are_not_in_segment():
+    records = EvpnEsiCollector().parse(_case("evpn_esi_two_ifls_one_instance.xml"), "junos-evo")
+    for record in records:
+        assert "et-0/0/8.4094" not in record["interfaces"]
+        assert not record["esi"].startswith("05:")
 
 
 def test_mac_merges_every_rpc_for_platform():
@@ -277,7 +324,7 @@ def test_auto_generated_esi_are_ignored(rpc_fixture, platform):
     result = EvpnEsiCollector().parse(rpc_fixture(platform, "evpn_esi"), platform)
     # ESI zacinajici 05: si box sam generuje (per-IRB) a nemaji status.
     # Nesmi se objevit v reportu.
-    assert all(not esi.startswith("05:") for esi in result)
+    assert all(not record["esi"].startswith("05:") for record in result)
 
 
 def test_auto_generated_esi_does_not_hide_real_esi(rpc_fixture):
@@ -289,7 +336,7 @@ def test_auto_generated_esi_does_not_hide_real_esi(rpc_fixture):
     # ae0.4094 (a jeho par irb.4094/MGMT) pribyl po presunu sluzeb na .5.
     # Hodnota nize (ae0.14) je jeden ze tri, ne uz jediny.
     result = EvpnEsiCollector().parse(rpc_fixture("junos-evo", "evpn_esi"), "junos-evo")
-    assert "00:11:12:13:14:00:14:00:00:00" in result
+    assert any(record["esi"] == "00:11:12:13:14:00:14:00:00:00" for record in result)
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)

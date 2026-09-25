@@ -71,3 +71,25 @@ def bfd_records(mapping: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
          "multihop": data.get("multihop", data.get("interface") is None)}
         for neighbor, data in mapping.items()
     ]
+
+
+def esi_record(
+    instance: str,
+    esi: str,
+    interfaces: dict[str, str],
+    *,
+    resolved_status: str | None = None,
+    df_role: str | None = "10.0.0.1",
+    mode: str = "all-active",
+) -> dict[str, Any]:
+    """interfaces: {ifl: stav}."""
+    first = next(iter(interfaces), None)
+    return {
+        "instance": instance,
+        "esi": esi,
+        "resolved_status": resolved_status or (f"Resolved by IFL {first}" if first else None),
+        "df_role": df_role,
+        "interfaces": {
+            name: {"status": status, "mode": mode} for name, status in interfaces.items()
+        },
+    }

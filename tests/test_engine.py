@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from fact_records import bfd_record, bfd_records, bgp_record, bgp_records
+from fact_records import bfd_record, bfd_records, bgp_record, bgp_records, esi_record
 
 from migration_validator import api
 from migration_validator.checks import base as check_base
@@ -25,7 +25,8 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 DEVICE_4 = str(FIXTURES / "172.20.20.4.yml")
 
 
-def _scope(scope_id, description, service_type, interface, peers=(), physical=()):
+def _scope(scope_id, description, service_type, interface, peers=(), physical=(),
+           routing_instances=()):
     return Scope(
         id=scope_id,
         kind="service",
@@ -34,6 +35,7 @@ def _scope(scope_id, description, service_type, interface, peers=(), physical=()
             interfaces=[interface],
             physical_interfaces=list(physical),
             bgp_neighbors=list(peers),
+            routing_instances=list(routing_instances),
         ),
     )
 
@@ -1683,8 +1685,8 @@ def test_engine_passes_baseline_collectors_to_checks(monkeypatch):
 
 
 def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatch):
-    old = _scope("svc:CORE:Core", "CORE", "Core", "ge-0/0/1.0")
-    new = _scope("svc:CORE:Core", "CORE", "Core", "et-0/0/1.0")
+    old = _scope("svc:CORE:Core", "CORE", "Core", "ge-0/0/1.0", routing_instances=["CORE"])
+    new = _scope("svc:CORE:Core", "CORE", "Core", "et-0/0/1.0", routing_instances=["CORE"])
     baseline = _snapshot("172.20.20.4", "ge-0/0/1.0", [old])
     baseline.facts.update({
         "isis_adjacency": {"ge-0/0/1.0": {"state": "Up"}},
@@ -1694,7 +1696,7 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatc
         "mpls_interface": {"ge-0/0/1.0": {"state": "Up"}},
         "igmp_group": {"ge-0/0/1.0": [{"source": "10.0.0.1", "group": "232.1.1.1"}]},
         "bfd": bfd_records({"10.1.0.5": {"state": "Up", "interface": "ge-0/0/1.0"}}),
-        "evpn_esi": {"00:11": {"interface": "ge-0/0/1.0", "status": "Resolved"}},
+        "evpn_esi": [esi_record("CORE", "00:11", {"ge-0/0/1.0": "Resolved"})],
     })
     baseline.capture.collectors.update(
         {name: {"status": "ok"} for name in ("isis_adjacency", "isis_interface",

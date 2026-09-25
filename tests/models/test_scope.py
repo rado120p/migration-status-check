@@ -1,4 +1,4 @@
-from fact_records import bfd_record, bfd_records, bgp_record, bgp_records
+from fact_records import bfd_record, bfd_records, bgp_record, bgp_records, esi_record
 
 from migration_validator.models.scope import (
     FACT_AREAS,
@@ -26,7 +26,9 @@ FACTS = {
         "10.9.9.2": {"state": "Active", "routing_instance": None},
     }),
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"status": "Up"}},
-    "evpn_esi": {"00:11": {"status": "Up", "interface": "ge-0/0/2.113"}},
+    "evpn_esi": [
+        esi_record("L3VPN-CPE13-NNI", "00:11", {"ge-0/0/2.113": "Up"}),
+    ],
     "evpn_mac": {"L3VPN-CPE13-NNI": {"BD-313": 42}},
 }
 
@@ -95,6 +97,43 @@ def test_select_evpn_instance_by_routing_instance():
     )
     facts = {"evpn_instance": {"EVPN-A": {"neighbors": {}}, "EVPN-B": {}}}
     assert set(scope.select(facts)["evpn_instance"]) == {"EVPN-A"}
+
+
+ESI = "00:11:12:13:14:00:00:00:00:00"
+
+
+def _elan(ri, iface):
+    return Scope(
+        id=f"svc:{iface}", kind="service",
+        key=ScopeKey(description=iface, service_type="E-LAN"),
+        selectors=Selectors(interfaces=[iface], physical_interfaces=["ae0"],
+                            routing_instances=[ri]),
+    )
+
+
+def test_esi_shared_by_two_instances_each_scope_gets_its_ifl():
+    facts = {"evpn_esi": [
+        esi_record("EVI-A", ESI, {"ae0.4093": "Down"}),
+        esi_record("EVI-B", ESI, {"ae0.4094": "Up"}),
+    ]}
+    a = _elan("EVI-A", "ae0.4093").select(facts)["evpn_esi"]
+    b = _elan("EVI-B", "ae0.4094").select(facts)["evpn_esi"]
+    assert a[ESI]["status"] == "Down" and a[ESI]["interface"] == "ae0.4093"
+    assert b[ESI]["status"] == "Up" and b[ESI]["interface"] == "ae0.4094"
+
+
+def test_esi_two_ifls_one_instance_scope_sees_only_own_ifl():
+    facts = {"evpn_esi": [esi_record("EVI", ESI, {"ae0.4093": "Up", "ae0.4094": "Down"})]}
+    view = _elan("EVI", "ae0.4093").select(facts)["evpn_esi"]
+    assert view == {ESI: {
+        "resolved_status": "Resolved by IFL ae0.4093", "df_role": "10.0.0.1",
+        "interface": "ae0.4093", "status": "Up", "mode": "all-active",
+    }}
+
+
+def test_esi_of_other_instance_is_not_selected():
+    facts = {"evpn_esi": [esi_record("EVI-B", ESI, {"ae0.4093": "Up"})]}
+    assert _elan("EVI-A", "ae0.4093").select(facts)["evpn_esi"] == {}
 
 
 def test_select_filters_ping_by_scope_id():

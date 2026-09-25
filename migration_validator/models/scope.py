@@ -310,11 +310,24 @@ class Scope:
             for name, data in (facts.get("evpn_vpws") or {}).items()
             if name in self.selectors.routing_instances
         }
-        evpn_esi = {
-            esi: data
-            for esi, data in (facts.get("evpn_esi") or {}).items()
-            if self.selectors.matches_interface(str(data.get("interface", "")))
-        }
+        # Klic (instance, ESI) na zarizeni, ESI ve scopu: scope ma jednu RI
+        # a jedno rozhrani, takze ESI je v nem jednoznacne. Stav je stav
+        # IFL scopu z per-IFL tabulky, ne 'Up/Forwarding' IFL, ktery Junos
+        # v ESI bloku nahodou vypsal (schema 14).
+        evpn_esi: dict[str, dict[str, Any]] = {}
+        for record in facts.get("evpn_esi") or []:
+            if record.get("instance") not in self.selectors.routing_instances:
+                continue
+            for name, state in sorted((record.get("interfaces") or {}).items()):
+                if self.selectors.matches_interface(name):
+                    evpn_esi[str(record.get("esi"))] = {
+                        "resolved_status": record.get("resolved_status"),
+                        "df_role": record.get("df_role"),
+                        "interface": name,
+                        "status": state.get("status"),
+                        "mode": state.get("mode"),
+                    }
+                    break
         evpn_instance = {
             name: data
             for name, data in (facts.get("evpn_instance") or {}).items()

@@ -153,7 +153,12 @@ def _facts_for(scopes, pps: int) -> dict:
     # adresy, seznam potrebuje vlastni pojistku podle (adresa, instance).
     seen_bgp: set[tuple[str, str | None]] = set()
     evpn_vpws = {}
-    evpn_esi = {}
+    # Schema 14: seznam zaznamu, klic je (instance, esi). Index podle
+    # instance drzi dedup napric scopy sdilejicimi tutez instanci (dve
+    # E-LAN sluzby ve stejnem EVI pripoji svuj IFL do jednoho zaznamu
+    # misto vyroby druheho se stejnym (instance, esi)).
+    evpn_esi: list[dict] = []
+    evpn_esi_by_instance: dict[str, dict] = {}
     evpn_mac = {}
     routes: dict[str, dict[str, dict]] = {}
     bfd: list[dict] = []
@@ -481,10 +486,24 @@ def _facts_for(scopes, pps: int) -> dict:
             instance = "default-switch"
         if service_type == "E-LAN" and instance:
             if instance != "default-switch":
-                evpn_esi[f"esi-{instance}"] = {
-                    "status": "Up",
-                    "df_role": "DF",
-                    "interface": scope.selectors.interfaces[0],
+                # Dve E-LAN sluzby sdilejici instanci (napr. MGMT-DEVICE4 a
+                # MGMT-VLAN v EVPN-VLAN-AWARE-POP1) pripoji svuj IFL do
+                # existujiciho zaznamu, ne vyrobi druhy se stejnym
+                # (instance, esi) - viz evpn_esi_two_instances.xml, kde
+                # stejne ESI ale ruzne instance zustavaji dva zaznamy.
+                record = evpn_esi_by_instance.get(instance)
+                if record is None:
+                    record = {
+                        "instance": instance,
+                        "esi": f"esi-{instance}",
+                        "resolved_status": None,
+                        "df_role": "DF",
+                        "interfaces": {},
+                    }
+                    evpn_esi_by_instance[instance] = record
+                    evpn_esi.append(record)
+                record["interfaces"][scope.selectors.interfaces[0]] = {
+                    "status": "Up", "mode": "all-active",
                 }
             # Nove schema (Task 2): klic je VLAN id, domena je jen popisek k
             # rendrovani (None u vlan-based - collector taky nevraci domenu).

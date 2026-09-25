@@ -90,14 +90,18 @@ class EvpnVpwsCollector(Collector):
 
 @register
 class EvpnEsiCollector(Collector):
-    """Stav ethernet segmentu (multihoming).
+    """Stav ethernet segmentu (multihoming), jeden zaznam per (instance, ESI).
 
     ESI bloky jsou v odpovedi jen s 'extensive' - bez nej 'show evpn instance'
     vrati souhrn bez jedineho ESI a collector by tise vracel prazdno.
 
-    'interface' je zamerne logicka jednotka ('ae0.14'), protoze presne tu drzi
-    scope v selektorech. Junos ji tady dava rovnou ve spravnem tvaru, takze
-    obava ze specu (fyzicky rodic bez Layer1 zaznamu) tady nenastava.
+    Per-IFL stav nese jen tabulka instance (evpn-interface-status-table):
+    ESI blok sam vypisuje jediny lokalni IFL i pri evpn-esi-num-local-intf
+    rovnem 2 (PTX laborka 2026-09-24, evpn_esi_two_ifls_one_instance.xml) -
+    'ae0.4093' i 'ae0.4094' jsou v segmentu, ale evpn-esi-local-intf-name
+    uvadi jen 'ae0.4094'. Klic je (instance, ESI), ne holy ESI: stejne ESI
+    (per-port na AE) muze byt ve vic instancich, kazda s vlastnim IFL
+    (evpn_esi_two_instances.xml).
     """
 
     name = "evpn_esi"
@@ -108,36 +112,47 @@ class EvpnEsiCollector(Collector):
     def rpc_kwargs(self, platform: str) -> dict[str, Any]:
         return {"extensive": True}
 
-    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
-        segments: dict[str, dict[str, Any]] = {}
-
-        for node in xml.iter("evpn-esi"):
-            esi = _text(node, "evpn-esi-value")
-            if not esi:
+    def parse(self, xml: etree._Element, platform: str) -> list[dict[str, Any]]:
+        segments: list[dict[str, Any]] = []
+        for instance_node in xml.iter("evpn-instance"):
+            instance = _text(instance_node, "evpn-instance-name")
+            if not instance:
                 continue
-
-            # ESI zacinajici 05: si box generuje sam (per-IRB). Nenesou
-            # status ani DF a v reportu by kazda L3-extended sluzba
-            # svitila radkem bez vypovedi.
-            if esi.startswith("05:"):
-                continue
-
-            local = node.find("evpn-esi-local-intf-information")
-            df = node.find("evpn-esi-df-information")
-
-            segments[esi] = {
-                # 'Up/Forwarding' - stav lokalniho rozhrani v segmentu.
-                "status": _text(local, "evpn-esi-local-intf-status") or "unknown",
-                # Popisny text 'Resolved by IFL ae0.14'. Na rovnost se
-                # neporovnava (nese jmeno IFL, ktere se migraci meni) -
-                # v reportu je to samostatny radek "ESI Status".
-                "resolved_status": _text(node, "evpn-esi-status"),
-                # IP adresa zvoleneho DF, ne role tohohle boxu - urcit "jsem
-                # DF?" by znamenalo interpretovat, a to collectoru nepatri.
-                "df_role": _text(df, "esi-designated-forwarder"),
-                "interface": _text(local, "evpn-esi-local-intf-name"),
-            }
-
+            # Per-IFL stav z tabulky instance, klicovano ESI. Instance jsou
+            # sourozenci, takze iter() z instance_node nesbira cizi bloky.
+            by_esi: dict[str, dict[str, dict[str, Any]]] = {}
+            for iface in instance_node.iter("evpn-interface"):
+                name = _text(iface, "evpn-interface-name")
+                esi_value = _text(iface, "evpn-interface-esi")
+                if not name or not esi_value:
+                    continue
+                by_esi.setdefault(esi_value, {})[name] = {
+                    "status": _text(iface, "evpn-interface-status") or "unknown",
+                    "mode": _text(iface, "evpn-interface-mode"),
+                }
+            for node in instance_node.iter("evpn-esi"):
+                esi = _text(node, "evpn-esi-value")
+                if not esi:
+                    continue
+                # ESI zacinajici 05: si box generuje sam (per-IRB). Nenesou
+                # status ani DF a v reportu by kazda L3-extended sluzba
+                # svitila radkem bez vypovedi.
+                if esi.startswith("05:"):
+                    continue
+                df = node.find("evpn-esi-df-information")
+                segments.append({
+                    "instance": instance,
+                    "esi": esi,
+                    # Popisny text 'Resolved by IFL ae0.14'. Na rovnost se
+                    # neporovnava (nese jmeno IFL, ktere se migraci meni) -
+                    # v reportu je to samostatny radek "ESI Status".
+                    "resolved_status": _text(node, "evpn-esi-status"),
+                    # IP adresa zvoleneho DF, ne role tohohle boxu - urcit
+                    # "jsem DF?" by znamenalo interpretovat, a to collectoru
+                    # nepatri.
+                    "df_role": _text(df, "esi-designated-forwarder"),
+                    "interfaces": by_esi.get(esi, {}),
+                })
         return segments
 
 

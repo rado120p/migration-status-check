@@ -430,6 +430,24 @@ def test_esi_missing_data_skips():
     assert run_check(EvpnEsiStatusCheck(), _ctx({"evpn_esi": {}}))[0].status is Status.SKIP
 
 
+def test_esi_status_row_uses_per_ifl_status_and_carries_mode():
+    # subject view {"evpn_esi": {ESI: {"resolved_status": "Resolved by IFL ae0.4093",
+    #   "df_role": "10.0.0.1", "interface": "ae0.4093", "status": "Down", "mode": "all-active"}}}
+    # -> radek "ESI Local interface status": Outcome BROKEN (bez baseline), value "Down",
+    #    subject == {"status": "Down", "interface": "ae0.4093", "mode": "all-active"}
+    ctx = _ctx({"evpn_esi": {"00:11": {
+        "resolved_status": "Resolved by IFL ae0.4093",
+        "df_role": "10.0.0.1",
+        "interface": "ae0.4093",
+        "status": "Down",
+        "mode": "all-active",
+    }}})
+    local = _by_label(run_check(EvpnEsiStatusCheck(), ctx), "ESI Local interface status")
+    assert local.status is Status.FAIL
+    assert local.value == "Down"
+    assert local.subject == {"status": "Down", "interface": "ae0.4093", "mode": "all-active"}
+
+
 def _mac_subject(count=2, *, vlan="313", domain="BD-313",
                  iface="ge-0/0/2.313", iface_count=1):
     return {"evpn_mac": {"EVPN-AWARE-CPE13": {

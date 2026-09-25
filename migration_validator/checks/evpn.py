@@ -417,7 +417,8 @@ class EvpnEsiStatusCheck(Check):
                 label="ESI Local interface status",
                 value=status,
                 baseline_value=str(baseline_status) if baseline_status else None,
-                subject={"status": status, "interface": data.get("interface")},
+                subject={"status": status, "interface": data.get("interface"),
+                         "mode": data.get("mode")},
             )
         )
 
