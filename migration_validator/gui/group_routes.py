@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from migration_validator import api
 from migration_validator.auth import load_settings
+from migration_validator.gui import audit
 from migration_validator.gui.authz import Actor, Permission, require
 from migration_validator.gui.capture_launch import launch_capture
 from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
@@ -75,7 +76,7 @@ def build_groups_router(
             raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
         return summary
 
-    def _start_batch(group: str, phase: str) -> dict[str, Any]:
+    def _start_batch(group: str, phase: str, actor: Actor) -> dict[str, Any]:
         members = api.group_runs(run_root).get(group)
         if not members:
             raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
@@ -105,6 +106,7 @@ def build_groups_router(
             except (ValueError, OSError, StopIteration, DeviceBusy, yaml.YAMLError) as error:
                 entry["error"] = str(error) or "run bez zarizeni"
             tasks.append(entry)
+        audit.record(actor.username, "group-capture", f"{group}/{phase}")
         return {"batch": uuid.uuid4().hex[:12], "tasks": tasks}
 
     @router.get("")
@@ -117,6 +119,7 @@ def build_groups_router(
             api.create_group(
                 body.group, [d.model_dump() for d in body.devices],
                 profile=body.profile, run_root=run_root, profiles_root=profiles.root,
+                created_by=actor.username,
             )
         except api.GroupError as error:
             raise _group_error(error) from error
@@ -124,7 +127,8 @@ def build_groups_router(
             raise _write_error(error) from error
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
-        batch = _start_batch(body.group, "pre") if body.capture_pre else None
+        audit.record(actor.username, "group-create", body.group)
+        batch = _start_batch(body.group, "pre", actor) if body.capture_pre else None
         return {**_summary_or_404(body.group), "batch": batch}
 
     @router.get("/{group}")
@@ -134,7 +138,10 @@ def build_groups_router(
     @router.post("/{group}/devices", status_code=201)
     def add_devices(group: str, body: AddDevicesBody, actor: Actor = require(Permission.OPERATE)) -> dict:
         try:
-            api.add_group_devices(group, [d.model_dump() for d in body.devices], run_root=run_root)
+            api.add_group_devices(
+                group, [d.model_dump() for d in body.devices], run_root=run_root,
+                created_by=actor.username,
+            )
         except FileNotFoundError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
         except api.GroupError as error:
@@ -143,6 +150,7 @@ def build_groups_router(
             raise _write_error(error) from error
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        audit.record(actor.username, "group-add-devices", group)
         return _summary_or_404(group)
 
     @router.post("/{group}/captures", status_code=202)
@@ -152,7 +160,7 @@ def build_groups_router(
                 status_code=422,
                 detail=f"neznama faze '{body.phase}', ocekavano pre, post nebo rollback",
             )
-        return _start_batch(group, body.phase)
+        return _start_batch(group, body.phase, actor)
 
     @router.post("/{group}/archive")
     def archive_group(group: str, actor: Actor = require(Permission.OPERATE)) -> dict:
@@ -167,6 +175,7 @@ def build_groups_router(
             raise HTTPException(status_code=404, detail=str(error)) from error
         except api.GroupWriteError as error:
             raise _write_error(error) from error
+        audit.record(actor.username, "group-archive", group)
         return {"archived": archived}
 
     @router.post("/{group}/upgrade")
@@ -190,6 +199,8 @@ def build_groups_router(
                     "run": name, "dry_run": dry_run, "backup": None, "items": [],
                     "error": f"{type(error).__name__}: {error}",
                 })
+        if not dry_run:
+            audit.record(actor.username, "group-upgrade", group)
         return {"group": group, "runs": runs}
 
     return router

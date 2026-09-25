@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from migration_validator.gui import audit
 from migration_validator.gui.authz import Actor, Permission, require
 from migration_validator.gui.profiles import profile_usage, server_default_profile
 from migration_validator.profiles.catalogue import build_catalogue
@@ -57,13 +58,16 @@ def build_profiles_router(
         except OSError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
 
-    def _save_or_error(name: str, document: dict[str, Any]) -> dict[str, Any]:
+    def _save_or_error(
+        name: str, document: dict[str, Any], actor: Actor, action: str
+    ) -> dict[str, Any]:
         try:
             store.save(name, document)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         except OSError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
+        audit.record(actor.username, action, name)
         return {"name": name, "document": _document_or_error(name)}
 
     # Staticke cesty (catalogue, preview) musi byt registrovane pred /{name}.
@@ -95,7 +99,7 @@ def build_profiles_router(
         _name_or_422(body.name)
         if store.exists(body.name):
             raise HTTPException(status_code=409, detail=f"profil '{body.name}' uz existuje")
-        return _save_or_error(body.name, body.document)
+        return _save_or_error(body.name, body.document, actor, "profile-create")
 
     @router.get("/{name}")
     def get_profile(name: str, actor: Actor = require(Permission.VIEW)) -> dict:
@@ -110,7 +114,7 @@ def build_profiles_router(
             raise HTTPException(
                 status_code=404, detail=f"profil '{name}' neexistuje ({store.path(name)})"
             )
-        return _save_or_error(name, body.document)
+        return _save_or_error(name, body.document, actor, "profile-edit")
 
     @router.delete("/{name}", status_code=204)
     def delete_profile(name: str, actor: Actor = require(Permission.OPERATE)) -> Response:
@@ -126,6 +130,7 @@ def build_profiles_router(
             store.delete(name)
         except OSError as error:
             raise HTTPException(status_code=500, detail=str(error)) from error
+        audit.record(actor.username, "profile-delete", name)
         return Response(status_code=204)
 
     return router

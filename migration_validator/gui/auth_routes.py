@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from migration_validator.gui import audit
 from migration_validator.gui.sessions import SESSION_COOKIE, LoginThrottle, SessionStore
 from migration_validator.users import (
     AuthenticationError,
@@ -51,6 +52,7 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
         password_ok = verify_password(body.password[:2048], stored)
         if user is None or not password_ok:
             throttle.failure(body.username, ip)
+            audit.record(body.username, "login-failed", ip=ip)
             raise HTTPException(status_code=401, detail=INVALID_LOGIN)
         throttle.success(body.username, ip)
         if needs_rehash(user.password_hash):
@@ -67,6 +69,7 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
                 # login still succeeds; rehash retried next time
                 log.warning("rehash hesla pro '%s' selhal: %s", user.username, error)
         token = sessions.create(user.username)
+        audit.record(user.username, "login", ip=ip)
         response = JSONResponse({"username": user.username, "role": user.role})
         response.set_cookie(SESSION_COOKIE, token, **_cookie_kwargs())
         return response
@@ -75,7 +78,10 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
     def logout(request: Request) -> Response:
         token = request.cookies.get(SESSION_COOKIE)
         if token:
+            username = sessions.lookup(token)
             sessions.drop(token)
+            if username is not None:
+                audit.record(username, "logout")
         response = Response(status_code=204)
         response.delete_cookie(SESSION_COOKIE, **_cookie_kwargs())
         return response

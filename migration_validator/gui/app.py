@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from migration_validator import api
 from migration_validator.auth import DEFAULT_CAPTURE_POOL, load_settings
 from migration_validator.collectors.registry import collectors_for
+from migration_validator.gui import audit
 from migration_validator.gui.auth_routes import build_auth_router
 from migration_validator.gui.authz import (
     Actor,
@@ -222,9 +223,11 @@ def create_app(
                 profile=body.profile,
                 run_root=run_root,
                 profiles_root=profiles.root,
+                created_by=actor.username,
             )
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        audit.record(actor.username, "run-create", body.name)
         return _detail(body.name)
 
     @app.put("/api/runs/{run}/mapping")
@@ -233,6 +236,7 @@ def create_app(
             api.update_mapping(run, body.mappings, run_root=run_root)
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        audit.record(actor.username, "mapping-edit", run)
         return _detail(run)
 
     @app.post("/api/runs/{run}/archive")
@@ -253,6 +257,7 @@ def create_app(
             target = api.archive_run(run, run_root=run_root)
         except (ValueError, FileNotFoundError) as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
+        audit.record(actor.username, "run-archive", run)
         return {"archived_to": target.name}
 
     @app.post("/api/runs/{run}/upgrade")
@@ -269,6 +274,8 @@ def create_app(
             raise HTTPException(
                 status_code=500, detail=f"{type(error).__name__}: {error}"
             ) from error
+        if not dry_run:
+            audit.record(actor.username, "run-upgrade", run)
         return report.to_dict()
 
     @app.get("/api/runs/{run}/evaluation")
@@ -399,6 +406,10 @@ def create_app(
             )
         except DeviceBusy as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
+        target = f"{body.run}/{body.device}/{body.phase}"
+        if body.port:
+            target += f"/{body.port}"
+        audit.record(actor.username, "capture-start", target)
         return {"id": task.id}
 
     @app.get("/api/captures/{task_id}")
