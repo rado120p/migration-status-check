@@ -476,7 +476,8 @@ def _facts_for(scopes, pps: int) -> dict:
                         "name": iface_name,
                         "status": "Up",
                         "mode": "single-homed",
-                        "local_sid": {"value": 1000, "peers": []},
+                        "pseudowire_status": None,
+                        "local_sid": {"value": 1000, "peers": [], "local_interface": None},
                         "remote_sid": {
                             "value": 2000,
                             "peers": [
@@ -488,6 +489,7 @@ def _facts_for(scopes, pps: int) -> dict:
                                     "status": "Resolved",
                                 }
                             ],
+                            "local_interface": None,
                         },
                     }
                 ]

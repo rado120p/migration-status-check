@@ -26,9 +26,11 @@ def test_vpws_instances_carry_interface_list(rpc_fixture, platform):
     for data in result.values():
         assert set(data) == {"interfaces"}
         for iface in data["interfaces"]:
-            assert set(iface) == {"name", "status", "mode", "local_sid", "remote_sid"}
+            assert set(iface) == {
+                "name", "status", "mode", "pseudowire_status", "local_sid", "remote_sid",
+            }
             for sid in (iface["local_sid"], iface["remote_sid"]):
-                assert set(sid) == {"value", "peers"}
+                assert set(sid) == {"value", "peers", "local_interface"}
                 for peer in sid["peers"]:
                     assert set(peer) == {"esi", "ipaddr", "mode", "role", "status"}
 
@@ -63,8 +65,68 @@ def test_vpws_empty_pe_table_gives_empty_peers():
     )
     result = EvpnVpwsCollector().parse(xml, "junos")
     iface = result["X"]["interfaces"][0]
-    assert iface["local_sid"] == {"value": 1000, "peers": []}
-    assert iface["remote_sid"] == {"value": 2000, "peers": []}
+    assert iface["local_sid"] == {"value": 1000, "peers": [], "local_interface": None}
+    assert iface["remote_sid"] == {"value": 2000, "peers": [], "local_interface": None}
+    assert iface["pseudowire_status"] is None
+
+
+def test_vpws_local_switch_evo_carries_partner_and_pw_status():
+    """PTX1-POP1 2026-09-25: lokalne prepnuty EVPN-VPWS - remote SID misto PE
+    nese partnersky AC, pseudowire-status je CCC-Up."""
+    result = EvpnVpwsCollector().parse(
+        _case("evpn_vpws_local_switch_evo.xml"), "junos-evo"
+    )
+    acs = result["EVPN-VPWS-LOCAL"]["interfaces"]
+    assert [ac["name"] for ac in acs] == ["et-0/0/8.211", "et-0/0/8.212"]
+    assert [ac["pseudowire_status"] for ac in acs] == ["CCC-Up", "CCC-Up"]
+    assert acs[0]["local_sid"] == {"value": 100, "peers": [], "local_interface": None}
+    assert acs[0]["remote_sid"] == {
+        "value": 200,
+        "peers": [],
+        "local_interface": {"name": "et-0/0/8.212", "status": "Up"},
+    }
+    assert acs[1]["remote_sid"]["local_interface"] == {"name": "et-0/0/8.211", "status": "Up"}
+
+
+def test_vpws_local_switch_mx_has_partner_but_no_pw_status():
+    """MX1-POP1 2026-09-25: partner stejne jako EVO, pseudowire-status MX
+    nevypisuje vubec."""
+    result = EvpnVpwsCollector().parse(_case("evpn_vpws_local_switch_mx.xml"), "junos")
+    acs = result["EVPN-VPWS-LOCAL"]["interfaces"]
+    assert [ac["name"] for ac in acs] == ["ge-0/0/2.211", "ge-0/0/2.212"]
+    assert [ac["pseudowire_status"] for ac in acs] == [None, None]
+    assert acs[0]["remote_sid"]["local_interface"] == {"name": "ge-0/0/2.212", "status": "Up"}
+    assert acs[1]["remote_sid"]["local_interface"] == {"name": "ge-0/0/2.211", "status": "Up"}
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_vpws_remote_pw_has_no_local_interface(rpc_fixture, platform):
+    result = EvpnVpwsCollector().parse(rpc_fixture(platform, "evpn_vpws"), platform)
+    for data in result.values():
+        for ac in data["interfaces"]:
+            assert ac["remote_sid"]["local_interface"] is None
+            assert ac["local_sid"]["local_interface"] is None
+            expected_pw = "CCC-Up" if platform == "junos-evo" else None
+            assert ac["pseudowire_status"] == expected_pw
+
+
+def test_vpws_partner_without_status_is_unknown():
+    xml = etree.fromstring(
+        """<evpn-vpws-information><evpn-vpws-instance>
+        <evpn-vpws-instance-name>X</evpn-vpws-instance-name>
+        <evpn-vpws-interface-status-table><evpn-vpws-interface>
+          <evpn-vpws-interface-name>ge-0/0/2.211</evpn-vpws-interface-name>
+          <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+          <evpn-vpws-service-id-remote-status-table><evpn-vpws-sid-remote>
+            <evpn-vpws-sid-remote-value>200</evpn-vpws-sid-remote-value>
+            <evpn-vpws-sid-local-interface-name>ge-0/0/2.212</evpn-vpws-sid-local-interface-name>
+            <evpn-vpws-sid-pe-status-table/>
+          </evpn-vpws-sid-remote></evpn-vpws-service-id-remote-status-table>
+        </evpn-vpws-interface></evpn-vpws-interface-status-table>
+        </evpn-vpws-instance></evpn-vpws-information>"""
+    )
+    iface = EvpnVpwsCollector().parse(xml, "junos")["X"]["interfaces"][0]
+    assert iface["remote_sid"]["local_interface"] == {"name": "ge-0/0/2.212", "status": "unknown"}
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)

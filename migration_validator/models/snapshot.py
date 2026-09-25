@@ -32,7 +32,10 @@ from migration_validator.models.scope import Scope
 #     local_interface), bfd (soused, rozhrani, multihop), evpn_esi
 #     (instance, ESI, per-IFL stav), routes (rib, prefix, protokol).
 #     pim_neighbor nese jen IPv4 sousedy.
-SCHEMA_VERSION = 14
+# 15: evpn_vpws AC nese pseudowire_status (jen EVO) a kazdy SID
+#     local_interface - partnersky AC lokalne prepnuteho EVPN-VPWS
+#     (spec 2026-09-25 vpws-local-switch-a-matcher).
+SCHEMA_VERSION = 15
 
 
 class SnapshotVersionError(Exception):

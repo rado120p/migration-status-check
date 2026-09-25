@@ -25,6 +25,23 @@ from migration_validator.collectors.interfaces import _int, _text
 from migration_validator.collectors.registry import register
 
 
+def _local_interface(sid: etree._Element) -> dict[str, str] | None:
+    """Partnersky AC lokalne prepnuteho EVPN-VPWS, jinak None.
+
+    Remote SID blok lokalne prepnute instance ma prazdnou
+    sid-pe-status-table a misto PE nese jmeno a stav AC na tomtez boxu -
+    MX 24.2 i EVO 25.2 stejne (lab 2026-09-25,
+    docs/superpowers/lab-captures/2026-09-25/).
+    """
+    name = _text(sid, "evpn-vpws-sid-local-interface-name")
+    if not name:
+        return None
+    return {
+        "name": name,
+        "status": _text(sid, "evpn-vpws-sid-local-interface-status") or "unknown",
+    }
+
+
 @register
 class EvpnVpwsCollector(Collector):
     """Stav EVPN-VPWS instanci vcetne vsech rozhrani a peeru obou SID.
@@ -33,6 +50,11 @@ class EvpnVpwsCollector(Collector):
     'evpn-vpws-sid-pe-status-table' (podstata checku evpn_vpws_status) se
     ignorovala. Nove schema nese vsechna rozhrani instance a u kazdeho SID
     seznam peeru s jejich statusem.
+
+    Schema 15 (spec 2026-09-25 vpws-local-switch-a-matcher): kazde AC nese
+    pseudowire_status (jen EVO - MX element nevypisuje ani u vzdaleneho PW,
+    None = nezmereno) a kazdy SID local_interface - partnersky AC lokalne
+    prepnuteho EVPN-VPWS, ktery Junos v remote SID vypisuje misto PE.
     """
 
     name = "evpn_vpws"
@@ -58,6 +80,7 @@ class EvpnVpwsCollector(Collector):
             "name": _text(iface, "evpn-vpws-interface-name"),
             "status": _text(iface, "evpn-vpws-interface-status") or "unknown",
             "mode": _text(iface, "evpn-vpws-interface-mode"),
+            "pseudowire_status": _text(iface, "evpn-vpws-pseudowire-status"),
             "local_sid": self._sid(
                 iface,
                 "evpn-vpws-service-id-local-status-table/evpn-vpws-sid-local",
@@ -74,7 +97,7 @@ class EvpnVpwsCollector(Collector):
     def _sid(iface: etree._Element, path: str, value_tag: str) -> dict[str, Any]:
         sid = iface.find(path)
         if sid is None:
-            return {"value": None, "peers": []}
+            return {"value": None, "peers": [], "local_interface": None}
         peers = [
             {
                 "esi": _text(peer, "evpn-vpws-sid-interface-esi"),
@@ -85,7 +108,11 @@ class EvpnVpwsCollector(Collector):
             }
             for peer in sid.iter("evpn-vpws-sid-pe-info")
         ]
-        return {"value": _int(sid, value_tag), "peers": peers}
+        return {
+            "value": _int(sid, value_tag),
+            "peers": peers,
+            "local_interface": _local_interface(sid),
+        }
 
 
 @register
