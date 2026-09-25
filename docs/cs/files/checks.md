@@ -402,9 +402,12 @@ a subjekt ji vůbec nezměřil (rodina odpojená při migraci), je vlastní `bro
 
 ## `evpn.py`
 
-Sdílená funkce **`_is_up(status)`** porovnává jen část před lomítkem: lokální rozhraní v ESI
-hlásí `Up/Forwarding`, VPWS rozhraní jen `Up`. Porovnání na přesnou rovnost by to první
-označilo za rozbité.
+Sdílená funkce **`_is_up(status)`** porovnává jen část před lomítkem. Od schema 14
+(spec 2026-09-25, "kolize klíčů – vrstva 2") už žádný ze čtyř zdrojů `"Up/Forwarding"`
+neposílá — ESI lokální rozhraní čte `status` z per-IFL tabulky instance
+(`evpn-interface-status-table`, hodnota `Up`/`Down`), ne z `evpn-esi-local-intf-status`
+uvnitř ESI bloku (ten se od schema 14 vůbec nečte). Split na `/` zůstává jako tolerance
+proti budoucímu tvaru, ne protože by ji dnešní data ještě nesla.
 
 Žádný z těchto checků neobsahuje větev na platformu — rozdíl MX (`virtual-switch` /
 `bridge-domain`) vs. EVO (`mac-vrf` / VLAN) pohltil collector.

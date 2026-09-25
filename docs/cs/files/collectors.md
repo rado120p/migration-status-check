@@ -134,10 +134,23 @@ novými řádky, EVO ne — `_text()` (sdílené s `arp.py`/`interfaces.py`) to 
 RPC: `get_bgp_neighbor_information`. Použití `neighbor` místo `summary` varianty je
 záměrné — summary neobsahuje počet **advertised** prefixů.
 
-Výstup: `{peer_ip: {state, peer_as, routing_instance, ribs: {rib_name: {received, accepted,
-advertised, active, suppressed}}}}`.
+Výstup (schema 14, spec 2026-09-25): seznam záznamů, jeden na `<bgp-peer>`, každý nese
+celou svou identitu — ne vnořený slovník klíčovaný adresou jako dřív:
 
-Tři věci ověřené proti laborce:
+```json
+[{"address": "150.0.0.1", "routing_instance": "L3VPN-CPE13-NNI",
+  "local_interface": "ae0.100", "state": "Established", "peer_as": 65013,
+  "ribs": {"inet.0": {"received": 14, "accepted": 14, "advertised": 3,
+                       "active": 3, "suppressed": 0}}}]
+```
+
+Dřívější tvar `{peer_ip: {...}}` se přepisoval, když dvě VRF měly peera na stejné adrese
+(ostrý běh MX → ACX 2026-09-23) — poslední zaznamenaný peer vyhrál a baseline jedné služby
+tak nesla session té druhé. `Scope.select` (`models/scope.py::owns_bgp_peer`) si pro pohled
+služby dál drží dnešní klíčovaný tvar `{address: záznam}` — scope má nejvýš jednu RI, takže
+uvnitř služby je adresa jednoznačná z konstrukce; kolizi vidí jen **surová** fakta.
+
+Čtyři věci ověřené proti laborce:
 
 - **`peer-address` nese port** (`150.0.0.1+179` na MX, efemerní `150.0.0.1+57010` na EVO).
   `strip_port()` ho odřízne — bez toho by se peer nikdy nepotkal s `bgp_neighbor`
@@ -147,6 +160,9 @@ Tři věci ověřené proti laborce:
   jednoho čísla a pokles v `inet6.0` kompenzovaný nárůstem v `inet.0` by prošel bez
   povšimnutí. `checks/bgp.py::peer_family()` pak rodinu řádku odvozuje z **adresy peeru**,
   ne z názvu RIB (ten rodinu nemusí nést vůbec, např. `bgp.l3vpn.0`).
+- **`local_interface`** je z `<local-interface-name>`; chybí-li, `null`. Ukládá se od
+  schema 14, vlastnictví ho zatím nepoužívá — je to podklad pro pozdější rozlišení dvou
+  link-local peerů na stejné adrese v jedné RI, ne dnešní chování.
 - `peer-cfg-rti` s hodnotou `master` / `default` / prázdnou se normalizuje na `None`,
   aby default instance nevypadala jako pojmenovaná VRF.
 
@@ -180,19 +196,38 @@ RPC: `get_evpn_vpws_information`. Výstup
 RPC: `get_evpn_instance_information` s **`extensive=True`**. Bez `extensive` vrátí
 `show evpn instance` souhrn bez jediného ESI a collector by tiše vracel prázdno.
 
-Výstup `{esi: {status, df_role, interface}}`.
+Výstup (schema 14, spec 2026-09-25): seznam záznamů, jeden na `(instance, ESI)`:
+
+```json
+[{"instance": "EVPN-VLAN-AWARE-POP1", "esi": "00:11:12:13:14:00:00:00:00:00",
+  "resolved_status": "Resolved by IFL ae0.4093", "df_role": "10.0.0.1",
+  "interfaces": {"ae0.4093": {"status": "Up", "mode": "all-active"},
+                 "ae0.4094": {"status": "Up", "mode": "all-active"}}}]
+```
+
+Dřívější tvar `{esi: {status, df_role, interface}}` klíčoval jen holým ESI a nesl jediné
+`interface` — stejné ESI (per-port na AE) ale může ležet ve víc instancích, každá s vlastním
+IFL, a jeden segment může mít víc lokálních IFL zároveň (`evpn-esi-num-local-intf` = 2).
+Klíč je proto `(instance, ESI)`, ne holé ESI, a `interfaces` je slovník **všech** IFL
+segmentu z **téže instance** — ne jediné `interface` z ESI bloku.
 
 - **ESI začínající `05:` se ignoruje.** Box si ho generuje sám (per-IRB, auto-derived) a
   nenese ani status, ani DF — v reportu by u každé L3-extended služby přibyl řádek bez
   vypovědní hodnoty.
-- `status` je `evpn-esi-local-intf-status` (`Up/Forwarding`) — `evpn-esi-status` je proti
-  tomu popisný text (`Resolved by IFL ae0.14`), který se nedá porovnávat.
+- `interfaces` je `evpn-interface` z tabulky `evpn-interface-status-table` **téže instance**,
+  jejichž `evpn-interface-esi` je rovno ESI segmentu — `status` v ní je `Up` / `Down`
+  (per-IFL tabulka), ne `Up/Forwarding` z ESI bloku (`evpn-esi-local-intf-status`), který se
+  už nečte. Segment, jehož ESI žádný řádek per-IFL tabulky nenese, se uloží s
+  `interfaces: {}` — stav se nefabuluje, žádný scope ho nevybere.
+- `resolved_status` je popisný text (`Resolved by IFL ae0.14`) z `evpn-esi-status` — nese
+  jméno IFL, které se migrací mění, takže se na rovnost neporovnává; v reportu je to
+  samostatný řádek „ESI Status".
 - `df_role` je **IP adresa zvoleného DF**, ne role tohohle boxu. Určit „jsem DF?" by
   znamenalo interpretovat, a to collectoru nepatří.
-- `interface` je **logická jednotka** (`ae0.14`, `irb.14`) — přesně to, co drží scope
-  v selektorech. Specifikace tady předpokládala problém (Junos prý hlásí fyzický název);
-  proti laborce se obava nepotvrdila, `evpn-esi-local-intf-name` vrací rovnou logickou
-  jednotku. Pojistkou je conformance test `test_esi_interface_matches_a_scope`.
+- Pohled pro službu (`Scope.select`) zůstává zploštělý na dnešní tvar, který check čte —
+  `interface`/`status`/`mode` z IFL scopu (scope má jedno rozhraní, takže vzniká jeden
+  stavový řádek na službu). Pojistkou zůstává conformance test
+  `test_esi_interface_matches_a_scope`.
 
 ### `EvpnMacCollector` (`evpn_mac`)
 
@@ -243,44 +278,47 @@ z ní nahraje **obě** odpovědi, takže fixtures nesou `routes.xml`
 Filtr na protokol drží odpověď malou i na zařízení s plnou internetovou tabulkou.
 `all=True` se **nepoužívá** — přidává jen `__juniper_private*` tabulky, což je šum.
 
-`collect()` slučuje výsledky obou průchodů do jedné tabulky — **přísně přídavně**: druhý
-průchod (`aggregate`) jen doplňuje prefixy, které první (`static`) nepřinesl
-(`target.setdefault(prefix, data)`), nikdy nepřepisuje. Prefix nemůže být v jedné RIB
-zároveň static i aggregate, takže kolize identity by znamenala poškozená data, ne legitimní
-update. Selhání **kteréhokoliv** z obou průchodů je chyba celého collectoru (`CollectorError`)
-— stejný důvod jako u `EvpnMacCollector`: částečná data (jen statiky bez agregátů) by check
-přečetl jako „agregát zmizel", což je falešný poplach.
+`collect()` slučuje výsledky obou průchodů — od schema 14 (spec 2026-09-25) **jen
+zřetězením** (`records.extend(parsed)`), žádné `setdefault` proti identitě prefixu.
+**Static a aggregate mohou legitimně sdílet stejné `(rib, prefix)`** (potvrzeno proti
+laborce 2026-09-24) — dřívější docstring tvrdil opak a `collect()` proto druhý průchod
+jen tiše zahazoval, kdykoli agregát ležel na stejném prefixu jako statika. Každý protokol
+je od schema 14 svůj vlastní záznam. Selhání **kteréhokoliv** z obou průchodů je chyba
+celého collectoru (`CollectorError`) — stejný důvod jako u `EvpnMacCollector`: částečná
+data (jen statiky bez agregátů) by check přečetl jako „agregát zmizel", což je falešný
+poplach.
 
-Výstup je dvouúrovňový slovník `{RIB: {prefix: {next_hop, via, active, protocol}}}`, tak jak
-ho vyrobí collector ze sloučení nahrávek `tests/fixtures/rpc/junos-evo/routes.xml` (static) a
-`routes.2.xml` (aggregate):
+Výstup (schema 14) je **plochý seznam záznamů** na `(rib, prefix, protocol)`, ne vnořený
+slovník — tak jak ho vyrobí collector ze zřetězení nahrávek
+`tests/fixtures/rpc/junos-evo/routes.xml` (static) a `routes.2.xml` (aggregate):
 
 ```json
-{
-  "inet.0": {
-    "198.62.1.0/29": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
-    "198.62.2.0/24": { "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" },
-    "10.1.0.0/23": { "next_hop": [], "via": [], "active": true, "protocol": "aggregate" }
-  },
-  "inet6.0": {
-    "2001:aaaa::/64": { "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true, "protocol": "static" }
-  },
-  "L3VPN-CPE13-NNI.inet.0": {
-    "172.26.1.0/29": { "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
-  },
-  "L3VPN-CPE13-NNI.inet6.0": {
-    "2001:eeee::/64": { "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true, "protocol": "static" }
-  }
-}
+[
+  {"rib": "inet.0", "prefix": "198.62.1.0/29", "protocol": "static",
+   "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true},
+  {"rib": "inet.0", "prefix": "198.62.2.0/24", "protocol": "static",
+   "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": true},
+  {"rib": "inet.0", "prefix": "10.1.0.0/23", "protocol": "aggregate",
+   "next_hop": [], "via": [], "active": true},
+  {"rib": "inet6.0", "prefix": "2001:aaaa::/64", "protocol": "static",
+   "next_hop": ["2001:abcd:11:13::b"], "via": ["et-0/0/8.13"], "active": true},
+  {"rib": "L3VPN-CPE13-NNI.inet.0", "prefix": "172.26.1.0/29", "protocol": "static",
+   "next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": true},
+  {"rib": "L3VPN-CPE13-NNI.inet6.0", "prefix": "2001:eeee::/64", "protocol": "static",
+   "next_hop": ["2001:db8:11:13::b"], "via": ["et-0/0/8.113"], "active": true}
+]
 ```
 
-Klíč `protocol` nese hodnotu `protocol-name` z RPC, malými písmeny (`"static"` / `"aggregate"`)
-— checky ho čtou při rozdělování na `static_route_status` a `aggregate_route_status`. Chybějící
-klíč `protocol` znamená snapshot pořízený před schema 10, kdy collector sbíral jen statiky;
-`checks/routes.py::_flatten()` v tom případě defaultuje na `"static"`. Tenhle default chrání
-jen vnitřek checku — reálný starý soubor snapshotu se přes `Snapshot.from_dict` nedostane vůbec
-(`schema_version != SCHEMA_VERSION` skončí na `SnapshotVersionError`), takže starý baseline
-stejně vyžaduje novou capturu.
+Klíč `protocol` nese hodnotu `protocol-name` z RPC, malými písmeny (`"static"` /
+`"aggregate"`). Pohled pro službu (`Scope.select`) tenhle plochý seznam přeskupí zpátky
+na dnešní tvar, který checky čtou —
+`{protokol: {rib: {prefix: záznam}}}` — pomocí identity `(rib, prefix, protocol)`
+(`models/scope.py::route_key()`, sdílená se `engine.py::_unassigned_static_routes`, aby
+záznam bez protokolu nezůstal neviditelný ani v jednom z obou míst). Selektor bez
+`route_type` znamená `"static"` — dnešní default, `_flatten()` (`checks/routes.py`) ho
+z pohledu čte přímo, žádný vlastní fallback na chybějící klíč už nepotřebuje: `schema_version`
+je exact-match, takže starý soubor bez `protocol` se přes `Snapshot.from_dict` vůbec
+nenačte.
 
 Čtyři věci ověřené proti laborce:
 
@@ -319,27 +357,33 @@ ani `remote-state` — bez klienta nejde odlišit session drženou BGP od jiné 
 na RPC opravdu dostane, hlídá až conformance test; nahrané fixtures to nesou v atributu
 `<bfd-session-information style="detail">`.
 
-Výstup je `{peer_ip: {state, interface, remote_state, local_diagnostic, clients,
-detection_time, transmission_interval, multiplier}}`, z nahrávky
-`tests/fixtures/rpc/junos-evo/bfd.xml`:
+Výstup (schema 14, spec 2026-09-25) je **seznam záznamů**, jeden na `<bfd-session>`, ne
+slovník klíčovaný sousedem jako dřív:
 
 ```json
-{
-  "152.11.13.2": {
-    "state": "Up", "interface": "et-0/0/8.13", "remote_state": "Up",
-    "local_diagnostic": "None", "clients": ["BGP"],
-    "detection_time": "9.000", "transmission_interval": "3.000", "multiplier": 3
-  },
-  "198.11.13.2": {
-    "state": "Down", "interface": "et-0/0/8.113", "remote_state": "AdminDown",
-    "local_diagnostic": "None", "clients": ["BGP"],
-    "detection_time": "0.000", "transmission_interval": "3.000", "multiplier": 3
-  }
-}
+[
+  {"neighbor": "152.11.13.2", "interface": "et-0/0/8.13", "multihop": false,
+   "state": "Up", "remote_state": "Up", "local_diagnostic": "None",
+   "clients": ["BGP"], "detection_time": "9.000",
+   "transmission_interval": "3.000", "multiplier": 3},
+  {"neighbor": "198.11.13.2", "interface": "et-0/0/8.113", "multihop": false,
+   "state": "Down", "remote_state": "AdminDown", "local_diagnostic": "None",
+   "clients": ["BGP"], "detection_time": "0.000",
+   "transmission_interval": "3.000", "multiplier": 3}
+]
 ```
 
-**Klíčem je adresa souseda**, protože přesně pod ní check hledá záměr z inventory
-(`Selectors.bfd_peers`) i stav BGP (`facts["bgp"]`).
+z nahrávky `tests/fixtures/rpc/junos-evo/bfd.xml`.
+
+Dřívější klíčovaný tvar `{peer_ip: {...}}` (přesně pod adresou souseda check hledal záměr
+z inventory i stav BGP) se přepisoval, kdykoli dvě multihop session mířily na stejnou
+adresu — `extensive` výpis nenese ani rozhraní, ani VRF, takže je nejde rozlišit vůbec
+(ověřeno v laborce 2026-09-24). **`multihop`** je nové pole (`<session-type>` obsahuje
+„Multi hop"; chybí-li `session-type`, rozhoduje `interface is None`) — `Scope.select`
+(`models/scope.py::owns_bfd_session`) ho potřebuje, aby single-hop session odlišil podle
+rozhraní a multihop session nechal splynout do `bfd_ambiguous`, když se dvě takové na
+stejnou adresu potkají. Pohled pro službu zůstává klíčovaný sousedem jako dřív —
+mění se jen surová fakta v snímku.
 
 **Prázdný výpis je platný stav, ne chyba.** Nahrávka z vMX
 (`tests/fixtures/rpc/junos/bfd.xml`) je `<sessions>0</sessions>` — BFD je tam
@@ -397,8 +441,20 @@ Rozhraní bez jména (`interface-name` chybí) se přeskočí stejně jako u ost
 information > pim-interface > pim-neighbor` — `pim-interface` **bez** vnořeného
 `pim-neighbor` (rozhraní s PIM zapnutým, ale bez souseda) nedostává syntetický záznam, klíč
 prostě chybí (absence je absence, ne vymyšlené Down). Kontrakt klíčuje jedním sousedem na
-rozhraní; při víc než jednom `pim-neighbor` pod jedním `pim-interface` (multi-access segment)
-collector bere první a další tiše zahazuje — v nahrávkách z laborky k tomu nedochází (1:1).
+rozhraní; při víc než jednom `pim-neighbor` pod jedním `pim-interface` (multi-access
+segment), nebo při víc než jednom `pim-interface` bloku se stejným jménem rozhraní, collector
+bere **první IPv4** souseda a další tiše zahazuje (`if interface in neighbors: break`) —
+v nahrávkách z laborky k tomu při jedné rodině nedochází (1:1).
+
+**Jen IPv4 se vyhodnocuje** — `<ip-protocol-version>` se testuje na doslovné `"6"` a takový
+soused se přeskočí (`continue`), ne `break`, takže nezablokuje pozdější IPv4 blok. Chybějící
+element `<ip-protocol-version>` znamená IPv4. Na dual-stack rozhraní PTX laborka
+(2026-09-24) vypisuje IPv4 `pim-interface` blok, pak IPv6 blok se stejným jménem rozhraní —
+bez filtru by IPv6 soused přepsal IPv4 (fixture
+`tests/fixtures/cases/pim_neighbors_dual_stack.xml`). Pravidlo platí bez ohledu na pořadí
+bloků v odpovědi: syntetický test s IPv6 blokem **před** IPv4 blokem
+(`tests/collectors/test_pim.py::test_v6_block_before_v4_block_keeps_v4`) ověřuje, že filtr
+sedí na verzi, ne na tom, že v laborce IPv4 chodí první.
 
 ### `mpls.py` — `MplsInterfaceCollector`
 

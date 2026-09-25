@@ -221,7 +221,7 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 13` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 14` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
 `peers` místo plochého `status`/`local_sid`/`remote_sid`). Zvýšení z 10 na 11 (vlna
@@ -232,7 +232,15 @@ záznamů naučených přes IRB (`interface` + `learned_via` místo neořezanéh
 `mvpn_instance`) — viz sekci `multicast.py` v [collectors.md](collectors.md).
 Zvýšení z 12 na 13 (spec 2026-09-07) přidalo čtvrtou multicast fact area `pim_join`
 (PIM join tabulka, klíčovaná stejně jako `multicast_route` — instance → `"source,group"`
-→ payload) do `FACT_AREAS`. Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
+→ payload) do `FACT_AREAS`. Zvýšení z 13 na 14 (spec 2026-09-25, "kolize klíčů – vrstva 2")
+změnilo *tvar* čtyř existujících fact areas, ne jejich seznam: `bgp`, `bfd`, `evpn_esi`
+a `routes` přestaly být vnořené slovníky klíčované adresou/ESI/RIB a staly se seznamy
+záznamů, z nichž každý nese celou svou identitu (stejně jako `arp`/`nd`) — dva legitimní
+záznamy na jednom boxu (peer ve dvou VRF na stejné adrese, dva link-local BGP sousedé,
+ethernet segment sdílený dvěma instancemi, statika a agregát na stejném `(rib, prefix)`)
+se tak přestaly navzájem přepisovat. Pohled, který dostává služba (`Scope.select`), si
+zůstává v dnešním klíčovaném tvaru — mění se jen surová fakta v snímku. Viz `collectors.md`
+pro tvar každého záznamu. Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
 
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje

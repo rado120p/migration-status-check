@@ -309,7 +309,7 @@ konstanty).
 
 ```jsonc
 {
-  "schema_version": 12,
+  "schema_version": 14,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -337,19 +337,25 @@ konstanty).
              "routing_instance": null}],
     "nd": [{"ip": "2001:db8:11:13::b", "mac": "00:11:...", "interface": "ge-0/0/2.113",
             "state": "reachable"}],
-    "bgp": {
-      "198.11.13.2": {
-        "state": "Established", "peer_as": 65013,
-        "routing_instance": "L3VPN-CPE13-NNI",
-        "ribs": {
-          "inet.0": {"received": 14, "accepted": 14, "advertised": 3,
-                     "active": 3, "suppressed": 0}
-        }
-      }
-    },
+    // Schema 14 (spec 2026-09-25): bgp/bfd/evpn_esi/routes jsou seznamy
+    // zaznamu, kazdy nese celou svou identitu (jako arp/nd), aby dva
+    // legitimni zaznamy na jednom boxu (jiny peer ve stejne VRF, jiny
+    // ethernet segment, ...) neprepsaly jeden druhy. Pohled pro sluzbu
+    // (Scope.select) si drzi dnesni tvar klicovany adresou/ESI.
+    "bgp": [
+      {"address": "198.11.13.2", "routing_instance": "L3VPN-CPE13-NNI",
+       "local_interface": "ge-0/0/2.113", "state": "Established", "peer_as": 65013,
+       "ribs": {
+         "inet.0": {"received": 14, "accepted": 14, "advertised": 3,
+                    "active": 3, "suppressed": 0}
+       }}
+    ],
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
-    "evpn_esi":  {"00:11:22:...": {"status": "Up/Forwarding", "df_role": "10.0.0.5",
-                                   "interface": "ae0.14"}},
+    "evpn_esi": [
+      {"instance": "EVPN-VLAN-AWARE-CPE13-NNI", "esi": "00:11:22:...",
+       "resolved_status": "Resolved by IFL ae0.14", "df_role": "10.0.0.5",
+       "interfaces": {"ae0.14": {"status": "Up", "mode": "all-active"}}}
+    ],
     // Od schema 7 ctou evpn_mac i evpn_instance per-instance data z 'count'
     // resp. extensive vypisu. VLAN klic je skutecny learn-vlan (drive "-").
     "evpn_instance": {
@@ -371,13 +377,13 @@ konstanty).
     // Doslovne z runs/bfd-static-2026-07-29/pre.json: na tomhle zarizeni je
     // pet servisnich statik nakonfigurovanych, ale v tabulce nejsou (next-hop
     // zesel po deaktivaci ge-0/0/2), a BFD session nevznikla ani jedna.
-    "routes": {
-      "mgmt_junos.inet.0":  {"0.0.0.0/0": {"next_hop": ["10.0.0.2"],
-                                           "via": ["fxp0.0"], "active": true}},
-      "mgmt_junos.inet6.0": {"::/0": {"next_hop": ["2001:db8::1"],
-                                      "via": ["fxp0.0"], "active": true}}
-    },
-    "bfd": {}
+    "routes": [
+      {"rib": "mgmt_junos.inet.0", "prefix": "0.0.0.0/0", "protocol": "static",
+       "next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": true},
+      {"rib": "mgmt_junos.inet6.0", "prefix": "::/0", "protocol": "static",
+       "next_hop": ["2001:db8::1"], "via": ["fxp0.0"], "active": true}
+    ],
+    "bfd": []
   },
   "probes": {
     "ping": [
