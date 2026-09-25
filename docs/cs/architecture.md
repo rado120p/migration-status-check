@@ -231,12 +231,16 @@ Matcher při nejednoznačnosti **nespáruje**. Vyjde-li pod klíčem některého
 pravidla víc než jeden kandidát, pár pod ním nevznikne. Nejednoznačnost ale scope z poolu
 **nevyřadí natrvalo** (E5, spec 2026-09-25): pozdější, slabší pravidlo (`routing_instance`,
 `subnet`, `vlan`) ho pořád smí spárovat, pokud tam pod ním existuje jednoznačná shoda 1:1.
-Scope, kterého se nejednoznačnost drží až do konce, jde do `unmatched` s důvodem
-`ambiguous: N kandidatu (...)` — ale jen tehdy, když aspoň jeden ze zapamatovaných soupeřů
-zůstal taky nespárovaný; jinak dostane `zadny kandidat na subject` / `nova sluzba, chybi
-baseline`, protože nejednoznačnost, jejíž jedna strana má pár, se v praxi rozhodla ve
-prospěch toho páru. Tichý špatný match by u migrace znamenal zelenou na rozbité službě —
-proto zůstává přiznané nespárování, ne hádání. Detailně v [files/scoping.md](files/scoping.md), sekce `matcher.py`.
+Pro scope, který nakonec nespárovalo žádné pravidlo, se zaznamenává **každá** jeho
+nejednoznačnost (v pořadí pravidel), ne jen první. Přesné pravidlo pro výsledný důvod
+(`_reason()` v `matcher.py`): projdi zapamatované nejednoznačnosti v pořadí pravidel a
+vrať `ambiguous: N kandidatu (...)` **té první, u které je pořád aspoň jeden zapamatovaný
+soupeř nespárovaný**. Když žádná taková není (u všech nejednoznačností mají všichni soupeři
+už pár — nejednoznačnost se v praxi rozhodla ve prospěch spárovaného kandidáta), dostane
+scope `zadny kandidat na subject` (baseline) / `nova sluzba, chybi baseline` (subject).
+Tichý špatný match by u migrace znamenal zelenou na rozbité službě — proto zůstává
+přiznané nespárování, ne hádání. Detailně v [files/scoping.md](files/scoping.md), sekce
+`matcher.py`.
 
 Výjimka je **ruční mapování** z `mapping.yml`: nejednoznačné ruční pravidlo scope z poolu
 odstraní nastálo s důvodem `ambiguous`, žádné pozdější pravidlo ho už nedostane.

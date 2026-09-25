@@ -430,9 +430,15 @@ nebo počtem AC dávalo cizí baseline a Down AC mohlo vyjít UNCHANGED (review 
 `_find_baseline_peer` (páruje PE podle `ipaddr` uvnitř spárovaného SID) beze změny.
 
 **AC scopu, které ve výpisu instance chybí** (`Scope.select` instanci zúžil a nic nezbylo):
-jeden řádek `EVPN VPWS local interface status`, `broken` (FAIL), text `<instance>: AC <iface
-scopu> ve vypisu instance chybi`, `value` `Chybi`. Je to jiná situace než SKIP „bez dat" —
-data instance jsou, jen v nich AC chybí.
+jeden řádek `EVPN VPWS local interface status`, text `<instance>: AC <iface scopu> ve
+vypisu instance chybi`, `value` `Chybi`. Je to jiná situace než SKIP „bez dat" — data
+instance jsou, jen v nich AC chybí. Outcome jde přes `unchanged_or` (`same = baseline_instance
+is not None and not baseline_acs`): **BROKEN** (FAIL), pokud baseline AC měla nebo instance
+v baseline vůbec nebyla; **UNCHANGED** (PASS se značkou R-3, `baseline_value` `Chybi`), když
+baseline instance byla a AC v ní taky chyběla — stejný nevyřešený stav v obou snímcích.
+`baseline_value` mimo tenhle UNCHANGED případ: status jediného baseline AC, když baseline
+instance měla přesně jedno AC, jinak `None` (víc baseline AC nejde jednoznačně přiřadit
+jednomu chybějícímu AC scopu).
 
 Na jedno AC vzniká postupně:
 
@@ -451,8 +457,11 @@ Na jedno AC vzniká postupně:
     řádků PE/status jeden nový řádek `EVPN VPWS SID remote local switch`, `value` =
     `"<jméno partnera> <stav>"` (např. `et-0/0/8.212 Up`). Partner `Up` → OK, jinak BROKEN.
     `same` u `unchanged_or` porovnává **jen stav partnera**, ne jméno — partnerský IFL se
-    migrací přejmenuje. `baseline_value` je totéž z baseline AC, jen když baseline byla
-    taky lokálně přepnutá.
+    migrací přejmenuje. `baseline_value`: když baseline byla taky lokálně přepnutá, je to
+    `"<jméno baseline partnera> <stav>"` (stejný tvar jako subjekt, `same` může být `True`);
+    když baseline byla vzdálený PW, je to `<ipaddr prvního baseline peeru> <status>` a
+    `same` je vždy `False` — tvar se změnil, UNCHANGED nikdy; bez baseline SID i bez peerů
+    je `baseline_value` `None`.
   - `remote_sid.local_interface` je `None` (vzdálený PW): dva řádky jako dřív, PE a status.
     Remote peer musí existovat vždy; jeho absence je `BROKEN` na obou řádcích, protože
     chybějící druhá strana SID znamená nenakonfigurovaný nebo spadlý remote PE.
@@ -474,7 +483,8 @@ téhož řádku.
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
-| AC scopu ve výpisu instance chybí | `broken` | FAIL | `Chybi` |
+| AC scopu ve výpisu instance chybí, baseline AC měla / bez baseline | `broken` | FAIL | `Chybi` |
+| AC scopu ve výpisu instance chybí, baseline AC taky chyběla | `unchanged` (přes R-3) | PASS (značka) | `Chybi` |
 | stav lokálního rozhraní `Up` | `ok` | PASS | naměřený stav |
 | stav lokálního rozhraní jiný | `broken` | FAIL | naměřený stav |
 | pseudowire status `CCC-Up` (jen EVO) | `ok` | PASS | naměřený stav |

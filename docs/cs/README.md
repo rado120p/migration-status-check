@@ -550,9 +550,13 @@ Rozdíl mezi 1 a 2 je záměrný: *test selhal* a *nástroj selhal* jsou dvě r�
 ## 5. Ladění párování služeb
 
 Párování mezi starým a novým zařízením je nejcitlivější část celého nástroje, protože stojí
-na kvalitě `description` na zařízeních. Nástroj **nikdy nehádá**: když na některé úrovni
-vyjde víc kandidátů, službu nespáruje a pošle ji do `NESPAROVANO` s důvodem
-`ambiguous: N kandidatu (...)`.
+na kvalitě `description` na zařízeních. Nástroj **nikdy nehádá**: pár vznikne jen
+z jednoznačné shody 1:1 pod nějakým pravidlem. Nejednoznačnost pod jedním pravidlem ale
+scope z poolu nevyřadí — pozdější, slabší pravidlo (`routing_instance`, `subnet`, `vlan`)
+ho pořád smí rozlišit. Do `NESPAROVANO` s důvodem `ambiguous: N kandidatu (...)` jde jen
+scope, u kterého nejednoznačnost žije až do konce (aspoň jeden zapamatovaný soupeř zůstal
+taky nespárovaný); jinak dostane `zadny kandidat na subject` / `nova sluzba, chybi
+baseline`.
 
 Ladit se to dá bez spouštění celé validace a bez sahání na síť:
 
