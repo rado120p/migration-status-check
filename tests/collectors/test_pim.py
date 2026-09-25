@@ -10,10 +10,14 @@ nesmi ovlivnit parsovani.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from lxml import etree
 
 from migration_validator.collectors.pim import PimNeighborCollector
+
+CASES = Path(__file__).resolve().parents[1] / "fixtures" / "cases"
 
 PLATFORMS = ("junos", "junos-evo")
 
@@ -79,3 +83,34 @@ def test_pim_interface_without_neighbor_gets_no_key(platform):
     )
     assert set(data) == {"ge-0/0/2.0"}
     assert "ge-0/0/3.0" not in data
+
+
+# --- Dual-stack testy (IPv6 neprepise IPv4) --------------------------------
+
+
+def test_dual_stack_v6_neighbor_does_not_overwrite_v4():
+    xml = etree.parse(str(CASES / "pim_neighbors_dual_stack.xml")).getroot()
+    result = PimNeighborCollector().parse(xml, "junos-evo")
+    assert result["et-0/0/1.0"] == {"neighbor_address": "10.1.0.4", "uptime_seconds": 87773}
+    assert result["et-0/0/0.0"]["neighbor_address"] == "10.1.1.2"
+
+
+def test_neighbor_without_ip_protocol_version_counts_as_v4():
+    xml = etree.fromstring(
+        "<pim-neighbors-information><pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<pim-neighbor-address>10.9.0.2</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface></pim-neighbors-information>"
+    )
+    assert PimNeighborCollector().parse(xml, "junos")["et-0/0/2.0"]["neighbor_address"] == "10.9.0.2"
+
+
+def test_only_v6_neighbor_gives_no_key():
+    xml = etree.fromstring(
+        "<pim-neighbors-information><pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<ip-protocol-version>6</ip-protocol-version>"
+        "<pim-neighbor-address>fe80::1</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface></pim-neighbors-information>"
+    )
+    assert PimNeighborCollector().parse(xml, "junos") == {}

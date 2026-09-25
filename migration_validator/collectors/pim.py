@@ -12,8 +12,10 @@ absence, ne vymyslene Down.
 
 Kontrakt klicuje jednim sousedem na rozhrani (viz Ukol 6), takze pri vic
 nez jednom pim-neighbor pod jednim pim-interface (multi-access segment)
-collector bere prvni a dalsi tise zahazuje - v capturech z laborky k tomu
-nedochazi (1:1).
+collector bere prvni IPv4 souseda a dalsi tise zahazuje - v capturech z
+laborky k tomu nedochazi (1:1). Na dual-stack rozhrani laborka PTX vypise
+IPv4 pim-interface blokem, pak IPv6 - bez filtru by IPv6 prepisalo IPv4.
+Filtrujem ip-protocol-version=6; chybejici verze = IPv4.
 """
 
 from __future__ import annotations
@@ -38,12 +40,20 @@ class PimNeighborCollector(Collector):
         neighbors: dict[str, dict[str, Any]] = {}
         for interface_node in xml.iter("{*}pim-interface"):
             interface = _localname_text(interface_node, "pim-interface-name")
-            neighbor_node = next(interface_node.iter("{*}pim-neighbor"), None)
-            if not interface or neighbor_node is None:
+            if not interface:
                 continue
-            uptime = next(neighbor_node.iter("{*}pim-neighbor-uptime"), None)
-            neighbors[interface] = {
-                "neighbor_address": _localname_text(neighbor_node, "pim-neighbor-address"),
-                "uptime_seconds": _seconds_attr(uptime),
-            }
+            for neighbor_node in interface_node.iter("{*}pim-neighbor"):
+                # Kazda rodina ma vlastni pim-interface se stejnym jmenem,
+                # v6 az za v4 (PTX laborka 2026-09-24) - bez filtru v6 soused
+                # prepsal v4. IPv6 PIM se nevyhodnocuje; chybejici verze = v4.
+                if _localname_text(neighbor_node, "ip-protocol-version") == "6":
+                    continue
+                if interface in neighbors:
+                    break
+                uptime = next(neighbor_node.iter("{*}pim-neighbor-uptime"), None)
+                neighbors[interface] = {
+                    "neighbor_address": _localname_text(neighbor_node, "pim-neighbor-address"),
+                    "uptime_seconds": _seconds_attr(uptime),
+                }
+                break
         return neighbors
