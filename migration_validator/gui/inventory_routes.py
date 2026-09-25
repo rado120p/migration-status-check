@@ -41,14 +41,20 @@ def build_inventory_router(inventory: InventorySource | None, filters: FilterSto
             "error": error,
         }
 
+    def _load_filter() -> tuple[list[str], str | None]:
+        """(allow, error). Chyba = nectitelny nebo neplatny filtr."""
+        try:
+            return filters.load(), None
+        except ValueError as error:
+            return [], str(error)
+        except OSError as error:
+            return [], f"{filters.path}: {error.strerror or error}"
+
     @router.get("")
     def search(q: str = "", actor: Actor = require(Permission.VIEW)) -> dict:
         hosts, _, error = _hosts()
         if error is None:
-            try:
-                allow = filters.load()
-            except ValueError as filter_error:
-                error = str(filter_error)
+            allow, error = _load_filter()
         if error is not None:
             return {"items": [], "total": 0, "enabled": inventory is not None, "error": error}
         needle = q.strip().lower()
@@ -62,13 +68,11 @@ def build_inventory_router(inventory: InventorySource | None, filters: FilterSto
 
     @router.get("/filter")
     def get_filter(actor: Actor = require(Permission.VIEW)) -> dict:
-        try:
-            allow = filters.load()
-        except ValueError as error:
-            state = _state([])
-            state["error"] = str(error)
-            return state
-        return _state(allow)
+        allow, error = _load_filter()
+        state = _state(allow)
+        if error is not None:
+            state["error"] = error
+        return state
 
     @router.put("/filter")
     def put_filter(body: FilterBody, dry_run: bool = False, actor: Actor = require(Permission.ADMIN)) -> dict:
@@ -77,7 +81,13 @@ def build_inventory_router(inventory: InventorySource | None, filters: FilterSto
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         if not dry_run:
-            filters.save(allow)
+            try:
+                filters.save(allow)
+            except OSError as error:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"hostname filter cannot be saved ({filters.path}): {error.strerror or error}",
+                ) from error
             record(actor.username, "filter-edit", target="hostname_filter", allow=",".join(allow))
         return _state(allow)
 

@@ -113,3 +113,31 @@ def test_malformed_filter_file_is_error_state(tmp_path):
     # saving a valid filter repairs it
     assert client.put("/api/inventory/filter", json={"allow": ["MX-*"]}).status_code == 200
     assert client.get("/api/inventory").json()["error"] is None
+
+
+def test_filter_load_os_error_is_error_state(tmp_path, monkeypatch):
+    client, _ = _client(tmp_path)
+    monkeypatch.setattr(
+        FilterStore, "load",
+        lambda self: (_ for _ in ()).throw(PermissionError(13, "Permission denied")),
+    )
+    search = client.get("/api/inventory").json()
+    assert search["items"] == [] and "Permission denied" in search["error"]
+    state = client.get("/api/inventory/filter").json()
+    assert "Permission denied" in state["error"]
+
+
+def test_filter_save_os_error_is_500_without_audit(tmp_path, caplog):
+    client, root = _client(tmp_path)
+
+    def _boom(self, patterns):
+        raise OSError(28, "No space left on device")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(FilterStore, "save", _boom)
+        with caplog.at_level(logging.INFO, logger="migration_validator.gui.audit"):
+            resp = client.put("/api/inventory/filter", json={"allow": ["MX-*"]})
+    assert resp.status_code == 500
+    assert "No space left on device" in resp.json()["detail"]
+    assert "filter-edit" not in caplog.text
+    assert not (root / "hostname_filter.yml").exists()
