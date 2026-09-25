@@ -2,8 +2,11 @@ import pytest
 
 pytest.importorskip("uvicorn")
 
+from fastapi.testclient import TestClient
+
 from migration_validator import users as users_mod
 from migration_validator.cli import EXIT_OK, EXIT_TOOL_ERROR, main
+from migration_validator.gui.authz import Actor
 from migration_validator.users import User, UserStore, hash_password
 
 
@@ -75,3 +78,31 @@ def test_gui_refusal_hint_includes_settings_path(settings, captured, capsys, tmp
     assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_TOOL_ERROR
     err = capsys.readouterr().err
     assert f"--settings {settings}" in err
+
+
+def test_gui_without_inventory_setting_passes_none(settings, captured, tmp_path):
+    _add_admin(tmp_path)
+    assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_OK
+    client_app = captured["app"]
+    client_app.state.actor_provider = lambda request: Actor(role="admin")
+    assert TestClient(client_app).get("/api/inventory").json()["enabled"] is False
+
+
+def test_gui_with_inventory_setting(tmp_path, captured):
+    _add_admin(tmp_path)
+    hosts = tmp_path / "hosts"
+    hosts.write_text("MX-POP1 ansible_host=10.0.0.1\n")
+    settings = tmp_path / "settings.yml"
+    settings.write_text(f"auth:\n  users_file: {tmp_path / 'users.yml'}\ninventory:\n  path: {hosts}\n")
+    assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_OK
+    app = captured["app"]
+    app.state.actor_provider = lambda request: Actor(role="admin")
+    body = TestClient(app).get("/api/inventory").json()
+    assert body["items"] == [{"node": "MX-POP1", "host": "10.0.0.1"}]
+
+
+def test_gui_starts_even_if_inventory_missing(tmp_path, captured):
+    _add_admin(tmp_path)
+    settings = tmp_path / "settings.yml"
+    settings.write_text(f"auth:\n  users_file: {tmp_path / 'users.yml'}\ninventory:\n  path: {tmp_path / 'nope'}\n")
+    assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_OK

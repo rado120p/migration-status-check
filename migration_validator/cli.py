@@ -496,9 +496,11 @@ def _cmd_gui(args: argparse.Namespace) -> int:
         import uvicorn
     except ImportError as error:
         raise ToolError("GUI vyzaduje 'pip install migration-validator[gui]'") from error
-    from migration_validator.auth import load_auth_settings, load_settings
+    from migration_validator.auth import load_auth_settings, load_inventory_settings, load_settings
     from migration_validator.gui.app import create_app
     from migration_validator.gui.audit import configure_audit_logging
+    from migration_validator.hostname_filter import DEFAULT_FILTER_FILE, FilterStore
+    from migration_validator.inventory import InventorySource
     from migration_validator.users import UserStore
 
     if bool(args.ssl_certfile) != bool(args.ssl_keyfile):
@@ -510,12 +512,15 @@ def _cmd_gui(args: argparse.Namespace) -> int:
         if args.settings:
             hint += f" --settings {args.settings}"
         raise ToolError(f"zadni uzivatele v {users.path} - zaloz admina: {hint}")
+    inventory_path = load_inventory_settings(settings_path).path
     app = create_app(
         run_root=args.run_root, profile_path=args.profile,
         profiles_root=args.profiles_root,
         capture_pool=load_settings(settings_path).capture_pool,
         users=users,
         settings_path=settings_path,
+        inventory=InventorySource(inventory_path) if inventory_path else None,
+        hostname_filter=FilterStore(DEFAULT_FILTER_FILE),
     )
     configure_audit_logging()
     options = {"host": args.host, "port": args.gui_port}
