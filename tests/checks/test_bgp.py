@@ -1,10 +1,12 @@
+from fact_records import bgp_records
+
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bgp import (
-    ADDRESS_COLLISION,
-    NO_BASELINE_COLLISION,
+    NO_BASELINE_AMBIGUOUS,
     PREFIX_KEYS,
     BgpPrefixCountsCheck,
     BgpSessionStateCheck,
+    ambiguous_value,
     peer_family,
 )
 from migration_validator.config import CheckConfig, default_config
@@ -305,7 +307,7 @@ def test_deactivated_peer_with_live_session_is_reported_normally():
             bgp_neighbors_inactive=["198.11.13.9"],
         ),
     )
-    facts = {"bgp": {"198.11.13.9": _peer(state="Established")}}
+    facts = {"bgp": bgp_records({"198.11.13.9": _peer(state="Established")})}
     ctx = CheckContext(
         scope=scope,
         subject=scope.select(facts),
@@ -854,7 +856,7 @@ def test_configured_peer_without_session_takes_identity_from_selectors():
     )
     # Fakta zarizeni nesou session UPLNE JINEHO peera - Scope.select ji
     # odfiltruje a subject vyjde prazdny, presne jako v provozu.
-    facts = {"bgp": {"203.0.113.7": _peer(state="Established")}}
+    facts = {"bgp": bgp_records({"203.0.113.7": _peer(state="Established")})}
     ctx = CheckContext(
         scope=scope,
         subject=scope.select(facts),
@@ -939,77 +941,78 @@ def test_prefix_counts_missing_rib_carries_baseline_value():
     assert missing.value == "chybi" and missing.baseline_value == "v tabulce"
 
 
-# Kolize adres (ostry beh MX -> ACX 2026-09-23): dve VRF se stejnou p2p
-# adresou peera, collector klicuje jen adresou a necha si posledni session.
-# Scope.select cizi polozku nevybere a hlasi ji v `bgp_collisions` - check
-# pak nesmi tvrdit nic, co z prepsanych dat nevi.
+# Nejednoznacna adresa (kolize klicu, spec 2026-09-25): ve scopu projde vic
+# nez jeden BGP zaznam na tutez adresu (dva link-local sousedi v jedne RI) a
+# Scope.select ji nevybere do `bgp`, ale hlasi ji v `bgp_ambiguous` - check
+# pak nesmi tvrdit nic, co z nejednoznacnych dat nevi.
 
 
-def test_configured_peer_shadowed_in_subject_is_skip_not_missing_session():
-    """Junos vypisuje kazdeho nakonfigurovaneho peera, takze nase session
-    v RPC byla - 'session neexistuje' by byla fabulace."""
-    ctx = _ctx({"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}})
+def test_session_ambiguous_subject_is_skip_not_missing():
+    """Nejednoznacna adresa ve scopu nesmi tvrdit 'session neexistuje' -
+    stav proste nejde urcit mezi vic zaznamy."""
+    ctx = _ctx({"bgp": {}, "bgp_ambiguous": {"fe80::2": 2}}, bgp_neighbors=["fe80::2"])
 
     [row] = run_check(BgpSessionStateCheck(), ctx)
 
     assert row.status is Status.SKIP
-    assert row.value == ADDRESS_COLLISION
-    assert "customer-a" in row.message
+    assert row.value == ambiguous_value(2)
+    assert "fe80::2" in row.message
 
 
-def test_peer_shadowed_in_baseline_and_missing_now_is_fail_not_unchanged():
-    """Pojistka proti falesnemu PASS: baseline nasi session nezmerila (prepsal
-    ji collector), takze 'v baseline taky nebyla' neplati a skutecna regrese
+def test_session_ambiguous_baseline_never_unchanged():
+    """Pojistka proti falesnemu PASS: nejednoznacna baseline nasi session
+    nezmerila, takze 'v baseline taky nebyla' neplati a skutecna regrese
     nesmi projit jako UNCHANGED.
 
-    Zabiji mutanta: `same=` ve vetvi bez session bez podminky na kolizi.
+    Zabiji mutanta: `same=` ve vetvi bez session bez podminky na
+    nejednoznacnost.
     """
     ctx = _ctx(
-        {"bgp": {}},
-        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+        {"bgp": {"198.11.13.2": _peer(state="Idle")}},
+        baseline={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
     )
 
     [row] = run_check(BgpSessionStateCheck(), ctx)
 
     assert row.status is Status.FAIL
     assert UNCHANGED_SINCE_BASELINE not in row.details
-    assert row.baseline_value == ADDRESS_COLLISION
+    assert row.baseline_value == ambiguous_value(2)
 
 
-def test_established_peer_shadowed_in_baseline_names_the_collision_as_before():
+def test_established_peer_ambiguous_in_baseline_names_the_ambiguity_as_before():
     ctx = _ctx(
         {"bgp": {"198.11.13.2": _peer()}},
-        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+        baseline={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
     )
 
     [row] = run_check(BgpSessionStateCheck(), ctx)
 
     assert row.status is Status.PASS
-    assert row.baseline_value == ADDRESS_COLLISION
+    assert row.baseline_value == ambiguous_value(2)
 
 
-def test_prefix_counts_with_baseline_shadowed_skip_and_say_why():
+def test_prefix_counts_ambiguous_baseline_is_skip():
     """Hodnota, ne jen hlaska: textovy report hlasku nevypisuje."""
     ctx = _ctx(
         subject={"bgp": {"198.11.13.2": _peer(rib="customer-b.inet.0")}},
-        baseline={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+        baseline={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
     )
 
     [row] = run_check(BgpPrefixCountsCheck(), ctx)
 
     assert row.status is Status.SKIP
-    assert row.value == NO_BASELINE_COLLISION
-    assert "customer-a" in row.message
+    assert row.value == NO_BASELINE_AMBIGUOUS
+    assert "198.11.13.2" in row.message
 
 
-def test_prefix_counts_with_subject_shadowed_skip_as_unknown():
+def test_prefix_counts_with_subject_ambiguous_skip_as_unknown():
     ctx = _ctx(
-        subject={"bgp": {}, "bgp_collisions": {"198.11.13.2": "customer-a"}},
+        subject={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
         baseline={"bgp": {"198.11.13.2": _peer()}},
     )
 
     [row] = run_check(BgpPrefixCountsCheck(), ctx)
 
     assert row.status is Status.SKIP
-    assert row.value == ADDRESS_COLLISION
-    assert "customer-a" in row.message
+    assert row.value == ambiguous_value(2)
+    assert "198.11.13.2" in row.message

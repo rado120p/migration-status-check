@@ -178,6 +178,16 @@ test("unassignedRow: bgp peer -> RI detail", () => {
     { identity: "192.0.2.99", detail: "RI -" });
 });
 
+test("unassignedRow: bgp peer with local_interface -> appended, absence unchanged", () => {
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bgp_peers",
+      { peer: "fe80::2", routing_instance: "CUST", local_interface: "ae0.100" }),
+    { identity: "fe80::2", detail: "RI CUST   ae0.100" });
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bgp_peers", { peer: "fe80::2", routing_instance: "CUST" }),
+    { identity: "fe80::2", detail: "RI CUST" });
+});
+
 test("unassignedRow: static route -> next_hop arrow, via fallback, aggregate suffix", () => {
   assert.deepStrictEqual(
     MigView.unassignedRow("static_routes",

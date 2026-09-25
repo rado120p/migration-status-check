@@ -27,7 +27,12 @@ from migration_validator.models.scope import Scope
 # 12: fact areas igmp_group/multicast_route/mvpn_instance (multicast checky,
 #     spec 2026-09-02) a selektor l2_interfaces (IRB -> access porty).
 # 13: fact area pim_join (PIM join tabulka per instance, spec 2026-09-07).
-SCHEMA_VERSION = 13
+# 14: device fakta bgp/bfd/evpn_esi/routes jsou seznamy zaznamu s celou
+#     identitou (kolize klicu, spec 2026-09-25): bgp (instance, adresa,
+#     local_interface), bfd (soused, rozhrani, multihop), evpn_esi
+#     (instance, ESI, per-IFL stav), routes (rib, prefix, protokol).
+#     pim_neighbor nese jen IPv4 sousedy.
+SCHEMA_VERSION = 14
 
 
 class SnapshotVersionError(Exception):

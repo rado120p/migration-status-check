@@ -29,34 +29,36 @@ def test_parses_peers(rpc_fixture, platform):
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_peer_schema(rpc_fixture, platform):
     result = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
-    for peer, data in result.items():
-        assert "+" not in peer, f"adresa peera nese port: {peer}"
-        assert set(data) == {"state", "peer_as", "routing_instance", "ribs"}
-        for rib_counts in data["ribs"].values():
+    for record in result:
+        assert "+" not in record["address"], f"adresa peera nese port: {record['address']}"
+        assert set(record) == {
+            "address", "routing_instance", "local_interface", "state", "peer_as", "ribs",
+        }
+        for rib_counts in record["ribs"].values():
             assert set(rib_counts) == RIB_KEYS
             assert all(isinstance(value, int) for value in rib_counts.values())
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_ribs_are_kept_apart(rpc_fixture, platform):
-    peers = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
-    assert peers, "fixture nema zadneho peera"
+    records = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
+    assert records, "fixture nema zadneho peera"
 
-    for peer, data in peers.items():
-        assert "prefixes" not in data, f"{peer}: souctove pole prezilo"
+    for record in records:
+        assert "prefixes" not in record, f"{record['address']}: souctove pole prezilo"
         # Idle session nevymenila zadne trasy, takze RPC odpoved pro ni
         # neobsahuje zadnou bgp-rib - prazdne ribs tam jsou spravne.
-        if data["state"] == "Established":
-            assert data["ribs"], f"{peer}: zadna RIB"
-        for rib_name, counts in data["ribs"].items():
+        if record["state"] == "Established":
+            assert record["ribs"], f"{record['address']}: zadna RIB"
+        for rib_name, counts in record["ribs"].items():
             assert rib_name
             assert set(counts) == RIB_KEYS
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_known_rib_name_is_present(rpc_fixture, platform):
-    peers = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
-    names = {rib for data in peers.values() for rib in data["ribs"]}
+    records = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
+    names = {rib for record in records for rib in record["ribs"]}
 
     assert "inet.0" in names
 
@@ -65,7 +67,7 @@ def test_known_rib_name_is_present(rpc_fixture, platform):
 def test_established_peers_are_reported(rpc_fixture, platform):
     """Laborka ma vsechny session nahore - stav se musi propsat doslova."""
     result = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
-    assert any(data["state"] == "Established" for data in result.values())
+    assert any(record["state"] == "Established" for record in result)
 
 
 def test_ribs_are_not_summed_together():
@@ -100,9 +102,9 @@ def test_ribs_are_not_summed_together():
         """
     )
 
-    result = BgpCollector().parse(xml, "junos")
+    (record,) = BgpCollector().parse(xml, "junos")
 
-    assert result["10.0.0.1"]["ribs"] == {
+    assert record["ribs"] == {
         "inet.0": {
             "received": 10,
             "accepted": 9,
@@ -118,9 +120,10 @@ def test_ribs_are_not_summed_together():
             "suppressed": 1,
         },
     }
-    assert result["10.0.0.1"]["state"] == "Established"
-    assert result["10.0.0.1"]["peer_as"] == 65001
-    assert result["10.0.0.1"]["routing_instance"] == "L3VPN-A"
+    assert record["address"] == "10.0.0.1"
+    assert record["state"] == "Established"
+    assert record["peer_as"] == 65001
+    assert record["routing_instance"] == "L3VPN-A"
 
 
 def test_rib_without_name_is_skipped():
@@ -139,8 +142,8 @@ def test_rib_without_name_is_skipped():
         </bgp-information>
         """
     )
-    result = BgpCollector().parse(xml, "junos")
-    assert result["10.0.0.4"]["ribs"] == {}
+    (record,) = BgpCollector().parse(xml, "junos")
+    assert record["ribs"] == {}
 
 
 def test_master_instance_is_normalised_to_none():
@@ -156,7 +159,8 @@ def test_master_instance_is_normalised_to_none():
         </bgp-information>
         """
     )
-    assert BgpCollector().parse(xml, "junos")["10.0.0.3"]["routing_instance"] is None
+    (record,) = BgpCollector().parse(xml, "junos")
+    assert record["routing_instance"] is None
 
 
 def test_missing_routing_instance_becomes_none():
@@ -170,10 +174,59 @@ def test_missing_routing_instance_becomes_none():
         </bgp-information>
         """
     )
-    result = BgpCollector().parse(xml, "junos")
-    assert result["10.0.0.2"]["routing_instance"] is None
-    assert result["10.0.0.2"]["ribs"] == {}
+    (record,) = BgpCollector().parse(xml, "junos")
+    assert record["routing_instance"] is None
+    assert record["ribs"] == {}
 
 
 def test_collector_metadata():
     assert BgpCollector().name == "bgp"
+
+
+def _peer(address, instance=None, local_if=None, state="Established"):
+    rti = f"<peer-cfg-rti>{instance}</peer-cfg-rti>" if instance else ""
+    lif = f"<local-interface-name>{local_if}</local-interface-name>" if local_if else ""
+    return (
+        f"<bgp-peer><peer-address>{address}+179</peer-address>"
+        f"<peer-state>{state}</peer-state><peer-as>65001</peer-as>{rti}{lif}</bgp-peer>"
+    )
+
+
+def test_same_address_in_two_instances_keeps_both():
+    xml = etree.fromstring(
+        "<bgp-information>"
+        + _peer("192.168.1.2", "customer-a", "ae0.100", "Idle")
+        + _peer("192.168.1.2", "customer-b", "ae0.200")
+        + "</bgp-information>"
+    )
+    records = BgpCollector().parse(xml, "junos")
+    assert [(r["address"], r["routing_instance"], r["state"]) for r in records] == [
+        ("192.168.1.2", "customer-a", "Idle"),
+        ("192.168.1.2", "customer-b", "Established"),
+    ]
+
+
+def test_record_carries_local_interface():
+    xml = etree.fromstring(
+        "<bgp-information>" + _peer("fe80::2", "CUST", "ae0.100") + "</bgp-information>"
+    )
+    (record,) = BgpCollector().parse(xml, "junos")
+    assert record["local_interface"] == "ae0.100"
+
+
+def test_master_instance_is_none():
+    xml = etree.fromstring(
+        "<bgp-information>" + _peer("10.0.0.1", "master") + "</bgp-information>"
+    )
+    (record,) = BgpCollector().parse(xml, "junos")
+    assert record["routing_instance"] is None
+    assert record["local_interface"] is None
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_fixture_records_carry_local_interface_key(rpc_fixture, platform):
+    records = BgpCollector().parse(rpc_fixture(platform, "bgp"), platform)
+    assert records
+    assert all(set(r) == {"address", "routing_instance", "local_interface",
+                          "state", "peer_as", "ribs"} for r in records)
+    assert any(r["local_interface"] for r in records)

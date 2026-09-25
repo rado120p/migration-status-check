@@ -1266,6 +1266,22 @@ def _unassigned_result():
     return result
 
 
+def test_unassigned_bgp_row_shows_local_interface_when_present():
+    from migration_validator.reporting.text_report import _unassigned_row
+
+    identity, detail = _unassigned_row(
+        "bgp_peers",
+        {"peer": "fe80::2", "routing_instance": "CUST", "local_interface": "ae0.100"},
+    )
+    assert identity == "fe80::2"
+    assert detail == "RI CUST   ae0.100"
+
+    identity, detail = _unassigned_row(
+        "bgp_peers", {"peer": "fe80::2", "routing_instance": "CUST"}
+    )
+    assert detail == "RI CUST"
+
+
 def test_unassigned_objects_reach_the_text_report():
     """Zabiji mutanta, ktery `unassigned` necha jen v JSON.
 

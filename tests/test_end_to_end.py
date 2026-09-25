@@ -672,7 +672,7 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     i navrat hlasky 'BFD bylo v baseline (...), v subjektu neni
     nakonfigurovane' (BFD).
 
-    Aserce `peer in new.facts['bgp']` nize je POJISTKA PROTI VAKUOVOSTI a
+    Aserce `peer in [r['address'] for r in new.facts['bgp']]` nize je POJISTKA PROTI VAKUOVOSTI a
     nesmi se odstranit. _facts_for() (tests/conftest.py) odvozuje
     facts['bgp'] (a facts['bfd']) ZE SELEKTORU, takze kdyby nekdo odebrani
     peera presunul pred stavbu snimku, zadna session by pro nej nevznikla -
@@ -725,7 +725,9 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
         if scope.id == "svc:INTERNET-CPE13-NNI:Internet"
     )
     peer = "152.11.13.2"
-    assert peer in new.facts["bgp"], "fixture nema session peera, test by byl vakuovy"
+    assert peer in [r["address"] for r in new.facts["bgp"]], (
+        "fixture nema session peera, test by byl vakuovy"
+    )
     assert peer in new.facts["bfd"], "fixture nema BFD session peera, test by byl vakuovy"
     target.selectors.bgp_neighbors = [
         neighbor for neighbor in target.selectors.bgp_neighbors if neighbor != peer
@@ -910,10 +912,11 @@ def test_peers_of_one_service_carry_different_prefix_counts(synthetic_snapshot):
     peers = service.selectors.bgp_neighbors
     assert len(peers) >= 2, "sluzba uz nema dva peery, test by byl vakuovy"
 
+    bgp_by_address = {record["address"]: record for record in new.facts["bgp"]}
     received = [
         counters["received"]
         for peer in peers
-        for counters in new.facts["bgp"][peer]["ribs"].values()
+        for counters in bgp_by_address[peer]["ribs"].values()
     ]
 
     assert len(set(received)) == len(received), f"countery se opakuji: {received}"
@@ -938,11 +941,13 @@ def test_prefix_counts_match_between_baseline_and_subject(synthetic_snapshot):
     old = synthetic_snapshot(DEVICE_4, "172.20.20.4", "pre-migration")
     new = synthetic_snapshot(DEVICE_5, "172.20.20.5", "post-migration")
 
-    shared = set(old.facts["bgp"]) & set(new.facts["bgp"])
+    old_by_address = {record["address"]: record for record in old.facts["bgp"]}
+    new_by_address = {record["address"]: record for record in new.facts["bgp"]}
+    shared = set(old_by_address) & set(new_by_address)
     assert shared, "snimky nemaji spolecneho peera, test by byl vakuovy"
 
     for peer in sorted(shared):
-        assert old.facts["bgp"][peer]["ribs"] == new.facts["bgp"][peer]["ribs"], peer
+        assert old_by_address[peer]["ribs"] == new_by_address[peer]["ribs"], peer
 
 
 def test_l2_l3_link_renders_paired_blocks():

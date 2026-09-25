@@ -1,3 +1,5 @@
+from fact_records import bgp_record, bgp_records
+
 from migration_validator.models.scope import (
     FACT_AREAS,
     Scope,
@@ -19,10 +21,10 @@ FACTS = {
         {"ip": "fe80::1", "interface": "ge-0/0/2.113"},
         {"ip": "2001:db8::9", "interface": "ge-0/0/9.0"},
     ],
-    "bgp": {
+    "bgp": bgp_records({
         "198.11.13.2": {"state": "Established", "routing_instance": "L3VPN-CPE13-NNI"},
         "10.9.9.2": {"state": "Active", "routing_instance": None},
-    },
+    }),
     "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"status": "Up"}},
     "evpn_esi": {"00:11": {"status": "Up", "interface": "ge-0/0/2.113"}},
     "evpn_mac": {"L3VPN-CPE13-NNI": {"BD-313": 42}},
@@ -229,7 +231,7 @@ def test_bgp_session_of_deactivated_peer_is_selected():
     """
     scope = _scope_with(bgp_neighbors=[], bgp_neighbors_inactive=["152.11.13.2"])
 
-    selected = scope.select({"bgp": {"152.11.13.2": {"state": "Established"}}})
+    selected = scope.select({"bgp": bgp_records({"152.11.13.2": {"state": "Established"}})})
 
     assert set(selected["bgp"]) == {"152.11.13.2"}
 
@@ -437,11 +439,16 @@ def _bgp_entry(instance: str | None) -> dict:
 
 
 def test_ipvpn_scope_does_not_take_peer_of_another_vrf_with_same_address():
-    """Zabiji mutanta: vyber `bgp` jen podle adresy (bez porovnani instance)."""
-    facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-a")}}
+    """Zabiji mutanta: vyber `bgp` jen podle adresy (bez porovnani instance).
 
-    assert _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)["bgp"] == {}
-    assert set(_vrf_scope("customer-a", "ge-0/0/1.100").select(facts)["bgp"]) == {SHARED_PEER}
+    Cizi zaznam je proste nepritomny - zadna kolize, zadna nejednoznacnost
+    (kolize klicu, spec 2026-09-25): kazda VRF ma sve vlastni zaznamy."""
+    facts = {"bgp": bgp_records({SHARED_PEER: _bgp_entry("customer-a")})}
+
+    b = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
+    a = _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)
+    assert b["bgp"] == {} and b["bgp_ambiguous"] == {}
+    assert set(a["bgp"]) == {SHARED_PEER} and a["bgp_ambiguous"] == {}
 
 
 def test_ipvpn_and_internet_on_same_subnet_do_not_take_each_others_peer():
@@ -453,8 +460,8 @@ def test_ipvpn_and_internet_on_same_subnet_do_not_take_each_others_peer():
         key=ScopeKey("inet", "Internet", None),
         selectors=Selectors(interfaces=["ge-0/0/3.0"], bgp_neighbors=[SHARED_PEER]),
     )
-    master_facts = {"bgp": {SHARED_PEER: _bgp_entry(None)}}
-    vrf_facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-b")}}
+    master_facts = {"bgp": bgp_records({SHARED_PEER: _bgp_entry(None)})}
+    vrf_facts = {"bgp": bgp_records({SHARED_PEER: _bgp_entry("customer-b")})}
 
     assert _vrf_scope("customer-b", "ge-0/0/2.200").select(master_facts)["bgp"] == {}
     assert internet.select(vrf_facts)["bgp"] == {}
@@ -475,7 +482,7 @@ def test_internet_scope_in_virtual_router_takes_master_peer():
         ),
     )
 
-    selected = scope.select({"bgp": {SHARED_PEER: _bgp_entry(None)}})
+    selected = scope.select({"bgp": bgp_records({SHARED_PEER: _bgp_entry(None)})})
 
     assert set(selected["bgp"]) == {SHARED_PEER}
 
@@ -488,35 +495,14 @@ def test_core_loopback_takes_master_ibgp_peer():
         selectors=Selectors(interfaces=["lo0.0"], bgp_neighbors=["150.0.0.1"]),
     )
 
-    selected = scope.select({"bgp": {"150.0.0.1": _bgp_entry(None)}})
+    selected = scope.select({"bgp": bgp_records({"150.0.0.1": _bgp_entry(None)})})
 
     assert set(selected["bgp"]) == {"150.0.0.1"}
 
 
-def test_configured_peer_shadowed_by_another_instance_is_a_bgp_collision():
-    """Junos vypisuje kazdeho nakonfigurovaneho peera (i Idle/Active), takze
-    cizi polozka na adrese naseho aktivniho peera znamena, ze collector nasi
-    session prepsal. Check z toho musi umet rict 'stav neznamy', ne 'session
-    neexistuje'."""
-    facts = {"bgp": {SHARED_PEER: _bgp_entry("customer-a")}}
-
-    assert _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)["bgp_collisions"] == {
-        SHARED_PEER: "customer-a"
-    }
-    assert _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)["bgp_collisions"] == {}
-
-
-def test_master_entry_shadowing_vrf_peer_names_master():
-    facts = {"bgp": {SHARED_PEER: _bgp_entry(None)}}
-
-    selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
-
-    assert selected["bgp_collisions"] == {SHARED_PEER: "master"}
-
-
-def test_deactivated_peer_is_never_a_bgp_collision():
-    """Deaktivovany peer se ve vypisu Junosu neobjevi, takze cizi polozka na
-    jeho adrese nic neprepsala - je to proste peer jine VRF."""
+def test_deactivated_peer_with_live_foreign_vrf_record_is_not_selected():
+    """Deaktivovany peer: zaznam cizi VRF na jeho adrese proste neni jeho -
+    zadna kolize, zadna nejednoznacnost."""
     scope = Scope(
         id="svc:customer-b:IPVPN",
         kind="service",
@@ -528,10 +514,45 @@ def test_deactivated_peer_is_never_a_bgp_collision():
         ),
     )
 
-    selected = scope.select({"bgp": {SHARED_PEER: _bgp_entry("customer-a")}})
+    selected = scope.select({"bgp": bgp_records({SHARED_PEER: _bgp_entry("customer-a")})})
 
     assert selected["bgp"] == {}
-    assert selected["bgp_collisions"] == {}
+    assert selected["bgp_ambiguous"] == {}
+
+
+def test_bgp_same_address_two_vrfs_each_scope_gets_its_own():
+    facts = {"bgp": [
+        bgp_record("192.168.1.2", routing_instance="customer-a", state="Idle"),
+        bgp_record("192.168.1.2", routing_instance="customer-b"),
+    ]}
+    a = _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)
+    b = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
+    assert a["bgp"]["192.168.1.2"]["state"] == "Idle"
+    assert b["bgp"]["192.168.1.2"]["state"] == "Established"
+    assert a["bgp_ambiguous"] == {} and b["bgp_ambiguous"] == {}
+    assert "bgp_collisions" not in a
+
+
+def test_bgp_two_link_local_records_in_one_ri_are_ambiguous():
+    facts = {"bgp": [
+        bgp_record("fe80::2", routing_instance="customer-a", local_interface="ge-0/0/1.100"),
+        bgp_record("fe80::2", routing_instance="customer-a", local_interface="ge-0/0/1.200"),
+    ]}
+    scope = Scope(
+        id="svc:customer-a:IPVPN",
+        kind="service",
+        key=ScopeKey("customer-a", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/1.100"],
+            routing_instances=["customer-a"],
+            bgp_neighbors=["fe80::2"],
+        ),
+    )
+
+    view = scope.select(facts)
+
+    assert view["bgp"] == {}
+    assert view["bgp_ambiguous"] == {"fe80::2": 2}
 
 
 def test_bfd_session_on_foreign_interface_is_not_selected():

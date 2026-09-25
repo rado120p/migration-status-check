@@ -93,7 +93,7 @@ def test_snapshot_without_inventory_has_empty_ping():
 
 
 def test_snapshot_version_is_thirteen():
-    assert SCHEMA_VERSION == 13
+    assert SCHEMA_VERSION == 14
 
 
 def test_nonfinite_optics_round_trip_as_strict_json(tmp_path):

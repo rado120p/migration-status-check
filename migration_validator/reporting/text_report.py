@@ -415,7 +415,11 @@ def _unassigned_row(kind: str, item: dict[str, object]) -> tuple[str, str]:
     by vydavalo rozhrani za branu.
     """
     if kind == "bgp_peers":
-        return item["peer"], f"RI {item.get('routing_instance') or '-'}"
+        detail = f"RI {item.get('routing_instance') or '-'}"
+        # Dva link-local peery se stejnou adresou by jinak vypadaly stejne.
+        if item.get("local_interface"):
+            detail += f"   {item['local_interface']}"
+        return item["peer"], detail
     if kind == "static_routes":
         hops = item.get("next_hop") or []
         detail = (

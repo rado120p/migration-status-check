@@ -463,33 +463,43 @@ def _unassigned_bgp_peers(
     # portu. Peer cizi sluzby (jina VRF, jiny subnet) tu neni mezera v
     # parsovani - patri jinemu kroku migrace. Loopbackovy iBGP peer patri
     # Core lo0.0, ktery vznika jen v celoboxovem snimku.
-    def _on_port(peer: str, data: dict[str, Any]) -> bool:
+    def _on_port(record: dict[str, Any]) -> bool:
         if port is None:
             return True
-        instance = data.get("routing_instance")
+        instance = record.get("routing_instance")
         if instance:
             return instance in _scope_instances(scopes)
         # Master peer smi na port pritahnout jen scope, ktery peery bere
         # z masteru. VRF scope se stejnou /30 by sem jinak vtahl peera
         # Internet sluzby z jineho portu (dve sluzby, jedna adresa).
         return _peer_in_scope_subnets(
-            peer, [scope for scope in scopes if scope.bgp_instance is None]
+            str(record.get("address")),
+            [scope for scope in scopes if scope.bgp_instance is None],
         )
 
     # Stejne pravidlo clenstvi jako Scope.select (Scope.owns_bgp_peer), vcetne
     # deaktivovanych peeru: kdyz pro takoveho peera presto prijde session, je
-    # to nalez o jeho sluzbe. Porovnani jen adresou by polozku cizi VRF na
-    # adrese naseho peera nevypsalo nikde - sluzba ji nevybere a tady by
-    # platila za zarazenou.
+    # to nalez o jeho sluzbe. Zaznam cizi VRF na adrese naseho peera tu je
+    # videt zvlast - je to samostatny zaznam, ne prepsana polozka - takze
+    # sluzba, ktera si ho nenarokuje, ho tady uvidi jako nezarazeny.
+    records = sorted(
+        subject.facts.get("bgp") or [],
+        key=lambda r: (
+            str(r.get("address")),
+            r.get("routing_instance") or "",
+            r.get("local_interface") or "",
+        ),
+    )
     return [
         {
-            "peer": peer,
-            "routing_instance": data.get("routing_instance"),
+            "peer": record.get("address"),
+            "routing_instance": record.get("routing_instance"),
+            "local_interface": record.get("local_interface"),
             "snapshot": "subject",
         }
-        for peer, data in sorted((subject.facts.get("bgp") or {}).items())
-        if not any(scope.owns_bgp_peer(peer, data) for scope in scopes)
-        and _on_port(peer, data)
+        for record in records
+        if not any(scope.owns_bgp_peer(record) for scope in scopes)
+        and _on_port(record)
     ]
 
 

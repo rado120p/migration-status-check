@@ -61,6 +61,24 @@ class ScopeKey:
         )
 
 
+def _by_key(
+    records: list[dict[str, Any]], key: str
+) -> tuple[dict[str, dict[str, Any]], dict[str, int]]:
+    """Vybrane zaznamy -> (pohled {klic: zaznam}, {klic: pocet} nejednoznacnych).
+
+    Uvnitr jednoho scopu je klic jednoznacny z konstrukce (jedno rozhrani,
+    nejvys jedna RI). Kdyz ownership presto projde vic zaznamu na jeden
+    klic (multihop BFD bez VRF, dva link-local BGP sousedi), nevybira se
+    nahodne - klic v pohledu chybi a check rekne 'nejednoznacne'.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        grouped.setdefault(str(record.get(key)), []).append(record)
+    view = {k: group[0] for k, group in grouped.items() if len(group) == 1}
+    ambiguous = {k: len(group) for k, group in grouped.items() if len(group) > 1}
+    return view, ambiguous
+
+
 # Subtypy sluzeb Internet/IPVPN, ktere nesou multicast stream. Sdili je
 # checks/multicast.py (kde se checky zapinaji) a checks/reachability.py +
 # probes/ping.py (kde se ping/ARP/ND vypinaji, rozhodnuti 2026-09-08).
@@ -190,8 +208,8 @@ class Scope:
             return self.selectors.routing_instances[0]
         return None
 
-    def owns_bgp_peer(self, peer: str, data: dict[str, Any]) -> bool:
-        """Patri polozka BGP faktu (klicovana jen adresou) teto sluzbe?
+    def owns_bgp_peer(self, record: dict[str, Any]) -> bool:
+        """Patri BGP zaznam teto sluzbe?
 
         Adresa nestaci: dve VRF se stejnou p2p podsiti maji peera na stejne
         adrese a baseline jedne sluzby by jinak nesla session te druhe (ostry
@@ -202,12 +220,13 @@ class Scope:
         jeho session nedostala, check by ho videl jako bezsessioveho a
         rozpor 'konfigurace vypnuto, zarizeni bezi' by z reportu zmizel.
         """
+        peer = str(record.get("address"))
         if (
             peer not in self.selectors.bgp_neighbors
             and peer not in self.selectors.bgp_neighbors_inactive
         ):
             return False
-        return data.get("routing_instance") == self.bgp_instance
+        return record.get("routing_instance") == self.bgp_instance
 
     def owns_bfd_session(self, peer: str, data: dict[str, Any]) -> bool:
         """Patri BFD session (klicovana jen adresou) teto sluzbe?
@@ -262,22 +281,10 @@ class Scope:
             for entry in (facts.get("nd") or [])
             if self.selectors.matches_interface(str(entry.get("interface", "")))
         ]
-        bgp_facts = facts.get("bgp") or {}
-        bgp = {
-            peer: data
-            for peer, data in bgp_facts.items()
-            if self.owns_bgp_peer(peer, data)
-        }
-        # Aktivni peer, jehoz adresu na zarizeni drzi cizi instance. Junos
-        # vypisuje kazdeho nakonfigurovaneho peera (i Idle), takze nase
-        # session v RPC byla - collector ji prepsal, protoze klicuje jen
-        # adresou. Stav je tedy neznamy, ne 'session neexistuje'; checky to
-        # musi umet rict (hodnota na zarizeni = nazev cizi instance).
-        bgp_collisions = {
-            peer: data.get("routing_instance") or "master"
-            for peer, data in bgp_facts.items()
-            if peer in self.selectors.bgp_neighbors and not self.owns_bgp_peer(peer, data)
-        }
+        bgp, bgp_ambiguous = _by_key(
+            [r for r in (facts.get("bgp") or []) if self.owns_bgp_peer(r)],
+            "address",
+        )
         evpn_vpws = {
             name: data
             for name, data in (facts.get("evpn_vpws") or {}).items()
@@ -390,7 +397,7 @@ class Scope:
             "arp": arp,
             "nd": nd,
             "bgp": bgp,
-            "bgp_collisions": bgp_collisions,
+            "bgp_ambiguous": bgp_ambiguous,
             "evpn_vpws": evpn_vpws,
             "evpn_esi": evpn_esi,
             "evpn_instance": evpn_instance,

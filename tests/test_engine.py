@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from fact_records import bgp_record, bgp_records
 
 from migration_validator import api
 from migration_validator.checks import base as check_base
@@ -60,7 +61,7 @@ def _snapshot(
                 "state": "reachable",
             }
         ],
-        "bgp": peers if peers is not None else {},
+        "bgp": peers if peers is not None else [],
     }
     if physical:
         facts["interfaces"][physical] = {
@@ -552,7 +553,7 @@ def test_prazdny_seznam_service_types_odfiltruje_vsechny_sluzby_ale_marker_zusta
 
 
 def test_unassigned_bgp_peers_are_reported():
-    peers = {"10.9.9.9": {"state": "Established", "routing_instance": None}}
+    peers = bgp_records({"10.9.9.9": {"state": "Established", "routing_instance": None}})
     subject = _new()
     subject.facts["bgp"] = peers
 
@@ -584,7 +585,7 @@ def test_inactive_peer_is_assigned_not_unassigned():
             phase="pre-migration",
             collectors={"interfaces": {"status": "ok"}},
         ),
-        facts={"bgp": {"198.11.13.9": {"state": "Established"}}},
+        facts={"bgp": bgp_records({"198.11.13.9": {"state": "Established"}})},
         probes={},
         scopes=[scope],
         inventory=[],
@@ -913,9 +914,9 @@ def test_snapshot_without_scopes_still_lists_unassigned():
     subject.scopes = []
     subject.facts["routes"] = MGMT_ROUTE
     subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
-    subject.facts["bgp"] = {
+    subject.facts["bgp"] = bgp_records({
         "10.1.1.1": {"state": "Established", "routing_instance": None, "ribs": {}}
-    }
+    })
 
     result = api.evaluate(subject, now=NOW)
 
@@ -932,9 +933,9 @@ def test_per_port_snapshot_without_scopes_narrows_unassigned_to_its_port():
         "10.1.1.1": {"state": "Up", "interface": "et-0/0/8.200"},
         "10.2.2.2": {"state": "Up", "interface": "et-0/0/9.0"},
     }
-    subject.facts["bgp"] = {
+    subject.facts["bgp"] = bgp_records({
         "10.9.9.9": {"state": "Established", "routing_instance": "CUST-B", "ribs": {}}
-    }
+    })
 
     result = api.evaluate(subject, now=NOW, port="et-0/0/8")
 
@@ -1763,9 +1764,9 @@ def test_whole_box_evaluation_keeps_route_via_any_port_unassigned():
 
 def test_per_port_bgp_peer_of_other_vrf_is_not_unassigned():
     subject = _new()
-    subject.facts["bgp"] = {
+    subject.facts["bgp"] = bgp_records({
         "198.11.14.4": {"routing_instance": "L3VPN-CPE14-UNI", "state": "Established"}
-    }
+    })
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1775,9 +1776,9 @@ def test_per_port_bgp_peer_of_other_vrf_is_not_unassigned():
 def test_per_port_bgp_peer_in_own_vrf_stays_unassigned():
     subject = _new()
     subject.scopes[0].selectors.routing_instances = ["L3VPN"]
-    subject.facts["bgp"] = {
+    subject.facts["bgp"] = bgp_records({
         "198.11.13.9": {"routing_instance": "L3VPN", "state": "Established"}
-    }
+    })
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1788,7 +1789,9 @@ def test_per_port_global_bgp_peer_outside_own_subnets_is_not_unassigned():
     """iBGP peer na loopbacku (150.0.0.1) patri Core lo0.0 - ne portu."""
     subject = _new()
     subject.scopes[0].selectors.local_ipv4 = ["152.11.13.1/30"]
-    subject.facts["bgp"] = {"150.0.0.1": {"routing_instance": None, "state": "Established"}}
+    subject.facts["bgp"] = bgp_records(
+        {"150.0.0.1": {"routing_instance": None, "state": "Established"}}
+    )
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1798,7 +1801,9 @@ def test_per_port_global_bgp_peer_outside_own_subnets_is_not_unassigned():
 def test_per_port_global_bgp_peer_in_own_subnet_stays_unassigned():
     subject = _new()
     subject.scopes[0].selectors.local_ipv4 = ["152.11.13.1/30"]
-    subject.facts["bgp"] = {"152.11.13.2": {"routing_instance": None, "state": "Established"}}
+    subject.facts["bgp"] = bgp_records(
+        {"152.11.13.2": {"routing_instance": None, "state": "Established"}}
+    )
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1864,12 +1869,19 @@ def test_foreign_vrf_peer_on_shared_address_is_unassigned():
     """Zabiji mutanta: `assigned` v `_unassigned_bgp_peers` jen podle adresy."""
     scope = _customer_b_scope()
     snapshot = _snapshot_with_facts(
-        {"bgp": {SHARED_PEER: {"state": "Established", "routing_instance": "customer-a"}}},
+        {"bgp": bgp_records(
+            {SHARED_PEER: {"state": "Established", "routing_instance": "customer-a"}}
+        )},
         [scope],
     )
 
     assert _unassigned_bgp_peers(snapshot, [scope]) == [
-        {"peer": SHARED_PEER, "routing_instance": "customer-a", "snapshot": "subject"}
+        {
+            "peer": SHARED_PEER,
+            "routing_instance": "customer-a",
+            "local_interface": None,
+            "snapshot": "subject",
+        }
     ]
     # Per-port snimek: cizi VRF patri jinemu kroku migrace.
     assert _unassigned_bgp_peers(snapshot, [scope], port="ge-0/0/2") == []
@@ -1898,7 +1910,9 @@ def test_own_peer_and_session_on_shared_address_stay_assigned():
     scope = _customer_b_scope()
     snapshot = _snapshot_with_facts(
         {
-            "bgp": {SHARED_PEER: {"state": "Established", "routing_instance": "customer-b"}},
+            "bgp": bgp_records(
+                {SHARED_PEER: {"state": "Established", "routing_instance": "customer-b"}}
+            ),
             "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/2.200"}},
         },
         [scope],
@@ -1906,6 +1920,27 @@ def test_own_peer_and_session_on_shared_address_stay_assigned():
 
     assert _unassigned_bgp_peers(snapshot, [scope]) == []
     assert _unassigned_bfd_sessions(snapshot, [scope]) == []
+
+
+def test_unassigned_bgp_foreign_vrf_record_on_our_address_is_listed():
+    # customer-b ma sluzbu, customer-a ne: session customer-a na stejne
+    # adrese nikomu nepatri a musi byt v NEZARAZENO.
+    scope = _customer_b_scope()
+    snapshot = _snapshot_with_facts(
+        {
+            "bgp": [
+                bgp_record(SHARED_PEER, routing_instance="customer-a"),
+                bgp_record(SHARED_PEER, routing_instance="customer-b"),
+            ]
+        },
+        [scope],
+    )
+
+    result = evaluate_snapshots(snapshot, now=NOW)
+
+    assert [(e["peer"], e["routing_instance"]) for e in result.unassigned["bgp_peers"]] == [
+        ("192.168.1.2", "customer-a")
+    ]
 
 
 def _customer_scope(name: str, interface: str, bfd: bool) -> Scope:
@@ -1955,21 +1990,21 @@ def _collision_snapshot(address, phase, facts, scopes) -> Snapshot:
 
 def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_service():
     """Ostry beh MX -> ACX 2026-09-23: customer-a (BFD, nemigrovana) a
-    customer-b (bez BFD, migrovana) maji peera na 192.168.1.2. MX collector
-    si nechal customer-a polozku, takze baseline customer-b nesla cizi RIB
-    a cizi BFD session:
+    customer-b (bez BFD, migrovana) maji peera na 192.168.1.2. Od schematu 14
+    (kolize klicu, spec 2026-09-25) BGP fakta nesou oba zaznamy zvlast, takze
+    zadna kolize adresy uz nevznika - customer-b proste nikdy nemel svuj
+    zaznam v baseline (byl tam jen zaznam customer-a, ktery mu nepatri):
 
-        WARN BGP prefixy (customer-a.inet.0)  chybi  | bylo v tabulce
+        SKIP BGP prefixy  bez baseline
         FAIL BFD (192.168.1.2)  v baseline patril k teto sluzbe, v subjektu uz ne
 
-    Ani jeden radek o customer-a do bloku customer-b nepatri. Srovnani
-    prefixu nejde - baseline nasi session nezmerila - a report to ma rict.
+    Ani jeden radek o customer-a do bloku customer-b nepatri.
     """
     baseline = _collision_snapshot(
         "172.20.20.4",
         "pre-migration",
         {
-            "bgp": {SHARED_PEER: _customer_peer("customer-a", 12)},
+            "bgp": bgp_records({SHARED_PEER: _customer_peer("customer-a", 12)}),
             "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}},
         },
         [
@@ -1980,7 +2015,7 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
     subject = _collision_snapshot(
         "172.20.20.5",
         "post-migration",
-        {"bgp": {SHARED_PEER: _customer_peer("customer-b", 7)}, "bfd": {}},
+        {"bgp": bgp_records({SHARED_PEER: _customer_peer("customer-b", 7)}), "bfd": {}},
         [_customer_scope("customer-b", "et-0/0/2.200", bfd=False)],
     )
 
@@ -1992,10 +2027,10 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
     assert ("bfd_session_state", f"BFD ({SHARED_PEER})") not in rows
     prefixes = rows[("bgp_prefix_counts", "BGP prefixy")]
     assert prefixes.status is Status.SKIP
-    assert prefixes.value == "bez baseline (kolize adresy)"
+    assert prefixes.value == "bez baseline"
     status = rows[("bgp_session_state", f"BGP status ({SHARED_PEER})")]
     assert status.status is Status.PASS
-    assert status.baseline_value == "neznamy (kolize adresy)"
+    assert status.baseline_value is None
 
 
 def test_master_peer_on_shared_subnet_does_not_leak_into_vrf_port_unassigned():
@@ -2010,7 +2045,7 @@ def test_master_peer_on_shared_subnet_does_not_leak_into_vrf_port_unassigned():
     scope = _customer_b_scope()
     scope.selectors.local_ipv4 = ["192.168.1.1/30"]
     snapshot = _snapshot_with_facts(
-        {"bgp": {SHARED_PEER: {"state": "Established", "routing_instance": None}}},
+        {"bgp": bgp_records({SHARED_PEER: {"state": "Established", "routing_instance": None}})},
         [scope],
     )
 

@@ -132,7 +132,7 @@ def test_failed_collector_is_recorded_and_capture_continues():
     assert snapshot.capture.collectors["interfaces"]["status"] == "ok"
     assert snapshot.capture.collectors["bgp"]["status"] == "error"
     assert "selhalo" in snapshot.capture.collectors["bgp"]["message"]
-    assert snapshot.facts["bgp"] == {}
+    assert snapshot.facts["bgp"] == []
 
 
 def test_failed_collector_shows_up_as_skip_in_evaluate():

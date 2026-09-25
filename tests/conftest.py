@@ -147,7 +147,11 @@ def _facts_for(scopes, pps: int) -> dict:
     interfaces = {}
     arp = []
     nd = []
-    bgp = {}
+    bgp: list[dict] = []
+    # Dedup napric scopy: dve sluzby na jednom unitu (IPVPN + jeho mvpn
+    # subtyp) muzou sdilet peera - stary dict tise deduplikoval podle
+    # adresy, seznam potrebuje vlastni pojistku podle (adresa, instance).
+    seen_bgp: set[tuple[str, str | None]] = set()
     evpn_vpws = {}
     evpn_esi = {}
     evpn_mac = {}
@@ -211,15 +215,19 @@ def _facts_for(scopes, pps: int) -> dict:
                 )
             else:
                 arp.append({"ip": peer, "interface": interface})
-            bgp[peer] = {
-                "state": "Established",
-                "routing_instance": (
-                    scope.selectors.routing_instances[0]
-                    if scope.selectors.routing_instances
-                    else None
-                ),
-                "ribs": _ribs_for(peer, family),
-            }
+            instance = scope.bgp_instance
+            if (peer, instance) not in seen_bgp:
+                seen_bgp.add((peer, instance))
+                bgp.append({
+                    "address": peer,
+                    # Presne pravidlo vlastnictvi (Scope.bgp_instance): Internet
+                    # ve virtual-routeru ma peery v masteru.
+                    "routing_instance": instance,
+                    "local_interface": interface,
+                    "state": "Established",
+                    "peer_as": None,
+                    "ribs": _ribs_for(peer, family),
+                })
         # Sluzba s adresou, ale bez peeru te rodiny, by jinak zustala s
         # prazdnou ARP/ND tabulkou. Fabrikuje se proto soused odvozeny ze
         # subnetu - stejne, jako se fabrikuje uplne vsechno ostatni.

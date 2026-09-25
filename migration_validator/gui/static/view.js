@@ -161,7 +161,11 @@ const UNASSIGNED_TITLES = [
 
 function unassignedRow(kind, item) {
   if (kind === "bgp_peers") {
-    return { identity: item.peer, detail: `RI ${item.routing_instance || "-"}` };
+    const detail = `RI ${item.routing_instance || "-"}`;
+    return {
+      identity: item.peer,
+      detail: item.local_interface ? `${detail}   ${item.local_interface}` : detail,
+    };
   }
   if (kind === "static_routes") {
     const hops = item.next_hop || [];

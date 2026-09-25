@@ -10,6 +10,11 @@ efemerni port '150.0.0.1+57010' na EVO) a jeden peer muze mit az 11 RIB
 (bgp.rtarget.0, inet.0, bgp.l3vpn.0, ...). Countery se ukladaji za kazdou
 RIB zvlast - souctem by se IPv4 a IPv6 slily do jednoho cisla a pokles v
 inet6.0 kompenzovany narustem v inet.0 by prosel bez povsimnuti.
+
+Od schematu 14 (kolize klicu, spec 2026-09-25) je `parse` seznam zaznamu,
+ne slovnik podle adresy: dve VRF se stejnou p2p podsiti maji peera na
+stejne adrese (ostry beh MX -> ACX 2026-09-23) a klic adresou jednu
+session tise zahodil. Identitu nese cely zaznam.
 """
 
 from __future__ import annotations
@@ -37,8 +42,13 @@ class BgpCollector(Collector):
     def rpc_name(self, platform: str) -> str:
         return "get_bgp_neighbor_information"
 
-    def parse(self, xml: etree._Element, platform: str) -> dict[str, dict[str, Any]]:
-        peers: dict[str, dict[str, Any]] = {}
+    def parse(self, xml: etree._Element, platform: str) -> list[dict[str, Any]]:
+        # Seznam, ne slovnik podle adresy: dve VRF se stejnou p2p podsiti
+        # maji peera na stejne adrese (ostry beh MX -> ACX 2026-09-23) a
+        # klic adresou jednu session tise zahodil. Identitu nese zaznam:
+        # (routing_instance, address, local_interface) - local_interface
+        # rozlisi i dva link-local sousedy v jedne RI (schema 14).
+        peers: list[dict[str, Any]] = []
 
         for node in xml.iter("bgp-peer"):
             raw_address = _text(node, "peer-address")
@@ -65,11 +75,13 @@ class BgpCollector(Collector):
 
             peer_as = _text(node, "peer-as")
 
-            peers[address] = {
+            peers.append({
+                "address": address,
+                "routing_instance": instance,
+                "local_interface": _text(node, "local-interface-name"),
                 "state": _text(node, "peer-state") or "unknown",
                 "peer_as": int(peer_as) if peer_as and peer_as.isdigit() else None,
-                "routing_instance": instance,
                 "ribs": ribs,
-            }
+            })
 
         return peers
