@@ -1,0 +1,79 @@
+<!-- MX1-POP1 (junos 24.2R1-S2.5), `show evpn vpws-instance EVPN-VPWS-LOCAL | display xml`, poslal uzivatel 2026-09-25.
+     Lokalne prepinany EVPN-VPWS na MX: remote SID nese evpn-vpws-sid-local-interface-name/-status stejne jako EVO;
+     evpn-vpws-pseudowire-status MX nevypisuje vubec (ani u vzdaleneho PW, viz tests/fixtures/rpc/junos/evpn_vpws.xml). -->
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/24.2R1-S2.5/junos">
+    <evpn-vpws-information xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing">
+        <evpn-vpws-instance xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+            <evpn-vpws-instance-name>EVPN-VPWS-LOCAL</evpn-vpws-instance-name>
+            <evpn-vpws-instance-type>EVPN VPWS</evpn-vpws-instance-type>
+            <evpn-vpws-instance-encap-type>MPLS</evpn-vpws-instance-encap-type>
+            <route-distinguisher>65000:211</route-distinguisher>
+            <local-interfaces>2</local-interfaces>
+            <local-interfaces-up>2</local-interfaces-up>
+            <evpn-vpws-interface-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                <evpn-vpws-interface xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                    <evpn-vpws-interface-name>ge-0/0/2.211</evpn-vpws-interface-name>
+                    <evpn-vpws-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-interface-esi>
+                    <evpn-vpws-interface-mode>single-homed</evpn-vpws-interface-mode>
+                    <evpn-vpws-interface-role>Primary</evpn-vpws-interface-role>
+                    <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+                    <evpn-vpws-control-word>No</evpn-vpws-control-word>
+                    <evpn-vpws-flow-label-transmit>No</evpn-vpws-flow-label-transmit>
+                    <evpn-vpws-flow-label-receive>No</evpn-vpws-flow-label-receive>
+                    <evpn-vpws-service-id-local-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                        <evpn-vpws-sid-local xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            <evpn-vpws-sid-local-value>100</evpn-vpws-sid-local-value>
+                            <evpn-vpws-sid-advertised-label>299920</evpn-vpws-sid-advertised-label>
+                            <evpn-vpws-sid-pe-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            </evpn-vpws-sid-pe-status-table>
+                        </evpn-vpws-sid-local>
+                    </evpn-vpws-service-id-local-status-table>
+                    <evpn-vpws-service-id-remote-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                        <evpn-vpws-sid-remote xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            <evpn-vpws-sid-remote-value>200</evpn-vpws-sid-remote-value>
+                            <evpn-vpws-sid-local-interface-name>ge-0/0/2.212</evpn-vpws-sid-local-interface-name>
+                            <evpn-vpws-sid-local-interface-status>Up</evpn-vpws-sid-local-interface-status>
+                            <evpn-vpws-sid-pe-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            </evpn-vpws-sid-pe-status-table>
+                        </evpn-vpws-sid-remote>
+                    </evpn-vpws-service-id-remote-status-table>
+                </evpn-vpws-interface>
+                <evpn-vpws-interface xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                    <evpn-vpws-interface-name>ge-0/0/2.212</evpn-vpws-interface-name>
+                    <evpn-vpws-interface-esi>00:00:00:00:00:00:00:00:00:00</evpn-vpws-interface-esi>
+                    <evpn-vpws-interface-mode>single-homed</evpn-vpws-interface-mode>
+                    <evpn-vpws-interface-role>Primary</evpn-vpws-interface-role>
+                    <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+                    <evpn-vpws-control-word>No</evpn-vpws-control-word>
+                    <evpn-vpws-flow-label-transmit>No</evpn-vpws-flow-label-transmit>
+                    <evpn-vpws-flow-label-receive>No</evpn-vpws-flow-label-receive>
+                    <evpn-vpws-service-id-local-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                        <evpn-vpws-sid-local xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            <evpn-vpws-sid-local-value>200</evpn-vpws-sid-local-value>
+                            <evpn-vpws-sid-advertised-label>299936</evpn-vpws-sid-advertised-label>
+                            <evpn-vpws-sid-pe-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            </evpn-vpws-sid-pe-status-table>
+                        </evpn-vpws-sid-local>
+                    </evpn-vpws-service-id-local-status-table>
+                    <evpn-vpws-service-id-remote-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                        <evpn-vpws-sid-remote xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            <evpn-vpws-sid-remote-value>100</evpn-vpws-sid-remote-value>
+                            <evpn-vpws-sid-local-interface-name>ge-0/0/2.211</evpn-vpws-sid-local-interface-name>
+                            <evpn-vpws-sid-local-interface-status>Up</evpn-vpws-sid-local-interface-status>
+                            <evpn-vpws-sid-pe-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+                            </evpn-vpws-sid-pe-status-table>
+                        </evpn-vpws-sid-remote>
+                    </evpn-vpws-service-id-remote-status-table>
+                </evpn-vpws-interface>
+            </evpn-vpws-interface-status-table>
+            <num-protect-interfaces>0</num-protect-interfaces>
+            <evpn-protect-interface-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+            </evpn-protect-interface-status-table>
+            <evpn-vpws-esi-info-status-table xmlns="http://xml.juniper.net/junos/24.2R0/junos-routing" junos:style="normal">
+            </evpn-vpws-esi-info-status-table>
+        </evpn-vpws-instance>
+    </evpn-vpws-information>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>

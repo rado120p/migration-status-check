@@ -1,0 +1,45 @@
+<!-- PTX1-POP1 (junos-evo 25.2R1.8), `show configuration routing-instances EVPN-VPWS-LOCAL | display xml`, poslal uzivatel 2026-09-25.
+     Lokalne prepinany EVPN-VPWS: oba AC v jedne instanci, SID zrcadlene (211: local 100 remote 200, 212: local 200 remote 100). -->
+<rpc-reply xmlns:junos="http://xml.juniper.net/junos/25.2R1.8-EVO/junos">
+    <configuration junos:commit-seconds="1790339581" junos:commit-localtime="2026-09-25 12:33:01 UTC" junos:commit-user="ansible">
+            <routing-instances>
+                <instance>
+                    <name>EVPN-VPWS-LOCAL</name>
+                    <instance-type>evpn-vpws</instance-type>
+                    <protocols>
+                        <evpn>
+                            <interface>
+                                <name>et-0/0/8.211</name>
+                                <vpws-service-id>
+                                    <local>100</local>
+                                    <remote>200</remote>
+                                </vpws-service-id>
+                            </interface>
+                            <interface>
+                                <name>et-0/0/8.212</name>
+                                <vpws-service-id>
+                                    <local>200</local>
+                                    <remote>100</remote>
+                                </vpws-service-id>
+                            </interface>
+                        </evpn>
+                    </protocols>
+                    <interface>
+                        <name>et-0/0/8.211</name>
+                    </interface>
+                    <interface>
+                        <name>et-0/0/8.212</name>
+                    </interface>
+                    <route-distinguisher>
+                        <rd-type>65000:211</rd-type>
+                    </route-distinguisher>
+                    <vrf-target>
+                        <community>target:65000:211</community>
+                    </vrf-target>
+                </instance>
+            </routing-instances>
+    </configuration>
+    <cli>
+        <banner></banner>
+    </cli>
+</rpc-reply>
