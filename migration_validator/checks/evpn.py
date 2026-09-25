@@ -22,11 +22,12 @@ UP = "Up"
 def _is_up(status: str) -> bool:
     """Je stav 'Up', bez ohledu na pripadny doplnek za lomitkem.
 
-    Od schematu 14 (spec 2026-09-25) nese ESI lokalni rozhrani, VPWS
-    rozhrani i IRB rozhrani stav z per-IFL tabulky ('evpn-interface-status',
-    'irb-interface-status') a ta hlasi jen holy 'Up' - zadne z ctyr volajicich
-    mist uz nedostane tvar 'Up/Forwarding'. Split na '/' zustava jako
-    tolerance, ne protoze by ji dnes nesla nejaka zname data.
+    Od schematu 14 (spec 2026-09-25) hlasi kazdy ze ctyr zdroju jen holy
+    'Up': ESI lokalni rozhrani i local_interfaces/irb_interfaces z per-IFL
+    tabulky instance ('evpn-interface-status', 'irb-interface-status'), VPWS
+    rozhrani z jineho RPC ('evpn-vpws-interface-status'). Zadne z nich uz
+    nedostane tvar 'Up/Forwarding'. Split na '/' zustava jako tolerance, ne
+    protoze by ji dnes nesla nejaka zname data.
     """
     return status.split("/", 1)[0].strip() == UP
 
