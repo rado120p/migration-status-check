@@ -171,7 +171,7 @@ Filtrování per oblast:
 | `arp` | `matches_interface(entry["interface"])` |
 | `nd` | `matches_interface(entry["interface"])` |
 | `bgp` | `peer ∈ selectors.bgp_neighbors` |
-| `evpn_vpws` | klíč (název instance) `∈ selectors.routing_instances` |
+| `evpn_vpws` | klíč (název instance) `∈ selectors.routing_instances`, **plus** (E2, schema 15) `interfaces` uvnitř instance se zúží na AC, pro která platí `matches_interface(ac["name"])` — scope vidí jen svoje AC, ne celou instanci |
 | `evpn_esi` | `matches_interface(data["interface"])` |
 | `evpn_mac` | klíč (název instance) `∈ selectors.routing_instances` |
 | `routes` | dvojice `(RIB, prefix)` `∈ selectors.static_routes` |
@@ -190,6 +190,11 @@ Dvě věci, které stojí za zdůraznění:
 - **`bfd` se filtruje podle `bgp_neighbors`, ne podle `bfd_peers`.** Kdyby se vybíralo podle
   záměru, session peeru, kterého parser do záměru nedoplnil, by se do scope nedostala —
   a chyba v průchodu parseru by tím zmizela beze stopy.
+- **`evpn_vpws` instance, ve které po filtru nezbylo žádné AC, se do výběru dostane
+  s prázdným `interfaces`, ne bez klíče.** To umožňuje checku rozlišit „AC scopu ve výpisu
+  chybí" (instance je, seznam prázdný) od „instance vůbec není ve faktech" (klíč chybí,
+  SKIP „bez dat"). Lokálně přepnutý EVPN-VPWS má v jedné instanci dvě AC, tedy dvě služby —
+  filtr je nutný, aby jedna služba neviděla i AC té druhé.
 
 `select()` je odolné vůči chybějícím oblastem — `facts.get(area) or {}` vrátí prázdno místo
 výjimky, takže snapshot z běhu s vypnutými collectory se pořád dá vyhodnotit.
@@ -221,7 +226,7 @@ kterým se selhaný sběr promítne do `SKIP` u checků (`CheckContext.failed_co
 verzí). Žádná snaha o migraci starých dat: raději hlasité selhání než tichá špatná
 interpretace.
 
-Aktuální `SCHEMA_VERSION = 14` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
+Aktuální `SCHEMA_VERSION = 15` (`models/snapshot.py`). Zvýšení z 5 na 6 neslo normalizaci ARP/ND
 záznamů naučených přes IRB (`interface` + `learned_via` místo neořezaného `irb.14[ ae0.14
 ]`, viz `collectors.md`) a nové schéma `evpn_vpws` (`interfaces`/`local_sid`/`remote_sid`/
 `peers` místo plochého `status`/`local_sid`/`remote_sid`). Zvýšení z 10 na 11 (vlna
@@ -241,6 +246,11 @@ ethernet segment sdílený dvěma instancemi, statika a agregát na stejném `(r
 se tak přestaly navzájem přepisovat. Pohled, který dostává služba (`Scope.select`), si
 zůstává v dnešním klíčovaném tvaru — mění se jen surová fakta v snímku. Viz `collectors.md`
 pro tvar každého záznamu. Stará snapshot data se proto musí znovu nasbírat, ne doupravit.
+Zvýšení z 14 na 15 (spec 2026-09-25, "EVPN-VPWS local-switch + AC filtr") přidalo do
+`evpn_vpws` dvě pole na AC: `pseudowire_status` (jen EVO, jinak `None`) a `local_interface`
+na `local_sid`/`remote_sid` (partner lokálně přepnutého EVPN-VPWS, jinak `None`). Běhy
+s raw XML se přesbírají `mig-validate upgrade`; běhy bez raw jsou ztracené (přijato už
+u bumpu 13 → 14).
 
 `save_snapshot()` / `load_snapshot()` zapisují a čtou JSON v UTF‑8 s `ensure_ascii=False`
 a zakládají cílový adresář. Round-trip přes disk ověřuje

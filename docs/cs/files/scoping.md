@@ -89,30 +89,62 @@ rozhraní se shoduje s popisem jiné služby). Bez toho by dvě různé služby 
 Klíč je vždy **složený**, ne samotná description — jedna description může nést víc záznamů
 (`ge-0/0/5` fyzické i `ge-0/0/5.0` logické mají stejnou).
 
-4. Co zbude, jde do `unmatched` s důvodem `zadny kandidat na subject` (baseline) nebo
-   `nova sluzba, chybi baseline` (subject).
+4. Co zbude, jde do `unmatched` s důvodem, viz „Nespárovaný scope na konci" níže.
 
-### Nikdy se nehádá
+### Nikdy se nehádá — ale nejednoznačnost z poolu nevyřadí (E5, spec 2026-09-25)
 
 Pár vznikne jen tehdy, když pod daným klíčem existuje **právě jeden** kandidát na každé
-straně. Jinak jdou všichni kandidáti do `unmatched` s důvodem
-`ambiguous: N kandidatu (id, id, ...)`.
+straně. To platí dál. Co se změnilo: **nejednoznačný scope zůstává v `remaining_*` poolu**
+místo aby z něj navždy zmizel — po každém pravidle se odeberou jen scopy, které se
+**spárovaly**. Pozdější (slabší) pravidlo — `routing_instance`, `subnet`, `vlan` — tak smí
+nejednoznačný scope rozlišit, přesně jako dnes rozlišuje scope bez shody description.
+Tichý špatný match by u migrace znamenal zelenou na rozbité službě — proto zůstává přiznané
+nespárování, ne hádání.
 
-Tichý špatný match by u migrace znamenal zelenou na rozbité službě — proto je přiznané
-nespárování lepší.
+Uvnitř **jednoho** pravidla se ale nesmí hádat. Vyhodnocení je **dvouprůchodové** a
+nezávisí na pořadí (klíčů ve scope ani scopů v seznamu):
 
-### Sledování `paired` a `dropped`
+1. **První průchod** posoudí každý klíč pravidla sám za sebe. Buď dá jednoznačného
+   kandidáta (1:1 shoda), nebo je pod ním scope nejednoznačný a zapíše se to.
+2. Scope, který má napříč **různými klíči téhož pravidla** víc než jednoho odlišného
+   kandidáta, je taky nejednoznačný — i když byl každý dílčí klíč sám o sobě 1:1, pravidlo
+   nesmí hádat, který kandidát je ten pravý (pojistka proti pravidlům 3–5, která generují
+   víc klíčů na jeden scope).
+3. **Druhý průchod** spáruje jen ty, co po prvním průchodu zůstaly jednoznačné na obou
+   stranách.
 
-Uvnitř jednoho pravidla se drží dvě množiny (podle `id()` objektu). Je to kvůli pravidlům
-3–5, která **generují víc klíčů na jeden scope**: scope zahozený jako nejednoznačný pod
-jedním klíčem by se pod jiným klíčem téhož pravidla jinak spároval a skončil by **zároveň
-v `pairs` i v `unmatched`**. Kontrolují se proto obě množiny.
+### Nespárovaný scope na konci
+
+Seznam nespárovaných se staví **až na konci**, ne pravidlo po pravidle. Když je scope pod
+klíčem (nebo napříč klíči, viz bod 2 výš) nejednoznačný, zapamatuje se důvod i scopy druhé
+strany, se kterými soupeřil — a to **každá** zaznamenaná nejednoznačnost, ne jen první.
+Scope, který nakonec nespárovalo žádné pravidlo, dostane:
+
+- důvod **první** (v pořadí pravidel) zapamatované nejednoznačnosti, která **ještě** má
+  aspoň jednoho nespárovaného soupeře. Nejednoznačnost tak může přetrvat i díky pozdějšímu
+  (slabšímu) pravidlu, přestože ta z nejsilnějšího pravidla už je vyřešená,
+- jinak `zadny kandidat na subject` (baseline) / `nova sluzba, chybi baseline` (subject) —
+  žádná ze zapamatovaných nejednoznačností už nemá nespárovaného soupeře, takže žádná
+  netrvá.
+
+Modelový příklad (viz design, §4): baseline má „CPE" ve VRF-a, subjekt „CPE" ve VRF-a
+(tenhle krok) a „CPE" ve VRF-b (dřívější vlna). Popis je 1×2 nejednoznačný,
+`routing_instance` spáruje VRF-a ↔ VRF-a. VRF-b soupeřil jen s baseline VRF-a, ta má pár,
+takže VRF-b dostane `nova sluzba, chybi baseline` — ne `ambiguous`, který by vytáhl scope
+do NESPAROVANO a jmenoval kandidáta, jenž už je spárovaný.
 
 ### Ruční mapování a nejednoznačnost
 
 Pravidlo z `mappings:` musí vyjít na **právě jeden** scope na každé straně. Když jich vyjde
-víc, pár nevznikne a všechny zasažené scopy jdou do `unmatched` s `ambiguous` — sémantika
-je stejná jako u automatických pravidel.
+víc, pár nevznikne: **jen strana s víc než jedním zásahem** jde do `unmatched` s
+`ambiguous` a zmizí z poolu nastálo — osamělý scope na druhé straně v poolu zůstává pro
+další pravidla. Na rozdíl od automatických pravidel se tahle nejednoznačnost **nesleduje
+dál** a nemůže ji vyřešit ani pozdější pravidlo, ani zápočet nespárovaného soupeře:
+`ambiguous` je tu konečný důvod. To platí i pro ruční pravidlo, které je nejednoznačné
+samo v sobě (víc scopů na jedné straně matchuje jeden zápis) — takové scopy skončí
+v NESPAROVANO s `ambiguous` místo aby je pohltilo vyloučení „cizí vlny" ve step běhu
+(`engine.py`, viz [top-level.md](top-level.md#enginepy--orchestrace-vyhodnocení)):
+rozbité ruční pravidlo tak zůstane vidět, ne potichu vyřazené.
 
 ---
 
@@ -120,14 +152,21 @@ je stejná jako u automatických pravidel.
 
 ### `Selector`
 
-Frozen dataclass s `description`, `service_type`, `interface`. `matches(scope)` je logický
-**AND** přes vyplněná pole; nevyplněná se ignorují. Prázdný selektor je odmítnutý při
-načítání (`ValueError`), protože by matchoval všechno.
+Frozen dataclass s `description`, `service_type`, `interface`, `routing_instance` (E5,
+schema 15). `matches(scope)` je logický **AND** přes vyplněná pole; nevyplněná se ignorují.
+Prázdný selektor je odmítnutý při načítání (`ValueError`), protože by matchoval všechno —
+hláška teď jmenuje i čtvrté pole: `prazdny selektor v mapping.yml - uved description,
+service_type, interface nebo routing_instance`. Platí pro `mappings` i `ignore`.
 
 `interface` se porovnává proti `scope.selectors.interfaces`, tedy proti **logické jednotce**.
 Napsat `ge-0/0/2` nezasáhne pět služeb, které přes ten port jedou — nezasáhne nic. Je to
 záměr: u `mappings` musí pravidlo vyjít na právě jeden scope na každé straně, a mít
 u `ignore` opačnou sémantiku téhož zápisu by bylo matoucí.
+
+`routing_instance` se porovnává proti `scope.selectors.routing_instances` (`in`, ne
+rovnost — scope může nést víc RI). Rozlišuje služby se stejným popisem v různých VRF, což
+`description` samo neumí — typický případ je stejná `description` na CPE portu, který
+migrace přesune do jiné VRF.
 
 ### `MappingRule` a `Mapping`
 

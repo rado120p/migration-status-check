@@ -22,7 +22,7 @@ Výpis odpovídá `mig-validate checks` (stav k 2026-09-07, 31 checků):
 | `ping_reachability` | both | advisory | Internet, IPVPN | odpovědi z cílů (IPv4 i IPv6) zjištěných při `capture`; mimo subtypy multicast/mvpn; prázdná tabulka v obou = PASS se značkou (R-3); proti baseline se porovnává ztrátovost, ne RTT (jitter nedá `ZMENA`) |
 | `bgp_session_state` | both | critical | Internet, IPVPN + Core (loopback) | stav je `Established`; s baseline navíc hlásí změnu stavu — na Core běží jen na loopback scope (iBGP na lo0.0), transit žádné peery nemá |
 | `bgp_prefix_counts` | compare | advisory | Internet, IPVPN + Core (loopback) | received / accepted / advertised / active proti toleranci — **za každou RIB zvlášť**; na Core běží jen na loopback scope |
-| `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID; shodný nevyřešený stav (local iface Down, chybějící/nevyřešený remote peer) s baseline = PASS se značkou (R-3); hodnoty stavů rozhraní nesou jen stav, ne jméno IFL (jméno je v labelu) |
+| `evpn_vpws_status` | both | critical | E-Line | stav rozhraní instance je `Up` a přišel remote SID nebo partner lokálního přepnutí; AC baseline se páruje podle `(local SID, remote SID)`; shodný nevyřešený stav (local iface Down, chybějící/nevyřešený remote peer, partner Down) s baseline = PASS se značkou (R-3); AC chybějící ve výpisu instance = BROKEN `Chybi`; schema 15: nový řádek pseudowire status (jen EVO), lokálně přepnutý EVPN-VPWS dostává řádek s partnerem místo řádků PE/status; hodnoty stavů rozhraní nesou jen stav, ne jméno IFL (jméno je v labelu) |
 | `evpn_esi_status` | both | critical | E-LAN | stav lokálního rozhraní v ESI je `Up`, hlásí DF; shodný nevyřešený stav (Unresolved, Down, DF not elected) s baseline = PASS se značkou (R-3); hodnota lokálního rozhraní nese jen stav, ne jméno IFL (jméno je v ESI hlavičce bloku) |
 | `evpn_instance_status` | both | critical | E-LAN | local interfaces > 0 a všechna up; IRB up (pokud IRB existují); EVPN neighbors > 0; ESI „resolved"; s baseline: pokles EVPN neighbors = WARN, počty local/IRB interfaců se na rovnost neporovnávají (rozdíl ukazuje sloupec ZMENA — konsolidace do jedné mac-vrf instance je při migraci mění); shodný nevyřešený stav (Down interface/IRB, chybějící unit, nevyřešené ESI, nulové neighbors) s baseline = PASS se značkou (R-3); hodnoty EVPN/IRB interface řádků nesou jen stav, jméno IFL je v labelu (`EVPN interface (jméno)` / `IRB interface (jméno)`; při více instancích ve scope se jméno instance připojí do téže závorky: `EVPN interface (jméno, instance)`) |
 | `evpn_mac_count` | both | advisory | E-LAN | počty MAC z `count` výpisu per VLAN a per interface; > 0 a s baseline pokles proti toleranci; nulový počet shodný s baseline = PASS se značkou (R-3) |
@@ -233,15 +233,22 @@ ignore:
   - {interface: "ge-0/0/7.0"}
 ```
 
-Selektor smí kombinovat `description`, `service_type` a `interface`; aspoň jedno musí být
-vyplněné, jinak načtení selže hláškou `prazdny selektor v mapping.yml`.
+Selektor smí kombinovat `description`, `service_type`, `interface` a `routing_instance`
+(schema 15, E5); aspoň jedno musí být vyplněné, jinak načtení selže hláškou `prazdny
+selektor v mapping.yml - uved description, service_type, interface nebo
+routing_instance`. `routing_instance` matchuje proti `scope.selectors.routing_instances`
+(`in`) — rozlišuje services se stejnou `description` v různých VRF, což `description` samo
+neumí.
 
 Sémantika:
 
 - **`mappings`** — jeden řádek = jedna služba. Pravidlo musí vyjít na **právě jeden** scope
-  na každé straně; když jich vyjde víc, pár nevznikne a všechny kandidáty jdou do
-  `unmatched` s důvodem `ambiguous`. Ruční mapování má prioritu před automatickými pravidly
-  a výsledný pár má `confidence: manual`.
+  na každé straně; když jich vyjde víc, pár nevznikne a **jen strana s víc než jedním
+  zásahem** jde do `unmatched` s důvodem `ambiguous` — osamělá strana zůstane v poolu pro
+  další zpracování (ale bez ručního páru). Na rozdíl od automatických pravidel nemá
+  nejednoznačnost ručního pravidla fall-through: `ambiguous` je tu konečný důvod, žádné
+  pozdější pravidlo (ani jiná ruční shoda) ho nevyřeší. Ruční mapování má prioritu před
+  automatickými pravidly a výsledný pár má `confidence: manual`.
 - **`ignore`** — scope se odstraní z obou stran ještě před párováním. Pro případy specifické
   pro danou migraci; management rozhraní se sem psát nemusí.
 - Selektor `{interface: ...}` cílí na **logickou jednotku** (`ge-0/0/2.113`). Napsat
@@ -263,19 +270,27 @@ Aplikují se v tomhle pořadí; první, které dá jednoznačný pár, vyhrává
 Klíč je vždy **složený**, ne samotná description: jedna description může nést víc záznamů
 (`ge-0/0/5` fyzické i `ge-0/0/5.0` logické mají stejnou).
 
+**Nejednoznačnost pod jedním automatickým pravidlem nevyřadí scope z poolu natrvalo**
+(E5, spec 2026-09-25) — pozdější, slabší pravidlo ho pořád smí spárovat, pokud pod ním
+existuje jednoznačná shoda 1:1. Scope se `ambiguous` důvodem skončí v `unmatched`, jen
+pokud i na konci zůstal nespárovaný aspoň jeden z kandidátů, se kterými soupeřil; jinak
+dostane `zadny kandidat na subject` / `nova sluzba, chybi baseline` (nejednoznačnost se
+v praxi rozhodla ve prospěch spárovaného kandidáta). Detaily dvouprůchodového vyhodnocení
+a pojistky proti víceklíčovým pravidlům: [files/scoping.md](files/scoping.md).
+
 Důvody v `unmatched`:
 
 | text | význam |
 |---|---|
 | `zadny kandidat na subject` | baseline služba nemá protějšek — podezření na zapomenutou migraci |
 | `nova sluzba, chybi baseline` | subject služba je navíc — nová nebo restrukturalizovaná |
-| `ambiguous: N kandidatu (id, id, ...)` | pravidlo dalo víc kandidátů, nástroj nehádá |
+| `ambiguous: N kandidatu (id, id, ...)` | pravidlo dalo víc kandidátů a nejednoznačnost trvá dál — nástroj nehádá |
 
 ---
 
 ## 4. Formát snapshotu
 
-`schema_version: 12`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
+`schema_version: 15`. Snapshot je **self-contained** — `evaluate` k němu nepotřebuje ani
 inventory, ani síť. Jiná verze schématu vede k tvrdé chybě (`SnapshotVersionError`), ne
 k pokusu o migraci dat.
 
@@ -291,6 +306,9 @@ Historie verzí:
 | 6 → 7 | `evpn_mac` collector čte `count` RPC (per-VLAN a per-interface počty, tvar `{vlans, interfaces}`); přibyla oblast `evpn_instance` — commit `e547a24` |
 | 10 → 11 | šest nových fact areas (`isis_adjacency`, `isis_interface`, `isis_overview`, `ldp_neighbor`, `pim_neighbor`, `mpls_interface`) pro Core transit/loopback checky — vlna 2026-08-26 |
 | 11 → 12 | tři nové fact areas (`igmp_group`, `multicast_route`, `mvpn_instance`) pro čtyři multicast checky — vlna 2026-09-02 |
+| 12 → 13 | čtvrtá multicast fact area `pim_join` (PIM join tabulka) — spec 2026-09-07 |
+| 13 → 14 | `bgp`, `bfd`, `evpn_esi`, `routes` ze slovníku klíčovaného adresou/ESI/RIB na seznam záznamů, každý nese celou svou identitu — spec 2026-09-25 „kolize klíčů – vrstva 2" |
+| 14 → 15 | `evpn_vpws` AC nese `pseudowire_status` (jen EVO) a každý SID `local_interface` — partnerský AC lokálně přepnutého EVPN-VPWS — spec 2026-09-25 „local-switch + AC filtr" |
 
 Mezi 7 a 10 proběhly další bumpy beze zápisu do téhle tabulky — mezera je vědomě
 přiznaná, ne dopočítaná (viz [`files/models.md`](files/models.md) pro aktuální hodnotu
@@ -309,7 +327,7 @@ konstanty).
 
 ```jsonc
 {
-  "schema_version": 14,
+  "schema_version": 15,
   "device": {
     "address": "172.20.20.4", "hostname": "MX1-POP1",
     "platform": "junos",              // junos | junos-evo
@@ -350,7 +368,22 @@ konstanty).
                     "active": 3, "suppressed": 0}
        }}
     ],
-    "evpn_vpws": {"EVPN-VPWS-CPE13-NNI": {"local_sid": 213, "remote_sid": 213, "status": "Up"}},
+    // Schema 15 (spec 2026-09-25): evpn_vpws AC nese pseudowire_status
+    // (jen EVO, jinak null) a kazdy SID pole local_interface - partner
+    // AC lokalne prepnuteho EVPN-VPWS ({name, status}), jinak null.
+    "evpn_vpws": {
+      "EVPN-VPWS-CPE13-NNI": {
+        "interfaces": [
+          {"name": "ge-0/0/2.213", "status": "Up", "mode": "single-homed",
+           "pseudowire_status": null,
+           "local_sid": {"value": 213, "peers": [], "local_interface": null},
+           "remote_sid": {"value": 213, "peers": [
+             {"esi": "00:00:...", "ipaddr": "10.0.0.9", "mode": "single-homed",
+              "role": null, "status": "Resolved"}
+           ], "local_interface": null}}
+        ]
+      }
+    },
     "evpn_esi": [
       {"instance": "EVPN-VLAN-AWARE-CPE13-NNI", "esi": "00:11:22:...",
        "resolved_status": "Resolved by IFL ae0.14", "df_role": "10.0.0.5",
@@ -917,12 +950,17 @@ nejhorší napříč všemi evaluacemi (`EXIT_FAILED_CHECKS`, jakmile má FAIL k
 služby, které se spárovaly s baseline **tohoto** kroku — zbytek se do checků nezapočítá,
 report o nich jen vypíše souhrnný řádek `Dalsi sluzby na <novy port> mimo tento krok: N
 (nesparovano s baseline <stary port>)` (jen když krok existuje a nějaké takové služby jsou).
-Výjimka: nespárovaný L2 scope, jehož propojený L3 protějšek (`scopes[].link`, viz „Vazba
-L2+L3" níže) se **spároval** s baseline tohoto kroku, se filtrem nevylučuje — jde s ním jako
-s jednou entitou. Ve výsledku `evaluate` (`docs/cs/files/reporting.md` a
-[oddíl 5](#5-formát-výsledku)) to nese JSON klíč `excluded_services` — přítomný jen s `step`
-a jen když se pro krok našla baseline (bez baseline klíč chybí, filtr neměl podle čeho
-filtrovat).
+**Vyloučí se jen nespárovaný subject scope s důvodem `nova sluzba, chybi baseline`** (E5,
+spec 2026-09-25) — scope, který zůstal nespárovaný kvůli trvající nejednoznačnosti
+(`ambiguous`), do `excluded_services` nejde: projde checky jako nespárovaný a zůstane
+v NESPAROVANO, protože může patřit právě tomuto kroku. Platí to i pro scope zasažený
+nejednoznačným ručním pravidlem z `mapping.yml` — jeho `ambiguous` důvod se filtrem
+nesmaže, aby bylo vidět rozbité ruční pravidlo. Výjimka: nespárovaný L2 scope, jehož
+propojený L3 protějšek (`scopes[].link`, viz „Vazba L2+L3" níže) se **spároval** s
+baseline tohoto kroku, se filtrem nevylučuje — jde s ním jako s jednou entitou. Ve výsledku
+`evaluate` (`docs/cs/files/reporting.md` a [oddíl 5](#5-formát-výsledku)) to nese JSON klíč
+`excluded_services` — přítomný jen s `step` a jen když se pro krok našla baseline (bez
+baseline klíč chybí, filtr neměl podle čeho filtrovat).
 
 ### Ping z baseline při `--phase post`
 

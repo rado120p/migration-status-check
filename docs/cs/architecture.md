@@ -103,7 +103,7 @@ kontrolovat celou oblast.
 | `arp` | `[{ip, mac, interface, learned_via, routing_instance}]` | `interface` |
 | `nd` | `[{ip, mac, interface, state, learned_via}]` — IPv6 protějšek `arp`, ND tabulka | `interface` |
 | `bgp` | schema 14: `[{address, routing_instance, local_interface, state, peer_as, ribs: {rib_name: {received, accepted, advertised, active, suppressed}}}]` — seznam záznamů, počty se drží **za každou RIB zvlášť**, nesčítají se | `address` ∈ `bgp_neighbors`, `routing_instance` shodná |
-| `evpn_vpws` | `{routing_instance: {interfaces: [{name, status, mode, local_sid, remote_sid}]}}` — `local_sid`/`remote_sid` mají tvar `{value, peers}` | **klíč = routing-instance** |
+| `evpn_vpws` | schema 15: `{routing_instance: {interfaces: [{name, status, mode, pseudowire_status, local_sid, remote_sid}]}}` — `local_sid`/`remote_sid` mají tvar `{value, peers, local_interface}`; `pseudowire_status` jen EVO (`CCC-Up`), jinak `None`; `local_interface` = partner AC lokálně přepnutého EVPN-VPWS (`{name, status}`), jinak `None` | **klíč = routing-instance**, `interfaces` uvnitř zúžené na AC scopu (`Scope.select`, E2) |
 | `evpn_esi` | schema 14: `[{instance, esi, resolved_status, df_role, interfaces: {ifl: {status, mode}}}]` — seznam záznamů na `(instance, esi)` | `instance` ∈ `routing_instances`, rozhraní scopu v `interfaces` |
 | `evpn_mac` | `{routing_instance: {vlan_id: count}}` | **klíč = routing-instance**; vnitřní klíč je **VLAN id** jako string (`"313"`), u vlan-based `"-"` |
 
@@ -227,9 +227,19 @@ Hlídá to `tests/test_capture.py::test_every_area_is_registered_for_both_platfo
 
 ### 3.8 Nikdy se nehádá
 
-Matcher při nejednoznačnosti **nespáruje**. Vyjde-li na některé úrovni víc než jeden
-kandidát, scope jde do `unmatched` s důvodem `ambiguous: N kandidatu (...)`. Tichý špatný
-match by u migrace znamenal zelenou na rozbité službě.
+Matcher při nejednoznačnosti **nespáruje**. Vyjde-li pod klíčem některého automatického
+pravidla víc než jeden kandidát, pár pod ním nevznikne. Nejednoznačnost ale scope z poolu
+**nevyřadí natrvalo** (E5, spec 2026-09-25): pozdější, slabší pravidlo (`routing_instance`,
+`subnet`, `vlan`) ho pořád smí spárovat, pokud tam pod ním existuje jednoznačná shoda 1:1.
+Scope, kterého se nejednoznačnost drží až do konce, jde do `unmatched` s důvodem
+`ambiguous: N kandidatu (...)` — ale jen tehdy, když aspoň jeden ze zapamatovaných soupeřů
+zůstal taky nespárovaný; jinak dostane `zadny kandidat na subject` / `nova sluzba, chybi
+baseline`, protože nejednoznačnost, jejíž jedna strana má pár, se v praxi rozhodla ve
+prospěch toho páru. Tichý špatný match by u migrace znamenal zelenou na rozbité službě —
+proto zůstává přiznané nespárování, ne hádání. Detailně v [files/scoping.md](files/scoping.md), sekce `matcher.py`.
+
+Výjimka je **ruční mapování** z `mapping.yml`: nejednoznačné ruční pravidlo scope z poolu
+odstraní nastálo s důvodem `ambiguous`, žádné pozdější pravidlo ho už nedostane.
 
 Symetricky platí, že se nic tiše nezahazuje:
 

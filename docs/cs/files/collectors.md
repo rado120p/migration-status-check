@@ -178,18 +178,29 @@ ta níže, ověřená přes `| display xml rpc`.
 
 ### `EvpnVpwsCollector` (`evpn_vpws`)
 
-RPC: `get_evpn_vpws_information`. Výstup
-`{routing_instance: {interfaces: [{name, status, mode, local_sid, remote_sid}]}}`.
+RPC: `get_evpn_vpws_information`. Výstup (schema 15, spec 2026-09-25 "local-switch + AC
+filtr")
+`{routing_instance: {interfaces: [{name, status, mode, pseudowire_status, local_sid, remote_sid}]}}`.
 
 - **Klíčem je název instance, ne rozhraní** — název instance je při migraci stabilní,
   název portu ne. Collector nese **všechna** rozhraní instance, ne jen první.
 - `status` u rozhraní je **stav rozhraní instance** (`Up`), ne stav vzdáleného PE
   (`Resolved`). Obě hodnoty v odpovědi existují a znamenají něco jiného; check porovnává
   proti `Up`, takže se emituje ta souměřitelná.
-- `local_sid` i `remote_sid` mají tvar `{value, peers}`. `value` je číslo SID; `peers` je
-  seznam `{esi, ipaddr, mode, role, status}` čtený z `evpn-vpws-sid-pe-status-table` —
-  tuhle tabulku dřívější schéma vůbec nečetlo, takže `evpn_vpws_status` neuměl rozlišit
-  konkrétního peera od druhé strany SID.
+- `pseudowire_status` se čte z `evpn-vpws-pseudowire-status`. Vypisuje ho **jen EVO**
+  (`CCC-Up`, u vzdáleného PW i u local-switch) — MX element nemá ani u vzdáleného PW, takže
+  je `None`.
+- `local_sid` i `remote_sid` mají tvar `{value, peers, local_interface}`. `value` je číslo
+  SID; `peers` je seznam `{esi, ipaddr, mode, role, status}` čtený z
+  `evpn-vpws-sid-pe-status-table` — tuhle tabulku dřívější schéma vůbec nečetlo, takže
+  `evpn_vpws_status` neuměl rozlišit konkrétního peera od druhé strany SID.
+- `local_interface` (schema 15) je `{name, status}` partnerského AC **lokálně přepnutého**
+  EVPN-VPWS, čtený z `evpn-vpws-sid-local-interface-name` / `-status` přímo pod
+  `evpn-vpws-sid-local` / `evpn-vpws-sid-remote`. Obě platformy ho hlásí stejně (MX i EVO
+  ověřeno v laborce), pole je na obou SID blocích kvůli jednotnému tvaru, ale v nahrávkách
+  je vyplněné jen u `remote_sid`. Chybí-li jméno, je `None` — to je i tvar vzdáleného PW,
+  kde partner neexistuje. Stav partnera bez textu je `"unknown"`, stejně jako `status`
+  rozhraní.
 
 ### `EvpnEsiCollector` (`evpn_esi`)
 

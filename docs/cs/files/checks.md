@@ -416,21 +416,55 @@ proti budoucímu tvaru, ne protože by ji dnešní data ještě nesla.
 
 Vyhodnocuje se **per SID a per peer**, ne jen podle stavu rozhraní a shody dvou čísel SID
 jako dřív — stav se teď čte výhradně z `evpn-vpws-sid-pe-status` (`collectors/evpn.py`,
-`EvpnVpwsCollector`). Na rozhraní s víc než jednou instancí se popisek kvalifikuje jménem
-rozhraní (`qualified()`), aby řádky obou instancí nesplynuly.
+`EvpnVpwsCollector`). `many` (kvalifikace popisku jménem rozhraní, `qualified()`) se počítá
+z AC **po filtru** `Scope.select` (E2, schema 15) — v praxi má scope po filtru jen svoje AC,
+takže se kvalifikace prakticky nikdy neuplatní.
 
-Na jedno rozhraní vzniká postupně:
+**Párování AC s baseline** (E2, schema 15, `_pair_baseline_acs`): AC se páruje s baseline AC
+se stejnou dvojicí `(local_sid.value, remote_sid.value)` — jméno IFL migrací projde
+(`ge-0/0/2.211` → `et-0/0/8.211`), SID ne, a dvojice je jednoznačná i u zrcadlených SID
+lokálního přepnutí (100/200 vs 200/100). Když dvojice nesedí a obě strany mají právě jedno
+AC, spárují se ta dvě — změna SID se pak ukáže jako ZMENA na řádku SID value. Jinak baseline
+AC nemá (`baseline_iface = None`). Starší poziční párování (`idx`) je pryč — s jiným pořadím
+nebo počtem AC dávalo cizí baseline a Down AC mohlo vyjít UNCHANGED (review 2026-09-24, E2).
+`_find_baseline_peer` (páruje PE podle `ipaddr` uvnitř spárovaného SID) beze změny.
+
+**AC scopu, které ve výpisu instance chybí** (`Scope.select` instanci zúžil a nic nezbylo):
+jeden řádek `EVPN VPWS local interface status`, `broken` (FAIL), text `<instance>: AC <iface
+scopu> ve vypisu instance chybi`, `value` `Chybi`. Je to jiná situace než SKIP „bez dat" —
+data instance jsou, jen v nich AC chybí.
+
+Na jedno AC vzniká postupně:
 
 - **stav rozhraní** (`Up` → OK, jinak BROKEN),
+- **stav pseudowire** (nový řádek, schema 15) — jen když `pseudowire_status` element ve
+  výpisu je (EVO); MX ho nemá ani u vzdáleného PW, takže žádný řádek, ne SKIP. `CCC-Up` →
+  OK, cokoliv jiného BROKEN. Baseline MX → subjekt EVO: `baseline_value` je vždy `None`
+  (MX element nemá), takže tenhle řádek nikdy nevyjde UNCHANGED při migraci MX → EVO,
 - **local i remote SID** — hodnota SID jde jako `INFO` řádek (nese číslo, ne stav, nemá
-  proti čemu být PASS/FAIL) a nemá `baseline_value`, takže sloupec `ZMENA` u ní zůstává
-  prázdný,
+  proti čemu být PASS/FAIL); `baseline_value` (schema 15) nese SID spárovaného baseline AC,
+  takže sloupec `ZMENA` u změněného SID ukáže rozdíl místo aby zůstal prázdný,
 - **peer local strany** — bez peerů je to očekávaný stav u single-homed rozhraní (`INFO`,
   ne chyba); u multi-homed přijde `INFO` navíc s módem, ESI a rolí,
-- **peer remote strany** — remote peer musí existovat vždy; jeho absence je `BROKEN` na
-  dvou řádcích (`... PE` a `... status`), protože chybějící druhá strana SID znamená
-  nenakonfigurovaný nebo spadlý remote PE. `status == "resolved"` (case-insensitive) je OK,
-  cokoliv jiného BROKEN.
+- **remote strana** — buď **partner lokálního přepnutí**, nebo **vzdálený PE**, nikdy obojí:
+  - `remote_sid.local_interface` není `None` (lokálně přepnutý EVPN-VPWS, schema 15): místo
+    řádků PE/status jeden nový řádek `EVPN VPWS SID remote local switch`, `value` =
+    `"<jméno partnera> <stav>"` (např. `et-0/0/8.212 Up`). Partner `Up` → OK, jinak BROKEN.
+    `same` u `unchanged_or` porovnává **jen stav partnera**, ne jméno — partnerský IFL se
+    migrací přejmenuje. `baseline_value` je totéž z baseline AC, jen když baseline byla
+    taky lokálně přepnutá.
+  - `remote_sid.local_interface` je `None` (vzdálený PW): dva řádky jako dřív, PE a status.
+    Remote peer musí existovat vždy; jeho absence je `BROKEN` na obou řádcích, protože
+    chybějící druhá strana SID znamená nenakonfigurovaný nebo spadlý remote PE.
+    `status == "resolved"` (case-insensitive) je OK, cokoliv jiného BROKEN.
+
+**Změna tvaru mezi baseline a subjektem** (typicky step běh, kdy se přesune jedno AC
+local-switch páru — na novém boxu je z něj vzdálený PW, SID zůstávají, takže se AC spárují):
+baseline hodnota `local switch (<partner> <stav>)` u řádků PE/status (opačný směr: řádek
+local switch dostane `baseline_value` = `<ipaddr PE> <status>` prvního baseline peeru) je
+`same = False` **vždy** — tahle baseline hodnota nikdy nevyjde UNCHANGED. Bez toho by
+baseline local-switch (bez peerů) spadla do stejné větve jako „remote peer chybi" a dala
+tiché UNCHANGED místo BROKEN.
 
 Řádek „peer status" u neresolvnutého peera nese důvod přímo v hlášce, ne stejný text jako
 OK: `<instance>: <side> peer <ip> neni Resolved (<status or 'chybi'>)`. INFO řádky
@@ -440,9 +474,14 @@ téhož řádku.
 
 | situace | Outcome | status | `value` |
 |---|---|---|---|
+| AC scopu ve výpisu instance chybí | `broken` | FAIL | `Chybi` |
 | stav lokálního rozhraní `Up` | `ok` | PASS | naměřený stav |
 | stav lokálního rozhraní jiný | `broken` | FAIL | naměřený stav |
-| remote strana, žádný peer | `broken` (řádek PE) + `broken` (řádek status) | FAIL | `Neznamy peer` / `Unresolved / Chybi` |
+| pseudowire status `CCC-Up` (jen EVO) | `ok` | PASS | naměřený stav |
+| pseudowire status jiný (jen EVO) | `broken` | FAIL | naměřený stav |
+| remote strana, lokální přepnutí, partner `Up` | `ok` | PASS | `<partner> Up` |
+| remote strana, lokální přepnutí, partner jiný | `broken` | FAIL | `<partner> <stav>` |
+| remote strana, vzdálený PW, žádný peer | `broken` (řádek PE) + `broken` (řádek status) | FAIL | `Neznamy peer` / `Unresolved / Chybi` |
 | local strana, bez peerů (single-homed, očekávané) | `INFO` | INFO | mode, s poznámkou „multi-homing peer ve vypisu nenalezen" |
 | per peer, status `Resolved` | `ok` | PASS | adresa peera |
 | per peer, status jiný (hláška uvádí konkrétní status) | `broken` | FAIL | adresa peera |

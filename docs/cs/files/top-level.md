@@ -149,6 +149,17 @@ Průběh:
      (nová služba se pořád zkontroluje, jen se nemá s čím porovnat),
    - nespárované baseline scopy jdou **jen** do `unmatched.baseline` — v subjektu nejsou,
      není co měřit.
+   - **Výjimka pro step běh** (`--run` na N:1 mapovaném LAG portu, E5 review + oprava
+     2026-09-25): do `RunResult.excluded_services` (a mimo checky i mimo NESPAROVANO) jde
+     nespárovaný subject scope **jen** tehdy, když jeho důvod nespárování je
+     `REASON_NEW_SERVICE` (`nova sluzba, chybi baseline`) — a zároveň se nepodařilo spárovat
+     přes `link` (§ „Vazba L2+L3", [reference.md](../reference.md#5-formát-výsledku)). Scope,
+     který zůstal nespárovaný kvůli **trvající nejednoznačnosti** (`matcher.py`,
+     `ambiguous: N kandidatu (...)`), projde checky jako nespárovaný a zůstane v
+     NESPAROVANO — může totiž patřit právě tomuhle kroku. Platí to i pro scope, kterého se
+     dotkla nejednoznačná ruční `mapping.yml` shoda ([scoping.md](scoping.md#ruční-mapování-a-nejednoznačnost)):
+     jeho důvod zůstává `ambiguous`, takže se ukáže místo aby ho vyloučení „cizí vlny" tiše
+     smazalo — je to jediný způsob, jak operátor uvidí rozbité ruční pravidlo.
 4. Sečte se `summary` přes všechny checky všech scopů (`count_statuses()` z `models/result.py`,
    táž funkce, kterou používá filtr při přepočtu i renderer na počty služeb).
 5. `_unassigned_bgp_peers()` dohledá peery ze subjektu, které nespadly do žádného scope.
