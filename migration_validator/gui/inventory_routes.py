@@ -90,7 +90,10 @@ def build_inventory_router(
                     status_code=500,
                     detail=f"hostname filter cannot be saved ({filters.path}): {error.strerror or error}",
                 ) from error
-            record(actor.username, "filter-edit", target="hostname_filter", allow=",".join(allow))
+            record(
+                actor.username, "filter-edit", target="hostname_filter",
+                allow=",".join(allow), count=str(len(allow)),
+            )
         return _state(allow)
 
     return router

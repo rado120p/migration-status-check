@@ -64,6 +64,10 @@ def test_filter_put_normalizes_and_counts(tmp_path, caplog):
     assert body["allow"] == ["MX-*"] and body["visible"] == 60 and body["total"] == 62
     assert FilterStore(root / "hostname_filter.yml").load() == ["MX-*"]
     assert "action=filter-edit" in caplog.text
+    # finding #9: count=N alongside the (possibly truncated) allow= value,
+    # so the audit line still says how many patterns were saved even if
+    # allow= itself got cut off.
+    assert "count=1" in caplog.text
 
 
 def test_filter_put_dry_run_does_not_save_or_audit(tmp_path, caplog):
