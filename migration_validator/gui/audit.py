@@ -10,11 +10,22 @@ _log = logging.getLogger(AUDIT_LOGGER)
 _HANDLER_NAME = "mig-audit"
 
 
+def _clean(value) -> str:
+    """Escape control chars/whitespace v uzivatelskem vstupu (napr.
+    username pred prihlasenim), aby se nedaly forgovat dalsi user=/action=
+    tokeny do audit radky. Delka omezena, aby jeden zaznam neprerostl log."""
+    text = str(value)[:128]
+    return "".join(
+        c if c.isprintable() and not c.isspace() else f"\\x{ord(c):02x}"
+        for c in text
+    )
+
+
 def record(username: str, action: str, target: str = "", **extra: str) -> None:
-    parts = [f"user={username}", f"action={action}"]
+    parts = [f"user={_clean(username)}", f"action={_clean(action)}"]
     if target:
-        parts.append(f"target={target}")
-    parts.extend(f"{key}={value}" for key, value in extra.items())
+        parts.append(f"target={_clean(target)}")
+    parts.extend(f"{key}={_clean(value)}" for key, value in extra.items())
     _log.info(" ".join(parts))
 
 

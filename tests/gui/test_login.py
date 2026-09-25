@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -65,6 +67,20 @@ def test_wrong_password_and_unknown_user_look_identical(env):
     assert a.json() == b.json() == {"detail": "invalid username or password"}
     assert "set-cookie" not in a.headers
     assert client.get("/api/runs").status_code == 401
+
+
+def test_failed_login_cannot_forge_audit_lines(env, caplog):
+    client, _, _ = env
+    forged = "eve\nuser=admin action=run-archive target=prod"
+    with caplog.at_level(logging.INFO, logger="migration_validator.gui.audit"):
+        resp = _login(client, username=forged, password="wrong password!!")
+    assert resp.status_code == 401
+    lines = [line for line in caplog.text.splitlines() if "action=login-failed" in line]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "\n" not in line
+    expected_user = "eve\\x0auser=admin\\x20action=run-archive\\x20target=prod"
+    assert f"user={expected_user} action=login-failed" in line
 
 
 def test_throttle_429_then_recovers(env):

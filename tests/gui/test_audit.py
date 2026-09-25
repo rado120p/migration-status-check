@@ -71,3 +71,26 @@ def test_configure_audit_logging_writes_to_stream():
     audit.record("rado", "login", ip="1.2.3.4")
     lines = [l for l in stream.getvalue().splitlines() if "action=login" in l]
     assert len(lines) == 1 and "user=rado action=login ip=1.2.3.4" in lines[0]
+
+
+def test_record_escapes_control_chars_and_whitespace(caplog):
+    from migration_validator.gui import audit
+
+    with caplog.at_level(logging.INFO, logger="migration_validator.gui.audit"):
+        audit.record(
+            "eve\nuser=admin action=run-archive target=prod", "login-failed", ip="1.2.3.4"
+        )
+    lines = [l for l in caplog.text.splitlines() if l]
+    assert len(lines) == 1
+    expected_user = "eve\\x0auser=admin\\x20action=run-archive\\x20target=prod"
+    assert f"user={expected_user} action=login-failed ip=1.2.3.4" in lines[0]
+
+
+def test_record_caps_value_length_at_128_chars(caplog):
+    from migration_validator.gui import audit
+
+    with caplog.at_level(logging.INFO, logger="migration_validator.gui.audit"):
+        audit.record("rado", "login", target="x" * 200)
+    line = next(l for l in caplog.text.splitlines() if "action=login" in l)
+    target_value = line.split("target=", 1)[1]
+    assert target_value == "x" * 128
