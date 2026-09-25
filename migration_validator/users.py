@@ -141,7 +141,10 @@ class UserStore:
     def load(self) -> dict[str, User]:
         if not self.path.exists():
             return {}
-        raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as error:
+            raise ValueError(f"{self.path}: neplatny YAML: {error}") from error
         if not isinstance(raw, dict):
             raise ValueError(f"{self.path}: ocekavan YAML mapping s klicem 'users'")
         entries = raw.get("users") or {}

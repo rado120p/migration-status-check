@@ -154,6 +154,15 @@ def test_store_malformed_file_raises(tmp_path, content, match):
         UserStore(path).load()
 
 
+def test_store_invalid_yaml_raises_value_error(tmp_path):
+    # finding #4 (cross-wave): yaml.YAMLError used to escape load()
+    # unwrapped; wrap it like hostname_filter.FilterStore.load() does.
+    path = tmp_path / "users.yml"
+    path.write_text("users: [unterminated\n")
+    with pytest.raises(ValueError, match="users.yml"):
+        UserStore(path).load()
+
+
 def test_store_empty_file_and_empty_users(tmp_path):
     path = tmp_path / "users.yml"
     path.write_text("")
