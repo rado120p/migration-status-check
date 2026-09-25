@@ -100,6 +100,7 @@ def create_app(
     users: UserStore | None = None,
     sessions: SessionStore | None = None,
     throttle: LoginThrottle | None = None,
+    settings_path: Path | None = None,
 ) -> FastAPI:
     app = FastAPI(title="mig-validate")
 
@@ -114,6 +115,7 @@ def create_app(
 
     app.state.run_root = run_root
     app.state.profile_path = profile_path
+    app.state.settings_path = settings_path
     profiles = ProfileStore(Path(profiles_root))
     app.state.profiles = profiles
     manager = CaptureManager(pool=capture_pool)
@@ -130,7 +132,7 @@ def create_app(
     app.state.group_cache = cache
     app.include_router(build_groups_router(
         run_root=run_root, profiles=profiles, profile_path=profile_path,
-        manager=manager, cache=cache,
+        manager=manager, cache=cache, settings_path=settings_path,
     ))
 
     @app.get("/api/me")
@@ -147,9 +149,9 @@ def create_app(
         return {"checks": api.list_checks()}
 
     @app.get("/api/meta")
-    def meta(actor: Actor = require(Permission.VIEW)) -> dict:
+    def meta(request: Request, actor: Actor = require(Permission.VIEW)) -> dict:
         try:
-            settings = load_settings()
+            settings = load_settings(request.app.state.settings_path)
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         profile = server_default_profile(profile_path)
@@ -386,7 +388,9 @@ def create_app(
         }
 
     @app.post("/api/captures", status_code=202)
-    def start_capture(body: CaptureBody, actor: Actor = require(Permission.OPERATE)) -> dict:
+    def start_capture(
+        body: CaptureBody, request: Request, actor: Actor = require(Permission.OPERATE)
+    ) -> dict:
         store = _require_store(body.run)
         manifest = store.load()
         if body.device not in manifest.devices:
@@ -394,7 +398,7 @@ def create_app(
                 status_code=404, detail=f"zarizeni '{body.device}' neni v runu"
             )
         try:
-            settings = load_settings()
+            settings = load_settings(request.app.state.settings_path)
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         profile = _profile_for(store, manifest)

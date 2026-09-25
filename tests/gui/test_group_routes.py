@@ -229,6 +229,30 @@ def test_post_groups_capture_pre_vrati_batch(tmp_path, monkeypatch):
     gate.set()
 
 
+def test_group_capture_pouziva_settings_path_z_create_app(tmp_path, monkeypatch):
+    # finding #2: group-capture volalo load_settings() bez cesty i kdyz
+    # `gui --settings` byl zadan.
+    from migration_validator.gui import group_routes as group_routes_module
+
+    settings_path = tmp_path / "custom-settings.yml"
+    recorded = []
+    original = group_routes_module.load_settings
+
+    def spy(path=None):
+        recorded.append(path)
+        return original(path)
+
+    monkeypatch.setattr(group_routes_module, "load_settings", spy)
+    app = create_app(
+        run_root=tmp_path, profiles_root=tmp_path / "p",
+        settings_path=settings_path,
+    )
+    client = TestClient(app)
+    resp = client.post("/api/groups", json=_body(capture_pre=True))
+    assert resp.status_code == 201
+    assert settings_path in recorded
+
+
 def test_archive_group_odmitne_beh_a_pak_archivuje(tmp_path, monkeypatch):
     gate = threading.Event()
     _blocking_capture(monkeypatch, gate)

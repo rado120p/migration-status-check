@@ -170,6 +170,38 @@ def test_route_capture_nevalidni_settings_je_503(client, tmp_path, monkeypatch):
     assert "MIG_TEST_NENASTAVENA" in response.json()["detail"]
 
 
+def test_route_capture_pouziva_settings_path_z_create_app(tmp_path, monkeypatch):
+    # finding #2: capture-launch volalo load_settings() bez cesty i kdyz
+    # `gui --settings` byl zadan.
+    from fastapi.testclient import TestClient
+    from migration_validator import api
+    from migration_validator.gui import app as app_module
+
+    old = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
+    new = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
+    api.create_run(
+        "mig01", kind="migration", devices=[old, new],
+        mappings=[("ge-0/0/1", "et-0/0/1")], run_root=tmp_path,
+    )
+    settings_path = tmp_path / "custom-settings.yml"
+    recorded = []
+    original = app_module.load_settings
+
+    def spy(path=None):
+        recorded.append(path)
+        return original(path)
+
+    monkeypatch.setattr(app_module, "load_settings", spy)
+    app = app_module.create_app(run_root=tmp_path, settings_path=settings_path)
+    client = TestClient(app)
+    response = client.post(
+        "/api/captures",
+        json={"run": "mig01", "device": "MX1", "port": None, "phase": "pre"},
+    )
+    assert response.status_code == 202
+    assert settings_path in recorded
+
+
 def test_route_capture_chybejici_profil_je_422(client, tmp_path):
     from migration_validator.runs.store import RunStore
 

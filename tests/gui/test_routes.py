@@ -42,6 +42,20 @@ def test_meta_vraci_profile_a_auth(client):
     assert isinstance(data["collectors"]["junos"], list) and data["collectors"]["junos"]
 
 
+def test_meta_ctenim_settings_path_z_create_app(tmp_path):
+    # finding #2: /api/meta drive vzdy volalo load_settings() bez cesty,
+    # takze `gui --settings` neplatilo pro tento endpoint.
+    from migration_validator.gui.app import create_app
+    from fastapi.testclient import TestClient
+
+    settings_path = tmp_path / "custom-settings.yml"
+    settings_path.write_text("connection:\n  username: laborant\n", encoding="utf-8")
+    app = create_app(run_root=tmp_path, settings_path=settings_path)
+    client = TestClient(app)
+    data = client.get("/api/meta").json()
+    assert data["auth"].startswith("laborant")
+
+
 def test_root_servuje_index(client):
     resp = client.get("/")
     assert resp.status_code == 200

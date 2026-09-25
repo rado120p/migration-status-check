@@ -63,7 +63,7 @@ def _write_error(error: api.GroupWriteError) -> HTTPException:
 
 def build_groups_router(
     *, run_root: Path, profiles: ProfileStore, profile_path: str | None,
-    manager: CaptureManager, cache: SummaryCache,
+    manager: CaptureManager, cache: SummaryCache, settings_path: Path | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/groups")
 
@@ -81,7 +81,7 @@ def build_groups_router(
         if not members:
             raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
         try:
-            settings = load_settings()
+            settings = load_settings(settings_path)
         except ValueError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         tasks = []

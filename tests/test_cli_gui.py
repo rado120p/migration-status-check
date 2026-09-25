@@ -60,3 +60,18 @@ def test_gui_needs_both_tls_files(settings, captured, tmp_path, capsys):
     assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path),
                  "--ssl-certfile", "c.pem"]) == EXIT_TOOL_ERROR
     assert not captured
+
+
+def test_gui_refuses_missing_settings_path(captured, capsys, tmp_path):
+    # finding #1: explicit --settings, ktera neexistuje, se dnes tise
+    # ignoruje a spadne na default config/settings.yml misto ToolError.
+    missing = tmp_path / "missing.yml"
+    assert main(["gui", "--settings", str(missing), "--run-root", str(tmp_path)]) == EXIT_TOOL_ERROR
+    assert "nenalezen" in capsys.readouterr().err
+    assert not captured
+
+
+def test_gui_refusal_hint_includes_settings_path(settings, captured, capsys, tmp_path):
+    assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_TOOL_ERROR
+    err = capsys.readouterr().err
+    assert f"--settings {settings}" in err

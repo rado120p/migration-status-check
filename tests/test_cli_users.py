@@ -88,3 +88,14 @@ def test_unknown_user(settings, argv, monkeypatch):
 def test_list_empty(settings, capsys):
     assert main(["user", "list", "--settings", str(settings)]) == EXIT_OK
     assert "zadni uzivatele" in capsys.readouterr().out
+
+
+def test_user_add_refuses_missing_settings_path(tmp_path, monkeypatch, capsys):
+    # finding #1: explicit --settings, ktera neexistuje, se dnes tise
+    # ignoruje a spadne na default config/settings.yml.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("getpass.getpass", lambda prompt="": pytest.fail("prompted"))
+    missing = tmp_path / "missing.yml"
+    assert main(["user", "add", "rado", "--role", "admin", "--settings", str(missing)]) == EXIT_TOOL_ERROR
+    assert "nenalezen" in capsys.readouterr().err
+    assert not (tmp_path / "config").exists()

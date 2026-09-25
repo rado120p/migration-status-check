@@ -43,7 +43,7 @@ class User:
 
 
 def validate_username(name: str) -> None:
-    if not isinstance(name, str) or not USERNAME_PATTERN.match(name):
+    if not isinstance(name, str) or not USERNAME_PATTERN.fullmatch(name):
         raise AuthenticationError(
             f"nevalidni jmeno uzivatele '{name}' - povoleno A-Z a-z 0-9 . _ -, 3-64 znaku"
         )

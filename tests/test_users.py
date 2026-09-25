@@ -66,6 +66,13 @@ def test_bad_usernames(name):
         users_mod.validate_username(name)
 
 
+def test_validate_username_rejects_trailing_newline():
+    # re.match + $ povoli "jmeno\n" (re.match nekotvi konec). fullmatch to
+    # odmita - finding #5 final-fix-findings.md.
+    with pytest.raises(AuthenticationError):
+        users_mod.validate_username("rado\n")
+
+
 def test_bad_role():
     with pytest.raises(AuthenticationError, match="guest"):
         users_mod.validate_role("guest")

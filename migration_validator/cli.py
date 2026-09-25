@@ -326,11 +326,22 @@ def _pick(*values):
     return None
 
 
+def _existing_settings_path(raw_path) -> Path | None:
+    """Explicitni --settings musi existovat, jinak ToolError - stejne pro
+    `gui` i vsechny `user` podprikazy (sdileno s `_connection_settings`,
+    ktera to same delala jen pro sebe). None kdyz --settings nezadan -
+    volajici pak pouzije vychozi cestu."""
+    if not raw_path:
+        return None
+    path = Path(raw_path)
+    if not path.exists():
+        raise ToolError(f"settings soubor nenalezen: {path}")
+    return path
+
+
 def _connection_settings(args: argparse.Namespace) -> ConnectionSettings:
-    if args.settings:
-        path = Path(args.settings)
-        if not path.exists():
-            raise ToolError(f"settings soubor nenalezen: {path}")
+    path = _existing_settings_path(args.settings)
+    if path is not None:
         return load_settings(path)
     return load_settings()
 
@@ -492,17 +503,19 @@ def _cmd_gui(args: argparse.Namespace) -> int:
 
     if bool(args.ssl_certfile) != bool(args.ssl_keyfile):
         raise ToolError("--ssl-certfile a --ssl-keyfile se zadavaji spolu")
-    users = UserStore(load_auth_settings(args.settings).users_file)
+    settings_path = _existing_settings_path(args.settings)
+    users = UserStore(load_auth_settings(settings_path).users_file)
     if not users.load():
-        raise ToolError(
-            f"zadni uzivatele v {users.path} - zaloz admina: "
-            "mig-validate user add <jmeno> --role admin"
-        )
+        hint = "mig-validate user add <jmeno> --role admin"
+        if args.settings:
+            hint += f" --settings {args.settings}"
+        raise ToolError(f"zadni uzivatele v {users.path} - zaloz admina: {hint}")
     app = create_app(
         run_root=args.run_root, profile_path=args.profile,
         profiles_root=args.profiles_root,
-        capture_pool=load_settings(args.settings).capture_pool,
+        capture_pool=load_settings(settings_path).capture_pool,
         users=users,
+        settings_path=settings_path,
     )
     configure_audit_logging()
     options = {"host": args.host, "port": args.gui_port}
@@ -634,7 +647,8 @@ def _user_store(args: argparse.Namespace):
     from migration_validator.auth import load_auth_settings
     from migration_validator.users import UserStore
 
-    return UserStore(load_auth_settings(args.settings).users_file)
+    path = _existing_settings_path(args.settings)
+    return UserStore(load_auth_settings(path).users_file)
 
 
 def _prompt_password() -> str:
