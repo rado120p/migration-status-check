@@ -470,30 +470,28 @@ def _facts_for(scopes, pps: int) -> dict:
             iface_name = (
                 scope.selectors.interfaces[0] if scope.selectors.interfaces else instance
             )
-            evpn_vpws[instance] = {
-                "interfaces": [
-                    {
-                        "name": iface_name,
-                        "status": "Up",
-                        "mode": "single-homed",
-                        "pseudowire_status": None,
-                        "local_sid": {"value": 1000, "peers": [], "local_interface": None},
-                        "remote_sid": {
-                            "value": 2000,
-                            "peers": [
-                                {
-                                    "esi": "00:00:00:00:00:00:00:00:00:00",
-                                    "ipaddr": "150.0.0.14",
-                                    "mode": "single-homed",
-                                    "role": "Primary",
-                                    "status": "Resolved",
-                                }
-                            ],
-                            "local_interface": None,
-                        },
-                    }
-                ]
-            }
+            evpn_vpws.setdefault(instance, {"interfaces": []})["interfaces"].append(
+                {
+                    "name": iface_name,
+                    "status": "Up",
+                    "mode": "single-homed",
+                    "pseudowire_status": None,
+                    "local_sid": {"value": 1000, "peers": [], "local_interface": None},
+                    "remote_sid": {
+                        "value": 2000,
+                        "peers": [
+                            {
+                                "esi": "00:00:00:00:00:00:00:00:00:00",
+                                "ipaddr": "150.0.0.14",
+                                "mode": "single-homed",
+                                "role": "Primary",
+                                "status": "Resolved",
+                            }
+                        ],
+                        "local_interface": None,
+                    },
+                }
+            )
         if service_type == "E-LAN" and instance is None and scope.service_subtype == "local":
             # E-LAN local: MAC count zije v default-switch (spec 2026-09-09),
             # ESI ani EVPN instance neexistuji.

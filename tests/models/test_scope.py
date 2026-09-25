@@ -732,3 +732,60 @@ def test_bfd_single_multihop_is_owned_by_address():
     facts = {"bfd": [bfd_record("198.11.14.4")]}
     view = _ipvpn("CUST", peer="198.11.14.4").select(facts)
     assert view["bfd"]["198.11.14.4"]["multihop"] is True
+
+
+def _eline(iface, ri="EVPN-VPWS-LOCAL"):
+    return Scope(
+        id=f"svc:{iface}", kind="service",
+        key=ScopeKey(description=iface, service_type="E-Line", service_subtype="vpws"),
+        selectors=Selectors(interfaces=[iface], physical_interfaces=["et-0/0/8"],
+                            routing_instances=[ri]),
+    )
+
+
+def _ac(name, status="Up"):
+    return {
+        "name": name, "status": status, "mode": "single-homed", "pseudowire_status": None,
+        "local_sid": {"value": 100, "peers": [], "local_interface": None},
+        "remote_sid": {"value": 200, "peers": [], "local_interface": None},
+    }
+
+
+def _vpws_facts():
+    return {"evpn_vpws": {"EVPN-VPWS-LOCAL": {"interfaces": [
+        _ac("et-0/0/8.211"), _ac("et-0/0/8.212", status="Down"),
+    ]}}}
+
+
+def test_select_vpws_keeps_only_own_ac():
+    """Review E2: scope .211 nesmi videt AC .212 tehoz VPWS instance -
+    Down .212 by jinak rozsvitil FAIL na zdrave sluzbe."""
+    facts = _vpws_facts()
+    for iface in ("et-0/0/8.211", "et-0/0/8.212"):
+        acs = _eline(iface).select(facts)["evpn_vpws"]["EVPN-VPWS-LOCAL"]["interfaces"]
+        assert [ac["name"] for ac in acs] == [iface]
+    # physical_interfaces ["et-0/0/8"] nesmi vybrat unity
+    assert len(facts["evpn_vpws"]["EVPN-VPWS-LOCAL"]["interfaces"]) == 2, "select zmenil fakta"
+
+
+def test_select_vpws_scope_whose_ac_is_missing_gets_empty_list():
+    selected = _eline("et-0/0/8.213").select(_vpws_facts())
+    assert selected["evpn_vpws"] == {"EVPN-VPWS-LOCAL": {"interfaces": []}}
+
+
+def test_select_vpws_real_remote_pw_names_survive_filter():
+    """ae0.224 / ge-0/0/3.0 z labu: filtr podle jmena IFL musi sedet."""
+    for iface in ("ae0.224", "ge-0/0/3.0"):
+        scope = Scope(
+            id=f"svc:{iface}", kind="service",
+            key=ScopeKey(description=iface, service_type="E-Line", service_subtype="vpws"),
+            selectors=Selectors(interfaces=[iface], physical_interfaces=[iface.split(".")[0]],
+                                routing_instances=["EVPN-VPWS-CPE23-UNI"]),
+        )
+        facts = {"evpn_vpws": {"EVPN-VPWS-CPE23-UNI": {"interfaces": [_ac(iface)]}}}
+        acs = scope.select(facts)["evpn_vpws"]["EVPN-VPWS-CPE23-UNI"]["interfaces"]
+        assert [ac["name"] for ac in acs] == [iface]
+
+
+def test_select_vpws_other_instance_not_selected():
+    assert _eline("et-0/0/8.211", ri="OTHER").select(_vpws_facts())["evpn_vpws"] == {}

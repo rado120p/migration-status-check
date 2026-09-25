@@ -322,8 +322,20 @@ class Scope:
             [r for r in (facts.get("bgp") or []) if self.owns_bgp_peer(r)],
             "address",
         )
+        # E2 (review 2026-09-24): VPWS fakta jsou klicovana instanci, ale
+        # scope je per AC - lokalne prepnuty EVPN-VPWS ma v jedne instanci
+        # obe AC (dve sluzby). Scope vidi jen sva AC; instance, ve ktere
+        # jeho AC ve vypisu chybi, zustava s prazdnym seznamem, aby check
+        # rozlisil "AC chybi" (BROKEN) od "instance chybi" (SKIP).
         evpn_vpws = {
-            name: data
+            name: {
+                **data,
+                "interfaces": [
+                    ac
+                    for ac in data.get("interfaces") or []
+                    if self.selectors.matches_interface(str(ac.get("name") or ""))
+                ],
+            }
             for name, data in (facts.get("evpn_vpws") or {}).items()
             if name in self.selectors.routing_instances
         }
