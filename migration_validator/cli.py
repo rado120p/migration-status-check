@@ -7,6 +7,7 @@ capture podprikaz doplni Plan 2.
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 from pathlib import Path
@@ -614,6 +615,86 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
     return worst
 
 
+def _user_store(args: argparse.Namespace):
+    from migration_validator.auth import load_auth_settings
+    from migration_validator.users import UserStore
+
+    return UserStore(load_auth_settings(args.settings).users_file)
+
+
+def _prompt_password() -> str:
+    first = getpass.getpass("Heslo: ")
+    second = getpass.getpass("Heslo znovu: ")
+    if first != second:
+        raise ToolError("hesla se neshoduji")
+    return first
+
+
+def _existing_user(users: dict, name: str):
+    if name not in users:
+        raise ToolError(f"uzivatel '{name}' neexistuje")
+    return users[name]
+
+
+def _cmd_user_add(args: argparse.Namespace) -> int:
+    from migration_validator.users import User, hash_password, validate_username
+
+    validate_username(args.name)
+    store = _user_store(args)
+    users = store.load()
+    if args.name in users:
+        raise ToolError(f"uzivatel '{args.name}' uz existuje ({store.path})")
+    users[args.name] = User(args.name, args.role, hash_password(_prompt_password()))
+    store.save(users)
+    print(f"uzivatel {args.name} ({args.role}) zalozen v {store.path}")
+    return EXIT_OK
+
+
+def _cmd_user_passwd(args: argparse.Namespace) -> int:
+    from dataclasses import replace
+
+    from migration_validator.users import hash_password
+
+    store = _user_store(args)
+    users = store.load()
+    user = _existing_user(users, args.name)
+    users[args.name] = replace(user, password_hash=hash_password(_prompt_password()))
+    store.save(users)
+    print(f"heslo uzivatele {args.name} zmeneno")
+    return EXIT_OK
+
+
+def _cmd_user_role(args: argparse.Namespace) -> int:
+    from dataclasses import replace
+
+    store = _user_store(args)
+    users = store.load()
+    user = _existing_user(users, args.name)
+    users[args.name] = replace(user, role=args.role)
+    store.save(users)
+    print(f"uzivatel {args.name}: role {user.role} -> {args.role}")
+    return EXIT_OK
+
+
+def _cmd_user_delete(args: argparse.Namespace) -> int:
+    store = _user_store(args)
+    users = store.load()
+    _existing_user(users, args.name)
+    del users[args.name]
+    store.save(users)
+    print(f"uzivatel {args.name} smazan")
+    return EXIT_OK
+
+
+def _cmd_user_list(args: argparse.Namespace) -> int:
+    users = _user_store(args).load()
+    if not users:
+        print("(zadni uzivatele)")
+    for name, user in sorted(users.items()):
+        print(f"{name}\t{user.role}")
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mig-validate",
@@ -762,6 +843,33 @@ def build_parser() -> argparse.ArgumentParser:
     purge.add_argument("--dry-run", action="store_true", help="jen vypise, co by smazal")
     purge.add_argument("--yes", action="store_true", help="bez potvrzeni")
     purge.set_defaults(func=_cmd_run_purge)
+
+    from migration_validator.users import ALLOWED_ROLES
+
+    roles = sorted(ALLOWED_ROLES)
+    user_common = argparse.ArgumentParser(add_help=False)
+    user_common.add_argument(
+        "--settings", type=Path, default=None,
+        help="settings.yml s auth.users_file (default config/settings.yml)",
+    )
+    user = sub.add_parser("user", help="ucty GUI (heslo se vzdy zadava interaktivne)")
+    user_sub = user.add_subparsers(dest="user_command", required=True)
+    add = user_sub.add_parser("add", parents=[user_common], help="zalozi uzivatele")
+    add.add_argument("name")
+    add.add_argument("--role", required=True, choices=roles)
+    add.set_defaults(func=_cmd_user_add)
+    passwd = user_sub.add_parser("passwd", parents=[user_common], help="zmeni heslo")
+    passwd.add_argument("name")
+    passwd.set_defaults(func=_cmd_user_passwd)
+    role = user_sub.add_parser("role", parents=[user_common], help="zmeni roli")
+    role.add_argument("name")
+    role.add_argument("role", choices=roles)
+    role.set_defaults(func=_cmd_user_role)
+    delete = user_sub.add_parser("delete", parents=[user_common], help="smaze uzivatele")
+    delete.add_argument("name")
+    delete.set_defaults(func=_cmd_user_delete)
+    listing = user_sub.add_parser("list", parents=[user_common], help="vypise uzivatele a role")
+    listing.set_defaults(func=_cmd_user_list)
 
     return parser
 
