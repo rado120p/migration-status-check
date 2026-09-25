@@ -67,3 +67,20 @@ class FilterStore:
         except BaseException:
             Path(tmp).unlink(missing_ok=True)
             raise
+
+
+class MemoryFilterStore:
+    """Filtr v pameti - stejne load()/save() API jako FilterStore, ale bez
+    dotyku disku. Pouziva se, kdyz create_app() nedostane hostname_filter
+    (napr. testy), aby se nikdy neproduchoval realny config/hostname_filter.yml
+    v CWD procesu."""
+
+    def __init__(self) -> None:
+        self.path = Path("<in-memory hostname filter>")
+        self._patterns: list[str] = []
+
+    def load(self) -> list[str]:
+        return list(self._patterns)
+
+    def save(self, patterns: list[str]) -> None:
+        self._patterns = list(patterns)

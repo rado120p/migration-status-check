@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from migration_validator import api
 from migration_validator.gui.app import create_app
 from migration_validator.gui.authz import Actor
+from migration_validator.hostname_filter import FilterStore
 
 OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
 NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
@@ -64,7 +65,13 @@ PUBLIC = {("POST", "/api/login"), ("POST", "/api/logout")}
 
 def _client(tmp_path, actor):
     api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
-    app = create_app(run_root=tmp_path, profiles_root=tmp_path / "profiles")
+    app = create_app(
+        run_root=tmp_path, profiles_root=tmp_path / "profiles",
+        # Explicit store, not the create_app() in-memory default: this
+        # matrix drives a real admin PUT /api/inventory/filter and must not
+        # depend on (or accidentally exercise) the CWD fallback.
+        hostname_filter=FilterStore(tmp_path / "hostname_filter.yml"),
+    )
     app.state.actor_provider = lambda request: actor
     # An allowed role may hit a route that fails on the thin fixture (e.g.
     # upgrade without raw records); only 401/403 matter here.
@@ -111,3 +118,19 @@ def test_matrix_covers_every_api_route(tmp_path):
 def _matches(template: str, concrete: str) -> bool:
     t, c = template.strip("/").split("/"), concrete.strip("/").split("/")
     return len(t) == len(c) and all(a == b or a.startswith("{") for a, b in zip(t, c))
+
+
+def test_admin_put_filter_without_explicit_store_never_touches_cwd_config(tmp_path, monkeypatch):
+    # finding #1: create_app(hostname_filter=None) must fall back to an
+    # in-memory store, never to FilterStore(DEFAULT_FILTER_FILE) resolved
+    # against the process CWD.
+    monkeypatch.chdir(tmp_path)
+    api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
+    app = create_app(run_root=tmp_path, profiles_root=tmp_path / "profiles")
+    app.state.actor_provider = lambda request: Actor(role="admin", username="u")
+    client = TestClient(app, raise_server_exceptions=False)
+    resp = client.put("/api/inventory/filter", json={"allow": []})
+    assert resp.status_code == 200
+    from pathlib import Path
+
+    assert not Path("config/hostname_filter.yml").exists()

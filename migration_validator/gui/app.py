@@ -33,7 +33,7 @@ from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.gui.sessions import LoginThrottle, SessionStore
-from migration_validator.hostname_filter import DEFAULT_FILTER_FILE, FilterStore
+from migration_validator.hostname_filter import FilterStore, MemoryFilterStore
 from migration_validator.inventory import InventorySource
 from migration_validator.models.snapshot import SnapshotVersionError, load_snapshot
 from migration_validator.profiles.store import ProfileStore
@@ -105,7 +105,7 @@ def create_app(
     throttle: LoginThrottle | None = None,
     settings_path: Path | None = None,
     inventory: InventorySource | None = None,
-    hostname_filter: FilterStore | None = None,
+    hostname_filter: FilterStore | MemoryFilterStore | None = None,
 ) -> FastAPI:
     # S auth zapnutym by /docs a /openapi.json byly nechrenenou mapou celeho
     # API bez require() seamu - vypnout, kdyz users soubor existuje.
@@ -145,7 +145,12 @@ def create_app(
         run_root=run_root, profiles=profiles, profile_path=profile_path,
         manager=manager, cache=cache, settings_path=settings_path,
     ))
-    app.include_router(build_inventory_router(inventory, hostname_filter or FilterStore(DEFAULT_FILTER_FILE)))
+    # Zadny hostname_filter -> in-memory store (testy, ad-hoc pouziti), aby
+    # se nikdy nesahlo na realny config/hostname_filter.yml v CWD. Jedine
+    # _cmd_gui predava skutecny FilterStore(DEFAULT_FILTER_FILE).
+    app.include_router(build_inventory_router(
+        inventory, hostname_filter if hostname_filter is not None else MemoryFilterStore()
+    ))
 
     @app.get("/api/me")
     def me(request: Request, actor: Actor = require(Permission.VIEW)) -> dict:

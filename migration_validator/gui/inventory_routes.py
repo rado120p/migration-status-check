@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from migration_validator.gui.audit import record
 from migration_validator.gui.authz import Actor, Permission, require
-from migration_validator.hostname_filter import FilterStore, is_visible, normalize_patterns
+from migration_validator.hostname_filter import FilterStore, MemoryFilterStore, is_visible, normalize_patterns
 from migration_validator.inventory import InventoryHost, InventorySource
 
 SEARCH_LIMIT = 50
@@ -17,7 +17,9 @@ class FilterBody(BaseModel):
     allow: list[str]
 
 
-def build_inventory_router(inventory: InventorySource | None, filters: FilterStore) -> APIRouter:
+def build_inventory_router(
+    inventory: InventorySource | None, filters: FilterStore | MemoryFilterStore
+) -> APIRouter:
     router = APIRouter(prefix="/api/inventory")
 
     def _hosts() -> tuple[list[InventoryHost], list[str], str | None]:

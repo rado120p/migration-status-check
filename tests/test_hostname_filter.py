@@ -1,7 +1,12 @@
 import pytest
 import yaml
 
-from migration_validator.hostname_filter import FilterStore, is_visible, normalize_patterns
+from migration_validator.hostname_filter import (
+    FilterStore,
+    MemoryFilterStore,
+    is_visible,
+    normalize_patterns,
+)
 
 
 @pytest.mark.parametrize("node, patterns, expected", [
@@ -48,3 +53,18 @@ def test_store_empty_file(tmp_path):
     path = tmp_path / "hostname_filter.yml"
     path.write_text("")
     assert FilterStore(path).load() == []
+
+
+def test_memory_filter_store_round_trip_touches_no_disk(tmp_path, monkeypatch):
+    # finding #1: create_app(hostname_filter=None) must never touch real
+    # config/ - a memory-backed store proves the round trip without a path.
+    monkeypatch.chdir(tmp_path)
+    store = MemoryFilterStore()
+    assert store.load() == []
+    store.save(["MX-*", "PTX-*"])
+    assert store.load() == ["MX-*", "PTX-*"]
+    assert not (tmp_path / "config").exists()
+
+
+def test_memory_filter_store_has_descriptive_path():
+    assert "in-memory" in str(MemoryFilterStore().path).lower()

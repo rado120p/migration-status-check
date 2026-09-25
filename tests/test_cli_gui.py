@@ -18,7 +18,7 @@ def settings(tmp_path):
 
 
 @pytest.fixture
-def captured(monkeypatch):
+def captured(monkeypatch, tmp_path):
     calls = {}
     import uvicorn
 
@@ -26,6 +26,10 @@ def captured(monkeypatch):
     # Real configure would set propagate=False on the audit logger for the
     # rest of the session and hide it from caplog in other tests.
     monkeypatch.setattr("migration_validator.gui.audit.configure_audit_logging", lambda stream=None: None)
+    # finding #1: _cmd_gui wires FilterStore(DEFAULT_FILTER_FILE), a path
+    # relative to CWD - chdir into tmp_path so no CLI test here reads or
+    # writes the real repo's config/hostname_filter.yml.
+    monkeypatch.chdir(tmp_path)
     return calls
 
 
@@ -106,3 +110,19 @@ def test_gui_starts_even_if_inventory_missing(tmp_path, captured):
     settings = tmp_path / "settings.yml"
     settings.write_text(f"auth:\n  users_file: {tmp_path / 'users.yml'}\ninventory:\n  path: {tmp_path / 'nope'}\n")
     assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_OK
+
+
+def test_gui_wires_a_real_filter_store_at_default_path(settings, captured, tmp_path):
+    # finding #1: only _cmd_gui may pass a real FilterStore(DEFAULT_FILTER_FILE)
+    # - the captured fixture chdir's into tmp_path, so a PUT through the
+    # returned app must land at tmp_path/config/hostname_filter.yml, not the
+    # real repo's config/.
+    _add_admin(tmp_path)
+    assert main(["gui", "--settings", str(settings), "--run-root", str(tmp_path)]) == EXIT_OK
+    app = captured["app"]
+    app.state.actor_provider = lambda request: Actor(role="admin", username="u")
+    resp = TestClient(app).put("/api/inventory/filter", json={"allow": ["MX-*"]})
+    assert resp.status_code == 200
+    saved = tmp_path / "config" / "hostname_filter.yml"
+    assert saved.exists()
+    assert "MX-*" in saved.read_text()
