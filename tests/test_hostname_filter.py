@@ -36,7 +36,7 @@ def test_store_round_trip(tmp_path):
     assert sorted(p.name for p in store.path.parent.iterdir()) == ["hostname_filter.yml"]
 
 
-@pytest.mark.parametrize("content", ["allow: MX-*\n", "- MX-*\n", "allow:\n  - ''\n"])
+@pytest.mark.parametrize("content", ["allow: MX-*\n", "- MX-*\n", "allow:\n  - ''\n", "allow: [unterminated\n"])
 def test_store_malformed_raises(tmp_path, content):
     path = tmp_path / "hostname_filter.yml"
     path.write_text(content)

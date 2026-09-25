@@ -41,7 +41,10 @@ class FilterStore:
     def load(self) -> list[str]:
         if not self.path.exists():
             return []
-        raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = yaml.safe_load(self.path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as error:
+            raise ValueError(f"{self.path}: neplatny YAML: {error}") from error
         if not isinstance(raw, dict):
             raise ValueError(f"{self.path}: ocekavan mapping s klicem 'allow'")
         allow = raw.get("allow") or []
