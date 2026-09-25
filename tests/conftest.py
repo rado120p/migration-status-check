@@ -156,7 +156,10 @@ def _facts_for(scopes, pps: int) -> dict:
     evpn_esi = {}
     evpn_mac = {}
     routes: dict[str, dict[str, dict]] = {}
-    bfd = {}
+    bfd: list[dict] = []
+    # Dedup napric scopy stejnym zpusobem jako u bgp vyse - klic je
+    # (soused, rozhrani), protoze schema 14 uz nedrzi bfd jako dict.
+    seen_bfd: set[tuple[str, str | None]] = set()
     optics = {}
     isis_adjacency = {}
     isis_interface = {}
@@ -268,20 +271,25 @@ def _facts_for(scopes, pps: int) -> dict:
 
         for intent in scope.selectors.bfd_peers:
             peer = str(intent["peer"])
-            bfd[peer] = {
-                "state": "Up",
-                "interface": (
-                    scope.selectors.interfaces[0]
-                    if scope.selectors.interfaces
-                    else None
-                ),
-                "remote_state": "Up",
-                "local_diagnostic": "None",
-                "clients": ["BGP"],
-                "detection_time": "9.000",
-                "transmission_interval": "3.000",
-                "multiplier": intent.get("multiplier"),
-            }
+            interface = (
+                scope.selectors.interfaces[0]
+                if scope.selectors.interfaces
+                else None
+            )
+            if (peer, interface) not in seen_bfd:
+                seen_bfd.add((peer, interface))
+                bfd.append({
+                    "neighbor": peer,
+                    "interface": interface,
+                    "multihop": False,
+                    "state": "Up",
+                    "remote_state": "Up",
+                    "local_diagnostic": "None",
+                    "clients": ["BGP"],
+                    "detection_time": "9.000",
+                    "transmission_interval": "3.000",
+                    "multiplier": intent.get("multiplier"),
+                })
 
         # Zdrava IS-IS adjacency pro kazde tranzitni rozhrani Core sluzby -
         # bez ni by isis_adjacency_state hlasil FAIL 'chybi v outputu' na
@@ -349,17 +357,20 @@ def _facts_for(scopes, pps: int) -> dict:
                 # (overeno), takze se to dnes neprojevi; druhe rozhrani ve
                 # scopu by potrebovalo vlastni v4/peer, ne tento kod beze zmeny.
                 bfd_peer = _neighbour_for(v4) if v4 else None
-                if bfd_peer:
-                    bfd[bfd_peer] = {
-                        "state": "Up",
+                if bfd_peer and (bfd_peer, name) not in seen_bfd:
+                    seen_bfd.add((bfd_peer, name))
+                    bfd.append({
+                        "neighbor": bfd_peer,
                         "interface": name,
+                        "multihop": False,
+                        "state": "Up",
                         "remote_state": "Up",
                         "local_diagnostic": "None",
                         "clients": ["ISIS"],
                         "detection_time": "9.000",
                         "transmission_interval": "3.000",
                         "multiplier": 3,
-                    }
+                    })
         # Multicast (spec 2026-09-02): zdravy receiver posila IGMP report,
         # stream tece na servisni rozhrani, upstream odpovida roli. Bez
         # toho by nove checky hlasily FAIL na kazde zdrave migraci (AR-29).

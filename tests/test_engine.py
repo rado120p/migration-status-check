@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from fact_records import bgp_record, bgp_records
+from fact_records import bfd_record, bfd_records, bgp_record, bgp_records
 
 from migration_validator import api
 from migration_validator.checks import base as check_base
@@ -346,12 +346,12 @@ def test_aligned_baseline_renames_bfd_session_interface_field():
         device=DeviceMeta(address="172.20.20.4"),
         capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
         facts={
-            "bfd": {
+            "bfd": bfd_records({
                 "198.11.13.2": {
                     "state": "Up",
                     "interface": "ge-0/0/1.0",
                 }
-            }
+            })
         },
         scopes=[baseline_scope],
     )
@@ -359,6 +359,38 @@ def test_aligned_baseline_renames_bfd_session_interface_field():
     data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
 
     assert data["bfd"]["198.11.13.2"]["interface"] == "et-0/0/1.0"
+
+
+def test_aligned_baseline_keeps_multihop_bfd_interface_none():
+    # baseline scope ge-0/0/2.100 -> subject scope et-0/0/8.100, baseline
+    # fakta bfd_records multihop 198.11.14.4 (interface None) -> aligned
+    # ["bfd"]["198.11.14.4"]["interface"] is None (zadny KeyError, zadny rename)
+    baseline_scope = Scope(
+        id="svc:CPE14:IPVPN",
+        kind="service",
+        key=ScopeKey("CPE14", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["ge-0/0/2.100"], bgp_neighbors=["198.11.14.4"],
+        ),
+    )
+    subject_scope = Scope(
+        id="svc:CPE14:IPVPN",
+        kind="service",
+        key=ScopeKey("CPE14", "IPVPN", None),
+        selectors=Selectors(
+            interfaces=["et-0/0/8.100"], bgp_neighbors=["198.11.14.4"],
+        ),
+    )
+    baseline = Snapshot(
+        device=DeviceMeta(address="172.20.20.4"),
+        capture=CaptureMeta(started_at=NOW, phase="pre-migration"),
+        facts={"bfd": bfd_records({"198.11.14.4": {"state": "Up"}})},
+        scopes=[baseline_scope],
+    )
+
+    data = _aligned_baseline_data(baseline_scope, subject_scope, baseline)
+
+    assert data["bfd"]["198.11.14.4"]["interface"] is None
 
 
 def test_aligned_baseline_renames_optics_keys_including_lag_members():
@@ -621,7 +653,7 @@ def test_inactive_peer_bfd_session_stays_visible_in_unassigned():
             phase="pre-migration",
             collectors={"interfaces": {"status": "ok"}},
         ),
-        facts={"bfd": {"198.11.13.9": {"state": "Up", "interface": "et-0/0/9.0"}}},
+        facts={"bfd": bfd_records({"198.11.13.9": {"state": "Up", "interface": "et-0/0/9.0"}})},
         probes={},
         scopes=[scope],
         inventory=[],
@@ -631,6 +663,7 @@ def test_inactive_peer_bfd_session_stays_visible_in_unassigned():
         {
             "peer": "198.11.13.9",
             "interface": "et-0/0/9.0",
+            "multihop": False,
             "state": "Up",
             "snapshot": "subject",
         }
@@ -656,7 +689,7 @@ def test_core_transit_bfd_session_claimed_by_interface_is_not_unassigned():
             phase="pre-migration",
             collectors={"interfaces": {"status": "ok"}},
         ),
-        facts={"bfd": {"10.0.0.1": {"state": "Up", "interface": "ge-0/0/0.0"}}},
+        facts={"bfd": bfd_records({"10.0.0.1": {"state": "Up", "interface": "ge-0/0/0.0"}})},
         probes={},
         scopes=[scope],
         inventory=[],
@@ -687,7 +720,7 @@ def test_core_loopback_ibgp_bfd_session_stays_visible_in_unassigned():
             phase="pre-migration",
             collectors={"interfaces": {"status": "ok"}},
         ),
-        facts={"bfd": {"150.0.0.1": {"state": "Up", "interface": "lo0.0"}}},
+        facts={"bfd": bfd_records({"150.0.0.1": {"state": "Up", "interface": "lo0.0"}})},
         probes={},
         scopes=[scope],
         inventory=[],
@@ -697,6 +730,7 @@ def test_core_loopback_ibgp_bfd_session_stays_visible_in_unassigned():
         {
             "peer": "150.0.0.1",
             "interface": "lo0.0",
+            "multihop": False,
             "state": "Up",
             "snapshot": "subject",
         }
@@ -825,7 +859,7 @@ def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
 
 def test_bfd_session_of_unknown_peer_lands_in_unassigned():
     subject = _new()
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.facts["bfd"] = bfd_records({"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}})
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
 
@@ -833,6 +867,7 @@ def test_bfd_session_of_unknown_peer_lands_in_unassigned():
         {
             "peer": "10.1.1.1",
             "interface": "et-0/0/9.0",
+            "multihop": False,
             "state": "Up",
             "snapshot": "subject",
         }
@@ -841,7 +876,7 @@ def test_bfd_session_of_unknown_peer_lands_in_unassigned():
 
 def test_bfd_session_of_known_peer_is_not_unassigned():
     subject = _new()
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/8.113"}}
+    subject.facts["bfd"] = bfd_records({"10.1.1.1": {"state": "Up", "interface": "et-0/0/8.113"}})
     subject.scopes[0].selectors.bgp_neighbors = ["10.1.1.1"]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
@@ -862,7 +897,7 @@ def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
     ztratila misto aby upozornila na rozpor.
     """
     subject = _new()
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.facts["bfd"] = bfd_records({"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}})
     subject.scopes[0].selectors.bfd_peers = [{"peer": "10.1.1.1"}]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
@@ -871,6 +906,7 @@ def test_unassigned_bfd_session_ignores_intent_not_in_bgp_neighbors():
         {
             "peer": "10.1.1.1",
             "interface": "et-0/0/9.0",
+            "multihop": False,
             "state": "Up",
             "snapshot": "subject",
         }
@@ -913,7 +949,7 @@ def test_snapshot_without_scopes_still_lists_unassigned():
     subject = _new()
     subject.scopes = []
     subject.facts["routes"] = MGMT_ROUTE
-    subject.facts["bfd"] = {"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}}
+    subject.facts["bfd"] = bfd_records({"10.1.1.1": {"state": "Up", "interface": "et-0/0/9.0"}})
     subject.facts["bgp"] = bgp_records({
         "10.1.1.1": {"state": "Established", "routing_instance": None, "ribs": {}}
     })
@@ -929,10 +965,10 @@ def test_per_port_snapshot_without_scopes_narrows_unassigned_to_its_port():
     # Port bez migrovane sluzby: NEZARAZENO nesmi vypsat cely box.
     subject = _new()
     subject.scopes = []
-    subject.facts["bfd"] = {
+    subject.facts["bfd"] = bfd_records({
         "10.1.1.1": {"state": "Up", "interface": "et-0/0/8.200"},
         "10.2.2.2": {"state": "Up", "interface": "et-0/0/9.0"},
-    }
+    })
     subject.facts["bgp"] = bgp_records({
         "10.9.9.9": {"state": "Established", "routing_instance": "CUST-B", "ribs": {}}
     })
@@ -941,6 +977,21 @@ def test_per_port_snapshot_without_scopes_narrows_unassigned_to_its_port():
 
     assert [s["peer"] for s in result.unassigned["bfd_sessions"]] == ["10.1.1.1"]
     assert result.unassigned["bgp_peers"] == []
+
+
+def test_unassigned_bfd_ambiguous_multihop_is_not_listed():
+    # scope IPVPN s peerem 198.11.14.4, dva multihop zaznamy na tu adresu
+    # -> oba vlastni scope (nejednoznacne), NEZARAZENO je nevypise
+    subject = _new()
+    subject.scopes[0].selectors.bgp_neighbors = ["198.11.14.4"]
+    subject.facts["bfd"] = [
+        bfd_record("198.11.14.4"),
+        bfd_record("198.11.14.4", state="Down"),
+    ]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bfd_sessions"] == []
 
 
 def test_layer1_only_subject_counts_as_no_services():
@@ -1642,7 +1693,7 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatc
         "pim_neighbor": {"ge-0/0/1.0": {"uptime_seconds": 5}},
         "mpls_interface": {"ge-0/0/1.0": {"state": "Up"}},
         "igmp_group": {"ge-0/0/1.0": [{"source": "10.0.0.1", "group": "232.1.1.1"}]},
-        "bfd": {"10.1.0.5": {"state": "Up", "interface": "ge-0/0/1.0"}},
+        "bfd": bfd_records({"10.1.0.5": {"state": "Up", "interface": "ge-0/0/1.0"}}),
         "evpn_esi": {"00:11": {"interface": "ge-0/0/1.0", "status": "Resolved"}},
     })
     baseline.capture.collectors.update(
@@ -1812,7 +1863,7 @@ def test_per_port_global_bgp_peer_in_own_subnet_stays_unassigned():
 
 def test_per_port_bfd_session_on_other_port_is_not_unassigned():
     subject = _new()
-    subject.facts["bfd"] = {"10.1.1.2": {"interface": "et-0/0/0.0", "state": "Up"}}
+    subject.facts["bfd"] = bfd_records({"10.1.1.2": {"interface": "et-0/0/0.0", "state": "Up"}})
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1821,7 +1872,7 @@ def test_per_port_bfd_session_on_other_port_is_not_unassigned():
 
 def test_per_port_bfd_session_on_own_port_stays_unassigned():
     subject = _new()
-    subject.facts["bfd"] = {"152.11.13.2": {"interface": "et-0/0/8.13", "state": "Up"}}
+    subject.facts["bfd"] = bfd_records({"152.11.13.2": {"interface": "et-0/0/8.13", "state": "Up"}})
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1891,7 +1942,7 @@ def test_foreign_interface_bfd_session_on_shared_address_is_unassigned():
     """Zabiji mutanta: `assigned` v `_unassigned_bfd_sessions` jen podle adresy."""
     scope = _customer_b_scope()
     snapshot = _snapshot_with_facts(
-        {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}},
+        {"bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}})},
         [scope],
     )
 
@@ -1899,6 +1950,7 @@ def test_foreign_interface_bfd_session_on_shared_address_is_unassigned():
         {
             "peer": SHARED_PEER,
             "interface": "ge-0/0/1.100",
+            "multihop": False,
             "state": "Up",
             "snapshot": "subject",
         }
@@ -1913,7 +1965,7 @@ def test_own_peer_and_session_on_shared_address_stay_assigned():
             "bgp": bgp_records(
                 {SHARED_PEER: {"state": "Established", "routing_instance": "customer-b"}}
             ),
-            "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/2.200"}},
+            "bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": "ge-0/0/2.200"}}),
         },
         [scope],
     )
@@ -2005,7 +2057,7 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
         "pre-migration",
         {
             "bgp": bgp_records({SHARED_PEER: _customer_peer("customer-a", 12)}),
-            "bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}},
+            "bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}),
         },
         [
             _customer_scope("customer-a", "ge-0/0/1.100", bfd=True),
@@ -2015,7 +2067,7 @@ def test_unmigrated_vrf_on_shared_peer_address_does_not_leak_into_migrated_servi
     subject = _collision_snapshot(
         "172.20.20.5",
         "post-migration",
-        {"bgp": bgp_records({SHARED_PEER: _customer_peer("customer-b", 7)}), "bfd": {}},
+        {"bgp": bgp_records({SHARED_PEER: _customer_peer("customer-b", 7)}), "bfd": []},
         [_customer_scope("customer-b", "et-0/0/2.200", bfd=False)],
     )
 

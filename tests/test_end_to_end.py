@@ -689,16 +689,18 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     # nesyntetizuje. Test overuje blok postaveny nad BASELINE session (viz
     # docstring), takze mu jedna Up session v baseline musi zustat - dopsana
     # rucne, protoze uz ji nejde odvodit ze skutecne .4 inventory.
-    old.facts["bfd"]["152.11.13.2"] = {
-        "state": "Up",
+    old.facts["bfd"].append({
+        "neighbor": "152.11.13.2",
         "interface": "ge-0/0/2.13",
+        "multihop": False,
+        "state": "Up",
         "remote_state": "Up",
         "local_diagnostic": "None",
         "clients": ["BGP"],
         "detection_time": "9.000",
         "transmission_interval": "3.000",
         "multiplier": 3,
-    }
+    })
 
     # Nahravka 2026-09-03 (task 5c, post-migration z .5) ukazala totez o
     # krok dal: bfd-liveness-detection byl device-wide odebran i na .5
@@ -708,16 +710,18 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     # nesyntetizuje. Test presouva peera pryc ze sluzby AZ NAD HOTOVYM
     # SNIMKEM (viz docstring), takze potrebuje odkud ho odebrat - dopsana
     # rucne, protoze uz ji nejde odvodit ze skutecne .5 inventory.
-    new.facts["bfd"]["152.11.13.2"] = {
-        "state": "Up",
+    new.facts["bfd"].append({
+        "neighbor": "152.11.13.2",
         "interface": "et-0/0/8.13",
+        "multihop": False,
+        "state": "Up",
         "remote_state": "Up",
         "local_diagnostic": "None",
         "clients": ["BGP"],
         "detection_time": "9.000",
         "transmission_interval": "3.000",
         "multiplier": 3,
-    }
+    })
 
     # Selektor se meni AZ NAD HOTOVYM SNIMKEM - viz docstring.
     target = next(
@@ -728,7 +732,9 @@ def test_peer_moved_out_of_service_is_not_claimed_to_be_missing(synthetic_snapsh
     assert peer in [r["address"] for r in new.facts["bgp"]], (
         "fixture nema session peera, test by byl vakuovy"
     )
-    assert peer in new.facts["bfd"], "fixture nema BFD session peera, test by byl vakuovy"
+    assert peer in [r["neighbor"] for r in new.facts["bfd"]], (
+        "fixture nema BFD session peera, test by byl vakuovy"
+    )
     target.selectors.bgp_neighbors = [
         neighbor for neighbor in target.selectors.bgp_neighbors if neighbor != peer
     ]

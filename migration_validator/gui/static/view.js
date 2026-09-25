@@ -175,10 +175,8 @@ function unassignedRow(kind, item) {
     const suffix = item.protocol === "aggregate" ? " (aggregate)" : "";
     return { identity: `${item.rib} ${item.prefix}${suffix}`, detail };
   }
-  return {
-    identity: item.peer,
-    detail: `${item.interface || "-"}   ${item.state || "-"}`,
-  };
+  const iface = item.interface || (item.multihop ? "multihop" : "-");
+  return { identity: item.peer, detail: `${iface}   ${item.state || "-"}` };
 }
 
 /* Run combobox filter: case-insensitive substring on run name and device

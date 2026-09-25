@@ -228,15 +228,22 @@ class Scope:
             return False
         return record.get("routing_instance") == self.bgp_instance
 
-    def owns_bfd_session(self, peer: str, data: dict[str, Any]) -> bool:
-        """Patri BFD session (klicovana jen adresou) teto sluzbe?
+    def owns_bfd_session(
+        self, record: dict[str, Any], records: list[dict[str, Any]]
+    ) -> bool:
+        """Patri BFD zaznam (schema 14: soused, rozhrani, multihop) teto sluzbe?
 
         Session patri scopu podle peeru, ne podle zameru: kdyby se vybiralo
         podle bfd_peers, session peeru, ktereho parser do zameru nedoplnil,
         by se sem nedostala a chyba v pruchodu hierarchii by se schovala pred
         vystupem nastroje (AR-14). Single-hop session navic nese rozhrani a to
         musi byt nase - adresu muze mit i peer jine VRF. Multihop rozhrani
-        nenese, tam zbyva jen adresa.
+        nenese, tam zbyva jen adresa - a protoze RPC nenese ani VRF, dve
+        multihop session na jednu adresu se od sebe vubec nerozlisi
+        (kolize klicu, spec 2026-09-25): `records` je proto cely seznam
+        zaznamu na boxu, ne jen tenhle jeden, aby ownership mohl poznat, ze
+        na tu adresu ma nekdo z nasich sousedu i vlastni single-hop session
+        na svem rozhrani - v tom pripade multihop zaznam jine VRF nase neni.
 
         Na rozdil od owns_bgp_peer se bgp_neighbors_inactive zamerne
         nepricita. checks/bfd.py o deaktivovanych peerech nevi - zamer si
@@ -246,17 +253,30 @@ class Scope:
         deaktivovany. Session proto zustava nezarazena a videt je
         v NEZARAZENO - viz _unassigned_bfd_sessions v engine.py.
         """
-        interface = data.get("interface")
-        if peer in self.selectors.bgp_neighbors and (
-            not interface or self.selectors.matches_interface(str(interface))
-        ):
-            return True
-        # Transit Core nema BFD zamery ani peery v konfiguraci sluzby -
-        # session na nej patri podle rozhrani (spec 2026-08-26).
-        return (
-            self.service_type == "Core"
-            and self.service_subtype == "transit"
-            and self.selectors.matches_interface(str(interface or ""))
+        neighbor = str(record.get("neighbor"))
+        interface = record.get("interface")
+        if interface:
+            if neighbor in self.selectors.bgp_neighbors and self.selectors.matches_interface(
+                str(interface)
+            ):
+                return True
+            # Transit Core nema BFD zamery ani peery v konfiguraci sluzby -
+            # session na nej patri podle rozhrani (spec 2026-08-26).
+            return (
+                self.service_type == "Core"
+                and self.service_subtype == "transit"
+                and self.selectors.matches_interface(str(interface))
+            )
+        # Multihop: rozhrani ani VRF nenese, zbyva adresa. Peer na vlastni
+        # /30 je single-hop - kdyz scope takovou session na svem rozhrani
+        # ma, multihop zaznam jine VRF na stejnou adresu mu nepatri.
+        if neighbor not in self.selectors.bgp_neighbors:
+            return False
+        return not any(
+            other.get("interface")
+            and str(other.get("neighbor")) == neighbor
+            and self.selectors.matches_interface(str(other["interface"]))
+            for other in records
         )
 
     def select(
@@ -324,23 +344,11 @@ class Scope:
             if selected_prefixes:
                 routes[table] = selected_prefixes
 
-        bfd_facts = facts.get("bfd") or {}
-        bfd = {
-            peer: data
-            for peer, data in bfd_facts.items()
-            if self.owns_bfd_session(peer, data)
-        }
-        # Single-hop session na adrese naseho peera, ale na cizim rozhrani.
-        # Na rozdil od BGP to neni dukaz, ze nase session existovala - jen
-        # ze ji collector mohl prepsat. Check proto u nakonfigurovaneho BFD
-        # rekne 'stav neznamy', ne 'session neexistuje'.
-        bfd_collisions = {
-            peer: str(data["interface"])
-            for peer, data in bfd_facts.items()
-            if peer in self.selectors.bgp_neighbors
-            and data.get("interface")
-            and not self.owns_bfd_session(peer, data)
-        }
+        bfd_facts = list(facts.get("bfd") or [])
+        bfd, bfd_ambiguous = _by_key(
+            [r for r in bfd_facts if self.owns_bfd_session(r, bfd_facts)],
+            "neighbor",
+        )
 
         ping = [probe for probe in pings if probe.get("scope_id") == self.id]
 
@@ -404,7 +412,7 @@ class Scope:
             "evpn_mac": evpn_mac,
             "routes": routes,
             "bfd": bfd,
-            "bfd_collisions": bfd_collisions,
+            "bfd_ambiguous": bfd_ambiguous,
             "optics": optics,
             "ping": ping,
             "ping_skipped": any(

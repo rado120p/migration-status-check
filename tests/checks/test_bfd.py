@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.bfd import BfdSessionStateCheck
-from migration_validator.checks.bgp import ADDRESS_COLLISION
+from migration_validator.checks.bgp import ambiguous_value
 from migration_validator.collectors.bfd import BfdCollector
 from migration_validator.config import default_config
 from migration_validator.models.result import UNCHANGED_SINCE_BASELINE, Outcome, Status
@@ -35,17 +35,17 @@ def _ctx(
     bgp_state="Established",
     baseline_sessions=None,
     scope=None,
-    collisions=None,
-    baseline_collisions=None,
+    ambiguous=None,
+    baseline_ambiguous=None,
 ):
     baseline = (
         {"bfd": baseline_sessions, "bgp": {}} if baseline_sessions is not None else None
     )
-    if baseline is not None and baseline_collisions is not None:
-        baseline["bfd_collisions"] = baseline_collisions
+    if baseline is not None and baseline_ambiguous is not None:
+        baseline["bfd_ambiguous"] = baseline_ambiguous
     subject = {"bfd": sessions, "bgp": {"198.11.13.2": {"state": bgp_state}}}
-    if collisions is not None:
-        subject["bfd_collisions"] = collisions
+    if ambiguous is not None:
+        subject["bfd_ambiguous"] = ambiguous
     return CheckContext(
         scope=scope or _scope(),
         subject=subject,
@@ -317,48 +317,68 @@ def test_unconfigured_session_baseline_value_is_same_sentinel():
     assert row.baseline_value == "parser nenasel konfiguraci"
 
 
-# Kolize adres (ostry beh MX -> ACX 2026-09-23): single-hop session na adrese
-# naseho peera, ale na cizim rozhrani. Scope.select ji nevybere a hlasi ji
-# v `bfd_collisions`; nase session mohl collector prepsat.
+# Nejednoznacnost (kolize klicu, spec 2026-09-25): dve multihop session na
+# adresu peera se od sebe nerozlisi vubec (RPC nenese VRF), takze
+# Scope.select zadnou nevybere a hlasi je v `bfd_ambiguous`.
 
 
-def test_configured_bfd_shadowed_in_subject_is_skip_not_missing_session():
+def test_bfd_ambiguous_subject_is_skip():
     findings = BfdSessionStateCheck().run(
-        _ctx({}, collisions={"198.11.13.2": "ge-0/0/1.100"})
+        _ctx({}, ambiguous={"198.11.13.2": 2})
     )
 
     assert findings[0].outcome is Outcome.SKIP
-    assert findings[0].value == ADDRESS_COLLISION
-    assert "ge-0/0/1.100" in findings[0].message
+    assert findings[0].value == ambiguous_value(2)
+    assert "2" in findings[0].message
 
 
-def test_bfd_shadowed_in_baseline_and_missing_now_is_fail_not_unchanged():
+def test_bfd_ambiguous_baseline_never_unchanged():
     """Pojistka proti falesnemu PASS: 'v baseline taky nebyla' neplati, kdyz
-    baseline nasi session nezmerila.
+    baseline nasi session nezmerila (byla nejednoznacna).
 
-    Zabiji mutanta: `same=baseline is None` ve vetvi NO_SESSION bez podminky
-    na kolizi.
+    Subjekt musi dopadnout ve vetvi NO_SESSION (zadna session, BGP bezi),
+    ne ve vetvi 'session existuje' - jinak test vubec neprojde radkem, ktery
+    ma pojistit. Zabiji mutanta: `same=baseline is None and not
+    baseline_ambiguous` zjednodusene na `same=baseline is None` ve vetvi
+    NO_SESSION.
     """
     [row] = run_check(
         BfdSessionStateCheck(),
-        _ctx({}, baseline_sessions={}, baseline_collisions={"198.11.13.2": "ge-0/0/1.100"}),
+        _ctx(
+            {},
+            baseline_sessions={},
+            baseline_ambiguous={"198.11.13.2": 2},
+        ),
     )
 
     assert row.status is Status.FAIL
     assert UNCHANGED_SINCE_BASELINE not in row.details
-    assert row.baseline_value == ADDRESS_COLLISION
+    assert row.baseline_value == ambiguous_value(2)
 
 
-def test_bfd_up_with_baseline_shadowed_does_not_claim_baseline_had_no_session():
-    """Bez kolize by baseline_value rikal 'bez session' - tvrzeni o baseline,
-    ktere z prepsanych dat nevyplyva."""
-    findings = BfdSessionStateCheck().run(
+def test_bfd_ambiguous_subject_with_session_reports_broken_and_baseline_ambiguous():
+    """Brief scenar (subjekt ma session Down, baseline nejednoznacna): jina
+    vetev nez test vyse ('session existuje', ne NO_SESSION) - `same` tam
+    zavisi jen na `baseline is not None`, takze tenhle test overuje
+    `was`/`baseline_value` vypocet (ambiguous_value), ne same= pojistku."""
+    [row] = run_check(
+        BfdSessionStateCheck(),
         _ctx(
-            {"198.11.13.2": {"state": "Up"}},
+            {"198.11.13.2": {"state": "Down"}},
             baseline_sessions={},
-            baseline_collisions={"198.11.13.2": "ge-0/0/1.100"},
-        )
+            baseline_ambiguous={"198.11.13.2": 2},
+        ),
     )
 
-    assert findings[0].outcome is Outcome.OK
-    assert findings[0].baseline_value == ADDRESS_COLLISION
+    assert row.status is Status.FAIL
+    assert row.baseline_value == ambiguous_value(2)
+
+
+def test_bfd_ambiguous_without_intent_gets_no_row():
+    """R-1: sluzba bez BFD zameru a bez session, jen nejednoznacna adresa
+    v subjektu, nesmi dostat radek."""
+    findings = BfdSessionStateCheck().run(
+        _ctx({}, scope=_scope(bfd_peers=[], bgp_neighbors=()), ambiguous={"198.11.13.2": 2})
+    )
+
+    assert findings == []

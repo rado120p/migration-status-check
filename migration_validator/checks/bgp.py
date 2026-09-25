@@ -38,15 +38,13 @@ NOT_IN_SERVICE = "v baseline patril k teto sluzbe, v subjektu uz ne"
 # Adresa, na kterou ve scopu projde vic nez jeden zaznam (dva link-local
 # sousedi v jedne RI, multihop BFD bez VRF - Scope.select -> *_ambiguous).
 # Je to 'nevime', ne 'neni': jako value u SKIP radku, jako baseline_value
-# tam, kde nejednoznacna byla baseline. bfd.py ji prevezme v Tasku 2.
+# tam, kde nejednoznacna byla baseline. Hodnota je sdilena s bfd.py.
 def ambiguous_value(count: int) -> str:
     return f"neznamy (nejednoznacne: {count} session)"
 
 
 # Hodnota SKIP radku prefixu, kdyz baseline na adrese nese vic session.
 NO_BASELINE_AMBIGUOUS = "bez baseline (nejednoznacne)"
-# Docasne - checks/bfd.py ho importuje do Tasku 2 teto vlny.
-ADDRESS_COLLISION = "neznamy (kolize adresy)"
 # Countery, ktere se dostanou do reportu - jeden radek na counter.
 # `suppressed` tu chybi zamerne (rozhodnuti 2026-07-29): damping se v
 # tomhle nasazeni nepouziva, takze radek by byl vzdy nulovy. Odpada s nim

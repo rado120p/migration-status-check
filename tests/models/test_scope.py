@@ -1,4 +1,4 @@
-from fact_records import bgp_record, bgp_records
+from fact_records import bfd_record, bfd_records, bgp_record, bgp_records
 
 from migration_validator.models.scope import (
     FACT_AREAS,
@@ -154,10 +154,10 @@ ROUTE_FACTS = {
     },
 }
 
-BFD_FACTS = {
+BFD_FACTS = bfd_records({
     "152.11.13.2": {"state": "Up", "interface": "et-0/0/8.13"},
     "198.11.14.2": {"state": "Down", "interface": "et-0/0/8.114"},
-}
+})
 
 
 def _scope_with(**selector_kwargs) -> Scope:
@@ -556,30 +556,78 @@ def test_bgp_two_link_local_records_in_one_ri_are_ambiguous():
 
 
 def test_bfd_session_on_foreign_interface_is_not_selected():
-    """Zabiji mutanta: vyber `bfd` jen podle adresy (bez porovnani rozhrani)."""
-    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}}
+    """Zabiji mutanta: vyber `bfd` jen podle adresy (bez porovnani rozhrani).
+
+    Od schematu 14 zaznam cizi VRF na nasi adrese proste neni nas - zadna
+    kolize, zadna nejednoznacnost (kazda VRF ma svuj zaznam s vlastnim
+    rozhranim)."""
+    facts = {"bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}})}
 
     selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
 
     assert selected["bfd"] == {}
-    assert selected["bfd_collisions"] == {SHARED_PEER: "ge-0/0/1.100"}
+    assert selected["bfd_ambiguous"] == {}
 
 
 def test_bfd_session_on_own_interface_is_selected():
-    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}}}
+    facts = {"bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": "ge-0/0/1.100"}})}
 
     selected = _vrf_scope("customer-a", "ge-0/0/1.100").select(facts)
 
     assert set(selected["bfd"]) == {SHARED_PEER}
-    assert selected["bfd_collisions"] == {}
+    assert selected["bfd_ambiguous"] == {}
 
 
 def test_multihop_bfd_session_without_interface_is_selected_by_peer():
     """Multihop session rozhrani nenese (laborka: 198.11.14.4 v L3VPN-CPE14-UNI),
-    takze zbyva jen adresa - znama mezera, kterou resi az zmena klicovani."""
-    facts = {"bfd": {SHARED_PEER: {"state": "Up", "interface": None}}}
+    takze zbyva jen adresa."""
+    facts = {"bfd": bfd_records({SHARED_PEER: {"state": "Up", "interface": None}})}
 
     selected = _vrf_scope("customer-b", "ge-0/0/2.200").select(facts)
 
     assert set(selected["bfd"]) == {SHARED_PEER}
-    assert selected["bfd_collisions"] == {}
+    assert selected["bfd_ambiguous"] == {}
+
+
+def _ipvpn(ri: str, peer: str = SHARED_PEER, iface: str = "ae0.100") -> Scope:
+    return Scope(
+        id=f"svc:{ri}:IPVPN",
+        kind="service",
+        key=ScopeKey(description=ri, service_type="IPVPN"),
+        selectors=Selectors(interfaces=[iface], routing_instances=[ri], bgp_neighbors=[peer]),
+    )
+
+
+def test_bfd_same_neighbor_two_interfaces_each_scope_gets_its_own():
+    facts = {"bfd": [
+        bfd_record("192.168.1.2", interface="ae0.100", state="Down"),
+        bfd_record("192.168.1.2", interface="ae0.200"),
+    ]}
+    a = _ipvpn("customer-a").select(facts)
+    b = _ipvpn("customer-b", iface="ae0.200").select(facts)
+    assert a["bfd"]["192.168.1.2"]["state"] == "Down"
+    assert b["bfd"]["192.168.1.2"]["state"] == "Up"
+    assert a["bfd_ambiguous"] == {} and "bfd_collisions" not in a
+
+
+def test_bfd_two_multihop_same_neighbor_is_ambiguous():
+    facts = {"bfd": [bfd_record("198.11.14.4"), bfd_record("198.11.14.4", state="Down")]}
+    view = _ipvpn("CUST", peer="198.11.14.4").select(facts)
+    assert view["bfd"] == {}
+    assert view["bfd_ambiguous"] == {"198.11.14.4": 2}
+
+
+def test_bfd_single_hop_on_own_interface_wins_over_multihop():
+    facts = {"bfd": [
+        bfd_record("192.168.1.2", interface="ae0.100"),
+        bfd_record("192.168.1.2"),  # multihop jine VRF
+    ]}
+    view = _ipvpn("customer-a").select(facts)
+    assert view["bfd"]["192.168.1.2"]["interface"] == "ae0.100"
+    assert view["bfd_ambiguous"] == {}
+
+
+def test_bfd_single_multihop_is_owned_by_address():
+    facts = {"bfd": [bfd_record("198.11.14.4")]}
+    view = _ipvpn("CUST", peer="198.11.14.4").select(facts)
+    assert view["bfd"]["198.11.14.4"]["multihop"] is True

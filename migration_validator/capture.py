@@ -26,7 +26,7 @@ from migration_validator.scoping.builder import build_scopes
 # krok je jmeno kolektoru nebo "ping"
 ProgressCallback = Callable[[str, str, str | None], None]
 
-LIST_AREAS = frozenset({"arp", "nd", "bgp"})
+LIST_AREAS = frozenset({"arp", "nd", "bgp", "bfd"})
 
 
 def _empty_for(area: str) -> Any:

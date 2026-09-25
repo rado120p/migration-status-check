@@ -216,6 +216,13 @@ test("unassignedRow: bfd session -> interface + state detail", () => {
     { identity: "10.1.2.2", detail: "et-0/0/8.13   Up" });
 });
 
+test("unassignedRow: multihop bfd session -> 'multihop' detail when no interface", () => {
+  assert.deepStrictEqual(
+    MigView.unassignedRow("bfd_sessions",
+      { peer: "198.11.14.4", interface: null, multihop: true, state: "Up" }),
+    { identity: "198.11.14.4", detail: "multihop   Up" });
+});
+
 const RUNS = [
   { name: "mig01", devices: { "MX1-POP1": {}, "PTX1-POP1": {} }, snapshots: 2 },
   { name: "upgrade-ptx-2026", devices: { "PTX3-POP2": {} }, snapshots: 1 },

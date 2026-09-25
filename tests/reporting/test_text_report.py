@@ -1282,6 +1282,16 @@ def test_unassigned_bgp_row_shows_local_interface_when_present():
     assert detail == "RI CUST"
 
 
+def test_unassigned_bfd_row_shows_multihop_when_no_interface():
+    from migration_validator.reporting.text_report import _unassigned_row
+
+    identity, detail = _unassigned_row(
+        "bfd_sessions", {"peer": "198.11.14.4", "interface": None, "multihop": True, "state": "Up"}
+    )
+    assert identity == "198.11.14.4"
+    assert detail == "multihop   Up"
+
+
 def test_unassigned_objects_reach_the_text_report():
     """Zabiji mutanta, ktery `unassigned` necha jen v JSON.
 

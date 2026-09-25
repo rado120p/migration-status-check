@@ -583,21 +583,30 @@ def _unassigned_bfd_sessions(
     # single-hop session na cizim rozhrani nepatri sluzbe, i kdyz ma adresu
     # jejiho peera, a Core transit si session bere podle rozhrani. Jine
     # pravidlo tady by takovou session vypsalo dvakrat, nebo vubec.
+    #
+    # `owns_bfd_session` potrebuje cely seznam zaznamu na boxu, ne jen ten
+    # jeden - multihop rozhodnuti se opira o to, jestli nektery z nasich
+    # sousedu ma na tu adresu i vlastni single-hop session na svem rozhrani.
     owners = [
         scope
         for scope in scopes
         if not (scope.service_type == "Core" and scope.service_subtype == "loopback")
     ]
+    records = list(subject.facts.get("bfd") or [])
     return [
         {
-            "peer": peer,
-            "interface": data.get("interface"),
-            "state": data.get("state"),
+            "peer": record.get("neighbor"),
+            "interface": record.get("interface"),
+            "multihop": bool(record.get("multihop")),
+            "state": record.get("state"),
             "snapshot": "subject",
         }
-        for peer, data in sorted((subject.facts.get("bfd") or {}).items())
-        if not any(scope.owns_bfd_session(peer, data) for scope in owners)
-        and (port is None or _interface_on_port(str(data.get("interface", "")), port, scopes))
+        for record in sorted(
+            records,
+            key=lambda r: (str(r.get("neighbor")), r.get("interface") or ""),
+        )
+        if not any(scope.owns_bfd_session(record, records) for scope in owners)
+        and (port is None or _interface_on_port(str(record.get("interface") or ""), port, scopes))
     ]
 
 

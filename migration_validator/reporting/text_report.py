@@ -431,7 +431,8 @@ def _unassigned_row(kind: str, item: dict[str, object]) -> tuple[str, str]:
         # jinak nez zbla statika - sufix operatorovi rekne, co mu vypadlo.
         suffix = " (aggregate)" if item.get("protocol") == "aggregate" else ""
         return f"{item['rib']} {item['prefix']}{suffix}", detail
-    return item["peer"], f"{item.get('interface') or '-'}   {item.get('state') or '-'}"
+    interface = item.get("interface") or ("multihop" if item.get("multihop") else "-")
+    return item["peer"], f"{interface}   {item.get('state') or '-'}"
 
 
 def _unassigned_lines(result: RunResult) -> list[str]:

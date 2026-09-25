@@ -18,6 +18,13 @@ zpusob jako EMPTY_OUTPUT nize), aby o pokryti nerozhodoval stav laborky.
 
 Prazdny vypis je platny stav a testuje se na syntetickem XML (EMPTY_OUTPUT),
 ne na nahravce, aby o pokryti nerozhodoval stav laborky.
+
+Od schematu 14 (kolize klicu, spec 2026-09-25) collector vraci seznam
+zaznamu, ne dict klicovany sousedem: single-hop session dvou VRF na stejnou
+adresu se lisi rozhranim a musi prezit obe, multihop session zadne rozhrani
+nenese (RPC ho nikdy nevraci - overeno v laborce 2026-09-24), takze dve
+takove na stejnou adresu se od sebe vubec nerozlisi a obe musi prezit taky,
+aby vyhodnoceni mohlo rict "nejednoznacne" misto tiche ztraty jedne z nich.
 """
 
 from __future__ import annotations
@@ -29,10 +36,23 @@ from migration_validator.collectors.bfd import BfdCollector
 
 PLATFORMS = ("junos", "junos-evo")
 
+EXPECTED_KEYS = {
+    "neighbor",
+    "interface",
+    "multihop",
+    "state",
+    "remote_state",
+    "local_diagnostic",
+    "clients",
+    "detection_time",
+    "transmission_interval",
+    "multiplier",
+}
+
 
 @pytest.mark.parametrize("platform", PLATFORMS)
-def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
-    """Collector vraci dict bez ohledu na to, kolik (pripadne zadnych) session laborka ma.
+def test_returns_list_of_records(rpc_fixture, platform):
+    """Collector vraci seznam bez ohledu na to, kolik (pripadne zadnych) session laborka ma.
 
     Do 2026-09-03 (task 5c) obe nahravky nesly spolecny peer 152.11.13.2 a
     testovalo se tu i na to. Po tomto datu .5 (junos-evo) nema BFD zadne -
@@ -42,7 +62,7 @@ def test_returns_mapping_keyed_by_neighbor(rpc_fixture, platform):
     .5, na realne nahravce pro .4).
     """
     result = BfdCollector().parse(rpc_fixture(platform, "bfd"), platform)
-    assert isinstance(result, dict)
+    assert isinstance(result, list)
 
 
 def test_evo_session_table_is_empty_after_bfd_removal(rpc_fixture):
@@ -50,11 +70,11 @@ def test_evo_session_table_is_empty_after_bfd_removal(rpc_fixture):
 
     Na rozdil od .4 (task 5b), kde stale AdminDown zaznamy v tabulce jeste
     zustavaji, .5 uz session table vyprazdnila uplne - collector musi umet
-    vratit prazdny dict i z RPC odpovedi, ktera ma sessions=0/clients=0.
+    vratit prazdny seznam i z RPC odpovedi, ktera ma sessions=0/clients=0.
     """
     result = BfdCollector().parse(rpc_fixture("junos-evo", "bfd"), "junos-evo")
 
-    assert result == {}
+    assert result == []
 
 
 EMPTY_OUTPUT = """
@@ -77,7 +97,12 @@ def test_empty_output_is_a_valid_state(platform):
     """
     result = BfdCollector().parse(etree.fromstring(EMPTY_OUTPUT.encode()), platform)
 
-    assert result == {}
+    assert result == []
+
+
+def _by_neighbor(records: list[dict], neighbor: str) -> dict:
+    (record,) = [r for r in records if r["neighbor"] == neighbor]
+    return record
 
 
 def test_up_and_down_sessions_are_recorded_verbatim():
@@ -109,12 +134,14 @@ def test_up_and_down_sessions_are_recorded_verbatim():
         """
     )
 
-    result = BfdCollector().parse(xml, "junos-evo")
+    records = BfdCollector().parse(xml, "junos-evo")
 
-    assert result["152.11.13.2"]["state"] == "Up"
-    assert result["152.11.13.2"]["interface"] == "et-0/0/8.13"
-    assert result["198.11.13.2"]["state"] == "Down"
-    assert result["198.11.13.2"]["remote_state"] == "AdminDown"
+    first = _by_neighbor(records, "152.11.13.2")
+    second = _by_neighbor(records, "198.11.13.2")
+    assert first["state"] == "Up"
+    assert first["interface"] == "et-0/0/8.13"
+    assert second["state"] == "Down"
+    assert second["remote_state"] == "AdminDown"
 
 
 def test_client_names_are_collected():
@@ -141,9 +168,9 @@ def test_client_names_are_collected():
         """
     )
 
-    result = BfdCollector().parse(xml, "junos-evo")
+    (record,) = BfdCollector().parse(xml, "junos-evo")
 
-    assert result["152.11.13.2"]["clients"] == ["BGP"]
+    assert record["clients"] == ["BGP"]
 
 
 def test_mx_sessions_are_recorded_verbatim(rpc_fixture):
@@ -159,13 +186,15 @@ def test_mx_sessions_are_recorded_verbatim(rpc_fixture):
     vypadl - misto neho se overuje 198.11.14.4 (L3VPN-CPE14-UNI), ktery ve
     stejne nahravce zustava jako AdminDown multi-hop session bez rozhrani.
     """
-    result = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+    records = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
 
-    assert result["152.11.13.2"]["state"] == "AdminDown"
-    assert result["152.11.13.2"]["interface"] == "ge-0/0/2.13"
-    assert result["152.11.13.2"]["remote_state"] == "Down"
-    assert result["198.11.14.4"]["state"] == "AdminDown"
-    assert result["198.11.14.4"]["remote_state"] == "Up"
+    single = _by_neighbor(records, "152.11.13.2")
+    multi = _by_neighbor(records, "198.11.14.4")
+    assert single["state"] == "AdminDown"
+    assert single["interface"] == "ge-0/0/2.13"
+    assert single["remote_state"] == "Down"
+    assert multi["state"] == "AdminDown"
+    assert multi["remote_state"] == "Up"
 
 
 def test_mx_client_names_are_collected(rpc_fixture):
@@ -197,9 +226,9 @@ def test_mx_client_names_are_collected(rpc_fixture):
         """
     )
 
-    result = BfdCollector().parse(xml, "junos")
+    (record,) = BfdCollector().parse(xml, "junos")
 
-    assert result["152.11.13.2"]["clients"] == ["BGP"]
+    assert record["clients"] == ["BGP"]
 
 
 def test_entries_have_expected_keys():
@@ -207,9 +236,9 @@ def test_entries_have_expected_keys():
 
     Do 2026-09-03 (task 5c) toto overovala nahravka z .5, ktera aspon jednu
     session mela. Po vyprazdneni .5 tabulky (viz modulovy docstring) by
-    smycka pres `result.values()` nad realnou nahravkou proslo VAKUOVE -
-    prazdny dict nema co iterovat. Synteticke XML drzi test na skutecnem
-    obsahu, ne na tom, jestli laborka zrovna nejakou session ma.
+    smycka pres vysledek nad realnou nahravkou proslo VAKUOVE - prazdny
+    seznam nema co iterovat. Synteticke XML drzi test na skutecnem obsahu,
+    ne na tom, jestli laborka zrovna nejakou session ma.
     """
     xml = etree.fromstring(
         b"""
@@ -231,19 +260,61 @@ def test_entries_have_expected_keys():
     result = BfdCollector().parse(xml, "junos-evo")
 
     assert result
-    for data in result.values():
-        assert set(data) == {
-            "state",
-            "interface",
-            "remote_state",
-            "local_diagnostic",
-            "clients",
-            "detection_time",
-            "transmission_interval",
-            "multiplier",
-        }
+    for record in result:
+        assert set(record) == EXPECTED_KEYS
 
 
 def test_collector_passes_detail_flag():
     """Strucna varianta nema bfd-client ani remote-state."""
     assert BfdCollector().rpc_kwargs("junos") == {"detail": True}
+
+
+def _session(neighbor, interface="", session_type="Single hop BFD", state="Up"):
+    return (
+        f"<bfd-session><session-neighbor>{neighbor}</session-neighbor>"
+        f"<session-state>{state}</session-state>"
+        f"<session-interface>{interface}</session-interface>"
+        f"<session-type>{session_type}</session-type></bfd-session>"
+    )
+
+
+def test_same_neighbor_two_interfaces_keeps_both():
+    xml = etree.fromstring(
+        "<bfd-session-information>"
+        + _session("192.168.1.2", "ae0.100", state="Down")
+        + _session("192.168.1.2", "ae0.200")
+        + "</bfd-session-information>"
+    )
+    records = BfdCollector().parse(xml, "junos")
+    assert [(r["neighbor"], r["interface"], r["state"]) for r in records] == [
+        ("192.168.1.2", "ae0.100", "Down"),
+        ("192.168.1.2", "ae0.200", "Up"),
+    ]
+
+
+def test_two_multihop_sessions_same_neighbor_keeps_both():
+    xml = etree.fromstring(
+        "<bfd-session-information>"
+        + _session("198.11.14.4", session_type="Multi hop BFD")
+        + _session("198.11.14.4", session_type="Multi hop BFD", state="Down")
+        + "</bfd-session-information>"
+    )
+    records = BfdCollector().parse(xml, "junos")
+    assert len(records) == 2
+    assert all(r["interface"] is None and r["multihop"] for r in records)
+
+
+def test_multihop_without_session_type_falls_back_to_empty_interface():
+    xml = etree.fromstring(
+        "<bfd-session-information><bfd-session>"
+        "<session-neighbor>10.9.9.9</session-neighbor><session-state>Up</session-state>"
+        "<session-interface/></bfd-session></bfd-session-information>"
+    )
+    (record,) = BfdCollector().parse(xml, "junos")
+    assert record["interface"] is None and record["multihop"] is True
+
+
+def test_mx_fixture_multihop_session_is_flagged(rpc_fixture):
+    records = BfdCollector().parse(rpc_fixture("junos", "bfd"), "junos")
+    (mh,) = [r for r in records if r["neighbor"] == "198.11.14.4"]
+    assert mh["multihop"] is True and mh["interface"] is None

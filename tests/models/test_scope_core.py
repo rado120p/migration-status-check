@@ -1,6 +1,8 @@
 """Selekce novych protokolovych areas. isis_overview je device-global a
 patri jen loopback scopu - transit by s nim tvrdil mereni, ktere se ho netyka."""
 
+from fact_records import bfd_records
+
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 
 FACTS = {
@@ -25,10 +27,10 @@ FACTS = {
         "ge-0/0/0.0": {"admin_group": []},
         "ge-0/0/1.0": {"admin_group": []},
     },
-    "bfd": {
+    "bfd": bfd_records({
         "10.0.0.1": {"state": "Up", "interface": "ge-0/0/0.0"},
         "10.0.0.9": {"state": "Up", "interface": "ge-0/0/9.0"},
-    },
+    }),
 }
 
 
