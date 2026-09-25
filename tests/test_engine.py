@@ -1667,6 +1667,59 @@ def test_step_pulls_linked_partner_of_matched_scope():
     assert excluded_ids == {"svc:OTHER:Internet"}
 
 
+def test_step_keeps_ambiguous_subject_scope_visible():
+    """E5: scope nesparovany kvuli nejednoznacnosti muze patrit tomuto
+    kroku - pres checky a do NESPAROVANO, ne do excluded_services."""
+    baseline = _snapshot(
+        "172.20.20.4", "ge-0/0/4.0",
+        [_scope("svc:DUP:Internet", "DUP", "Internet", "ge-0/0/4.0")],
+    )
+    subject = _snapshot(
+        "172.20.20.5", "ae0.15",
+        [
+            _scope("svc:DUP:Internet#1", "DUP", "Internet", "ae0.15"),
+            _scope("svc:DUP:Internet#2", "DUP", "Internet", "ae0.16"),
+        ],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    shown_ids = {scope.scope_id for scope in result.scopes}
+    assert {"svc:DUP:Internet#1", "svc:DUP:Internet#2"} <= shown_ids
+    assert result.excluded_services == []
+    assert [e["scope_id"] for e in result.unmatched["subject"]] == [
+        "svc:DUP:Internet#1", "svc:DUP:Internet#2",
+    ]
+    assert all("ambiguous" in e["reason"] for e in result.unmatched["subject"])
+
+
+def test_step_excludes_foreign_wave_scope_after_ambiguity_is_resolved():
+    """Rozhodnuti 2026-09-25: VRF-b (drivejsi vlna) souperil jen se
+    sparovanou baseline -> nova sluzba -> vyloucen."""
+    baseline = _snapshot(
+        "172.20.20.4", "ge-0/0/4.0",
+        [_scope("svc:CPE:IPVPN", "CPE", "IPVPN", "ge-0/0/4.0", routing_instances=["VRF-a"])],
+    )
+    subject = _snapshot(
+        "172.20.20.5", "ae0.15",
+        [
+            _scope("svc:CPE:IPVPN#a", "CPE", "IPVPN", "ae0.15", routing_instances=["VRF-a"]),
+            _scope("svc:CPE:IPVPN#b", "CPE", "IPVPN", "ae0.16", routing_instances=["VRF-b"]),
+        ],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    shown_ids = {scope.scope_id for scope in result.scopes}
+    assert "svc:CPE:IPVPN#a" in shown_ids
+    assert "svc:CPE:IPVPN#b" not in shown_ids
+    assert [(e["scope_id"], e["reason"]) for e in result.excluded_services] == [
+        ("svc:CPE:IPVPN#b", "nova sluzba, chybi baseline"),
+    ]
+
+
 def test_step_without_baseline_has_no_excluded_services():
     """Krok bez pre snimku nema baseline, filtr pres baseline neprobehl."""
     subject = _snapshot(

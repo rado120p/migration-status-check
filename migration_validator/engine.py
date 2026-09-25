@@ -27,7 +27,7 @@ from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope, route_k
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.scoping.linker import ScopeLink, link_scopes
 from migration_validator.scoping.mapping import Mapping, empty_mapping
-from migration_validator.scoping.matcher import MatchedPair, match_scopes
+from migration_validator.scoping.matcher import REASON_NEW_SERVICE, MatchedPair, match_scopes
 
 
 _RENAMED_KEY_AREAS = (
@@ -700,9 +700,12 @@ def evaluate_snapshots(
                 step is not None
                 and item.scope.kind == "service"
                 and not partner_matched
+                and item.reason == REASON_NEW_SERVICE
             ):
                 # Cizi vlna na sdilenem portu: mimo tento migracni krok.
-                # Nejde pres checky ani do NESPAROVANO - jen do JSON.
+                # Nejde pres checky ani do NESPAROVANO - jen do JSON. Jen
+                # "nova sluzba": scope nesparovany kvuli trvajici
+                # nejednoznacnosti muze patrit tomuto kroku (E5).
                 excluded.append(_unmatched_entry(item.scope, item.reason))
                 continue
             # `unmatched["subject"]` seznam se nefiltruje - NESPAROVANO je
