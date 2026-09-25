@@ -244,9 +244,13 @@ Renderery NEZARAZENO (`reporting/text_report.py:_unassigned_row`,
 
   - message: proč (např. „multihop session na stejnou adresu je 2×, RPC
     nenese VRF“ / „2 BGP session na stejnou adresu v instanci X“).
-  - Nejednoznačná adresa v baseline → `bez baseline (nejednoznacne)`;
-    nikdy UNCHANGED ani RECOVERED (pojistka proti falešnému PASS jako ve
-    vrstvě 1).
+  - Nejednoznačná adresa v baseline: stavový řádek (BGP status, BFD) nese
+    jako baseline hodnotu `neznamy (nejednoznacne: {n} session)` – baseline
+    stav neznala, „bez baseline“ by tvrdilo, že tam nic nebylo. Řádek
+    prefixů, který nemá s čím porovnat, má hodnotu `bez baseline
+    (nejednoznacne)`. Nikdy UNCHANGED ani RECOVERED (pojistka proti
+    falešnému PASS jako ve vrstvě 1). (Upřesněno 2026-09-25 podle
+    implementace a Global Constraints plánu.)
   - Nejednoznačná adresa sama řádek nezakládá – doplní ho jen tam, kde by
     ho služba měla i tak (BFD záměr, BGP soused v `bgp_neighbors`).
 
@@ -294,7 +298,8 @@ upgrade je vypíše „nelze – bez raw záznamu“.
   - static + aggregate na stejném (rib, prefix): každý check vidí svůj
     záznam, NEZARAZENO agregát nespolkne.
   - dvě multihop session na jednu adresu → SKIP nejednoznačné; totéž
-    v baseline → `bez baseline (nejednoznacne)`, ne UNCHANGED.
+    v baseline → baseline hodnota `neznamy (nejednoznacne: 2 session)`,
+    ne UNCHANGED.
   - dva link-local BGP sousedi se stejnou adresou → nejednoznačné.
   - ESI sdílené dvěma instancemi, jeden IFL Down → služba toho IFL FAIL
     (dnes PASS).
