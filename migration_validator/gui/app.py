@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from migration_validator import api
 from migration_validator.auth import DEFAULT_CAPTURE_POOL, load_settings
 from migration_validator.collectors.registry import collectors_for
-from migration_validator.gui.authz import Actor, Permission, anonymous_admin, require
+from migration_validator.gui.auth_routes import build_auth_router
+from migration_validator.gui.authz import (
+    Actor,
+    Permission,
+    anonymous_admin,
+    current_actor,
+    permissions_for,
+    require,
+    session_actor_provider,
+)
 from migration_validator.gui.capture_launch import launch_capture
 from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
 from migration_validator.gui.group_routes import build_groups_router
@@ -20,11 +30,13 @@ from migration_validator.gui.groups import SummaryCache
 from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
+from migration_validator.gui.sessions import LoginThrottle, SessionStore
 from migration_validator.models.snapshot import SnapshotVersionError, load_snapshot
 from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
 from migration_validator.runs.pairing import plan_evaluations
 from migration_validator.runs.store import RunStore
+from migration_validator.users import UserStore
 
 
 class DeviceBody(BaseModel):
@@ -84,6 +96,9 @@ def create_app(
     profile_path: str | None = None,
     profiles_root: Path = Path("profiles"),
     capture_pool: int = DEFAULT_CAPTURE_POOL,
+    users: UserStore | None = None,
+    sessions: SessionStore | None = None,
+    throttle: LoginThrottle | None = None,
 ) -> FastAPI:
     app = FastAPI(title="mig-validate")
 
@@ -102,7 +117,13 @@ def create_app(
     app.state.profiles = profiles
     manager = CaptureManager(pool=capture_pool)
     app.state.captures = manager
-    app.state.actor_provider = anonymous_admin
+    app.state.auth_enabled = users is not None
+    if users is not None:
+        sessions = sessions or SessionStore()
+        app.state.actor_provider = session_actor_provider(sessions, users)
+        app.include_router(build_auth_router(users, sessions, throttle or LoginThrottle()))
+    else:
+        app.state.actor_provider = anonymous_admin
     app.include_router(build_profiles_router(profiles, run_root, profile_path))
     cache = SummaryCache()
     app.state.group_cache = cache
@@ -110,6 +131,15 @@ def create_app(
         run_root=run_root, profiles=profiles, profile_path=profile_path,
         manager=manager, cache=cache,
     ))
+
+    @app.get("/api/me")
+    def me(request: Request, actor: Actor = require(Permission.VIEW)) -> dict:
+        return {
+            "username": actor.username,
+            "role": actor.role,
+            "permissions": permissions_for(actor.role),
+            "auth": request.app.state.auth_enabled,
+        }
 
     @app.get("/api/checks")
     def list_checks(actor: Actor = require(Permission.VIEW)) -> dict:
@@ -389,8 +419,26 @@ def create_app(
             response.headers["Cache-Control"] = "no-cache"
         return response
 
+    @app.middleware("http")
+    async def same_origin_writes(request, call_next):
+        # SameSite=Strict + tato kontrola = CSRF ochrana. Chybejici Origin
+        # (curl, skripty) projde - prohlizec ho u techto metod posila vzdy.
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path.startswith("/api/"):
+            origin = request.headers.get("origin")
+            if origin is not None and urlsplit(origin).netloc != request.headers.get("host"):
+                return JSONResponse(status_code=403, content={"detail": "cross-origin request refused"})
+        return await call_next(request)
+
     @app.get("/", include_in_schema=False)
-    def index() -> FileResponse:
+    def index(request: Request):
+        if current_actor(request) is None:
+            return RedirectResponse("/login", status_code=302)
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/login", include_in_schema=False)
+    def login_page(request: Request):
+        if not request.app.state.auth_enabled or current_actor(request) is not None:
+            return RedirectResponse("/", status_code=302)
+        return FileResponse(STATIC_DIR / "login.html")
 
     return app

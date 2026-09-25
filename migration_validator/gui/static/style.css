@@ -1245,3 +1245,18 @@ a:hover { color: #0e3fa9; }
 .row-actions { display: flex; gap: 8px; align-items: center; justify-self: end; }
 .run-combo-row.grouped { padding-left: 28px; }
 .run-combo-group .kind-tag { margin-left: 8px; }
+
+/* Login page */
+.login-body { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card {
+  width: min(360px, calc(100vw - 32px));
+  padding: 28px;
+  border: 1px solid #d3d7de;
+  border-radius: 10px;
+  background: #f7f8fa;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.10);
+}
+.login-card .brand { margin-bottom: 20px; }
+.login-card form { display: flex; flex-direction: column; gap: 8px; }
+.login-error { color: #b91c1c; font-size: 13px; }
+.login-submit { margin-top: 12px; }

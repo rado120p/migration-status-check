@@ -13,6 +13,7 @@ NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new
 # (method, path, minimum role). An allowed role may get 404/409/422 from the
 # thin fixture; only 401/403 are asserted.
 MATRIX = [
+    ("GET", "/api/me", "viewer"),
     ("GET", "/api/checks", "viewer"),
     ("GET", "/api/meta", "viewer"),
     ("GET", "/api/runs", "viewer"),
