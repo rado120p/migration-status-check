@@ -3,6 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from fact_records import route_records
+
 from migration_validator.gui.app import create_app
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.models.snapshot import (
@@ -410,7 +412,7 @@ def test_run_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
     post_path = _write_multi_snapshot(store, "post", "PTX1", "ae0", "10.0.0.2",
                                       [("A", "Internet", "ae0.100")])
     post = load_snapshot(post_path)
-    post.facts["routes"] = {
+    post.facts["routes"] = route_records({
         "inet.0": {
             "198.62.1.0/29": {
                 "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"],
@@ -421,7 +423,7 @@ def test_run_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
                 "active": True, "protocol": "static",
             },
         }
-    }
+    })
     save_snapshot(post, post_path)
     manifest.record_capture(CaptureRecord("pre", "MX1", "ge-0/0/4", pre.name, NOW))
     manifest.record_capture(CaptureRecord("post", "PTX1", "ae0", post_path.name, NOW))
@@ -436,7 +438,7 @@ def test_run_evaluation_per_port_nezarazeno_nenese_routy_jineho_portu(tmp_path):
 
 
 def _leaky_routes():
-    return {
+    return route_records({
         "inet.0": {
             "198.62.1.0/29": {
                 "next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"],
@@ -447,7 +449,7 @@ def _leaky_routes():
                 "active": True, "protocol": "static",
             },
         }
-    }
+    })
 
 
 def _run_with_ae0_post(tmp_path, port):

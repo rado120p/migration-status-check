@@ -599,7 +599,7 @@ class CoreMulticastForwardingCheck(Check):
             assign_sources(multicast_table(ctx.baseline), prefixes)
             if ctx.has_baseline else None
         )
-        inet2 = (ctx.subject.get("routes") or {}).get("inet.2") or {}
+        inet2 = ((ctx.subject.get("routes") or {}).get("static") or {}).get("inet.2") or {}
         findings: list[Finding] = []
         for prefix in prefixes:
             streams = assigned.get(prefix, [])

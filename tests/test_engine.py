@@ -1,7 +1,15 @@
 from pathlib import Path
 
 import pytest
-from fact_records import bfd_record, bfd_records, bgp_record, bgp_records, esi_record
+from fact_records import (
+    bfd_record,
+    bfd_records,
+    bgp_record,
+    bgp_records,
+    esi_record,
+    route_record,
+    route_records,
+)
 
 from migration_validator import api
 from migration_validator.checks import base as check_base
@@ -739,13 +747,13 @@ def test_core_loopback_ibgp_bfd_session_stays_visible_in_unassigned():
     ]
 
 
-MGMT_ROUTE = {
+MGMT_ROUTE = route_records({
     "mgmt_junos.inet.0": {
         "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}
     }
-}
+})
 
-SERVICE_ROUTE = {
+SERVICE_ROUTE = route_records({
     "inet.0": {
         "198.62.1.0/29": {
             "next_hop": ["152.11.13.2"],
@@ -753,7 +761,7 @@ SERVICE_ROUTE = {
             "active": True,
         }
     }
-}
+})
 
 
 def test_management_static_route_lands_in_unassigned():
@@ -784,16 +792,9 @@ def test_nezarazeny_aggregate_nese_protokol():
     spadne do NEZARAZENO stejne jako statika - a nese protocol, aby report
     poznal, ze jde o agregat, ne o klasickou statiku."""
     subject = _new()
-    subject.facts["routes"] = {
-        "inet6.0": {
-            "2001:abcd::/32": {
-                "next_hop": [],
-                "via": [],
-                "active": True,
-                "protocol": "aggregate",
-            }
-        }
-    }
+    subject.facts["routes"] = [
+        route_record("inet6.0", "2001:abcd::/32", protocol="aggregate", active=True)
+    ]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
 
@@ -821,6 +822,26 @@ def test_route_claimed_by_a_scope_is_not_unassigned():
     assert result.unassigned["static_routes"] == []
 
 
+def test_unassigned_aggregate_on_prefix_of_owned_static_is_listed():
+    """Vlastnena staticka routa nesmi schovat nevlastneny agregat na
+    stejnem (rib, prefix) - jsou to dva zaznamy, dva klice v `assigned`."""
+    subject = _new()
+    subject.facts["routes"] = [
+        route_record("inet.0", "198.62.1.0/29", protocol="static",
+                      next_hop=["152.11.13.2"], via=["et-0/0/8.13"]),
+        route_record("inet.0", "198.62.1.0/29", protocol="aggregate", next_hop=[], via=[]),
+    ]
+    subject.scopes[0].selectors.static_routes = [
+        {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]}
+    ]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert [
+        (r["rib"], r["prefix"], r["protocol"]) for r in result.unassigned["static_routes"]
+    ] == [("inet.0", "198.62.1.0/29", "aggregate")]
+
+
 def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
     """Klic je (rib, prefix) - shoda jen na prefixu nestaci.
 
@@ -829,7 +850,7 @@ def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
     schoval statiku ve mgmt_junos.inet.0.
     """
     subject = _new()
-    subject.facts["routes"] = {
+    subject.facts["routes"] = route_records({
         "inet.0": {
             "0.0.0.0/0": {
                 "next_hop": ["152.11.13.1"],
@@ -840,7 +861,7 @@ def test_unassigned_static_route_claim_must_match_rib_not_just_prefix():
         "mgmt_junos.inet.0": {
             "0.0.0.0/0": {"next_hop": ["10.0.0.2"], "via": ["fxp0.0"], "active": True}
         },
-    }
+    })
     subject.scopes[0].selectors.static_routes = [
         {"rib": "inet.0", "prefix": "0.0.0.0/0", "next_hop": ["152.11.13.1"]}
     ]
@@ -1174,7 +1195,11 @@ def test_route_without_active_key_does_not_mask_healthy_siblings(synthetic_snaps
     nezavisi.
     """
     subject = synthetic_snapshot(DEVICE_4, "172.20.20.4", "post-migration")
-    del subject.facts["routes"]["inet.0"]["198.62.1.0/29"]["active"]
+    [route] = [
+        r for r in subject.facts["routes"]
+        if r["rib"] == "inet.0" and r["prefix"] == "198.62.1.0/29"
+    ]
+    del route["active"]
 
     result = api.evaluate(subject, now=NOW)
 
@@ -1737,18 +1762,13 @@ def test_aligned_baseline_renames_protocol_areas_and_interface_fields(monkeypatc
 # INTERNET-CPE13-NNI a L3VPN-CPE13-NNI z et-0/0/8.
 
 
-def _route(via, protocol="static", next_hop=("152.11.13.2",)):
-    return {
-        "next_hop": list(next_hop),
-        "via": list(via),
-        "active": True,
-        "protocol": protocol,
-    }
+def _route(rib, prefix, via, protocol="static", next_hop=("152.11.13.2",)):
+    return route_record(rib, prefix, protocol=protocol, next_hop=next_hop, via=via)
 
 
 def test_per_port_route_via_other_port_is_not_unassigned():
     subject = _new()
-    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["ae0.14"])}}
+    subject.facts["routes"] = [_route("inet.0", "198.62.1.0/29", ["ae0.14"])]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1759,7 +1779,7 @@ def test_per_port_unclaimed_route_via_own_port_stays_unassigned():
     """Pojistka proti mezere v parsovani zustava: routa pres vlastni port,
     kterou si zadny scope nenarokuje, je porad videt."""
     subject = _new()
-    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["et-0/0/8.13"])}}
+    subject.facts["routes"] = [_route("inet.0", "198.62.1.0/29", ["et-0/0/8.13"])]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1771,9 +1791,9 @@ def test_per_port_route_via_irb_of_own_scope_stays_unassigned():
     local -> irb), takze routa pres nej k portu patri."""
     subject = _new()
     subject.scopes[0].selectors.interfaces.append("irb.10")
-    subject.facts["routes"] = {
-        "NGMVPN.inet.0": {"10.10.11.0/30": _route(["irb.10"], next_hop=["10.100.11.2"])}
-    }
+    subject.facts["routes"] = [
+        _route("NGMVPN.inet.0", "10.10.11.0/30", ["irb.10"], next_hop=["10.100.11.2"])
+    ]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1784,9 +1804,9 @@ def test_per_port_global_aggregate_without_interface_is_not_unassigned():
     """Agregat bez rozhrani v globalni tabulce patri lo0.0 - ten vznika jen
     v celoboxovem snimku. Per-port snimek ho nema komu pripsat."""
     subject = _new()
-    subject.facts["routes"] = {
-        "inet6.0": {"2001:abcd::/32": _route([], protocol="aggregate", next_hop=[])}
-    }
+    subject.facts["routes"] = [
+        _route("inet6.0", "2001:abcd::/32", [], protocol="aggregate", next_hop=[])
+    ]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1796,9 +1816,9 @@ def test_per_port_global_aggregate_without_interface_is_not_unassigned():
 def test_per_port_aggregate_in_own_vrf_stays_unassigned():
     subject = _new()
     subject.scopes[0].selectors.routing_instances = ["L3VPN"]
-    subject.facts["routes"] = {
-        "L3VPN.inet.0": {"172.26.0.0/23": _route([], protocol="aggregate", next_hop=[])}
-    }
+    subject.facts["routes"] = [
+        _route("L3VPN.inet.0", "172.26.0.0/23", [], protocol="aggregate", next_hop=[])
+    ]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW, port="et-0/0/8")
 
@@ -1808,7 +1828,7 @@ def test_per_port_aggregate_in_own_vrf_stays_unassigned():
 def test_whole_box_evaluation_keeps_route_via_any_port_unassigned():
     """Bez portu (celoboxovy snimek) se nic nezuzuje - chovani beze zmeny."""
     subject = _new()
-    subject.facts["routes"] = {"inet.0": {"198.62.1.0/29": _route(["ae0.14"])}}
+    subject.facts["routes"] = [_route("inet.0", "198.62.1.0/29", ["ae0.14"])]
 
     result = api.evaluate(subject, baseline=_old(), now=NOW)
 

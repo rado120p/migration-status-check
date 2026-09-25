@@ -160,7 +160,12 @@ def _facts_for(scopes, pps: int) -> dict:
     evpn_esi: list[dict] = []
     evpn_esi_by_instance: dict[str, dict] = {}
     evpn_mac = {}
-    routes: dict[str, dict[str, dict]] = {}
+    routes: list[dict] = []
+    # Dedup na (rib, prefix, protokol): stary dict dedupoval last-wins na
+    # (rib, prefix), tenhle seznam drzi prvni vyskyt - schema 14 uz umi
+    # static i aggregate na stejnem (rib, prefix) jako dva zaznamy, takze
+    # jen protokol rozliseni.
+    seen_routes: set[tuple[str, str, str]] = set()
     bfd: list[dict] = []
     # Dedup napric scopy stejnym zpusobem jako u bgp vyse - klic je
     # (soused, rozhrani), protoze schema 14 uz nedrzi bfd jako dict.
@@ -265,14 +270,21 @@ def _facts_for(scopes, pps: int) -> dict:
         # Zamer z inventory se zrcadli do namerenych faktu jako zdravy stav:
         # routa je v tabulce se stejnym next-hopem, session je Up.
         for route in scope.selectors.static_routes:
-            routes.setdefault(str(route["rib"]), {})[str(route["prefix"])] = {
-                "next_hop": [
-                    hop["to"] for hop in route.get("next_hops") or [] if hop["active"]
-                ],
-                "via": list(scope.selectors.interfaces[:1]),
-                "active": True,
-                "protocol": str(route.get("route_type", "static")),
-            }
+            rib = str(route["rib"])
+            prefix = str(route["prefix"])
+            protocol = str(route.get("route_type", "static"))
+            if (rib, prefix, protocol) not in seen_routes:
+                seen_routes.add((rib, prefix, protocol))
+                routes.append({
+                    "rib": rib,
+                    "prefix": prefix,
+                    "protocol": protocol,
+                    "next_hop": [
+                        hop["to"] for hop in route.get("next_hops") or [] if hop["active"]
+                    ],
+                    "via": list(scope.selectors.interfaces[:1]),
+                    "active": True,
+                })
 
         for intent in scope.selectors.bfd_peers:
             peer = str(intent["peer"])

@@ -18,11 +18,15 @@ Check cte jen zaznamy s `protocol == "static"` (fakta) / `route_type ==
 "static"` (zamer) - agregaty ma od 2026-08-19 QNH vlastni
 `aggregate_route_status`. Klicovani `(rib, prefix)` se s per-hop zaznamy
 nemeni: casteci deaktivace (nektere next-hopy vypnute, jine ne) zije uvnitr
-jednoho zaznamu, ne jako druha identita.
+jednoho zaznamu, ne jako druha identita. Od Tasku 4 (2026-09-25) muze mit
+stejny (rib, prefix) dva zaznamy - jeden static, jeden aggregate - takze
+oddeleni podle protokolu dela `_flatten` uz na vstupu, ne filtr uvnitr
+cyklu.
 
 Zapsany predpoklad: jmena RIB migraci prezijou. `_aligned_baseline_data`
 v enginu preslovnuje mezi baseline a subjectem jen oblast `interfaces`;
-`routes` jsou klicovane table -> prefix a preslovneni nedostanou. V laborce
+pohled scopu `routes` je {protokol: {rib: {prefix: zaznam}}} a preslovneni
+nedostane. V laborce
 to plati (L3VPN-CPE13-NNI.inet*.0 je na obou zarizenich stejne), ale sady
 instanci se lisi - mgmt_junos je jen na jednom z nich. Kdyby budouci migrace
 prejmenovala VRF, kazda routa v ni se precte jako chybejici + nova.
@@ -77,13 +81,12 @@ def _next_hop_text(data: dict[str, Any] | None) -> str | None:
 def _flatten(
     routes: dict[str, Any] | None, protocol: str
 ) -> dict[tuple[str, str], dict[str, Any]]:
-    # Chybejici klic 'protocol' je zaznam ze snapshotu pred schematem 10 -
-    # tehdy se sbiraly jen statiky, takze default je 'static', ne chyba.
+    # Pohled scopu je {protokol: {rib: {prefix: zaznam}}} (schema 14) -
+    # statika a agregat na stejnem (rib, prefix) jsou dva zaznamy.
     return {
         (table, prefix): data
-        for table, prefixes in (routes or {}).items()
+        for table, prefixes in ((routes or {}).get(protocol) or {}).items()
         for prefix, data in prefixes.items()
-        if str(data.get("protocol", "static")) == protocol
     }
 
 

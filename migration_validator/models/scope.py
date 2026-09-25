@@ -341,21 +341,18 @@ class Scope:
             for name, data in (facts.get("evpn_mac") or {}).items()
             if name in mac_instances
         }
+        # Selektor (rib, prefix, route_type): static a aggregate muzou sdilet
+        # (rib, prefix) (overeno 2026-09-24), takze bez protokolu by statika
+        # vybrala i agregat. Chybejici route_type = static (dnesni default).
         wanted_routes = {
-            (str(route.get("rib")), str(route.get("prefix")))
+            (str(route.get("rib")), str(route.get("prefix")), str(route.get("route_type", "static")))
             for route in self.selectors.static_routes
         }
-        routes = {}
-        for table, prefixes in (facts.get("routes") or {}).items():
-            selected_prefixes = {
-                prefix: data
-                for prefix, data in prefixes.items()
-                if (table, prefix) in wanted_routes
-            }
-            # Prazdna tabulka se nevraci - v reportu by nic nerekla a
-            # check by ji musel preskakovat.
-            if selected_prefixes:
-                routes[table] = selected_prefixes
+        routes: dict[str, dict[str, dict[str, Any]]] = {}
+        for record in facts.get("routes") or []:
+            key = (str(record.get("rib")), str(record.get("prefix")), str(record.get("protocol")))
+            if key in wanted_routes:
+                routes.setdefault(key[2], {}).setdefault(key[0], {})[key[1]] = record
 
         bfd_facts = list(facts.get("bfd") or [])
         bfd, bfd_ambiguous = _by_key(

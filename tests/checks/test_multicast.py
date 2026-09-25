@@ -650,8 +650,9 @@ def _core_scope(static_routes=INET2):
 def _core_facts(routes=None, via=("et-0/0/0.0",), inet2_present=True):
     facts = {"multicast_route": {"master": routes if routes is not None else {
         f"{SG[0]},{SG[1]}": _route(downstream=["et-0/0/8.11", "irb.2"])}}}
-    facts["routes"] = {"inet.2": {PREFIX: {"next_hop": ["10.1.1.2"], "via": list(via),
-                                           "active": True, "protocol": "static"}}} if inet2_present else {}
+    facts["routes"] = {"static": {"inet.2": {PREFIX: {
+        "next_hop": ["10.1.1.2"], "via": list(via), "active": True, "protocol": "static",
+    }}}} if inet2_present else {}
     return facts
 
 

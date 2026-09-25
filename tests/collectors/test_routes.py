@@ -20,45 +20,55 @@ from migration_validator.collectors.routes import RoutesCollector
 PLATFORMS = ("junos", "junos-evo")
 
 
+def _records_for(records: list[dict], rib: str, prefix: str) -> list[dict]:
+    return [r for r in records if r["rib"] == rib and r["prefix"] == prefix]
+
+
 @pytest.mark.parametrize("platform", PLATFORMS)
-def test_returns_mapping_of_tables(rpc_fixture, platform):
+def test_returns_list_of_records(rpc_fixture, platform):
     result = RoutesCollector().parse(rpc_fixture(platform, "routes"), platform)
-    assert isinstance(result, dict)
+    assert isinstance(result, list)
     assert result, "fixture nema zadnou statickou routu"
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_entries_have_expected_keys(rpc_fixture, platform):
     result = RoutesCollector().parse(rpc_fixture(platform, "routes"), platform)
-    for prefixes in result.values():
-        for data in prefixes.values():
-            assert set(data) == {"next_hop", "via", "active", "protocol"}
+    for record in result:
+        assert set(record) == {"rib", "prefix", "next_hop", "via", "active", "protocol"}
 
 
 def test_table_name_carries_rib_and_family(rpc_fixture):
     """table-name nese RIB i rodinu v jednom poli - proto se na nej normalizuje parser."""
     result = RoutesCollector().parse(rpc_fixture("junos-evo", "routes"), "junos-evo")
 
-    assert result["inet.0"]["198.62.1.0/29"]["next_hop"] == ["152.11.13.2"]
-    assert result["inet6.0"]["2001:aaaa::/64"]["next_hop"] == ["2001:abcd:11:14::4"]
-    assert result["L3VPN-CPE13-NNI.inet.0"]["172.26.1.0/29"]["via"] == ["et-0/0/8.113"]
-    assert "L3VPN-CPE13-NNI.inet6.0" in result
+    assert _records_for(result, "inet.0", "198.62.1.0/29")[0]["next_hop"] == ["152.11.13.2"]
+    assert _records_for(result, "inet6.0", "2001:aaaa::/64")[0]["next_hop"] == [
+        "2001:abcd:11:14::4"
+    ]
+    assert _records_for(result, "L3VPN-CPE13-NNI.inet.0", "172.26.1.0/29")[0]["via"] == [
+        "et-0/0/8.113"
+    ]
+    assert any(r["rib"] == "L3VPN-CPE13-NNI.inet6.0" for r in result)
 
 
 def test_management_routes_are_collected_not_filtered(rpc_fixture):
     """Collector neinterpretuje. Vyrazeni mgmt rout patri do scope, ne sem."""
     result = RoutesCollector().parse(rpc_fixture("junos", "routes"), "junos")
 
-    assert result["mgmt_junos.inet.0"]["0.0.0.0/0"]["via"] == ["fxp0.0"]
-    assert result["mgmt_junos.inet6.0"]["::/0"]["next_hop"] == ["2001:db8::1"]
+    assert _records_for(result, "mgmt_junos.inet.0", "0.0.0.0/0")[0]["via"] == ["fxp0.0"]
+    assert _records_for(result, "mgmt_junos.inet6.0", "::/0")[0]["next_hop"] == [
+        "2001:db8::1"
+    ]
 
 
 @pytest.mark.parametrize("platform", PLATFORMS)
-def test_empty_tables_are_dropped(rpc_fixture, platform):
-    """RPC vraci pres dvacet tabulek, vetsina prazdna - ty by snimek jen nafoukly."""
+def test_empty_tables_produce_no_record(rpc_fixture, platform):
+    """RPC vraci pres dvacet tabulek, vetsina prazdna - z nich zadny zaznam nevznikne."""
     result = RoutesCollector().parse(rpc_fixture(platform, "routes"), platform)
 
-    assert all(prefixes for prefixes in result.values())
+    tables_with_records = {r["rib"] for r in result}
+    assert tables_with_records, "fixture nema zadnou tabulku se zaznamem"
 
 
 # Druhy pruchod (protocol=aggregate): nahravka z Tasku 1 ukazuje, ze
@@ -126,7 +136,7 @@ def _static_xml() -> etree._Element:
 
 def test_parse_tagne_aggregate_zaznam_protokolem():
     parsed = RoutesCollector().parse(etree.fromstring(AGGREGATE_XML), "junos-evo")
-    entry = parsed["inet6.0"]["2001:abcd::/32"]
+    [entry] = _records_for(parsed, "inet6.0", "2001:abcd::/32")
     assert entry["protocol"] == "aggregate"
     assert entry["next_hop"] == []
     assert entry["via"] == []
@@ -136,8 +146,7 @@ def test_parse_tagne_aggregate_zaznam_protokolem():
 def test_parse_tagne_static_zaznam_protokolem():
     # stavajici STATIC_XML konstanta / fixture routes.xml
     parsed = RoutesCollector().parse(_static_xml(), "junos-evo")
-    entry = next(iter(next(iter(parsed.values())).values()))
-    assert entry["protocol"] == "static"
+    assert parsed[0]["protocol"] == "static"
 
 
 FOREIGN_PROTOCOL_XML = b"""
@@ -180,8 +189,47 @@ def test_parse_filtruje_cizi_protokol_ale_neztraci_static():
     selektivni, ne rozbity."""
     parsed = RoutesCollector().parse(etree.fromstring(FOREIGN_PROTOCOL_XML), "junos-evo")
 
-    assert "2001:bbbb::/64" not in parsed["inet6.0"]
-    assert parsed["inet6.0"]["2001:aaaa::/64"]["protocol"] == "static"
+    assert not _records_for(parsed, "inet6.0", "2001:bbbb::/64")
+    assert _records_for(parsed, "inet6.0", "2001:aaaa::/64")[0]["protocol"] == "static"
+
+
+BOTH_PROTOCOLS_SAME_PREFIX_XML = b"""
+<route-information>
+  <route-table>
+    <table-name>CUST.inet.0</table-name>
+    <rt>
+      <rt-destination>10.1.0.0/24</rt-destination>
+      <rt-entry>
+        <active-tag>*</active-tag>
+        <protocol-name>Static</protocol-name>
+        <nh>
+          <to>192.168.1.2</to>
+          <via>ae0.100</via>
+        </nh>
+      </rt-entry>
+      <rt-entry>
+        <protocol-name>Aggregate</protocol-name>
+        <nh-type>Reject</nh-type>
+      </rt-entry>
+    </rt>
+  </route-table>
+</route-information>
+"""
+
+
+def test_parse_keeps_static_and_aggregate_from_one_response_as_two_records():
+    """Oba protokoly muzou prijit v jedne odpovedi pod jednim <rt> (ne jen
+    ve dvou samostatnych pruchodech RPC) - grupovani podle protokolu musi
+    fungovat i uvnitr jednoho parse() volani, ne jen mezi dvema pruchody
+    collect()."""
+    parsed = RoutesCollector().parse(
+        etree.fromstring(BOTH_PROTOCOLS_SAME_PREFIX_XML), "junos"
+    )
+    records = _records_for(parsed, "CUST.inet.0", "10.1.0.0/24")
+    assert sorted((r["protocol"], r["active"]) for r in records) == [
+        ("aggregate", False),
+        ("static", True),
+    ]
 
 
 class _FakeRoutesRpc:
@@ -206,14 +254,26 @@ class _FakeDevice:
         self.rpc = _FakeRoutesRpc(by_protocol)
 
 
-def test_collect_merguje_oba_pruchody_a_druhy_jen_pridava():
-    device = _FakeDevice({
-        "static": STATIC_XML,
-        "aggregate": AGGREGATE_XML_SE_STEJNYM_PREFIXEM,
-    })
-    facts = RoutesCollector().collect(device, "junos-evo")
-    # prefix z prvniho pruchodu nesmi byt prepsan druhym
-    assert facts["inet6.0"]["2001:aaaa::/64"]["protocol"] == "static"
+def test_collect_keeps_static_and_aggregate_on_same_prefix():
+    static_xml = (
+        b"<route-information><route-table><table-name>CUST.inet.0</table-name>"
+        b"<rt><rt-destination>10.1.0.0/24</rt-destination><rt-entry>"
+        b"<active-tag>*</active-tag><protocol-name>Static</protocol-name>"
+        b"<nh><to>192.168.1.2</to><via>ae0.100</via></nh></rt-entry></rt>"
+        b"</route-table></route-information>"
+    )
+    aggregate_xml = (
+        b"<route-information><route-table><table-name>CUST.inet.0</table-name>"
+        b"<rt><rt-destination>10.1.0.0/24</rt-destination><rt-entry>"
+        b"<protocol-name>Aggregate</protocol-name><nh-type>Reject</nh-type></rt-entry></rt>"
+        b"</route-table></route-information>"
+    )
+    device = _FakeDevice({"static": static_xml, "aggregate": aggregate_xml})
+    records = RoutesCollector().collect(device, "junos")
+    assert sorted((r["rib"], r["prefix"], r["protocol"], r["active"]) for r in records) == [
+        ("CUST.inet.0", "10.1.0.0/24", "aggregate", False),
+        ("CUST.inet.0", "10.1.0.0/24", "static", True),
+    ]
 
 
 def test_rpc_calls_stril_static_a_aggregate():
@@ -247,7 +307,7 @@ def test_two_rt_entries_of_one_prefix_are_merged():
     xml = etree.parse(str(CASES / "routes_qnh.xml")).getroot()
     result = RoutesCollector().parse(xml, "junos")
 
-    route = result["inet.2"]["10.11.11.1/32"]
+    [route] = _records_for(result, "inet.2", "10.11.11.1/32")
     assert route["active"] is True
     assert route["via"] == ["ge-0/0/0.0", "ge-0/0/1.0"]
     assert route["next_hop"] == ["10.1.2.0", "10.1.0.5"]
@@ -256,7 +316,6 @@ def test_two_rt_entries_of_one_prefix_are_merged():
 
 def test_single_entry_route_shape_is_unchanged(rpc_fixture):
     result = RoutesCollector().parse(rpc_fixture("junos", "routes"), "junos")
-    for prefixes in result.values():
-        for data in prefixes.values():
-            assert set(data) == {"next_hop", "via", "active", "protocol"}
-            assert len(data["via"]) == len(set(data["via"]))
+    for record in result:
+        assert set(record) == {"rib", "prefix", "next_hop", "via", "active", "protocol"}
+        assert len(record["via"]) == len(set(record["via"]))

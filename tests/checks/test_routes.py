@@ -6,6 +6,8 @@ Check na XML nesaha - fakta se skladaji rucne, protoze prave kombinace
 
 from __future__ import annotations
 
+from fact_records import route_record
+
 from migration_validator.checks.base import CheckContext, run_check
 from migration_validator.checks.routes import (
     NOT_ACTIVE,
@@ -73,6 +75,18 @@ def _scope(static_routes=None) -> Scope:
     )
 
 
+def _view(routes: dict) -> dict:
+    """{rib: {prefix: data}} -> pohled scopu {protokol: {rib: {prefix: data}}}
+    (schema 14, Task 4). `data.get("protocol")` chybi u statik (default
+    "static") a je explicitni u agregatu - stejne, jako to dela Scope.select."""
+    view: dict[str, dict[str, dict]] = {}
+    for rib, prefixes in (routes or {}).items():
+        for prefix, data in prefixes.items():
+            protocol = str(data.get("protocol", "static"))
+            view.setdefault(protocol, {}).setdefault(rib, {})[prefix] = data
+    return view
+
+
 def _ctx(
     subject_routes, baseline_routes=None, scope=None, baseline_scope=None
 ) -> CheckContext:
@@ -82,8 +96,8 @@ def _ctx(
     dodava vlastni slovnik po konstrukci."""
     return CheckContext(
         scope=scope or _scope(CONFIGURED),
-        subject={"routes": subject_routes},
-        baseline={"routes": baseline_routes} if baseline_routes is not None else None,
+        subject={"routes": _view(subject_routes)},
+        baseline={"routes": _view(baseline_routes)} if baseline_routes is not None else None,
         baseline_scope=baseline_scope,
         config=default_config(),
         baseline_collectors=(
@@ -396,7 +410,7 @@ def test_service_scope_with_baseline_record_says_missing_against_baseline():
     ctx = CheckContext(
         scope=scope,
         subject={"routes": {}},
-        baseline={"routes": _installed()},
+        baseline={"routes": _view(_installed())},
         config=default_config(),
     )
 
@@ -701,8 +715,8 @@ def test_route_active_now_deactivated_in_baseline_gets_no_deactivation_row():
     }
     ctx = CheckContext(
         scope=scope,
-        subject={"routes": subject_routes},
-        baseline={"routes": subject_routes},
+        subject={"routes": _view(subject_routes)},
+        baseline={"routes": _view(subject_routes)},
         baseline_scope=baseline_scope,
         config=default_config(),
     )
@@ -950,3 +964,48 @@ def test_aggregate_baseline_without_activity_has_no_baseline_value():
 def test_static_zaznamy_aggregate_check_ignoruje():
     ctx = _ctx(_installed(), scope=_scope(CONFIGURED))
     assert AggregateRouteStatusCheck().run(ctx) == []
+
+
+def test_static_and_aggregate_on_same_prefix_each_check_sees_its_own():
+    """Uzivatel potvrdil (2026-09-24), ze static a aggregate muzou sdilet
+    (rib, prefix) - kazdy check tak musi cist jen svuj protokol, ne oba
+    zaznamy dohromady.
+
+    active=True u agregatu (ne False): test je o koexistenci na jednom
+    (rib, prefix), ne o semantice neaktivniho agregatu - ta ma vlastni
+    testy vyse (test_aggregate_neaktivni_v_baseline_ukaze_bylo_neni_aktivni
+    a sousedi)."""
+    rib, prefix = "CUST.inet.0", "10.1.0.0/24"
+    scope = Scope(
+        id="svc:CUST:Internet", kind="service",
+        key=ScopeKey(description="CUST", service_type="Internet"),
+        selectors=Selectors(static_routes=[
+            {"rib": rib, "prefix": prefix, "route_type": "static",
+             "next_hops": [{"to": "192.168.1.2", "interface": None,
+                             "qualified": False, "active": True}]},
+            {"rib": rib, "prefix": prefix, "route_type": "aggregate",
+             "next_hops": [], "active": True},
+        ]),
+    )
+    routes_view = {
+        "static": {rib: {prefix: route_record(
+            rib, prefix, protocol="static", next_hop=["192.168.1.2"],
+            via=["ae0.100"], active=True,
+        )}},
+        "aggregate": {rib: {prefix: route_record(
+            rib, prefix, protocol="aggregate", active=True,
+        )}},
+    }
+    ctx = CheckContext(
+        scope=scope,
+        subject={"routes": routes_view},
+        baseline=None,
+        config=default_config(),
+    )
+
+    [static_finding] = StaticRouteStatusCheck().run(ctx)
+    assert static_finding.outcome is Outcome.OK
+
+    [aggregate_finding] = AggregateRouteStatusCheck().run(ctx)
+    assert aggregate_finding.outcome is Outcome.OK
+    assert aggregate_finding.value == "v tabulce"

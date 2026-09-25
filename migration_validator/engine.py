@@ -520,34 +520,43 @@ def _unassigned_static_routes(
     ne sem; agregat bez rozhrani se pripise podle VRF, globalni agregat
     patri Core lo0.0 z celoboxoveho snimku. Pojistka proti mezere v
     parsovani zustava pro routy pres vlastni port.
+
+    Identita zarazeni je (rib, prefix, protokol): vlastnena staticka routa
+    na stejnem (rib, prefix) nesmi schovat nevlastneny agregat - jsou to
+    dva zaznamy, ne jeden.
     """
     assigned = {
-        (str(route.get("rib")), str(route.get("prefix")))
+        (str(route.get("rib")), str(route.get("prefix")), str(route.get("route_type", "static")))
         for scope in scopes
         for route in scope.selectors.static_routes
     }
 
-    def _on_port(table: str, data: dict[str, Any]) -> bool:
+    def _on_port(record: dict[str, Any]) -> bool:
         if port is None:
             return True
-        via = [str(name) for name in data.get("via", [])]
+        via = [str(name) for name in record.get("via", [])]
         if via:
             return any(_interface_on_port(name, port, scopes) for name in via)
-        instance = _rib_instance(table)
+        instance = _rib_instance(str(record.get("rib")))
         return instance is not None and instance in _scope_instances(scopes)
 
+    records = sorted(
+        subject.facts.get("routes") or [],
+        key=lambda r: (str(r.get("rib")), str(r.get("prefix")), str(r.get("protocol"))),
+    )
     return [
         {
-            "rib": table,
-            "prefix": prefix,
-            "next_hop": data.get("next_hop", []),
-            "via": data.get("via", []),
-            "protocol": str(data.get("protocol", "static")),
+            "rib": record.get("rib"),
+            "prefix": record.get("prefix"),
+            "next_hop": record.get("next_hop", []),
+            "via": record.get("via", []),
+            "protocol": str(record.get("protocol", "static")),
             "snapshot": "subject",
         }
-        for table, prefixes in sorted((subject.facts.get("routes") or {}).items())
-        for prefix, data in sorted(prefixes.items())
-        if (table, prefix) not in assigned and _on_port(table, data)
+        for record in records
+        if (str(record.get("rib")), str(record.get("prefix")), str(record.get("protocol", "static")))
+        not in assigned
+        and _on_port(record)
     ]
 
 

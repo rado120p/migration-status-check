@@ -1,6 +1,6 @@
 """Stavitele zaznamu device faktu (schema 14) pro testy.
 
-Device fakta bgp/bfd/evpn_esi/routes jsou od schematu 14 seznamy zaznamu,
+Device fakta bgp/bfd/evpn_esi/routes jsou seznamy zaznamu (routes od Tasku 4),
 ktere nesou celou svou identitu. Testy, ktere si fakta staveji rucne, je
 maji stavet timhle modulem - tvar se pak meni na jednom miste.
 
@@ -70,6 +70,31 @@ def bfd_records(mapping: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
          "neighbor": neighbor,
          "multihop": data.get("multihop", data.get("interface") is None)}
         for neighbor, data in mapping.items()
+    ]
+
+
+def route_record(
+    rib: str,
+    prefix: str,
+    *,
+    protocol: str = "static",
+    next_hop: list[str] | tuple[str, ...] = (),
+    via: list[str] | tuple[str, ...] = (),
+    active: bool = True,
+) -> dict[str, Any]:
+    return {
+        "rib": rib, "prefix": prefix, "protocol": protocol,
+        "next_hop": list(next_hop), "via": list(via), "active": active,
+    }
+
+
+def route_records(mapping: dict[str, dict[str, dict[str, Any]]]) -> list[dict[str, Any]]:
+    """{rib: {prefix: data}} -> [zaznam]; chybejici protocol = static."""
+    return [
+        {**route_record(rib, prefix), **data, "rib": rib, "prefix": prefix,
+         "protocol": data.get("protocol", "static")}
+        for rib, prefixes in mapping.items()
+        for prefix, data in prefixes.items()
     ]
 
 

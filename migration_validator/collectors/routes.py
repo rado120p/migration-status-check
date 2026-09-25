@@ -9,10 +9,10 @@ IPv4 a IPv6, se v RPC nevyskytuje. `via` nese vystupni rozhrani, takze
 mapovani na sluzbu nepotrebuje aritmetiku nad next-hopem.
 
 Sber jede dvema pruchody stejneho RPC (protocol=static, protocol=aggregate)
-- vzor je InterfacesCollector (extensive + terse). Merge v collect() druhym
-pruchodem jen priresava, nikdy neprepisuje: prefix nemuze byt v jedne RIB
-soucasne static i aggregate, takze kolize by znamenala poskozena data, ne
-legitimni update.
+- vzor je InterfacesCollector (extensive + terse). Uzivatel potvrdil
+(2026-09-24), ze static a aggregate muzou sdilet stejny (rib, prefix) -
+kazdy protokol je proto svuj vlastni zaznam a oba pruchody se jen
+zretezuji, nikdy neslucuji.
 
 Overeno proti laborce (routes.2.xml): agregatni zaznam nema zadny <nh> -
 <nh-type> (Discard/Reject) sedi primo pod <rt-entry>, takze next_hop i via
@@ -111,7 +111,7 @@ class RoutesCollector(Collector):
                 f"collector '{self.name}' nepodporuje platformu '{platform}'"
             )
 
-        tables: dict[str, dict[str, dict[str, Any]]] = {}
+        records: list[dict[str, Any]] = []
         failures: list[str] = []
 
         for rpc_name, rpc_kwargs in self.rpc_calls(platform):
@@ -128,38 +128,31 @@ class RoutesCollector(Collector):
                 failures.append(f"{variant}: parsovani selhalo - {error}")
                 continue
 
-            for table, prefixes in parsed.items():
-                target = tables.setdefault(table, {})
-                for prefix, data in prefixes.items():
-                    # Druhy pruchod jen pridava: prefix nemuze byt v jedne
-                    # RIB zaroven static a aggregate, a last-write-wins by
-                    # jeden z nich tise schoval.
-                    target.setdefault(prefix, data)
+            records.extend(parsed)
 
         if failures:
             raise CollectorError(
                 f"collector '{self.name}': RPC selhalo - " + "; ".join(failures)
             )
 
-        return tables
+        return records
 
-    def parse(
-        self, xml: etree._Element, platform: str
-    ) -> dict[str, dict[str, dict[str, Any]]]:
-        tables: dict[str, dict[str, dict[str, Any]]] = {}
+    def parse(self, xml: etree._Element, platform: str) -> list[dict[str, Any]]:
+        # RPC vraci pres dvacet tabulek, vetsina prazdna - z nich proste
+        # nevznikne zadny zaznam, snimek se jimi nenafoukne.
+        records: list[dict[str, Any]] = []
 
         for table in xml.iter("route-table"):
             name = _text(table, "table-name")
             if not name:
                 continue
 
-            prefixes: dict[str, dict[str, Any]] = {}
             for route in table.iter("rt"):
                 prefix = _text(route, "rt-destination")
                 if not prefix:
                     continue
 
-                entries: list[dict[str, Any]] = []
+                by_protocol: dict[str, list[dict[str, Any]]] = {}
                 for entry in route.iter("rt-entry"):
                     # Filtr na protokol uz je v RPC, tohle je pojistka:
                     # nasazeni s jinym filtrem (nebo neocekavana odpoved)
@@ -167,18 +160,22 @@ class RoutesCollector(Collector):
                     protocol = (_text(entry, "protocol-name") or "").lower()
                     if protocol not in PROTOCOLS:
                         continue
-                    entries.append({
+                    by_protocol.setdefault(protocol, []).append({
                         "next_hop": _texts(entry, "to"),
                         "via": _texts(entry, "via"),
                         "active": _text(entry, "active-tag") == ACTIVE_TAG,
                         "protocol": protocol,
                     })
-                if entries:
-                    prefixes[prefix] = _merge_entries(entries)
 
-            # RPC vraci pres dvacet tabulek, vetsina prazdna. Ukladat je
-            # znamena nafouknout kazdy snimek o rady, ktere nic nerikaji.
-            if prefixes:
-                tables[name] = prefixes
+                # Kazdy protokol na tomhle prefixu je svuj vlastni zaznam -
+                # static a aggregate muzou sdilet (rib, prefix) (overeno
+                # 2026-09-24). _merge_entries slucuje jen vic rt-entry
+                # stejneho protokolu (next-hop + qualified-next-hop).
+                for entries in by_protocol.values():
+                    records.append({
+                        "rib": name,
+                        "prefix": prefix,
+                        **_merge_entries(entries),
+                    })
 
-        return tables
+        return records

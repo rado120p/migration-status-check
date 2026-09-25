@@ -1,4 +1,12 @@
-from fact_records import bfd_record, bfd_records, bgp_record, bgp_records, esi_record
+from fact_records import (
+    bfd_record,
+    bfd_records,
+    bgp_record,
+    bgp_records,
+    esi_record,
+    route_record,
+    route_records,
+)
 
 from migration_validator.models.scope import (
     FACT_AREAS,
@@ -183,7 +191,7 @@ def test_device_scope_no_longer_exists():
     assert not hasattr(Scope, "is_device")
 
 
-ROUTE_FACTS = {
+ROUTE_FACTS = route_records({
     "inet.0": {
         "198.62.1.0/29": {"next_hop": ["152.11.13.2"], "via": ["et-0/0/8.13"], "active": True},
         "10.9.9.0/24": {"next_hop": ["10.9.9.1"], "via": ["et-0/0/9.0"], "active": True},
@@ -191,7 +199,7 @@ ROUTE_FACTS = {
     "L3VPN-A.inet.0": {
         "172.26.1.0/29": {"next_hop": ["198.11.13.2"], "via": ["et-0/0/8.113"], "active": True},
     },
-}
+})
 
 BFD_FACTS = bfd_records({
     "152.11.13.2": {"state": "Up", "interface": "et-0/0/8.13"},
@@ -219,11 +227,12 @@ def test_routes_are_selected_by_rib_and_prefix():
     selected = scope.select({"routes": ROUTE_FACTS})
 
     assert selected["routes"] == {
-        "inet.0": {
-            "198.62.1.0/29": {
-                "next_hop": ["152.11.13.2"],
-                "via": ["et-0/0/8.13"],
-                "active": True,
+        "static": {
+            "inet.0": {
+                "198.62.1.0/29": route_record(
+                    "inet.0", "198.62.1.0/29",
+                    next_hop=["152.11.13.2"], via=["et-0/0/8.13"], active=True,
+                )
             }
         }
     }
@@ -239,7 +248,39 @@ def test_table_without_matching_prefix_is_dropped_entirely():
 
     selected = scope.select({"routes": ROUTE_FACTS})
 
-    assert set(selected["routes"]) == {"L3VPN-A.inet.0"}
+    assert set(selected["routes"]["static"]) == {"L3VPN-A.inet.0"}
+
+
+def test_routes_view_is_keyed_by_protocol_and_selector_route_type():
+    scope = Scope(
+        id="svc:x", kind="service", key=ScopeKey(description="x", service_type="IPVPN"),
+        selectors=Selectors(interfaces=["ae0.100"], routing_instances=["CUST"], static_routes=[
+            {"rib": "CUST.inet.0", "prefix": "10.1.0.0/24", "route_type": "static", "next_hops": []},
+        ]),
+    )
+    facts = {"routes": [
+        route_record("CUST.inet.0", "10.1.0.0/24", protocol="static", via=["ae0.100"]),
+        route_record("CUST.inet.0", "10.1.0.0/24", protocol="aggregate", active=False),
+    ]}
+    view = scope.select(facts)["routes"]
+    assert set(view) == {"static"}
+    assert view["static"]["CUST.inet.0"]["10.1.0.0/24"]["via"] == ["ae0.100"]
+
+
+def test_routes_view_keeps_static_and_aggregate_selectors_separate():
+    scope = Scope(
+        id="svc:x", kind="service", key=ScopeKey(description="x", service_type="IPVPN"),
+        selectors=Selectors(interfaces=["ae0.100"], routing_instances=["CUST"], static_routes=[
+            {"rib": "CUST.inet.0", "prefix": "10.1.0.0/24", "route_type": "static", "next_hops": []},
+            {"rib": "CUST.inet.0", "prefix": "10.1.0.0/24", "route_type": "aggregate", "next_hops": []},
+        ]),
+    )
+    facts = {"routes": [
+        route_record("CUST.inet.0", "10.1.0.0/24", protocol="static", via=["ae0.100"]),
+        route_record("CUST.inet.0", "10.1.0.0/24", protocol="aggregate", active=False),
+    ]}
+    view = scope.select(facts)["routes"]
+    assert set(view) == {"static", "aggregate"}
 
 
 def test_bfd_sessions_are_selected_by_bgp_neighbors():

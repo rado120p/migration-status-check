@@ -544,7 +544,16 @@ def _deactivate_shared_route(old, new) -> tuple[str, str]:
         route["active"] = False
 
     description, service_type, rib, prefix = target
-    new.facts.get("routes", {}).get(rib, {}).pop(prefix, None)
+    protocol = str(by_key[target]["new"].get("route_type", "static"))
+    new.facts["routes"] = [
+        record
+        for record in new.facts.get("routes") or []
+        if not (
+            str(record.get("rib")) == rib
+            and str(record.get("prefix")) == prefix
+            and str(record.get("protocol", "static")) == protocol
+        )
+    ]
     return description, service_type
 
 
