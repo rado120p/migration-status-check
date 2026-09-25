@@ -39,14 +39,28 @@ def _vpws_ctx(subject, baseline=None):
     return _ctx(subject, baseline, service_type="E-Line", subtype="vpws")
 
 
+def _vpws_ac(*, name="ge-0/0/2.213", status="Up", mode="single-homed", local_value=1000,
+             remote_value=2000, local_peers=(), remote_peers=(), partner=None, pw=None):
+    return {
+        "name": name, "status": status, "mode": mode, "pseudowire_status": pw,
+        "local_sid": {"value": local_value, "peers": list(local_peers), "local_interface": None},
+        "remote_sid": {"value": remote_value, "peers": list(remote_peers),
+                       "local_interface": partner},
+    }
+
+
+def _vpws_facts(*acs, instance="EVPN-VPWS-X"):
+    return {"evpn_vpws": {instance: {"interfaces": list(acs)}}}
+
+
 def _vpws_subject(*, status="Up", mode="single-homed", iface_name="ge-0/0/2.213",
                   local_peers=(), remote_peers=(), remote_value=2000,
-                  instance="EVPN-VPWS-X"):
-    return {"evpn_vpws": {instance: {"interfaces": [{
-        "name": iface_name, "status": status, "mode": mode,
-        "local_sid": {"value": 1000, "peers": list(local_peers)},
-        "remote_sid": {"value": remote_value, "peers": list(remote_peers)},
-    }]}}}
+                  instance="EVPN-VPWS-X", pw=None, partner=None):
+    return _vpws_facts(
+        _vpws_ac(name=iface_name, status=status, mode=mode, remote_value=remote_value,
+                 local_peers=local_peers, remote_peers=remote_peers, pw=pw, partner=partner),
+        instance=instance,
+    )
 
 
 PEER_OK = {"esi": "00:00:00:00:00:00:00:00:00:00", "ipaddr": "150.0.0.14",
@@ -195,9 +209,8 @@ def test_vpws_baseline_different_local_mode_is_plain_mode():
     assert row.baseline_value == "single-homed"
 
 
-def test_vpws_baseline_matches_by_position_despite_renamed_interface():
-    # Jmeno rozhrani se migraci meni (ge-0/0/3.0 -> ae0.224), parovani
-    # musi byt pozicni, ne podle jmena.
+def test_vpws_baseline_pairs_by_sid_despite_renamed_interface():
+    # Jmeno rozhrani se migraci meni (ge-0/0/3.0 -> ae0.224), SID ne.
     baseline = _vpws_subject(remote_peers=[PEER_OK], iface_name="ge-0/0/3.0")
     subject = _vpws_subject(remote_peers=[PEER_OK], iface_name="ae0.224")
     findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
@@ -315,6 +328,143 @@ def test_vpws_missing_remote_peer_in_both_is_unchanged_with_sentinel_baseline():
     assert pe.baseline_value == "Neznamy peer"
     status = _by_label(rows, "EVPN VPWS SID remote status")
     assert status.status is Status.PASS and status.baseline_value == "Unresolved / Chybi"
+
+
+def test_vpws_baseline_pairs_by_sid_not_position():
+    """Review E2: baseline AC v jinem poradi - parovani podle (local, remote) SID."""
+    a = _vpws_ac(name="ge-0/0/2.100", local_value=100, remote_value=200, remote_peers=[PEER_OK])
+    b = _vpws_ac(name="ge-0/0/2.101", local_value=101, remote_value=201, status="Down",
+                 remote_peers=[PEER_OK])
+    subject = _vpws_facts({**a, "name": "et-0/0/8.100"}, {**b, "name": "et-0/0/8.101", "status": "Up"})
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, _vpws_facts(b, a)))
+    assert _by_label(findings, "EVPN VPWS local interface status (et-0/0/8.100)").baseline_value == "Up"
+    assert _by_label(findings, "EVPN VPWS local interface status (et-0/0/8.101)").baseline_value == "Down"
+
+
+def test_vpws_down_ac_never_unchanged_against_other_acs_baseline():
+    """Pozicne by Down .100 dostal baseline Down .101 -> falesne UNCHANGED."""
+    base_a = _vpws_ac(name="ge-0/0/2.100", local_value=100, remote_value=200, remote_peers=[PEER_OK])
+    base_b = _vpws_ac(name="ge-0/0/2.101", local_value=101, remote_value=201, status="Down",
+                      remote_peers=[PEER_OK])
+    subject = _vpws_facts(
+        _vpws_ac(name="et-0/0/8.100", local_value=100, remote_value=200, status="Down",
+                 remote_peers=[PEER_OK]),
+        _vpws_ac(name="et-0/0/8.101", local_value=101, remote_value=201, status="Down",
+                 remote_peers=[PEER_OK]),
+    )
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=_vpws_facts(base_b, base_a)))
+    assert _by_label(rows, "EVPN VPWS local interface status (et-0/0/8.100)").status is Status.FAIL
+    assert _by_label(rows, "EVPN VPWS local interface status (et-0/0/8.101)").status is Status.PASS
+
+
+def test_vpws_single_ac_with_changed_sid_still_pairs():
+    baseline = _vpws_subject(remote_peers=[PEER_OK], remote_value=2000)
+    subject = _vpws_subject(remote_peers=[PEER_OK], remote_value=2001, iface_name="et-0/0/8.213")
+    row = _by_label(EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline)),
+                    "EVPN VPWS SID remote value")
+    assert row.value == "SID 2001" and row.baseline_value == "SID 2000"
+
+
+def test_vpws_two_acs_without_sid_match_get_no_baseline():
+    baseline = _vpws_facts(_vpws_ac(name="a.1", local_value=1, remote_value=2),
+                           _vpws_ac(name="a.2", local_value=3, remote_value=4))
+    subject = _vpws_facts(_vpws_ac(name="b.1", local_value=5, remote_value=6),
+                          _vpws_ac(name="b.2", local_value=7, remote_value=8))
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    assert _by_label(findings, "EVPN VPWS local interface status (b.1)").baseline_value is None
+    assert _by_label(findings, "EVPN VPWS local interface status (b.2)").baseline_value is None
+
+
+def test_vpws_unknown_sids_never_pair_by_sid():
+    """(None, None) neni identita - dve AC bez SID se podle SID neparuji."""
+    baseline = _vpws_facts(_vpws_ac(name="a.1", local_value=None, remote_value=None),
+                           _vpws_ac(name="a.2", local_value=None, remote_value=None, status="Down"))
+    subject = _vpws_facts(_vpws_ac(name="b.1", local_value=None, remote_value=None),
+                          _vpws_ac(name="b.2", local_value=None, remote_value=None))
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    for iface in ("b.1", "b.2"):
+        assert _by_label(findings, f"EVPN VPWS local interface status ({iface})").baseline_value is None
+
+
+def test_vpws_ac_missing_from_instance_output_is_broken():
+    """Instance je, AC scopu ve vypisu neni -> BROKEN, ne SKIP."""
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(_vpws_facts()))
+    row = _by_label(findings, "EVPN VPWS local interface status")
+    assert row.outcome is Outcome.BROKEN
+    assert row.value == "Chybi"
+    assert row.message == "EVPN-VPWS-X: AC ge-0/0/2.313 ve vypisu instance chybi"
+
+
+def test_vpws_ac_missing_in_both_is_unchanged():
+    empty = _vpws_facts()
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(empty, baseline=empty))
+    row = _by_label(rows, "EVPN VPWS local interface status")
+    assert row.status is Status.PASS and row.baseline_value == "Chybi"
+
+
+def test_vpws_ac_missing_but_present_in_baseline_shows_previous_status():
+    findings = EvpnVpwsStatusCheck().run(
+        _vpws_ctx(_vpws_facts(), _vpws_subject(remote_peers=[PEER_OK]))
+    )
+    row = _by_label(findings, "EVPN VPWS local interface status")
+    assert row.outcome is Outcome.BROKEN and row.baseline_value == "Up"
+
+
+def test_vpws_pw_status_ccc_up_is_ok_and_follows_interface_row():
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK], pw="CCC-Up"))
+    assert [f.label for f in findings[:2]] == [
+        "EVPN VPWS local interface status", "EVPN VPWS pseudowire status",
+    ]
+    row = _by_label(findings, "EVPN VPWS pseudowire status")
+    assert row.outcome is Outcome.OK and row.value == "CCC-Up"
+
+
+def test_vpws_pw_status_other_than_ccc_up_is_broken():
+    row = _by_label(run_findings(_vpws_subject(remote_peers=[PEER_OK], pw="CCC-Down")),
+                    "EVPN VPWS pseudowire status")
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == "EVPN-VPWS-X: pseudowire CCC-Down, ocekavano CCC-Up"
+
+
+def test_vpws_pw_status_absent_emits_no_row():
+    """MX pseudowire-status nevypisuje - zadny radek, ani SKIP."""
+    findings = run_findings(_vpws_subject(remote_peers=[PEER_OK]))
+    assert not any(f.label == "EVPN VPWS pseudowire status" for f in findings)
+
+
+def test_vpws_pw_status_against_mx_baseline_has_no_baseline_value():
+    baseline = _vpws_subject(remote_peers=[PEER_OK])
+    subject = _vpws_subject(remote_peers=[PEER_OK], pw="CCC-Down", iface_name="et-0/0/8.213")
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    row = _by_label(rows, "EVPN VPWS pseudowire status")
+    assert row.status is Status.FAIL and row.baseline_value is None
+
+
+def test_vpws_pw_status_same_broken_in_both_is_unchanged():
+    subject = _vpws_subject(remote_peers=[PEER_OK], pw="CCC-Down")
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    assert _by_label(rows, "EVPN VPWS pseudowire status").status is Status.PASS
+
+
+def test_vpws_review_case_down_ac_does_not_leak_into_other_scope():
+    """Review E2 end to end: .101 Down, scope .100 zustane cisty."""
+    facts = _vpws_facts(
+        _vpws_ac(name="ge-0/0/1.100", local_value=100, remote_value=200, remote_peers=[PEER_OK]),
+        _vpws_ac(name="ge-0/0/1.101", local_value=101, remote_value=201, status="Down",
+                 remote_peers=[PEER_OK]),
+        instance="VPWS",
+    )
+    scope = Scope(
+        id="svc:ge-0/0/1.100", kind="service",
+        key=ScopeKey("ge-0/0/1.100", "E-Line", "vpws"),
+        selectors=Selectors(interfaces=["ge-0/0/1.100"], physical_interfaces=["ge-0/0/1"],
+                            routing_instances=["VPWS"]),
+    )
+    ctx = CheckContext(scope=scope, subject=scope.select(facts), baseline=None,
+                       config=default_config(), failed_collectors={}, baseline_collectors={})
+    rows = run_check(EvpnVpwsStatusCheck(), ctx)
+    assert all(row.status is not Status.FAIL for row in rows)
+    assert not any("ge-0/0/1.101" in (row.label or "") for row in rows)
 
 
 # Rozpad ESI bloku na samostatne radky (lab 2026-08-13): jeden slepeny

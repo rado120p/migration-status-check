@@ -17,6 +17,7 @@ from migration_validator.checks.registry import register
 from migration_validator.models.result import Finding, Outcome, Severity
 
 UP = "Up"
+PW_UP = "CCC-Up"
 
 
 def _is_up(status: str) -> bool:
@@ -35,7 +36,7 @@ def _is_up(status: str) -> bool:
 def _find_baseline_peer(
     baseline_peers: list[dict[str, Any]], ipaddr: Any
 ) -> dict[str, Any] | None:
-    """Najde baseline peera podle ipaddr v jiz pozicne sparovanem SID.
+    """Najde baseline peera podle ipaddr v SID baseline AC sparovaneho podle (local, remote) SID.
 
     Jmena rozhrani se migraci meni, ale IP adresa vzdaleneho PE ne - proto
     je ipaddr jedine spolehlive kriterium pro parovani peeru uvnitr SID.
@@ -46,15 +47,52 @@ def _find_baseline_peer(
     return None
 
 
+def _sid_key(ac: dict[str, Any]) -> tuple[Any, Any] | None:
+    local = (ac.get("local_sid") or {}).get("value")
+    remote = (ac.get("remote_sid") or {}).get("value")
+    if local is None or remote is None:
+        return None
+    return (local, remote)
+
+
+def _pair_baseline_acs(
+    acs: list[dict[str, Any]], baseline_acs: list[dict[str, Any]]
+) -> list[dict[str, Any] | None]:
+    """Baseline AC ke kazdemu AC subjektu podle (local SID, remote SID).
+
+    Jmeno IFL se migraci meni (ge-0/0/2.211 -> et-0/0/8.211), SID ne.
+    Drivejsi pozicni parovani dalo pri jinem poradi/poctu AC cizi baseline
+    a Down AC mohlo vyjit UNCHANGED (review 2026-09-24, E2). Dvojice je
+    jednoznacna i u zrcadlenych SID lokalniho prepnuti (100/200 vs
+    200/100). Kdyz SID nesedi a obe strany maji prave jedno AC, sparuji se
+    ta dve - zmenu SID ukaze ZMENA na radku SID value. Jinak AC baseline
+    nema. Neznamy SID (None) neni identita a podle SID se neparuje.
+    """
+    by_key: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
+    for ac in baseline_acs:
+        key = _sid_key(ac)
+        if key is not None:
+            by_key.setdefault(key, []).append(ac)
+    paired: list[dict[str, Any] | None] = []
+    for ac in acs:
+        key = _sid_key(ac)
+        hits = by_key.get(key, []) if key is not None else []
+        paired.append(hits[0] if len(hits) == 1 else None)
+    if len(acs) == 1 and len(baseline_acs) == 1 and paired[0] is None:
+        paired[0] = baseline_acs[0]
+    return paired
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     """Stav EVPN-VPWS per SID a peer.
 
     Stav se ted cte vyhradne z 'evpn-vpws-sid-pe-status' - drivejsi
     porovnani jen SID cisel a stavu rozhrani tuhle tabulku vubec necetlo.
-    Mode.BOTH je opravneny: baseline_value se dopocitava pozicnim
-    parovanim rozhrani a peeru podle ipaddr (viz _find_baseline_peer),
-    takze sloupec ZMENA nese skutecny rozdil, ne trvale "bez baseline".
+    Mode.BOTH je opravneny: baseline_value se dopocitava parovanim AC
+    podle (local, remote) SID (_pair_baseline_acs) a peeru podle ipaddr
+    (_find_baseline_peer), takze sloupec ZMENA nese skutecny rozdil, ne
+    trvale "bez baseline".
     Drivejsi radek 'chybi remote SID' nahrazuji dva BROKEN radky remote
     PE / remote status.
     """
@@ -81,20 +119,45 @@ class EvpnVpwsStatusCheck(Check):
         findings: list[Finding] = []
         for name in sorted(instances):
             interfaces = instances[name].get("interfaces", [])
-            baseline_interfaces = baseline_instances.get(name, {}).get("interfaces", [])
+            baseline_instance = baseline_instances.get(name)
+            baseline_interfaces = (baseline_instance or {}).get("interfaces", [])
+            if not interfaces:
+                findings.append(self._missing_ac_finding(name, baseline_instance, ctx))
+                continue
             many = len(interfaces) > 1
-            for idx, iface in enumerate(interfaces):
-                # Pozicni parovani rozhrani: jmena rozhrani se migraci meni
-                # (ge-0/0/3.0 -> ae0.224), takze jmeno pro parovani s
-                # baseline pouzit nejde - stejny princip jako pozicni zip
-                # v _aligned_baseline_data (engine.py).
-                baseline_iface = (
-                    baseline_interfaces[idx] if idx < len(baseline_interfaces) else None
-                )
+            paired = _pair_baseline_acs(interfaces, baseline_interfaces)
+            for iface, baseline_iface in zip(interfaces, paired):
                 findings.extend(
                     self._interface_findings(name, iface, baseline_iface, many, ctx)
                 )
         return findings
+
+    def _missing_ac_finding(
+        self,
+        instance: str,
+        baseline_instance: dict[str, Any] | None,
+        ctx: CheckContext,
+    ) -> Finding:
+        # Scope.select zuzil instanci na AC scopu (E2) a zadne nezbylo:
+        # inventory rika, ze AC v instanci je, operacni vypis ho nezna.
+        # BROKEN, ne SKIP - data instance mame, jen v nich AC chybi.
+        acs = ", ".join(ctx.scope.selectors.interfaces) or "?"
+        baseline_acs = (baseline_instance or {}).get("interfaces", [])
+        same = baseline_instance is not None and not baseline_acs
+        outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=same)
+        if same:
+            baseline_value = "Chybi"
+        elif len(baseline_acs) == 1:
+            baseline_value = str(baseline_acs[0].get("status", UNKNOWN))
+        else:
+            baseline_value = None
+        return Finding(
+            outcome,
+            f"{instance}: AC {acs} ve vypisu instance chybi" + suffix(outcome),
+            label="EVPN VPWS local interface status",
+            value="Chybi",
+            baseline_value=baseline_value,
+        )
 
     def _interface_findings(
         self,
@@ -134,9 +197,40 @@ class EvpnVpwsStatusCheck(Check):
                 subject={"interface": iface["name"], "status": status},
             )
         )
+        pw = iface.get("pseudowire_status")
+        if pw is not None:
+            findings.append(self._pw_finding(instance, pw, baseline_iface, label, ctx))
         findings.extend(self._sid_findings(instance, iface, baseline_iface, "local", label, ctx))
         findings.extend(self._sid_findings(instance, iface, baseline_iface, "remote", label, ctx))
         return findings
+
+    def _pw_finding(
+        self,
+        instance: str,
+        pw: str,
+        baseline_iface: dict[str, Any] | None,
+        label,
+        ctx: CheckContext,
+    ) -> Finding:
+        # Radek jen kdyz Junos element vypsal (EVO). MX ho nema ani
+        # u vzdaleneho PW - zadny radek misto SKIP, stav se nefabuluje.
+        baseline_pw = (
+            baseline_iface.get("pseudowire_status") if baseline_iface is not None else None
+        )
+        up = pw == PW_UP
+        outcome = (
+            Outcome.OK if up
+            else unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=baseline_pw == pw)
+        )
+        return Finding(
+            outcome,
+            f"{instance}: pseudowire {pw}"
+            + ("" if up else f", ocekavano {PW_UP}")
+            + suffix(outcome),
+            label=label("EVPN VPWS pseudowire status"),
+            value=pw,
+            baseline_value=baseline_pw,
+        )
 
     def _sid_findings(
         self,
