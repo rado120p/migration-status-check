@@ -40,9 +40,13 @@ MATRIX = [
     ("POST", "/api/profiles", "operator"),
     ("PUT", "/api/profiles/p1", "operator"),
     ("DELETE", "/api/profiles/p1", "operator"),
+    ("GET", "/api/inventory", "viewer"),
+    ("GET", "/api/inventory/filter", "viewer"),
+    ("PUT", "/api/inventory/filter", "admin"),
 ]
 
 BODIES = {
+    ("PUT", "/api/inventory/filter"): {"allow": []},
     ("POST", "/api/runs"): {"name": "zz", "kind": "migration", "devices": [], "mappings": []},
     ("PUT", "/api/runs/mig01/mapping"): {"mappings": []},
     ("POST", "/api/captures"): {"run": "nope", "device": "MX1", "phase": "pre"},

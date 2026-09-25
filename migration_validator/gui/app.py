@@ -28,10 +28,13 @@ from migration_validator.gui.capture_launch import launch_capture
 from migration_validator.gui.captures import CaptureManager, DeviceBusy, RunBusy
 from migration_validator.gui.group_routes import build_groups_router
 from migration_validator.gui.groups import SummaryCache
+from migration_validator.gui.inventory_routes import build_inventory_router
 from migration_validator.gui.profile_routes import build_profiles_router
 from migration_validator.gui.profiles import profile_for_run, server_default_profile
 from migration_validator.gui.serializers import snapshot_list, status_rows
 from migration_validator.gui.sessions import LoginThrottle, SessionStore
+from migration_validator.hostname_filter import DEFAULT_FILTER_FILE, FilterStore
+from migration_validator.inventory import InventorySource
 from migration_validator.models.snapshot import SnapshotVersionError, load_snapshot
 from migration_validator.profiles.store import ProfileStore
 from migration_validator.runs.manifest import RunManifest
@@ -101,6 +104,8 @@ def create_app(
     sessions: SessionStore | None = None,
     throttle: LoginThrottle | None = None,
     settings_path: Path | None = None,
+    inventory: InventorySource | None = None,
+    hostname_filter: FilterStore | None = None,
 ) -> FastAPI:
     # S auth zapnutym by /docs a /openapi.json byly nechrenenou mapou celeho
     # API bez require() seamu - vypnout, kdyz users soubor existuje.
@@ -140,6 +145,7 @@ def create_app(
         run_root=run_root, profiles=profiles, profile_path=profile_path,
         manager=manager, cache=cache, settings_path=settings_path,
     ))
+    app.include_router(build_inventory_router(inventory, hostname_filter or FilterStore(DEFAULT_FILTER_FILE)))
 
     @app.get("/api/me")
     def me(request: Request, actor: Actor = require(Permission.VIEW)) -> dict:
