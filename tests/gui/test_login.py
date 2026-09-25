@@ -131,6 +131,53 @@ def test_rehash_on_login(env, monkeypatch):
     assert store.load()["rado"].password_hash.split("$")[1] == "2000"
 
 
+def test_rehash_skipped_when_user_deleted_mid_request(env, monkeypatch):
+    """verify_password is slow; if the account is deleted while it runs, the
+    rehash (which loads a FRESH copy of the store) must not resurrect the
+    stale pre-verify record."""
+    client, store, _ = env
+    monkeypatch.setattr(users_mod, "PASSWORD_ITERATIONS", 2_000)
+    from migration_validator.gui import auth_routes
+
+    real_verify = auth_routes.verify_password
+
+    def racing_verify(password, stored):
+        ok = real_verify(password, stored)
+        if ok:
+            store.save({"eva": store.load()["eva"]})  # 'rado' deleted mid-request
+        return ok
+
+    monkeypatch.setattr(auth_routes, "verify_password", racing_verify)
+    resp = _login(client)
+    assert resp.status_code == 200  # in-memory login still succeeds
+    assert "rado" not in store.load()  # deletion is not undone by the rehash
+
+
+def test_rehash_preserves_role_changed_mid_request(env, monkeypatch):
+    """If the role changes between the initial lookup and the rehash write,
+    the newer role must win - not the role captured before verify_password."""
+    client, store, _ = env
+    monkeypatch.setattr(users_mod, "PASSWORD_ITERATIONS", 2_000)
+    from migration_validator.gui import auth_routes
+
+    real_verify = auth_routes.verify_password
+
+    def racing_verify(password, stored):
+        ok = real_verify(password, stored)
+        if ok:
+            current = store.load()
+            current["rado"] = User("rado", "viewer", current["rado"].password_hash)
+            store.save(current)
+        return ok
+
+    monkeypatch.setattr(auth_routes, "verify_password", racing_verify)
+    resp = _login(client)
+    assert resp.status_code == 200
+    rado = store.load()["rado"]
+    assert rado.role == "viewer"  # race-changed role wins over the stale one
+    assert rado.password_hash.split("$")[1] == "2000"  # rehash still applied
+
+
 def test_origin_mismatch_rejected(env):
     client, _, _ = env
     _login(client)

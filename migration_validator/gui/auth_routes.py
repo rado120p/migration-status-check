@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -19,6 +20,8 @@ from migration_validator.users import (
 )
 
 INVALID_LOGIN = "invalid username or password"
+
+log = logging.getLogger(__name__)
 
 
 class LoginBody(BaseModel):
@@ -53,10 +56,16 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
         if needs_rehash(user.password_hash):
             try:
                 current = users.load()
-                current[user.username] = replace(user, password_hash=hash_password(body.password))
-                users.save(current)
-            except (AuthenticationError, OSError):
-                pass  # login still succeeds; rehash retried next time
+                fresh = current.get(user.username)
+                # Mezi get() (pred pomalym verify_password) a timto zapisem
+                # mohl CLI ucet smazat nebo zmenit - pisme jen kdyz fresh
+                # zaznam porad odpovida heslu, ktere jsme prave overili.
+                if fresh is not None and fresh.password_hash == user.password_hash:
+                    current[user.username] = replace(fresh, password_hash=hash_password(body.password))
+                    users.save(current)
+            except (AuthenticationError, OSError) as error:
+                # login still succeeds; rehash retried next time
+                log.warning("rehash hesla pro '%s' selhal: %s", user.username, error)
         token = sessions.create(user.username)
         response = JSONResponse({"username": user.username, "role": user.role})
         response.set_cookie(SESSION_COOKIE, token, **_cookie_kwargs())
