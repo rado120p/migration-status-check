@@ -213,13 +213,13 @@ def test_viewer_cte_ale_nezapisuje(tmp_path):
         viewer.post("/api/profiles/preview", json={"document": empty_document()}),
     ):
         assert resp.status_code == 403
-        assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje admin"
+        assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje operate"
 
 
-def test_operator_take_nezapisuje(tmp_path):
+def test_operator_zapisuje(tmp_path):
     operator = _client(tmp_path, role="operator")
     resp = operator.post("/api/profiles", json={"name": "b", "document": empty_document()})
-    assert resp.status_code == 403
+    assert resp.status_code == 201
 
 
 # -- preview / save: jen odchylky od defaultu (spec 4) -----------------------

@@ -1,6 +1,6 @@
 """Routes /api/groups - bulk single runy (spec 2026-09-06).
 
-Cteni view, zakladani a capture operate, archivace admin. Chyby validace
+Cteni view, zakladani, capture a archivace operate. Chyby validace
 (GroupError) jdou jako 409 s detail {"message", "rows": [{"index",
 "message"}]}, aby je formular ukazal u radku; neznama skupina 404; zapis,
 ktery selhal uprostred, 500 s jiz zapsanymi runy."""
@@ -155,7 +155,7 @@ def build_groups_router(
         return _start_batch(group, body.phase)
 
     @router.post("/{group}/archive")
-    def archive_group(group: str, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def archive_group(group: str, actor: Actor = require(Permission.OPERATE)) -> dict:
         members = api.group_runs(run_root).get(group)
         if not members:
             raise HTTPException(status_code=404, detail=f"skupina '{group}' neexistuje")
@@ -170,7 +170,7 @@ def build_groups_router(
         return {"archived": archived}
 
     @router.post("/{group}/upgrade")
-    def upgrade_group(group: str, dry_run: bool = False, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def upgrade_group(group: str, dry_run: bool = False, actor: Actor = require(Permission.OPERATE)) -> dict:
         """Upgrade vsech runu skupiny postupne; selhani jednoho runu
         ostatni nezastavi (spec 2026-09-23, sekce 4)."""
         members = api.group_runs(run_root).get(group)

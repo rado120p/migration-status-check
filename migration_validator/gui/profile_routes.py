@@ -1,6 +1,6 @@
 """Routes /api/profiles - tenke obaly nad profiles.store a profiles.catalogue.
 
-Cteni vyzaduje view, zapis admin (spec 3). Router se sklada v create_app,
+Cteni vyzaduje view, zapis operate (spec 3). Router se sklada v create_app,
 aby dostal store, run_root a serverovy default profil.
 
 Mapovani chyb: nevalidni jmeno / nevalidni dokument (ValueError z loaderu)
@@ -72,7 +72,7 @@ def build_profiles_router(
         return build_catalogue()
 
     @router.post("/preview")
-    def preview(body: DocumentBody, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def preview(body: DocumentBody, actor: Actor = require(Permission.OPERATE)) -> dict:
         return {"yaml": document_to_yaml(body.document)}
 
     @router.get("")
@@ -91,7 +91,7 @@ def build_profiles_router(
         }
 
     @router.post("", status_code=201)
-    def create_profile(body: ProfileBody, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def create_profile(body: ProfileBody, actor: Actor = require(Permission.OPERATE)) -> dict:
         _name_or_422(body.name)
         if store.exists(body.name):
             raise HTTPException(status_code=409, detail=f"profil '{body.name}' uz existuje")
@@ -103,7 +103,7 @@ def build_profiles_router(
 
     @router.put("/{name}")
     def update_profile(
-        name: str, body: DocumentBody, actor: Actor = require(Permission.ADMIN)
+        name: str, body: DocumentBody, actor: Actor = require(Permission.OPERATE)
     ) -> dict:
         _name_or_422(name)
         if not store.exists(name):
@@ -113,7 +113,7 @@ def build_profiles_router(
         return _save_or_error(name, body.document)
 
     @router.delete("/{name}", status_code=204)
-    def delete_profile(name: str, actor: Actor = require(Permission.ADMIN)) -> Response:
+    def delete_profile(name: str, actor: Actor = require(Permission.OPERATE)) -> Response:
         _name_or_422(name)
         if not store.exists(name):
             raise HTTPException(

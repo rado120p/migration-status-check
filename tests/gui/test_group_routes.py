@@ -251,6 +251,6 @@ def test_archive_group_odmitne_beh_a_pak_archivuje(tmp_path, monkeypatch):
     assert client.get("/api/groups/pop1").status_code == 404
 
 
-def test_archive_group_vyzaduje_admin(tmp_path):
-    client = _client(tmp_path, role="operator")
+def test_archive_group_vyzaduje_operatora(tmp_path):
+    client = _client(tmp_path, role="viewer")
     assert client.post("/api/groups/pop1/archive").status_code == 403

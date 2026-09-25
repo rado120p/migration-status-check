@@ -51,6 +51,59 @@ def test_neznama_role_nema_nic(tmp_path):
     assert client.get("/api/runs").status_code == 403
 
 
+def test_no_actor_is_401(tmp_path):
+    api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
+    app = create_app(run_root=tmp_path)
+    app.state.actor_provider = lambda request: None
+    client = TestClient(app)
+    resp = client.get("/api/runs")
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "login required"}
+
+
+def test_session_provider_follows_users_file(tmp_path, monkeypatch):
+    from migration_validator.gui.authz import session_actor_provider
+    from migration_validator.gui.sessions import SESSION_COOKIE, SessionStore
+    from migration_validator.users import User, UserStore, hash_password
+
+    store = UserStore(tmp_path / "users.yml")
+    store.save({"eva": User("eva", "viewer", hash_password("correct horse battery", iterations=1000))})
+    sessions = SessionStore()
+    token = sessions.create("eva")
+    provider = session_actor_provider(sessions, store)
+
+    class Req:
+        cookies = {SESSION_COOKIE: token}
+
+    assert provider(Req()) == Actor(role="viewer", username="eva")
+    store.save({"eva": User("eva", "admin", store.load()["eva"].password_hash)})
+    import os
+    st = store.path.stat()
+    os.utime(store.path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+    assert provider(Req()).role == "admin"
+    store.save({})
+    st = store.path.stat()
+    os.utime(store.path, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000))
+    assert provider(Req()) is None
+    assert sessions.lookup(token) is None  # deleted user's session is dropped
+
+    class NoCookie:
+        cookies = {}
+
+    assert provider(NoCookie()) is None
+
+
+def test_permissions_for():
+    from migration_validator.gui.authz import permissions_for
+    assert permissions_for("viewer") == ["view"]
+    assert permissions_for("operator") == ["view", "operate"]
+    assert permissions_for("admin") == ["view", "operate", "admin"]
+    assert permissions_for("guest") == []
+
+
+PUBLIC_API = {"POST /api/login", "POST /api/logout"}
+
+
 def _dependant_uses_authz(dependant) -> bool:
     """Projde strom dependant.dependencies a hleda authz.require() seam."""
     call = getattr(dependant, "call", None)
@@ -80,5 +133,7 @@ def test_kazda_api_routa_ma_authz_zavislost(tmp_path):
             continue
         if not _dependant_uses_authz(dependant):
             methods = sorted(getattr(route, "methods", []) or [])
-            unguarded.append(f"{','.join(methods)} {path}")
+            label = f"{','.join(methods)} {path}"
+            if label not in PUBLIC_API:
+                unguarded.append(label)
     assert not unguarded, f"routy bez authz zavislosti: {unguarded}"

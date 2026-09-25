@@ -83,10 +83,10 @@ def test_upgrade_unknown_run_is_404(tmp_path):
     assert client.post("/api/runs/nope/upgrade").status_code == 404
 
 
-def test_upgrade_needs_admin(tmp_path):
+def test_upgrade_needs_operator(tmp_path):
     build_run(tmp_path)
     app, client = _client(tmp_path)
-    app.state.actor_provider = lambda request: Actor(role="operator")
+    app.state.actor_provider = lambda request: Actor(role="viewer")
 
     assert client.post("/api/runs/mig01/upgrade?dry_run=true").status_code == 403
     assert client.post("/api/groups/pop1/upgrade?dry_run=true").status_code == 403

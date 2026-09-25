@@ -206,7 +206,7 @@ def create_app(
         return _detail(run)
 
     @app.post("/api/runs/{run}/archive")
-    def archive_run(run: str, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def archive_run(run: str, actor: Actor = require(Permission.OPERATE)) -> dict:
         """Archivuje run - presune runs/<run>/ do runs/.archive/.
 
         Kontrola busy_run() a nasledny rename nejsou atomicke. Mezi nimi muze
@@ -226,7 +226,7 @@ def create_app(
         return {"archived_to": target.name}
 
     @app.post("/api/runs/{run}/upgrade")
-    def upgrade_run(run: str, dry_run: bool = False, actor: Actor = require(Permission.ADMIN)) -> dict:
+    def upgrade_run(run: str, dry_run: bool = False, actor: Actor = require(Permission.OPERATE)) -> dict:
         """Pregeneruje run z raw zaznamu (spec 2026-09-23). Synchronni -
         replay je offline a kratky, fronta captures se nepouziva."""
         _require_store(run)

@@ -101,15 +101,15 @@ def test_post_archive_s_bezicim_capture_je_409(tmp_path):
     assert (tmp_path / "mig02" / "run.yml").exists()
 
 
-def test_post_archive_vyzaduje_admina(tmp_path):
+def test_post_archive_vyzaduje_operatora(tmp_path):
     from migration_validator.gui.authz import Actor
     app = create_app(run_root=tmp_path)
     client = TestClient(app)
     client.post("/api/runs", json=_migration())
-    app.state.actor_provider = lambda request: Actor(role="operator")
+    app.state.actor_provider = lambda request: Actor(role="viewer")
     resp = client.post("/api/runs/mig02/archive")
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje admin"
+    assert resp.json()["detail"] == "nedostatecne opravneni: vyzaduje operate"
 
 
 def test_post_runs_single(tmp_path):
