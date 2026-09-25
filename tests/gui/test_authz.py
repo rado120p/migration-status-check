@@ -67,9 +67,10 @@ def test_session_provider_follows_users_file(tmp_path, monkeypatch):
     from migration_validator.users import User, UserStore, hash_password
 
     store = UserStore(tmp_path / "users.yml")
-    store.save({"eva": User("eva", "viewer", hash_password("correct horse battery", iterations=1000))})
+    pw_hash = hash_password("correct horse battery", iterations=1000)
+    store.save({"eva": User("eva", "viewer", pw_hash)})
     sessions = SessionStore()
-    token = sessions.create("eva")
+    token = sessions.create("eva", password_hash=pw_hash)
     provider = session_actor_provider(sessions, store)
 
     class Req:

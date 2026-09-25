@@ -211,6 +211,32 @@ def test_origin_check_applies_to_login(env):
     assert resp.status_code == 403
 
 
+def test_passwd_invalidates_existing_sessions(env):
+    # finding #3: `user passwd` did not end existing sessions - the session
+    # provider only checked username+role existence, never the hash.
+    client, store, _ = env
+    _login(client)
+    assert client.get("/api/me").status_code == 200
+    from dataclasses import replace
+
+    rado = store.load()["rado"]
+    store.save({**store.load(), "rado": replace(rado, password_hash=hash_password("a brand new password"))})
+    import os
+
+    st = store.path.stat()
+    os.utime(store.path, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000))
+    assert client.get("/api/me").status_code == 401
+
+
+def test_login_with_rehash_keeps_working_on_next_request(env, monkeypatch):
+    # The rehash-on-login write must not immediately invalidate the very
+    # session that login() just created for the freshly rehashed user.
+    client, store, _ = env
+    monkeypatch.setattr(users_mod, "PASSWORD_ITERATIONS", 2_000)
+    assert _login(client).status_code == 200
+    assert client.get("/api/me").status_code == 200
+
+
 def test_anonymous_mode_me(tmp_path):
     client = TestClient(create_app(run_root=tmp_path))
     assert client.get("/api/me").json() == {

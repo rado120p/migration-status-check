@@ -55,6 +55,7 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
             audit.record(body.username, "login-failed", ip=ip)
             raise HTTPException(status_code=401, detail=INVALID_LOGIN)
         throttle.success(body.username, ip)
+        session_hash = user.password_hash
         if needs_rehash(user.password_hash):
             try:
                 current = users.load()
@@ -63,12 +64,17 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
                 # mohl CLI ucet smazat nebo zmenit - pisme jen kdyz fresh
                 # zaznam porad odpovida heslu, ktere jsme prave overili.
                 if fresh is not None and fresh.password_hash == user.password_hash:
-                    current[user.username] = replace(fresh, password_hash=hash_password(body.password))
+                    session_hash = hash_password(body.password)
+                    current[user.username] = replace(fresh, password_hash=session_hash)
                     users.save(current)
             except (AuthenticationError, OSError) as error:
                 # login still succeeds; rehash retried next time
                 log.warning("rehash hesla pro '%s' selhal: %s", user.username, error)
-        token = sessions.create(user.username)
+                session_hash = user.password_hash
+        # Session musi nest hash, ktery je PRAVE TED aktualni (po pripadnem
+        # rehashi) - jinak by prihlaseni-s-rehashem samo sebe hned zneplatnilo
+        # (provider by porovnal starou session hash s novym souborem).
+        token = sessions.create(user.username, password_hash=session_hash)
         audit.record(user.username, "login", ip=ip)
         response = JSONResponse({"username": user.username, "role": user.role})
         response.set_cookie(SESSION_COOKIE, token, **_cookie_kwargs())
@@ -78,10 +84,10 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
     def logout(request: Request) -> Response:
         token = request.cookies.get(SESSION_COOKIE)
         if token:
-            username = sessions.lookup(token)
+            session = sessions.lookup(token)
             sessions.drop(token)
-            if username is not None:
-                audit.record(username, "logout")
+            if session is not None:
+                audit.record(session.username, "logout")
         response = Response(status_code=204)
         response.delete_cookie(SESSION_COOKIE, **_cookie_kwargs())
         return response

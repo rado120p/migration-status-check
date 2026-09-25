@@ -22,6 +22,7 @@ class _Session:
     username: str
     created_at: float
     last_seen: float
+    password_hash: str | None = None
 
 
 class SessionStore:
@@ -40,16 +41,19 @@ class SessionStore:
     def _expired(self, session: _Session, now: float) -> bool:
         return now - session.last_seen > self._idle or now - session.created_at > self._absolute
 
-    def create(self, username: str) -> str:
+    def create(self, username: str, *, password_hash: str | None = None) -> str:
         token = secrets.token_urlsafe(32)
         now = self._clock()
         with self._lock:
             for key in [k for k, s in self._sessions.items() if self._expired(s, now)]:
                 del self._sessions[key]
-            self._sessions[token] = _Session(username, now, now)
+            self._sessions[token] = _Session(username, now, now, password_hash)
         return token
 
-    def lookup(self, token: str) -> str | None:
+    def lookup(self, token: str) -> _Session | None:
+        """Vraci cely zaznam session (username + password_hash v okamziku
+        prihlaseni), aby volajici mohl poznat, ze `user passwd` mezitim
+        zmenil heslo a stara session uz neplati."""
         now = self._clock()
         with self._lock:
             session = self._sessions.get(token)
@@ -59,7 +63,7 @@ class SessionStore:
                 del self._sessions[token]
                 return None
             session.last_seen = now
-            return session.username
+            return session
 
     def drop(self, token: str) -> None:
         with self._lock:

@@ -48,11 +48,13 @@ def session_actor_provider(sessions: SessionStore, users: UserStore) -> ActorPro
         token = request.cookies.get(SESSION_COOKIE)
         if not token:
             return None
-        username = sessions.lookup(token)
-        if username is None:
+        session = sessions.lookup(token)
+        if session is None:
             return None
-        user = users.get(username)
-        if user is None:
+        user = users.get(session.username)
+        # password_hash mismatch = `user passwd` changed it since login -
+        # the old session must not keep working (finding #3).
+        if user is None or user.password_hash != session.password_hash:
             sessions.drop(token)
             return None
         return Actor(role=user.role, username=user.username)
