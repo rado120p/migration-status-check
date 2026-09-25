@@ -80,7 +80,9 @@ class EvpnVpwsCollector(Collector):
             "name": _text(iface, "evpn-vpws-interface-name"),
             "status": _text(iface, "evpn-vpws-interface-status") or "unknown",
             "mode": _text(iface, "evpn-vpws-interface-mode"),
-            "pseudowire_status": _text(iface, "evpn-vpws-pseudowire-status"),
+            # Prazdny / jen mezery element neni stav (final review M-a):
+            # None = nezmereno, check pak radek nevypise.
+            "pseudowire_status": _text(iface, "evpn-vpws-pseudowire-status") or None,
             "local_sid": self._sid(
                 iface,
                 "evpn-vpws-service-id-local-status-table/evpn-vpws-sid-local",

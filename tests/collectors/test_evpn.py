@@ -129,6 +129,28 @@ def test_vpws_partner_without_status_is_unknown():
     assert iface["remote_sid"]["local_interface"] == {"name": "ge-0/0/2.212", "status": "unknown"}
 
 
+@pytest.mark.parametrize("pw_element", [
+    "<evpn-vpws-pseudowire-status></evpn-vpws-pseudowire-status>",
+    "<evpn-vpws-pseudowire-status>   </evpn-vpws-pseudowire-status>",
+    "<evpn-vpws-pseudowire-status/>",
+])
+def test_vpws_empty_pw_status_is_not_measured(pw_element):
+    """Final review M-a: prazdny element neni stav - None, jinak by check
+    vypsal radek "pseudowire , ocekavano CCC-Up"."""
+    xml = etree.fromstring(
+        f"""<evpn-vpws-information><evpn-vpws-instance>
+        <evpn-vpws-instance-name>X</evpn-vpws-instance-name>
+        <evpn-vpws-interface-status-table><evpn-vpws-interface>
+          <evpn-vpws-interface-name>et-0/0/8.213</evpn-vpws-interface-name>
+          <evpn-vpws-interface-status>Up</evpn-vpws-interface-status>
+          {pw_element}
+        </evpn-vpws-interface></evpn-vpws-interface-status-table>
+        </evpn-vpws-instance></evpn-vpws-information>"""
+    )
+    iface = EvpnVpwsCollector().parse(xml, "junos-evo")["X"]["interfaces"][0]
+    assert iface["pseudowire_status"] is None
+
+
 @pytest.mark.parametrize("platform", PLATFORMS)
 def test_esi_schema(rpc_fixture, platform):
     result = EvpnEsiCollector().parse(rpc_fixture(platform, "evpn_esi"), platform)
