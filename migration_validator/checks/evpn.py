@@ -83,6 +83,10 @@ def _pair_baseline_acs(
     return paired
 
 
+def _local_switch_text(partner: dict[str, Any]) -> str:
+    return f"local switch ({partner.get('name') or '?'} {partner.get('status') or UNKNOWN})"
+
+
 @register
 class EvpnVpwsStatusCheck(Check):
     """Stav EVPN-VPWS per SID a peer.
@@ -95,6 +99,9 @@ class EvpnVpwsStatusCheck(Check):
     trvale "bez baseline".
     Drivejsi radek 'chybi remote SID' nahrazuji dva BROKEN radky remote
     PE / remote status.
+    Lokalne prepnuty EVPN-VPWS (remote SID nese partnersky AC misto PE) ma
+    misto radku remote PE / remote status jeden radek 'EVPN VPWS SID remote
+    local switch' se stavem partnera (schema 15).
     """
 
     id = "evpn_vpws_status"
@@ -266,6 +273,22 @@ class EvpnVpwsStatusCheck(Check):
             )
         ]
 
+        # Lokalne prepnuty EVPN-VPWS (schema 15): remote SID nema PE, ale
+        # partnersky AC na tomtez boxu - radky PE/status se nahrazuji
+        # jednim radkem se stavem partnera.
+        partner = sid.get("local_interface")
+        if side == "remote" and partner is not None:
+            findings.append(
+                self._local_switch_finding(instance, partner, baseline_sid, label, ctx)
+            )
+            return findings
+        baseline_partner = (
+            (baseline_sid or {}).get("local_interface") if side == "remote" else None
+        )
+        # Baseline byla lokalne prepnuta, subjekt ma PE (nebo nic): radky
+        # PE/status nesou jako baseline tvar baseline, nikdy UNCHANGED.
+        switch_text = _local_switch_text(baseline_partner) if baseline_partner else None
+
         if not peers:
             if side == "remote":
                 # Remote peer musi existovat vzdy - jeho absence znamena
@@ -274,7 +297,11 @@ class EvpnVpwsStatusCheck(Check):
                 # kterou operator potrebuje - proto se pujcuje z prvniho
                 # baseline peeru, i kdyz v subjektu zadny peer neni.
                 first_baseline_peer = baseline_peers[0] if baseline_peers else None
-                same = baseline_iface is not None and not baseline_peers
+                same = (
+                    baseline_iface is not None
+                    and not baseline_peers
+                    and baseline_partner is None
+                )
                 outcome = unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=same)
                 findings.append(
                     Finding(
@@ -287,7 +314,7 @@ class EvpnVpwsStatusCheck(Check):
                             else (
                                 str(first_baseline_peer.get("ipaddr") or "?")
                                 if first_baseline_peer
-                                else None
+                                else switch_text
                             )
                         ),
                     )
@@ -303,7 +330,7 @@ class EvpnVpwsStatusCheck(Check):
                             else (
                                 str(first_baseline_peer.get("status") or "Unresolved / Chybi")
                                 if first_baseline_peer
-                                else None
+                                else switch_text
                             )
                         ),
                     )
@@ -370,7 +397,7 @@ class EvpnVpwsStatusCheck(Check):
                     label=label(peer_label),
                     value=str(peer.get("ipaddr") or "?"),
                     baseline_value=(
-                        str(baseline_peer.get("ipaddr") or "?") if baseline_peer else None
+                        str(baseline_peer.get("ipaddr") or "?") if baseline_peer else switch_text
                     ),
                     subject=dict(peer),
                 )
@@ -385,7 +412,7 @@ class EvpnVpwsStatusCheck(Check):
                     baseline_value=(
                         str(baseline_peer.get("status") or "Unresolved / Chybi")
                         if baseline_peer
-                        else None
+                        else switch_text
                     ),
                 )
             )
@@ -405,6 +432,51 @@ class EvpnVpwsStatusCheck(Check):
                         )
                     )
         return findings
+
+    def _local_switch_finding(
+        self,
+        instance: str,
+        partner: dict[str, Any],
+        baseline_sid: dict[str, Any] | None,
+        label,
+        ctx: CheckContext,
+    ) -> Finding:
+        # Stav partnera je stav druheho konce okruhu. Porovnava se jen stav,
+        # ne jmeno - partnersky IFL se migraci prejmenuje
+        # (ge-0/0/2.212 -> et-0/0/8.212).
+        name = partner.get("name") or "?"
+        status = str(partner.get("status") or UNKNOWN)
+        baseline_partner = (baseline_sid or {}).get("local_interface")
+        baseline_peers = (baseline_sid or {}).get("peers") or []
+        if baseline_partner is not None:
+            baseline_status = str(baseline_partner.get("status") or UNKNOWN)
+            baseline_value = f"{baseline_partner.get('name') or '?'} {baseline_status}"
+            same = status != UNKNOWN and baseline_status == status
+        elif baseline_peers:
+            # Baseline byl vzdaleny PW - tvar se zmenil, UNCHANGED nikdy.
+            first = baseline_peers[0]
+            baseline_value = (
+                f"{first.get('ipaddr') or '?'} {first.get('status') or 'Unresolved / Chybi'}"
+            )
+            same = False
+        else:
+            baseline_value = None
+            same = False
+        up = _is_up(status)
+        outcome = (
+            Outcome.OK if up
+            else unchanged_or(Outcome.BROKEN, ctx, "evpn_vpws", same=same)
+        )
+        return Finding(
+            outcome,
+            f"{instance}: lokalni prepnuti na {name}, stav {status}"
+            + ("" if up else f", ocekavano {UP}")
+            + suffix(outcome),
+            label=label("EVPN VPWS SID remote local switch"),
+            value=f"{name} {status}",
+            baseline_value=baseline_value,
+            subject={"interface": name, "status": status},
+        )
 
 
 @register

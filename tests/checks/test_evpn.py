@@ -1311,3 +1311,117 @@ def test_evpn_only_checks_skip_local_subtype():
         assert check.applies_to(local) is False
         assert check.applies_to(aware) is True
     assert EvpnMacCountCheck().applies_to(local) is True
+
+
+PARTNER_UP = {"name": "et-0/0/8.212", "status": "Up"}
+BASE_PARTNER_UP = {"name": "ge-0/0/2.212", "status": "Up"}
+REMOTE_PE_LABELS = ("EVPN VPWS SID remote PE", "EVPN VPWS SID remote status")
+
+
+def test_vpws_local_switch_row_replaces_pe_rows():
+    findings = run_findings(_vpws_subject(partner=PARTNER_UP, pw="CCC-Up"))
+    row = _by_label(findings, "EVPN VPWS SID remote local switch")
+    assert row.outcome is Outcome.OK
+    assert row.value == "et-0/0/8.212 Up"
+    assert row.message == "EVPN-VPWS-X: lokalni prepnuti na et-0/0/8.212, stav Up"
+    assert not any(f.label in REMOTE_PE_LABELS for f in findings)
+
+
+def test_vpws_local_switch_partner_down_is_broken():
+    findings = run_findings(_vpws_subject(partner={"name": "et-0/0/8.212", "status": "Down"}))
+    row = _by_label(findings, "EVPN VPWS SID remote local switch")
+    assert row.outcome is Outcome.BROKEN
+    assert row.message == "EVPN-VPWS-X: lokalni prepnuti na et-0/0/8.212, stav Down, ocekavano Up"
+
+
+def test_vpws_local_switch_partner_down_in_both_is_unchanged_despite_rename():
+    baseline = _vpws_subject(partner={"name": "ge-0/0/2.212", "status": "Down"})
+    subject = _vpws_subject(partner={"name": "et-0/0/8.212", "status": "Down"})
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    row = _by_label(rows, "EVPN VPWS SID remote local switch")
+    assert row.status is Status.PASS and row.details[UNCHANGED_SINCE_BASELINE] is True
+    assert row.baseline_value == "ge-0/0/2.212 Down"
+
+
+def test_vpws_local_switch_partner_down_but_up_in_baseline_fails():
+    baseline = _vpws_subject(partner=BASE_PARTNER_UP)
+    subject = _vpws_subject(partner={"name": "et-0/0/8.212", "status": "Down"})
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    assert _by_label(rows, "EVPN VPWS SID remote local switch").status is Status.FAIL
+
+
+def test_vpws_local_switch_partner_unknown_in_both_stays_fail():
+    unknown = {"name": "ge-0/0/2.212", "status": "unknown"}
+    subject = _vpws_subject(partner=unknown)
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=subject))
+    assert _by_label(rows, "EVPN VPWS SID remote local switch").status is Status.FAIL
+
+
+def test_vpws_local_switch_in_baseline_remote_pw_in_subject_shows_shape_change():
+    """Step presunul jedno AC local-switch paru: na novem boxu je vzdaleny PW."""
+    baseline = _vpws_subject(iface_name="ge-0/0/2.211", partner=BASE_PARTNER_UP)
+    subject = _vpws_subject(iface_name="et-0/0/8.211", remote_peers=[PEER_OK])
+    findings = EvpnVpwsStatusCheck().run(_vpws_ctx(subject, baseline))
+    for label in REMOTE_PE_LABELS:
+        assert _by_label(findings, label).baseline_value == "local switch (ge-0/0/2.212 Up)"
+
+
+def test_vpws_local_switch_baseline_and_subject_without_peer_is_broken_not_unchanged():
+    """Dnes: baseline bez peeru -> same=True -> UNCHANGED. Baseline ale byla
+    lokalne prepnuta a fungovala - subjekt bez PE i partnera je FAIL."""
+    baseline = _vpws_subject(partner=BASE_PARTNER_UP)
+    subject = _vpws_subject(remote_peers=())
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    for label in REMOTE_PE_LABELS:
+        row = _by_label(rows, label)
+        assert row.status is Status.FAIL
+        assert row.baseline_value == "local switch (ge-0/0/2.212 Up)"
+
+
+def test_vpws_remote_pw_in_baseline_local_switch_in_subject_shows_pe_as_baseline():
+    baseline = _vpws_subject(remote_peers=[PEER_OK])
+    subject = _vpws_subject(partner={"name": "et-0/0/8.212", "status": "Down"})
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    row = _by_label(rows, "EVPN VPWS SID remote local switch")
+    assert row.status is Status.FAIL and row.baseline_value == "150.0.0.14 Resolved"
+
+
+def test_vpws_local_switch_lab_captures_mx_to_evo():
+    """Lab 2026-09-25: MX1 ge-0/0/2.211 -> PTX1 et-0/0/8.211, oba konce Up.
+    Collector + Scope.select + check nad skutecnymi zaznamy."""
+    from pathlib import Path
+
+    from lxml import etree
+
+    from migration_validator.collectors.evpn import EvpnVpwsCollector
+
+    cases = Path(__file__).resolve().parents[1] / "fixtures" / "cases"
+
+    def facts(name, platform):
+        root = etree.parse(str(cases / name)).getroot()
+        return {"evpn_vpws": EvpnVpwsCollector().parse(root, platform)}
+
+    def scope(iface):
+        return Scope(
+            id=f"svc:{iface}", kind="service",
+            key=ScopeKey("EVPN-VPWS-LOCAL", "E-Line", "vpws"),
+            selectors=Selectors(interfaces=[iface], physical_interfaces=[iface.split(".")[0]],
+                                routing_instances=["EVPN-VPWS-LOCAL"]),
+        )
+
+    subject_scope = scope("et-0/0/8.211")
+    baseline_view = scope("ge-0/0/2.211").select(
+        facts("evpn_vpws_local_switch_mx.xml", "junos"))
+    subject_view = subject_scope.select(facts("evpn_vpws_local_switch_evo.xml", "junos-evo"))
+    ctx = CheckContext(
+        scope=subject_scope, subject=subject_view, baseline=baseline_view,
+        config=default_config(), failed_collectors={},
+        baseline_collectors={"evpn_vpws": {"status": "ok"}},
+    )
+    rows = run_check(EvpnVpwsStatusCheck(), ctx)
+    assert not any(row.status is Status.FAIL for row in rows)
+    switch = _by_label(rows, "EVPN VPWS SID remote local switch")
+    assert switch.status is Status.PASS
+    assert switch.value == "et-0/0/8.212 Up" and switch.baseline_value == "ge-0/0/2.212 Up"
+    assert _by_label(rows, "EVPN VPWS pseudowire status").baseline_value is None
+    assert not any(row.label in REMOTE_PE_LABELS for row in rows)
