@@ -1,7 +1,0 @@
-connection:
-  netconf_port: 830
-  timeout: 30
-  username: ansible
-  ssh_key_paths:
-    - /home/rado/.ssh/id_rsa
-  password_env: 

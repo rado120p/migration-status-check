@@ -1,5 +1,7 @@
 """Testy pro config/settings.yml - nahrada auth.yml."""
 
+from pathlib import Path
+
 import pytest
 
 from migration_validator.auth import (
@@ -7,6 +9,9 @@ from migration_validator.auth import (
     DEFAULT_SETTINGS_PATH,
     ConnectionSettings,
     load_settings,
+    DEFAULT_USERS_FILE,
+    AuthSettings,
+    load_auth_settings,
 )
 
 
@@ -122,3 +127,48 @@ def test_capture_pool_pod_1_je_chyba(tmp_path):
     path.write_text("connection:\n  capture_pool: 0\n", encoding="utf-8")
     with pytest.raises(ValueError, match="capture_pool musi byt >= 1"):
         load_settings(path)
+
+
+def test_auth_settings_default_when_file_missing(tmp_path):
+    assert load_auth_settings(tmp_path / "missing.yml") == AuthSettings()
+    assert AuthSettings().users_file == DEFAULT_USERS_FILE
+
+
+def test_auth_settings_default_when_block_missing(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  timeout: 10\n")
+    assert load_auth_settings(path).users_file == DEFAULT_USERS_FILE
+
+
+def test_auth_settings_users_file(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("auth:\n  users_file: /srv/mig/users.yml\n")
+    assert load_auth_settings(path).users_file == Path("/srv/mig/users.yml")
+
+
+def test_auth_settings_expands_user(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("auth:\n  users_file: ~/users.yml\n")
+    assert load_auth_settings(path).users_file == Path("~/users.yml").expanduser()
+
+
+def test_auth_settings_unknown_key_rejected(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("auth:\n  userfile: x.yml\n")
+    with pytest.raises(ValueError, match="userfile"):
+        load_auth_settings(path)
+
+
+def test_auth_settings_block_must_be_mapping(tmp_path):
+    path = tmp_path / "settings.yml"
+    path.write_text("auth: config/users.yml\n")
+    with pytest.raises(ValueError, match="'auth' musi byt mapping"):
+        load_auth_settings(path)
+
+
+def test_auth_settings_does_not_need_password_env(tmp_path, monkeypatch):
+    # `mig-validate user add` must work without MIG_LAB_PASSWORD in the env.
+    monkeypatch.delenv("NOPE_UNSET", raising=False)
+    path = tmp_path / "settings.yml"
+    path.write_text("connection:\n  password_env: NOPE_UNSET\nauth:\n  users_file: u.yml\n")
+    assert load_auth_settings(path).users_file == Path("u.yml")

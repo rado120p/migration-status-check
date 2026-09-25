@@ -15,6 +15,7 @@ from pathlib import Path
 import yaml
 
 DEFAULT_SETTINGS_PATH = Path("config") / "settings.yml"
+DEFAULT_USERS_FILE = Path("config") / "users.yml"
 
 DEFAULT_USERNAME = "ansible"
 DEFAULT_NETCONF_PORT = 830
@@ -26,6 +27,8 @@ _KNOWN_KEYS = frozenset(
     {"netconf_port", "timeout", "username", "ssh_key_paths", "password",
      "password_env", "capture_pool"}
 )
+
+_KNOWN_AUTH_KEYS = frozenset({"users_file"})
 
 
 @dataclass(frozen=True)
@@ -39,19 +42,54 @@ class ConnectionSettings:
     capture_pool: int = DEFAULT_CAPTURE_POOL
 
 
+@dataclass(frozen=True)
+class AuthSettings:
+    users_file: Path = DEFAULT_USERS_FILE
+
+
 def _expand(paths) -> tuple[str, ...]:
     return tuple(str(Path(p).expanduser()) for p in paths)
+
+
+def _read_settings(path: Path) -> dict | None:
+    """Obsah settings.yml jako dict; None kdyz soubor neexistuje."""
+    if not path.exists():
+        return None
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: ocekavan YAML mapping")
+    return raw
+
+
+def load_auth_settings(path: Path | None = None) -> AuthSettings:
+    """Blok `auth:` - zvlast od connection, aby `user add` nepotreboval
+    password_env v prostredi."""
+    if path is None:
+        path = DEFAULT_SETTINGS_PATH
+    raw = _read_settings(path)
+    if raw is None:
+        return AuthSettings()
+    block = raw.get("auth") or {}
+    if not isinstance(block, dict):
+        raise ValueError(f"{path}: 'auth' musi byt mapping")
+    unknown = sorted(set(block) - _KNOWN_AUTH_KEYS)
+    if unknown:
+        raise ValueError(
+            f"{path}: neznamy klic auth.{', auth.'.join(unknown)} "
+            f"(zname: {', '.join(sorted(_KNOWN_AUTH_KEYS))})"
+        )
+    users_file = block.get("users_file")
+    if users_file is None:
+        return AuthSettings()
+    return AuthSettings(users_file=Path(str(users_file)).expanduser())
 
 
 def load_settings(path: Path | None = None) -> ConnectionSettings:
     if path is None:
         path = DEFAULT_SETTINGS_PATH
-    if not path.exists():
+    raw = _read_settings(path)
+    if raw is None:
         return ConnectionSettings(ssh_key_paths=_expand(DEFAULT_SSH_KEY_PATHS))
-
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(raw, dict):
-        raise ValueError(f"{path}: ocekavan YAML mapping")
 
     connection = raw.get("connection") or {}
     if not isinstance(connection, dict):

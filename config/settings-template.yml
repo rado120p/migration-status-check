@@ -5,3 +5,6 @@ connection:
   ssh_key_paths:
     - /home/user-1/.ssh/id_rsa
   password_env: # Optional password env
+auth:
+  # GUI accounts; created with `mig-validate user add NAME --role ROLE`.
+  users_file: config/users.yml

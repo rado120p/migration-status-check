@@ -7,3 +7,6 @@ pyats-venv/
 /runs/
 .superpowers/
 .claude/worktrees/
+/config/settings.yml
+/config/users.yml
+/config/hostname_filter.yml
