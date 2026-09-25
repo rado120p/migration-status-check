@@ -92,7 +92,7 @@ def test_snapshot_without_inventory_has_empty_ping():
     assert snapshot.probes["ping"] == []
 
 
-def test_snapshot_version_is_thirteen():
+def test_snapshot_version_is_fifteen():
     assert SCHEMA_VERSION == 15
 
 
