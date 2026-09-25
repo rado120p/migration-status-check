@@ -20,6 +20,7 @@ class Selector:
     description: str | None = None
     service_type: str | None = None
     interface: str | None = None
+    routing_instance: str | None = None
 
     def matches(self, scope: Scope) -> bool:
         if self.description is not None:
@@ -31,6 +32,10 @@ class Selector:
         if self.interface is not None:
             if self.interface not in scope.selectors.interfaces:
                 return False
+        if self.routing_instance is not None:
+            # Rozlisi sluzby se stejnym popisem v ruznych VRF (E5).
+            if self.routing_instance not in scope.selectors.routing_instances:
+                return False
         return True
 
     @classmethod
@@ -39,14 +44,17 @@ class Selector:
             description=data.get("description"),
             service_type=data.get("service_type"),
             interface=data.get("interface"),
+            routing_instance=data.get("routing_instance"),
         )
         if (
             selector.description is None
             and selector.service_type is None
             and selector.interface is None
+            and selector.routing_instance is None
         ):
             raise ValueError(
-                "prazdny selektor v mapping.yml - uved description, service_type nebo interface"
+                "prazdny selektor v mapping.yml - uved description, service_type, "
+                "interface nebo routing_instance"
             )
         return selector
 

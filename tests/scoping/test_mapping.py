@@ -67,3 +67,44 @@ def test_empty_mapping_ignores_nothing():
     mapping = empty_mapping()
     assert mapping.mappings == []
     assert mapping.is_ignored(_scope("X", "Internet", "ge-0/0/1.0")) is False
+
+
+def _vrf_scope(description, routing_instance, interface) -> Scope:
+    return Scope(
+        id=f"svc:{description}:IPVPN:{interface}",
+        kind="service",
+        key=ScopeKey(description, "IPVPN", None),
+        selectors=Selectors(interfaces=[interface], routing_instances=[routing_instance]),
+    )
+
+
+def test_selector_matches_on_routing_instance():
+    selector = Selector(description="CPE", routing_instance="customer-a")
+    assert selector.matches(_vrf_scope("CPE", "customer-a", "ge-0/0/2.100"))
+    assert not selector.matches(_vrf_scope("CPE", "customer-b", "ge-0/0/2.200"))
+
+
+def test_routing_instance_alone_is_a_valid_selector():
+    assert Selector.from_dict({"routing_instance": "customer-a"}).routing_instance == "customer-a"
+
+
+def test_load_mapping_reads_routing_instance(tmp_path):
+    path = tmp_path / "mapping.yml"
+    path.write_text(
+        textwrap.dedent(
+            """\
+            mappings:
+              - baseline: {description: CPE, routing_instance: customer-a}
+                subject:  {description: CPE, routing_instance: customer-a}
+            ignore:
+              - {routing_instance: VRF-x}
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    mapping = load_mapping(path)
+
+    assert mapping.mappings[0].baseline.routing_instance == "customer-a"
+    assert mapping.is_ignored(_vrf_scope("ANY", "VRF-x", "ge-0/0/9.0")) is True
+    assert mapping.is_ignored(_vrf_scope("ANY", "VRF-y", "ge-0/0/9.0")) is False

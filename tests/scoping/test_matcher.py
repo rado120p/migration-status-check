@@ -541,3 +541,25 @@ def test_later_rule_ambiguity_survives_earlier_rule_resolution():
     )
     assert "ambiguous" in sx_reason
     assert "ambiguous" in b2_reason
+
+
+def test_manual_mapping_by_routing_instance_splits_same_description():
+    baseline = [
+        _scope("ge-0/0/2.100", "CPE", "IPVPN", routing_instance="customer-a"),
+        _scope("ge-0/0/2.200", "CPE", "IPVPN", routing_instance="customer-b"),
+    ]
+    subject = [
+        _scope("et-0/0/8.100", "CPE", "IPVPN", routing_instance="customer-a"),
+        _scope("et-0/0/8.200", "CPE", "IPVPN", routing_instance="customer-b"),
+    ]
+    mapping = Mapping(mappings=[
+        MappingRule(
+            baseline=Selector(description="CPE", routing_instance="customer-a"),
+            subject=Selector(description="CPE", routing_instance="customer-a"),
+        ),
+    ])
+
+    result = match_scopes(baseline, subject, mapping)
+
+    manual = [p for p in result.pairs if p.method == "manual"]
+    assert _ifaces(manual) == {("ge-0/0/2.100", "et-0/0/8.100")}
