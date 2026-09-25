@@ -6,7 +6,9 @@
 
 **Architecture:** A core `migration_validator/users.py` (PBKDF2 hashing + YAML `UserStore`, no FastAPI) serves both the new `mig-validate user …` CLI and the GUI. The GUI gets an in-memory `SessionStore` + `LoginThrottle` (`gui/sessions.py`), a session-based actor provider plugged into the existing `authz.py` seam, login/logout routes, a static login page, an Origin-check middleware and an audit logger. `create_app(users=None)` keeps today's anonymous admin for tests and embedding; `mig-validate gui` always passes a `UserStore` and refuses to start without users.
 
-**Tech Stack:** Python 3.13, FastAPI 0.141 / Starlette 1.6, PyYAML, stdlib `hashlib`/`hmac`/`secrets`, vanilla JS, pytest (`.venv/bin/python -m pytest`), `node --test tests/js/`.
+**Tech Stack:** Python 3.13, FastAPI 0.141 / Starlette 1.6, PyYAML, stdlib `hashlib`/`hmac`/`secrets`, vanilla JS, pytest, `node --test tests/js/`.
+
+**Running tests:** `pyproject.toml` already sets `addopts = "-q"`; never add another `-q` (it hides the `N passed` summary). Use `.venv/bin/python -m pytest -p no:warnings [paths]`, run from the repository (or worktree) root with the main checkout's `.venv`. Baseline before this wave: 2164 passed.
 
 **Spec:** `docs/superpowers/specs/2026-09-25-user-roles-and-inventory-design.md` (sections "Permission matrix" and "Wave A").
 
@@ -142,7 +144,7 @@ def test_auth_settings_does_not_need_password_env(tmp_path, monkeypatch):
 
 - [ ] **Step 4: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/test_auth.py -q`
+Run: `.venv/bin/python -m pytest tests/test_auth.py -p no:warnings`
 Expected: ImportError for `load_auth_settings`.
 
 - [ ] **Step 5: Implement**
@@ -197,7 +199,7 @@ Make `load_settings` use `_read_settings` (behaviour unchanged: missing file →
 
 - [ ] **Step 6: Run tests**
 
-Run: `.venv/bin/python -m pytest tests/test_auth.py -q`
+Run: `.venv/bin/python -m pytest tests/test_auth.py -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 7: Commit**
@@ -369,7 +371,7 @@ def test_store_empty_file_and_empty_users(tmp_path):
 
 - [ ] **Step 2: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/test_users.py -q`
+Run: `.venv/bin/python -m pytest tests/test_users.py -p no:warnings`
 Expected: ModuleNotFoundError.
 
 - [ ] **Step 3: Implement `migration_validator/users.py`**
@@ -559,7 +561,7 @@ class UserStore:
 
 - [ ] **Step 4: Run tests**
 
-Run: `.venv/bin/python -m pytest tests/test_users.py -q`
+Run: `.venv/bin/python -m pytest tests/test_users.py -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -678,7 +680,7 @@ def test_list_empty(settings, capsys):
 
 - [ ] **Step 2: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_users.py -q`
+Run: `.venv/bin/python -m pytest tests/test_cli_users.py -p no:warnings`
 Expected: argparse error (invalid choice 'user').
 
 - [ ] **Step 3: Implement in `cli.py`**
@@ -801,7 +803,7 @@ Parser, in `build_parser()` before `return parser`:
 
 - [ ] **Step 4: Run tests**
 
-Run: `.venv/bin/python -m pytest tests/test_cli_users.py tests/test_cli.py -q`
+Run: `.venv/bin/python -m pytest tests/test_cli_users.py tests/test_cli.py -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -879,7 +881,7 @@ def test_group_members_record_created_by(tmp_path):
 
 - [ ] **Step 2: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/runs/test_manifest_created_by.py tests/test_api_runs.py tests/test_api_groups.py -q`
+Run: `.venv/bin/python -m pytest tests/runs/test_manifest_created_by.py tests/test_api_runs.py tests/test_api_groups.py -p no:warnings`
 Expected: TypeError on unexpected keyword `created_by`.
 
 - [ ] **Step 3: Implement**
@@ -899,7 +901,7 @@ Expected: TypeError on unexpected keyword `created_by`.
 
 - [ ] **Step 4: Run tests + whole suite**
 
-Run: `.venv/bin/python -m pytest -q -p no:warnings`
+Run: `.venv/bin/python -m pytest -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -1003,7 +1005,7 @@ def test_throttle_success_resets():
 
 - [ ] **Step 2: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/gui/test_sessions.py -q` → ModuleNotFoundError.
+Run: `.venv/bin/python -m pytest tests/gui/test_sessions.py -p no:warnings` → ModuleNotFoundError.
 
 - [ ] **Step 3: Implement `migration_validator/gui/sessions.py`**
 
@@ -1131,7 +1133,7 @@ class LoginThrottle:
             self._entries.pop((username, ip), None)
 ```
 
-Run: `.venv/bin/python -m pytest tests/gui/test_sessions.py -q` → PASS.
+Run: `.venv/bin/python -m pytest tests/gui/test_sessions.py -p no:warnings` → PASS.
 
 - [ ] **Step 4: Write failing authz + matrix tests**
 
@@ -1216,10 +1218,8 @@ from migration_validator.gui.authz import Actor
 OLD = {"node": "MX1", "host": "10.0.0.1", "platform": "junos", "role": "old"}
 NEW = {"node": "PTX1", "host": "10.0.0.2", "platform": "junos-evo", "role": "new"}
 
-# (method, path, minimum role). Bodies are irrelevant: an allowed role may get
-# 404/409/422, a disallowed one must get 403 before validation... except that
-# FastAPI validates the body before dependencies run, so every write sends a
-# body that passes pydantic validation.
+# (method, path, minimum role). An allowed role may get 404/409/422 from the
+# thin fixture; only 401/403 are asserted.
 MATRIX = [
     ("GET", "/api/checks", "viewer"),
     ("GET", "/api/meta", "viewer"),
@@ -1320,7 +1320,7 @@ If a write route's body shape above fails pydantic validation and the 403/401 as
 
 - [ ] **Step 5: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/gui/test_authz.py tests/gui/test_permission_matrix.py -q`
+Run: `.venv/bin/python -m pytest tests/gui/test_authz.py tests/gui/test_permission_matrix.py -p no:warnings`
 Expected: failures for 401 (currently 403/200), relabelled routes (operator gets 403), `session_actor_provider` import.
 
 - [ ] **Step 6: Implement authz + relabels**
@@ -1382,7 +1382,7 @@ Update the module docstring (the future-roles note is now implemented). Relabel 
 
 - [ ] **Step 7: Run tests + whole suite**
 
-Run: `.venv/bin/python -m pytest -q -p no:warnings`
+Run: `.venv/bin/python -m pytest -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 8: Commit**
@@ -1571,7 +1571,7 @@ def test_anonymous_mode_me(tmp_path):
 
 - [ ] **Step 2: Run and see them fail**
 
-Run: `.venv/bin/python -m pytest tests/gui/test_login.py -q` → TypeError `users` kwarg / 404s.
+Run: `.venv/bin/python -m pytest tests/gui/test_login.py -p no:warnings` → TypeError `users` kwarg / 404s.
 
 - [ ] **Step 3: Implement `gui/auth_routes.py`**
 
@@ -1774,6 +1774,14 @@ Imports: `from urllib.parse import urlsplit`, `RedirectResponse`, `UserStore`, `
     errorEl.hidden = false;
   }
 
+  // The session cookie is Secure: over plain HTTP (except loopback) the browser
+  // drops it and sign-in would silently loop back to this page.
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+  if (window.location.protocol === "http:" && !loopback) {
+    showError("Sign-in requires HTTPS. Open this page via https://.");
+    submit.disabled = true;
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     errorEl.hidden = true;
@@ -1820,7 +1828,7 @@ Imports: `from urllib.parse import urlsplit`, `RedirectResponse`, `UserStore`, `
 
 - [ ] **Step 6: Add the `/api/me` MATRIX row; run tests**
 
-Run: `.venv/bin/python -m pytest -q -p no:warnings`
+Run: `.venv/bin/python -m pytest -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 7: Commit**
@@ -1924,7 +1932,7 @@ def restore_audit_logger():
     logger.propagate, logger.level = propagate, level
 ```
 
-- [ ] **Step 2: Run and see them fail.** `.venv/bin/python -m pytest tests/gui/test_audit.py -q`
+- [ ] **Step 2: Run and see them fail.** `.venv/bin/python -m pytest tests/gui/test_audit.py -p no:warnings`
 
 - [ ] **Step 3: Implement `gui/audit.py`**
 
@@ -1985,7 +1993,7 @@ Action names (fixed vocabulary):
 
 Record only after the operation succeeded (after the `try` block). Login: `record(body.username, "login-failed", ip=ip)` on failure, `record(user.username, "login", ip=ip)` on success; logout: look up `sessions.lookup(token)` before dropping and record when non-None.
 
-- [ ] **Step 5: Run whole suite.** `.venv/bin/python -m pytest -q -p no:warnings` → PASS.
+- [ ] **Step 5: Run whole suite.** `.venv/bin/python -m pytest -p no:warnings` → PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -2073,7 +2081,7 @@ def test_gui_needs_both_tls_files(settings, captured, tmp_path, capsys):
     assert not captured
 ```
 
-- [ ] **Step 2: Run and see them fail.** `.venv/bin/python -m pytest tests/test_cli_gui.py -q`
+- [ ] **Step 2: Run and see them fail.** `.venv/bin/python -m pytest tests/test_cli_gui.py -p no:warnings`
 
 - [ ] **Step 3: Implement**
 
@@ -2123,7 +2131,7 @@ Note `load_settings(args.settings)` with `args.settings=None` keeps today's defa
                      help="IP reverse proxy, ktere veri X-Forwarded-For (pro login throttle)")
 ```
 
-- [ ] **Step 4: Run whole suite.** `.venv/bin/python -m pytest -q -p no:warnings` → PASS.
+- [ ] **Step 4: Run whole suite.** `.venv/bin/python -m pytest -p no:warnings` → PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -2214,7 +2222,7 @@ Find where the run overview renders kind/profile (search `detail.profile` or `"p
 
 - [ ] **Step 5: Run JS tests and Python suite**
 
-Run: `node --test tests/js/ && .venv/bin/python -m pytest -q -p no:warnings`
+Run: `node --test tests/js/ && .venv/bin/python -m pytest -p no:warnings`
 Expected: all PASS.
 
 - [ ] **Step 6: Docs**
@@ -2225,7 +2233,7 @@ Expected: all PASS.
 - Permission matrix (copy the table from the spec).
 - `auth.users_file` in `config/settings.yml` (default `config/users.yml`, mode 0600, gitignored).
 - `mig-validate gui` refuses to start without users; flags `--settings`, `--ssl-certfile/--ssl-keyfile`, `--forwarded-allow-ips`.
-- HTTPS is required for the session cookie except on 127.0.0.1/localhost; behind a reverse proxy keep the `Host` header (`proxy_set_header Host $host;`) or every write is refused as cross-origin.
+- HTTPS is required for the session cookie except on 127.0.0.1/localhost. Behind a reverse proxy forward the browser's Host including the port — nginx `proxy_set_header Host $http_host;` (not `$host`, which drops a non-default port) — or every write is refused as cross-origin.
 - Sessions live in memory: a GUI restart logs everyone out; idle 8 h, absolute 12 h; 5 failed logins lock that username+IP for 5 minutes.
 - Upgrade note: `config/settings.yml` is no longer tracked — copy it aside before `git pull`, restore afterwards.
 
