@@ -791,14 +791,16 @@ class App {
 
   renderAddDevicesModal(root) {
     const modal = this.state.addDevicesModal;
-    const children = [
-      el("h3", { text: "Add devices" }),
+    const children = [el("h3", { text: "Add devices" })];
+    const modalInventoryNotice = MigPicker.unavailableNotice(this.cache.inventory);
+    if (modalInventoryNotice) children.push(el("div", { className: "notice notice-warn", text: modalInventoryNotice }));
+    children.push(
       this.buildBulkDeviceRows(modal.devices, modal.touched, modal.rowErrors, () => {
         const had = Object.keys(modal.rowErrors).length > 0;
         modal.rowErrors = {};
         if (had) this.render();
-      }),
-    ];
+      })
+    );
     if (modal.error) children.push(el("div", { className: "field-error", text: modal.error }));
     children.push(
       el("div", {
@@ -3963,6 +3965,15 @@ class App {
         const res = await fetch(`/api/inventory?q=${encodeURIComponent(q)}`);
         const body = await res.json().catch(() => ({}));
         if (mySeq !== seq || !input.isConnected) return;
+        if (!res.ok) {
+          // finding #5: a non-OK, non-401 response (e.g. 500 {detail}) used
+          // to leave the dropdown empty with no explanation.
+          items = [];
+          lastTotal = 0;
+          highlighted = -1;
+          renderDropdown(MigPicker.searchErrorNote(res.status, body));
+          return;
+        }
         items = body.items || [];
         lastTotal = body.total || 0;
         highlighted = items.length ? 0 : -1;
@@ -3984,7 +3995,14 @@ class App {
     input.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (items.length) { highlighted = MigPicker.moveHighlight(highlighted, 1, items.length); renderDropdown(null); }
+        if (items.length) {
+          highlighted = MigPicker.moveHighlight(highlighted, 1, items.length);
+          renderDropdown(null);
+        } else if (MigPicker.shouldBrowseOnArrowDown(input.value, items.length)) {
+          // finding #8: browse the first page of hosts from an empty,
+          // untouched input instead of requiring a keystroke first.
+          runSearch("");
+        }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         if (items.length) { highlighted = MigPicker.moveHighlight(highlighted, -1, items.length); renderDropdown(null); }
@@ -4004,9 +4022,31 @@ class App {
     return wrap;
   }
 
+  // finding #7 (first-open race): while cache.inventory is still null (the
+  // very first form opened this session, before loadInventoryAvailability()
+  // resolves) neither "manual" nor "pick" mode is known yet. Rendering
+  // disabled loading fields - instead of guessing manual and later
+  // replacing them with a picker - means nothing typed in that window is
+  // ever silently dropped.
+  buildLoadingField(label) {
+    const input = el("input", {
+      className: "form-input",
+      attrs: { type: "text", placeholder: "Loading inventory…", disabled: "disabled" },
+    });
+    return el("div", { className: "form-field", children: [
+      el("label", { className: "field-label", text: label }), input,
+    ] });
+  }
+
   buildDeviceSubform(title, device, touched) {
     const wrap = el("div", { className: "device-subform" });
     wrap.appendChild(el("div", { className: "device-subform-title", text: title }));
+
+    if (this.cache.inventory === null) {
+      wrap.appendChild(this.buildLoadingField("Node"));
+      wrap.appendChild(this.buildLoadingField("Host"));
+      return wrap;
+    }
 
     const focusKey = `newrun-picker-${title}`;
     const picker = this.buildNodePicker(device, { focusKey });
@@ -4090,7 +4130,11 @@ class App {
      Manual column only exists when inventory is available - otherwise the
      table keeps today's 4-column layout untouched. */
   buildBulkDeviceRows(devices, touched, rowErrors, onChange) {
-    const withPicker = this.inventoryAvailable();
+    // finding #7: same first-open race as buildDeviceSubform - render every
+    // row disabled until we know whether inventory is available, instead of
+    // guessing manual and swapping to a picker under the user later.
+    const loading = this.cache.inventory === null;
+    const withPicker = !loading && this.inventoryAvailable();
     const table = el("div", { className: "bulk-table" + (withPicker ? " with-picker" : "") });
     const headCells = [el("span", { text: "Node" }), el("span", { text: "Host" })];
     if (withPicker) headCells.push(el("span", { text: "Manual" }));
@@ -4102,7 +4146,9 @@ class App {
       const dup = key && seen.has(key);
       if (key && !dup) seen.set(key, i);
       const field = (prop, mono) => {
-        const input = el("input", { className: "form-input" + (mono ? " mono" : ""), attrs: { type: "text" } });
+        const attrs = { type: "text" };
+        if (loading) { attrs.disabled = "disabled"; attrs.placeholder = "Loading inventory…"; }
+        const input = el("input", { className: "form-input" + (mono ? " mono" : ""), attrs });
         input.value = device[prop];
         input.addEventListener("input", (e) => { device[prop] = e.target.value; onChange(); });
         input.addEventListener("blur", () => this.render());
@@ -4111,6 +4157,7 @@ class App {
       const platform = el("select", { className: "form-select", children: ["junos", "junos-evo"].map((p) =>
         el("option", { text: p, attrs: p === device.platform ? { value: p, selected: "selected" } : { value: p } })
       ) });
+      if (loading) platform.setAttribute("disabled", "disabled");
       platform.addEventListener("change", (e) => { device.platform = e.target.value; onChange(); });
       const errors = [];
       if (touched && !device.node.trim()) errors.push("node is required");
@@ -4128,16 +4175,18 @@ class App {
       }
       if (withPicker) cells.push(this.buildManualCheckbox(device, onChange));
       cells.push(platform);
-      cells.push(
-        el("button", { className: "btn btn-secondary bulk-remove", text: "×", attrs: { type: "button", title: "remove row" },
-          onClick: () => { devices.splice(i, 1); onChange(); this.render(); } })
-      );
+      const removeBtn = el("button", { className: "btn btn-secondary bulk-remove", text: "×", attrs: { type: "button", title: "remove row" },
+        onClick: () => { devices.splice(i, 1); onChange(); this.render(); } });
+      if (loading) removeBtn.setAttribute("disabled", "disabled");
+      cells.push(removeBtn);
       if (errors.length) cells.push(el("div", { className: "field-error bulk-row-error", text: errors.join(" · ") }));
 
       table.appendChild(el("div", { className: "bulk-row" + (errors.length ? " has-error" : ""), children: cells }));
     });
-    table.appendChild(el("button", { className: "btn btn-secondary", text: "+ add device", attrs: { type: "button" },
-      onClick: () => { devices.push({ node: "", host: "", platform: "junos" }); this.render(); } }));
+    const addBtn = el("button", { className: "btn btn-secondary", text: "+ add device", attrs: { type: "button" },
+      onClick: () => { devices.push({ node: "", host: "", platform: "junos" }); this.render(); } });
+    if (loading) addBtn.setAttribute("disabled", "disabled");
+    table.appendChild(addBtn);
     return table;
   }
 
@@ -4373,15 +4422,13 @@ class App {
             this.buildDeviceSubform("New device", form.new, form.touched),
           ],
         });
-    this.mainEl.appendChild(
-      el("div", {
-        className: "form-card",
-        children: [
-          el("div", { className: "form-section-label", text: single ? "Device" : "Devices" }),
-          devicesGrid,
-        ],
-      })
-    );
+    const devicesCardChildren = [
+      el("div", { className: "form-section-label", text: single ? "Device" : "Devices" }),
+    ];
+    const inventoryNotice = MigPicker.unavailableNotice(this.cache.inventory);
+    if (inventoryNotice) devicesCardChildren.push(el("div", { className: "notice notice-warn", text: inventoryNotice }));
+    devicesCardChildren.push(devicesGrid);
+    this.mainEl.appendChild(el("div", { className: "form-card", children: devicesCardChildren }));
 
     if (!single) {
       this.mainEl.appendChild(
@@ -4448,14 +4495,15 @@ class App {
         this.buildProfilePicker(form),
       ] }),
     ] }));
-    this.mainEl.appendChild(el("div", { className: "form-card", children: [
-      el("div", { className: "form-section-label", text: "Devices" }),
-      this.buildBulkDeviceRows(bulk.devices, form.touched, bulk.rowErrors, () => {
-        const had = Object.keys(bulk.rowErrors).length > 0;
-        bulk.rowErrors = {};
-        if (had) this.render();
-      }),
-    ] }));
+    const bulkCardChildren = [el("div", { className: "form-section-label", text: "Devices" })];
+    const bulkInventoryNotice = MigPicker.unavailableNotice(this.cache.inventory);
+    if (bulkInventoryNotice) bulkCardChildren.push(el("div", { className: "notice notice-warn", text: bulkInventoryNotice }));
+    bulkCardChildren.push(this.buildBulkDeviceRows(bulk.devices, form.touched, bulk.rowErrors, () => {
+      const had = Object.keys(bulk.rowErrors).length > 0;
+      bulk.rowErrors = {};
+      if (had) this.render();
+    }));
+    this.mainEl.appendChild(el("div", { className: "form-card", children: bulkCardChildren }));
     const valid = !this.bulkGroupError() && this.bulkRowsValid(bulk.devices) && !Object.keys(bulk.rowErrors).length;
     const checkbox = el("input", { attrs: { type: "checkbox" } });
     checkbox.checked = bulk.capturePre;

@@ -634,8 +634,11 @@ whenever it changes on disk — no GUI restart needed.
 **New run / Bulk.** Each device row gets a search box: type part of a node name, pick a match,
 and node + host fill in read-only with a "×" to clear. A **Manual** checkbox on the row swaps
 back to today's free-text node/host inputs — use it for a box that is not in the inventory.
-When the inventory is disabled or failing, every row is already manual and the checkbox is
-hidden. Platform is always chosen by hand either way.
+When the inventory is disabled, every row is already manual and the checkbox is hidden. When
+it is configured but failing (unreadable file, parse error), the form falls back to manual the
+same way, but now shows a warning above the device rows: "Inventory unavailable: `<error>` —
+manual entry only." — in the new-run form, the bulk table and the Add devices modal. Platform
+is always chosen by hand either way.
 
 **Hostname filter (Settings, admin only).** The topbar **Settings** button (next to Profiles,
 admin role only) narrows what the search offers: one glob pattern per line, matched
