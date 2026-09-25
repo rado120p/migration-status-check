@@ -174,6 +174,31 @@ class BfdSessionStateCheck(Check):
                 subject=session,
             )
 
+        if ambiguous is not None:
+            # Multihop session na adresu peera je vic a RPC nenese VRF -
+            # kterou z nich sluzba ma, nejde rict. 'Session neexistuje' by
+            # byla fabulace. Pred vetvi 'not configured': subjekt bez
+            # zameru, ale s nejednoznacnou adresou v baseline zaznamu, by
+            # jinak dostal FAIL "v baseline patril k teto sluzbe" - tvrzeni
+            # o CLENSTVI, ktere z nejednoznacnych dat nejde zmerit (na
+            # rozdil od BGP, kde polozka muze byt jednoznacna - proto BGP
+            # ambiguous-check bezi taky pred NOT_IN_SERVICE, checks/bgp.py).
+            #
+            # baseline_value pouziva was_measured (surovy stav baseline
+            # session), ne was: `was` je _session_value(baseline,
+            # configured=False, ...), ktera pro not-None baseline session
+            # vraci PARSER_MISSED znacku - lez, kdyz baseline session
+            # skutecne mela zmereny stav.
+            return Finding(
+                Outcome.SKIP,
+                f"{peer}: stav BFD nelze urcit - multihop session na tuto adresu "
+                f"je {ambiguous}x a RPC nenese VRF",
+                label=label,
+                family=family,
+                value=ambiguous_value(ambiguous),
+                baseline_value=was_measured,
+            )
+
         if not configured:
             # Session byla v baseline, v subjektu neni ani zamer. Tvrzeni o
             # CLENSTVI, ne o existenci: peer, ktereho nenarokuje zadny
@@ -193,20 +218,6 @@ class BfdSessionStateCheck(Check):
                 value=NOT_IN_SERVICE,
                 baseline_value=was_measured,
                 baseline=baseline,
-            )
-
-        if ambiguous is not None:
-            # Multihop session na adresu peera je vic a RPC nenese VRF -
-            # kterou z nich sluzba ma, nejde rict. 'Session neexistuje' by
-            # byla fabulace. Pred BGP vetvi: BGP polozka muze byt jednoznacna.
-            return Finding(
-                Outcome.SKIP,
-                f"{peer}: stav BFD nelze urcit - multihop session na tuto adresu "
-                f"je {ambiguous}x a RPC nenese VRF",
-                label=label,
-                family=family,
-                value=ambiguous_value(ambiguous),
-                baseline_value=was,
             )
 
         if bgp_state != ESTABLISHED:

@@ -1017,6 +1017,26 @@ def test_unassigned_bfd_ambiguous_multihop_is_not_listed():
     assert result.unassigned["bfd_sessions"] == []
 
 
+def test_unassigned_bgp_ambiguous_link_local_is_not_listed():
+    """Mirror vyse (review Minor 6): dva link-local zaznamy na stejnou
+    adresu, stejnou RI, ruzne local_interface - IPVPN scope oba vlastni
+    (owns_bgp_peer nekontroluje local_interface), Scope.select je proto
+    nahlasi jako nejednoznacne (bgp_ambiguous), ale engine._unassigned_bgp_peers
+    je i tak nesmi ukazat v NEZARAZENO - patri sluzbe, jen se od sebe
+    nerozlisi ktery konkretne."""
+    subject = _new()
+    subject.scopes[0].selectors.bgp_neighbors = ["198.11.14.4"]
+    subject.scopes[0].selectors.routing_instances = ["L3VPN-CPE13-NNI"]
+    subject.facts["bgp"] = [
+        bgp_record("198.11.14.4", routing_instance="L3VPN-CPE13-NNI", local_interface="ae0"),
+        bgp_record("198.11.14.4", routing_instance="L3VPN-CPE13-NNI", local_interface="ae1"),
+    ]
+
+    result = api.evaluate(subject, baseline=_old(), now=NOW)
+
+    assert result.unassigned["bgp_peers"] == []
+
+
 def test_layer1_only_subject_counts_as_no_services():
     # no_services se pocita ze service scopu, ne ze vsech - budouci
     # box-level scope by jinak tuhle logiku rozbil (spec, Mimo rozsah).

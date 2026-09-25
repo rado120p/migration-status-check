@@ -23,7 +23,7 @@ from migration_validator.models.result import (
     count_statuses,
     count_unchanged,
 )
-from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope
+from migration_validator.models.scope import LAYER1_SERVICE_TYPE, Scope, route_key
 from migration_validator.models.snapshot import Snapshot
 from migration_validator.scoping.linker import ScopeLink, link_scopes
 from migration_validator.scoping.mapping import Mapping, empty_mapping
@@ -526,7 +526,7 @@ def _unassigned_static_routes(
     dva zaznamy, ne jeden.
     """
     assigned = {
-        (str(route.get("rib")), str(route.get("prefix")), str(route.get("route_type", "static")))
+        route_key(route)
         for scope in scopes
         for route in scope.selectors.static_routes
     }
@@ -542,7 +542,7 @@ def _unassigned_static_routes(
 
     records = sorted(
         subject.facts.get("routes") or [],
-        key=lambda r: (str(r.get("rib")), str(r.get("prefix")), str(r.get("protocol"))),
+        key=route_key,
     )
     return [
         {
@@ -554,8 +554,7 @@ def _unassigned_static_routes(
             "snapshot": "subject",
         }
         for record in records
-        if (str(record.get("rib")), str(record.get("prefix")), str(record.get("protocol", "static")))
-        not in assigned
+        if route_key(record) not in assigned
         and _on_port(record)
     ]
 

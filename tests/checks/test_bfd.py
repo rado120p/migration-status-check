@@ -382,3 +382,29 @@ def test_bfd_ambiguous_without_intent_gets_no_row():
     )
 
     assert findings == []
+
+
+def test_bfd_ambiguous_without_intent_but_in_baseline_stays_skip():
+    """Ostry beh MX -> ACX 2026-09-23: subjekt ma dve multihop session na
+    adresu peera (nejednoznacne, bez BFD zameru), baseline mela pro tu
+    sluzbu jednu session. Peer se do smycky dostane pres baseline_sessions
+    (ne pres intent/sessions), takze 'not configured' vetev by nahlasila
+    FAIL 'v baseline patril k teto sluzbe, v subjektu uz ne' - tvrzeni o
+    clenstvi, ktere nejde zmerit (BGP peer muze byt jednoznacny). Ambiguous
+    musi vyhrat: presne jeden SKIP radek, baseline_value je surovy stav
+    baseline session (was_measured), ne PARSER_MISSED znacka, kterou by
+    vratilo `_session_value(baseline, configured=False, ...)`."""
+    findings = BfdSessionStateCheck().run(
+        _ctx(
+            {},
+            scope=_scope(bfd_peers=[], bgp_neighbors=()),
+            baseline_sessions={"198.11.14.4": {"state": "Up"}},
+            ambiguous={"198.11.14.4": 2},
+        )
+    )
+
+    assert len(findings) == 1
+    row = findings[0]
+    assert row.outcome is Outcome.SKIP
+    assert row.value == ambiguous_value(2)
+    assert row.baseline_value == "Up"

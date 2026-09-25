@@ -79,6 +79,23 @@ def _by_key(
     return view, ambiguous
 
 
+def route_key(record: dict[str, Any]) -> tuple[str, str, str]:
+    """Identita routy: (rib, prefix, protokol). Chybejici protokol je static
+    (dnesni default) - staticka routa a agregat muzou sdilet (rib, prefix)
+    (overeno 2026-09-24), takze bez protokolu ve trici by statika vybrala i
+    agregat.
+
+    Selektor ze zamerove konfigurace nese pole `route_type`, fakta ze
+    zarizeni pole `protocol` - jedna funkce cte oboje, aby Scope.select a
+    engine._unassigned_static_routes pocitaly stejny klic (bod review:
+    predtim engine.py mel default "static" a scope.py ne, takze
+    protokol-less zaznam nebyl videt nikde)."""
+    protocol = record.get("protocol")
+    if protocol is None:
+        protocol = record.get("route_type", "static")
+    return (str(record.get("rib")), str(record.get("prefix")), str(protocol))
+
+
 # Subtypy sluzeb Internet/IPVPN, ktere nesou multicast stream. Sdili je
 # checks/multicast.py (kde se checky zapinaji) a checks/reachability.py +
 # probes/ping.py (kde se ping/ARP/ND vypinaji, rozhodnuti 2026-09-08).
@@ -341,16 +358,13 @@ class Scope:
             for name, data in (facts.get("evpn_mac") or {}).items()
             if name in mac_instances
         }
-        # Selektor (rib, prefix, route_type): static a aggregate muzou sdilet
-        # (rib, prefix) (overeno 2026-09-24), takze bez protokolu by statika
-        # vybrala i agregat. Chybejici route_type = static (dnesni default).
-        wanted_routes = {
-            (str(route.get("rib")), str(route.get("prefix")), str(route.get("route_type", "static")))
-            for route in self.selectors.static_routes
-        }
+        # Identita routy (rib, prefix, protokol) je v jedne funkci
+        # (route_key nize v modulu) - stejny klic pro selektor i fakt, aby
+        # protokol-less zaznam nezustal nevidet nikde (bod review).
+        wanted_routes = {route_key(route) for route in self.selectors.static_routes}
         routes: dict[str, dict[str, dict[str, Any]]] = {}
         for record in facts.get("routes") or []:
-            key = (str(record.get("rib")), str(record.get("prefix")), str(record.get("protocol")))
+            key = route_key(record)
             if key in wanted_routes:
                 routes.setdefault(key[2], {}).setdefault(key[0], {})[key[1]] = record
 

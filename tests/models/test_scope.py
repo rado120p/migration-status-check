@@ -283,6 +283,27 @@ def test_routes_view_keeps_static_and_aggregate_selectors_separate():
     assert set(view) == {"static", "aggregate"}
 
 
+def test_routes_view_protocol_less_record_matches_default_static_selector():
+    """route_key() musi pouzit stejny default 'static' na obou stranach
+    (review Minor 3): zaznam bez klice 'protocol' (parser ho nekdy
+    nevyplni) se ma spárovat se selektorem bez 'route_type' (taky default
+    static). Predtim scope.py cetlo record stranu bez defaultu
+    (str(record.get('protocol')) -> literal 'None'), takze se nikdy
+    nesparovalo s wanted_routes defaultem 'static' - routa nebyla videt
+    nikde."""
+    scope = Scope(
+        id="svc:x", kind="service", key=ScopeKey(description="x", service_type="Internet"),
+        selectors=Selectors(static_routes=[
+            {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hops": []},
+        ]),
+    )
+    record = {"rib": "inet.0", "prefix": "198.62.1.0/29", "next_hop": ["152.11.13.2"]}
+
+    view = scope.select({"routes": [record]})["routes"]
+
+    assert view == {"static": {"inet.0": {"198.62.1.0/29": record}}}
+
+
 def test_bfd_sessions_are_selected_by_bgp_neighbors():
     """Session patri scopu podle peeru, ne podle zameru - viz AR-14.
 

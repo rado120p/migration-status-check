@@ -219,6 +219,48 @@ def test_esi_single_homed_ifls_are_not_in_segment():
         assert not record["esi"].startswith("05:")
 
 
+def test_esi_with_no_matching_ifl_in_table_gets_empty_interfaces():
+    """Segment, jehoz ESI zadny radek evpn-interface-status-table nenese
+    (review Minor 5) - `by_esi.get(esi, {})` ma vratit prazdny slovnik, ne
+    vyhodit KeyError nebo zaznam potichu zahodit. Ucel: sluzba se pozna
+    (resolved_status, df_role), i kdyz per-IFL tabulka o jejim ESI mlci."""
+    xml = etree.fromstring(
+        """
+        <evpn-instance-information>
+          <evpn-instance>
+            <evpn-instance-name>EVPN-X</evpn-instance-name>
+            <evpn-interface-status-table>
+              <evpn-interface>
+                <evpn-interface-name>ae0.14</evpn-interface-name>
+                <evpn-interface-esi>00:11:12:13:14:00:00:00:00:00</evpn-interface-esi>
+                <evpn-interface-mode>all-active</evpn-interface-mode>
+                <evpn-interface-status>Up/Forwarding</evpn-interface-status>
+              </evpn-interface>
+            </evpn-interface-status-table>
+            <evpn-esi>
+              <evpn-esi-value>99:11:12:13:14:00:00:00:00:00</evpn-esi-value>
+              <evpn-esi-status>Resolved by IFL ae0.15</evpn-esi-status>
+              <evpn-esi-df-information>
+                <esi-designated-forwarder>150.0.0.3</esi-designated-forwarder>
+              </evpn-esi-df-information>
+            </evpn-esi>
+          </evpn-instance>
+        </evpn-instance-information>
+        """
+    )
+    result = EvpnEsiCollector().parse(xml, "junos-evo")
+
+    assert result == [
+        {
+            "instance": "EVPN-X",
+            "esi": "99:11:12:13:14:00:00:00:00:00",
+            "resolved_status": "Resolved by IFL ae0.15",
+            "df_role": "150.0.0.3",
+            "interfaces": {},
+        }
+    ]
+
+
 def test_mac_merges_every_rpc_for_platform():
     """MX vidi vlan-aware jen pres bridge mac-table, vlan-based jen pres evpn."""
 

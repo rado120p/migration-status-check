@@ -114,3 +114,50 @@ def test_only_v6_neighbor_gives_no_key():
         "</pim-neighbor></pim-interface></pim-neighbors-information>"
     )
     assert PimNeighborCollector().parse(xml, "junos") == {}
+
+
+# --- "Prvni v4 vyhrava" (review Minor 4, `if interface in neighbors: break`) -
+
+
+def test_two_v4_blocks_same_interface_first_wins():
+    """Multi-access segment / duplicitni pim-interface blok se stejnym
+    jmenem: druhy v4 zaznam se tise zahodi, prvni zustava. Kontrakt
+    klicuje jednim sousedem na rozhrani (Ukol 6)."""
+    xml = etree.fromstring(
+        "<pim-neighbors-information>"
+        "<pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<ip-protocol-version>4</ip-protocol-version>"
+        "<pim-neighbor-address>10.9.0.1</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface>"
+        "<pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<ip-protocol-version>4</ip-protocol-version>"
+        "<pim-neighbor-address>10.9.0.2</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface>"
+        "</pim-neighbors-information>"
+    )
+    data = PimNeighborCollector().parse(xml, "junos")
+    assert data["et-0/0/2.0"]["neighbor_address"] == "10.9.0.1"
+
+
+def test_v6_block_before_v4_block_keeps_v4():
+    """Poradi blocku obraceny nez v laborce (v6 pred v4) nesmi zmenit
+    vysledek - filtr na ip-protocol-version=6 musi platit bez ohledu na
+    poradi, ne jen na to, ze v laborce v4 chodi prvni."""
+    xml = etree.fromstring(
+        "<pim-neighbors-information>"
+        "<pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<ip-protocol-version>6</ip-protocol-version>"
+        "<pim-neighbor-address>fe80::1</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface>"
+        "<pim-interface><pim-neighbor>"
+        "<pim-interface-name>et-0/0/2.0</pim-interface-name>"
+        "<ip-protocol-version>4</ip-protocol-version>"
+        "<pim-neighbor-address>10.9.0.3</pim-neighbor-address>"
+        "</pim-neighbor></pim-interface>"
+        "</pim-neighbors-information>"
+    )
+    data = PimNeighborCollector().parse(xml, "junos")
+    assert data["et-0/0/2.0"]["neighbor_address"] == "10.9.0.3"
