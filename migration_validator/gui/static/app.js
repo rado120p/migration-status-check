@@ -113,6 +113,14 @@ const GUIDE_TEXT = {
     title: "Edit mapping",
     body: ["Páruje starý port s novým. Řádek s existujícím capture je zamčený — mapování, podle kterého už se sbíralo, se nemění."],
   },
+  settings: {
+    title: "Settings",
+    body: [
+      "Hostname filter omezuje nabídku ve vyhledávání inventáře (New run, Bulk) — na existující runy ani na ruční zadání nemá vliv.",
+      "Jeden vzor na řádek, glob (fnmatch) na celé jméno uzlu, bez ohledu na velikost písmen — MX-* projde MX-POP1, ne PTX-POP1. Prázdný filtr znamená vidět všechno.",
+      "Počet N of M se přepočítává za psaní (dry-run, nic se neukládá) — Save filtr uloží do config/hostname_filter.yml.",
+    ],
+  },
   group: {
     title: "Group",
     body: [
@@ -151,6 +159,7 @@ class App {
       captureReturnGroup: null,
       upgradeModal: null,
       upgradeGroupModal: null,
+      settings: null,
     };
     this.cache = {
       runs: [],
@@ -202,8 +211,10 @@ class App {
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.syncResultsColumns());
     this.guideEl = document.getElementById("guide");
     this.btnProfilesEl = document.getElementById("btn-profiles");
+    this.btnSettingsEl = document.getElementById("btn-settings");
 
     this.btnProfilesEl.addEventListener("click", () => this.goToProfiles(null));
+    this.btnSettingsEl.addEventListener("click", () => this.goToSettings());
     document.getElementById("btn-new-capture").addEventListener("click", () => {
       this.openCaptureForm();
     });
@@ -228,7 +239,7 @@ class App {
     });
     window.addEventListener("beforeunload", () => this.stopCapturePolling());
     window.addEventListener("beforeunload", (e) => {
-      if (this.editorDirty()) {
+      if (this.editorDirty() || this.settingsDirty()) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -259,6 +270,10 @@ class App {
   // /api/me response (role: admin) just like an authenticated session.
   canOperate() {
     return !!this.me && this.me.permissions.includes("operate");
+  }
+
+  canAdmin() {
+    return !!this.me && this.me.permissions.includes("admin");
   }
 
   async boot() {
@@ -1650,11 +1665,23 @@ class App {
     return !!editor && editor.name !== null && MigView.profileDirty(editor.doc, editor.saved);
   }
 
+  // Same idea as editorDirty(), for the Settings hostname filter textarea.
+  settingsDirty() {
+    if (this.state.view !== "settings") return false;
+    const settings = this.state.settings;
+    return !!settings && settings.dirty;
+  }
+
   // Every navigation away from the editor goes through here (spec §5:
   // "navigating away with unsaved changes asks for confirmation").
   leaveGuard() {
-    if (!this.editorDirty()) return true;
-    return window.confirm("Profil má neuložené změny. Zahodit je?");
+    if (this.editorDirty()) {
+      return window.confirm("Profil má neuložené změny. Zahodit je?");
+    }
+    if (this.settingsDirty()) {
+      return window.confirm("Hostname filter má neuložené změny. Zahodit je?");
+    }
+    return true;
   }
 
   // editor.form is the table's state (effective value of every catalogue
@@ -1718,7 +1745,7 @@ class App {
   }
 
   async goToProfiles(name) {
-    if (this.state.view === "profiles" && !this.leaveGuard()) return;
+    if (!this.leaveGuard()) return;
     this.state.view = "profiles";
     this.state.selectedSnapshot = null;
     this.state.profileEditor = { name, doc: null, saved: null, saving: false, error: null, errorTarget: null, loadError: null, form: null, preview: { yaml: null, error: null, pending: false } };
@@ -2301,6 +2328,7 @@ class App {
     this.renderRunCombo();
     this.renderModal();
     this.btnProfilesEl.classList.toggle("btn-toggle-active", this.state.view === "profiles");
+    this.btnSettingsEl.classList.toggle("btn-toggle-active", this.state.view === "settings");
     const noRuns = this.cache.runs.length === 0;
     this.btnNewRunEl.classList.toggle("btn-pulse", noRuns);
     document.getElementById("btn-new-capture").disabled = noRuns || this.state.view === "group";
@@ -2318,6 +2346,9 @@ class App {
         break;
       case "profiles":
         this.renderProfilesView();
+        break;
+      case "settings":
+        this.renderSettingsView();
         break;
       case "capture":
         this.renderCaptureForm();
@@ -5007,6 +5038,209 @@ class App {
       footerChildren.push(el("div", { className: "footer-actions", children: [discardBtn, saveBtn] }));
     }
     this.mainEl.appendChild(el("div", { className: "profile-footer", children: footerChildren }));
+  }
+
+  // --- Settings (admin-only hostname filter) ---
+
+  parseFilterLines(text) {
+    return text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }
+
+  // GET, PUT and PUT?dry_run=true all answer the same shape (spec: {allow,
+  // visible, total, warnings, enabled, error}). Only a real load or a real
+  // save may treat `allow` as what is on disk (updateSaved) - a dry-run
+  // echoes back the not-yet-saved text and must never be mistaken for it,
+  // or the "unsaved changes" marker would clear itself while typing.
+  applyFilterResponse(settings, body, updateSaved) {
+    settings.counts = { visible: body.visible, total: body.total };
+    settings.warnings = body.warnings || [];
+    settings.enabled = !!body.enabled;
+    settings.error = body.error || null;
+    if (updateSaved) settings.saved = body.allow || [];
+  }
+
+  async goToSettings() {
+    if (!this.leaveGuard()) return;
+    this.state.view = "settings";
+    this.state.selectedSnapshot = null;
+    this.state.settings = {
+      text: "",
+      saved: [],
+      counts: null,
+      warnings: [],
+      enabled: true,
+      error: null,
+      saving: false,
+      saveError: null,
+      dirty: false,
+    };
+    this.render();
+    await this.loadFilter();
+    this.render();
+  }
+
+  async loadFilter() {
+    const settings = this.state.settings;
+    if (!settings) return;
+    try {
+      const res = await fetch("/api/inventory/filter");
+      if (res.ok) {
+        const body = await res.json();
+        this.applyFilterResponse(settings, body, true);
+        settings.text = settings.saved.join("\n");
+        settings.dirty = false;
+      } else {
+        const body = await res.json().catch(() => ({}));
+        settings.error = body.detail || `hostname filter se nepodarilo nacist (${res.status})`;
+      }
+    } catch (err) {
+      settings.error = String(err);
+    }
+  }
+
+  async saveFilter() {
+    const settings = this.state.settings;
+    if (!settings || settings.saving) return;
+    settings.saving = true;
+    settings.saveError = null;
+    this.render();
+    try {
+      const allow = this.parseFilterLines(settings.text);
+      const res = await fetch("/api/inventory/filter", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allow }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        this.applyFilterResponse(settings, body, true);
+        settings.text = settings.saved.join("\n");
+        settings.dirty = false;
+      } else {
+        const body = await res.json().catch(() => ({}));
+        settings.saveError = body.detail || `hostname filter se nepodarilo ulozit (${res.status})`;
+      }
+    } catch (err) {
+      settings.saveError = String(err);
+    }
+    settings.saving = false;
+    this.render();
+  }
+
+  renderSettingsView() {
+    clear(this.mainEl);
+    this.mainEl.appendChild(
+      el("div", {
+        className: "run-header",
+        children: [
+          el("h1", { text: "Settings" }),
+          el("span", { className: "subtitle", text: "hostname filter narrows the inventory search only" }),
+        ],
+      })
+    );
+    const settings = this.state.settings;
+    if (!settings) return;
+
+    const readonly = !this.canAdmin();
+    const card = el("div", { className: "form-card" });
+    card.appendChild(el("div", { className: "form-section-label", text: "Hostname filter" }));
+
+    const textarea = el("textarea", {
+      className: "form-input mono settings-filter-textarea",
+      attrs: { rows: "10", placeholder: "MX-*\nPTX-*", spellcheck: "false" },
+    });
+    textarea.value = settings.text;
+    if (readonly) textarea.setAttribute("disabled", "disabled");
+    card.appendChild(el("div", { className: "form-field", children: [textarea] }));
+
+    const countLine = el("div", { className: "settings-count-line" });
+    const dirtyMarker = el("span", { className: "settings-dirty-marker", text: "unsaved changes" });
+    dirtyMarker.hidden = !settings.dirty;
+    const dryRunError = el("div", { className: "field-error settings-dryrun-error" });
+    dryRunError.hidden = true;
+    card.appendChild(el("div", { className: "settings-count-row", children: [countLine, dirtyMarker] }));
+    card.appendChild(dryRunError);
+
+    const updateCountLine = () => {
+      if (!settings.enabled) {
+        countLine.textContent = "Inventory not configured — set inventory.path in config/settings.yml";
+      } else if (settings.error) {
+        countLine.textContent = settings.error;
+      } else if (settings.counts) {
+        countLine.textContent = `${settings.counts.visible} of ${settings.counts.total} nodes visible`;
+      } else {
+        countLine.textContent = "";
+      }
+    };
+    updateCountLine();
+
+    if (settings.warnings && settings.warnings.length) {
+      const warnBlock = el("div", { className: "form-field" });
+      warnBlock.appendChild(el("div", { className: "field-label", text: "Inventory warnings" }));
+      for (const warning of settings.warnings) {
+        warnBlock.appendChild(el("div", { className: "notice notice-warn", text: warning }));
+      }
+      card.appendChild(warnBlock);
+    }
+
+    if (!readonly) {
+      const saveBtn = el("button", {
+        className: "btn btn-primary",
+        text: settings.saving ? "Saving…" : "Save",
+        attrs: { type: "button", "data-perm": "admin" },
+        onClick: settings.saving ? null : () => this.saveFilter(),
+      });
+      if (settings.saving) saveBtn.setAttribute("disabled", "disabled");
+      card.appendChild(el("div", { className: "footer-actions", children: [saveBtn] }));
+      if (settings.saveError) card.appendChild(el("div", { className: "field-error", text: settings.saveError }));
+
+      // Debounced dry-run validation: only the count line and the dry-run
+      // error are updated directly, never via this.render() - a full
+      // re-render would rebuild the textarea and drop focus/caret while
+      // typing (spec: "typing... updates only the count line").
+      let debounceTimer = null;
+      let requestSeq = 0;
+      const runDryRun = async () => {
+        const mySeq = ++requestSeq;
+        const allow = this.parseFilterLines(settings.text);
+        try {
+          const res = await fetch("/api/inventory/filter?dry_run=true", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ allow }),
+          });
+          if (mySeq !== requestSeq || !textarea.isConnected) return;
+          if (res.ok) {
+            const body = await res.json();
+            this.applyFilterResponse(settings, body, false);
+            dryRunError.hidden = true;
+            dryRunError.textContent = "";
+          } else {
+            const body = await res.json().catch(() => ({}));
+            dryRunError.textContent = body.detail || `filter se nepodarilo overit (${res.status})`;
+            dryRunError.hidden = false;
+          }
+        } catch (err) {
+          if (mySeq !== requestSeq || !textarea.isConnected) return;
+          dryRunError.textContent = String(err);
+          dryRunError.hidden = false;
+        }
+        updateCountLine();
+      };
+
+      textarea.addEventListener("input", (e) => {
+        settings.text = e.target.value;
+        settings.dirty = this.parseFilterLines(settings.text).join("\n") !== settings.saved.join("\n");
+        dirtyMarker.hidden = !settings.dirty;
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runDryRun, 300);
+      });
+    }
+
+    this.mainEl.appendChild(card);
   }
 }
 

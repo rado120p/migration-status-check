@@ -562,7 +562,8 @@ auth:
 ```
 
 The file is written atomically with mode `0600` and is gitignored — it never leaves the
-server.
+server. `config/settings.yml` has a second, independent optional key, `inventory.path`, for the
+host inventory the New run/Bulk forms search — see §6b.
 
 **Starting the GUI.** `mig-validate gui` refuses to start when the users file is missing or
 has no users, and prints the `mig-validate user add <name> --role admin` hint instead. New
@@ -592,6 +593,54 @@ existing sessions.
 **Upgrade note.** `config/settings.yml` is no longer tracked in git. Pulling the commit that
 untracked it deletes your local copy (git removes a file the commit removes) — copy it aside
 before `git pull` and restore it afterwards.
+
+---
+
+## 6b. Host inventory (GUI)
+
+Pointing the GUI at an Ansible-style host inventory lets New run and Bulk forms fill node and
+host by searching, instead of typing every IP by hand. It is entirely optional — manual entry
+always works, with or without an inventory.
+
+**Enabling it.** Add the path to `config/settings.yml`:
+
+```yaml
+inventory:
+  path: /etc/ansible/hosts
+```
+
+Missing `inventory` key → inventory disabled, forms are manual-only, the Settings screen says
+so. Configured but unreadable file → inventory endpoints return an error with the path and
+reason; forms fall back to manual with a notice. Either way the GUI still starts.
+
+**Supported format.** One host per line, Ansible INI style:
+
+```
+MX-POP1 ansible_host=172.20.20.4
+PTX-POP1 ansible_host=172.20.20.5
+```
+
+The first token is the node name, `ansible_host=` gives its address; other `key=value` pairs
+are ignored. Blank lines, `#`/`;` comments and `[group]` / `[group:vars]` / `[group:children]`
+headers (and their body lines) are skipped. Host ranges (`mx[01:10]`), YAML inventories and
+`host_vars/` directories are **not** expanded — list hosts one per line. A line missing
+`ansible_host`, or a name repeated with a different host, is skipped with a warning; the
+warnings show up on the Settings screen. The file is re-read whenever it changes on disk — no
+GUI restart needed.
+
+**New run / Bulk.** Each device row gets a search box: type part of a node name, pick a match,
+and node + host fill in read-only with a "×" to clear. A **Manual** checkbox on the row swaps
+back to today's free-text node/host inputs — use it for a box that is not in the inventory.
+When the inventory is disabled or failing, every row is already manual and the checkbox is
+hidden. Platform is always chosen by hand either way.
+
+**Hostname filter (Settings, admin only).** The topbar **Settings** button (next to Profiles,
+admin role only) narrows what the search offers: one glob pattern per line, matched
+case-insensitively against the whole node name (`MX-*`, `*POP1*`). An empty filter shows
+everything. It only narrows the inventory search — it never hides existing runs and never
+blocks manual entry. Typing shows a live "N of M nodes visible" count (an unsaved dry-run
+check); Save writes it to `config/hostname_filter.yml`, which is gitignored like
+`auth.users_file`.
 
 ---
 

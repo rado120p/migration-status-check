@@ -666,6 +666,8 @@ auth:
 ```
 
 Soubor se zapisuje atomicky s právy `0600` a je v `.gitignore` — ze serveru neodchází.
+`config/settings.yml` má druhý, nezávislý volitelný klíč, `inventory.path`, pro inventář
+zařízení, který prohledávají formuláře New run/Bulk — viz §6b.
 
 **Spuštění GUI.** `mig-validate gui` odmítne nastartovat, když soubor s uživateli chybí nebo
 je prázdný, a místo toho vypíše nápovědu `mig-validate user add <jmeno> --role admin`. Nové
@@ -695,6 +697,55 @@ existující sessions.
 **Poznámka k upgradu.** `config/settings.yml` už není v gitu sledovaný. Stažením commitu,
 který ho odsledoval, se lokální kopie smaže (git odstraní soubor, který commit odstraňuje) —
 před `git pull` si ho zálohuj a po pullu vrať zpět.
+
+---
+
+## 6b. Inventář zařízení (GUI)
+
+Když GUI ukáže na inventář zařízení ve stylu Ansible, formuláře New run a Bulk umí node a host
+vyplnit hledáním místo ručního opisování IP adres. Je to čistě volitelné — ruční zadání funguje
+vždy, s inventářem i bez něj.
+
+**Zapnutí.** Přidej cestu do `config/settings.yml`:
+
+```yaml
+inventory:
+  path: /etc/ansible/hosts
+```
+
+Chybějící klíč `inventory` → inventář vypnutý, formuláře jsou jen manuální, obrazovka Settings
+to říká. Nastavená, ale nečitelná cesta → endpointy inventáře vrátí chybu s cestou a důvodem;
+formuláře spadnou zpět na manuální zadání s upozorněním. GUI v obou případech normálně
+nastartuje.
+
+**Podporovaný formát.** Jeden host na řádek, Ansible INI styl:
+
+```
+MX-POP1 ansible_host=172.20.20.4
+PTX-POP1 ansible_host=172.20.20.5
+```
+
+První token je jméno uzlu, `ansible_host=` dává jeho adresu; ostatní páry `klíč=hodnota` se
+ignorují. Prázdné řádky, komentáře `#`/`;` a hlavičky `[group]` / `[group:vars]` /
+`[group:children]` (i jejich tělo) se přeskakují. Rozsahy hostů (`mx[01:10]`), YAML inventáře
+a adresáře `host_vars/` se **nerozbalují** — hosty vypiš jeden po druhém. Řádek bez
+`ansible_host`, nebo jméno opakované s jiným hostem, se přeskočí s varováním; varování se
+zobrazují na obrazovce Settings. Soubor se znovu čte při každé změně na disku — restart GUI
+není potřeba.
+
+**New run / Bulk.** Každý řádek zařízení dostane vyhledávací pole: napiš část jména uzlu,
+vyber shodu, node i host se vyplní needitovatelně s "×" na vymazání. Zaškrtávátko **Manual** u
+řádku přepne zpět na dnešní volná pole node/host — použij ho pro box, který v inventáři není.
+Když je inventář vypnutý nebo nedostupný, je manuální rovnou celý řádek a zaškrtávátko se
+neukazuje. Platforma se volí ručně vždy.
+
+**Hostname filter (Settings, jen admin).** Tlačítko **Settings** v horní liště (vedle Profiles,
+jen role admin) zužuje nabídku ve vyhledávání: jeden glob vzor na řádek, porovnávaný bez
+ohledu na velikost písmen proti celému jménu uzlu (`MX-*`, `*POP1*`). Prázdný filtr ukazuje
+všechno. Zužuje jen vyhledávání v inventáři — nikdy neschová existující runy a nezablokuje
+ruční zadání. Psaní ukazuje živý počet "N of M nodes visible" (neukládaná kontrola nanečisto);
+Save ho zapíše do `config/hostname_filter.yml`, který je v `.gitignore` stejně jako
+`auth.users_file`.
 
 ---
 

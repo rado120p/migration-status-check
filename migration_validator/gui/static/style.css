@@ -1248,6 +1248,11 @@ body:not([data-role="admin"]) [data-perm="admin"] { display: none !important; }
 .ping-input { width: 140px; }
 .ping-input::placeholder { color: #9ca3af; font-style: italic; }
 .profile-footer { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+
+.settings-filter-textarea { resize: vertical; min-height: 160px; line-height: 1.5; }
+.settings-count-row { display: flex; align-items: baseline; gap: 12px; }
+.settings-count-line { font-size: 13.5px; color: #6b7280; }
+.settings-dirty-marker { font-size: 12.5px; font-weight: 600; color: #b45309; }
 .footer-actions button:disabled { opacity: 0.5; cursor: default; }
 
 /* -- group view ---------------------------------------------------------- */
