@@ -20,13 +20,13 @@ UP = "Up"
 
 
 def _is_up(status: str) -> bool:
-    """Junos umi hlasit stav i s doplnkem za lomitkem.
+    """Je stav 'Up', bez ohledu na pripadny doplnek za lomitkem.
 
-    ESI lokalni rozhrani od Tasku 3 nese stav z per-IFL
-    'evpn-interface-status-table' (hodnota 'Up'), VPWS rozhrani hlasi
-    take jen 'Up'. Funkce prijima i tvar 'Up/Forwarding' pro pripad
-    starsiho vystupu - porovnani na presnou rovnost by ho oznacilo za
-    rozbite.
+    Od schematu 14 (spec 2026-09-25) nese ESI lokalni rozhrani, VPWS
+    rozhrani i IRB rozhrani stav z per-IFL tabulky ('evpn-interface-status',
+    'irb-interface-status') a ta hlasi jen holy 'Up' - zadne z ctyr volajicich
+    mist uz nedostane tvar 'Up/Forwarding'. Split na '/' zustava jako
+    tolerance, ne protoze by ji dnes nesla nejaka zname data.
     """
     return status.split("/", 1)[0].strip() == UP
 

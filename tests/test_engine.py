@@ -2192,6 +2192,14 @@ def test_production_mx_to_acx_customer_a_customer_b_shared_peer_end_to_end():
     assert not any(
         c.value == "v baseline patril k teto sluzbe, v subjektu uz ne" for c in b.checks
     )
+    # customer-b bylo skutecne zmereno proti baseline, ne jen SKIP "bez
+    # baseline" - PASS samotny by to nerozlisil (SKIP se ze statusu sluzby
+    # vypousti, kdyz jsou jine vysledky).
+    b_bgp_status = next(c for c in b.checks if c.id == "bgp_session_state")
+    assert b_bgp_status.status is Status.PASS
+    assert b_bgp_status.baseline_value == "Established"
+    b_prefixes = [c for c in b.checks if c.id == "bgp_prefix_counts"]
+    assert b_prefixes and all(c.status is Status.PASS for c in b_prefixes)
     assert a.status is Status.FAIL
     assert any(
         c.label == "BGP status (192.168.1.2)" and c.value == "Idle" for c in a.checks

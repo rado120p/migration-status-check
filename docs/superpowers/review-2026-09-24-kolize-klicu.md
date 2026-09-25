@@ -62,8 +62,9 @@ je skládá zpět a hlásí `bgp_ambiguous`/`bfd_ambiguous` místo tichého pře
 F5 (pim_neighbor) vyřešeno omezeně: collector teď drží jen IPv4 souseda, takže
 v4/v6 kolize na stejném rozhraní nevzniká; víc IPv4 sousedů na jednom rozhraní
 řešeno nebylo. F4 (pim_join), F6 (isis_adjacency) a F7 (ldp_neighbor) zůstávají
-mimo rozsah – rozhodnutím uživatele (viz „Ověření v laborce“ níže: F4 a F6 se
-nedělají, F7 je teoretické a zůstává neřešené).
+mimo rozsah – rozhodnutím uživatele: F4 a F6 „se nedělají“ (viz „Ověření
+v laborce“ níže), F7 je mimo rozsah spec `docs/superpowers/specs/2026-09-25-
+kolize-klicu-vrstva-2-design.md` (řádek „Mimo rozsah“).
 
 ## Nálezy podrobně
 
