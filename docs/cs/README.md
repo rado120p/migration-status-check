@@ -688,7 +688,9 @@ posílá prohlížeč.
 
 **Sessions.** Sessions žijí jen v paměti: restart GUI procesu odhlásí všechny. Idle timeout
 je 8 hodin, absolutní timeout 12 hodin. Pět neúspěšných přihlášení pro stejnou dvojici
-uživatelské jméno+IP tuto dvojici zamkne na 5 minut.
+uživatelské jméno+IP tuto dvojici zamkne na 5 minut. Změna hesla (`user passwd`) nebo role,
+případně smazání uživatele, se projeví při jeho dalším requestu; změna hesla navíc odhlásí
+existující sessions.
 
 **Poznámka k upgradu.** `config/settings.yml` už není v gitu sledovaný. Stažením commitu,
 který ho odsledoval, se lokální kopie smaže (git odstraní soubor, který commit odstraňuje) —

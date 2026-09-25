@@ -71,7 +71,7 @@ The essential property: **`evaluate` has no way to reach the network.** It recei
 
 ## `cli.py` — the terminal interface
 
-A thin wrapper over `api.py`, not an alternative implementation. It defines six subcommands:
+A thin wrapper over `api.py`, not an alternative implementation. It defines seven subcommands:
 
 | subcommand | function | what it does |
 |---|---|---|
@@ -81,6 +81,7 @@ A thin wrapper over `api.py`, not an alternative implementation. It defines six 
 | `match` | `_cmd_match` | `match_scopes()` only — for debugging `mapping.yml` without a full validation |
 | `checks` | `_cmd_checks` | prints the check registry, text or JSON |
 | `record` | `_cmd_record` | stores every collector's raw RPC XML as fixtures |
+| `user` | `_cmd_user_add`/`_cmd_user_passwd`/`_cmd_user_role`/`_cmd_user_delete`/`_cmd_user_list` | manages the GUI's `users.yml` accounts (add/passwd/role/delete/list); the password is always prompted interactively, never passed as a flag |
 
 Other notable parts of the file:
 

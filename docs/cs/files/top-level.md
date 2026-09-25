@@ -69,7 +69,7 @@ credentials — jen hotové snapshoty.
 
 ## `cli.py` — terminálové rozhraní
 
-Tenký obal nad `api.py`, ne alternativní implementace. Definuje šest podpříkazů:
+Tenký obal nad `api.py`, ne alternativní implementace. Definuje sedm podpříkazů:
 
 | podpříkaz | funkce | co dělá |
 |---|---|---|
@@ -79,6 +79,7 @@ Tenký obal nad `api.py`, ne alternativní implementace. Definuje šest podpří
 | `match` | `_cmd_match` | jen `match_scopes()` — ladění `mapping.yml` bez celé validace |
 | `checks` | `_cmd_checks` | výpis registru checků, text nebo JSON |
 | `record` | `_cmd_record` | uloží syrové RPC XML všech collectorů jako fixtures |
+| `user` | `_cmd_user_add`/`_cmd_user_passwd`/`_cmd_user_role`/`_cmd_user_delete`/`_cmd_user_list` | správa uctů `users.yml` pro GUI (add/passwd/role/delete/list); heslo se vždy zadává interaktivně, nikdy jako flag |
 
 Další podstatné části souboru:
 

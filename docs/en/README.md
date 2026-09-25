@@ -585,7 +585,9 @@ Not `$host` — that variable drops a non-default port, which then no longer mat
 
 **Sessions.** Sessions live in memory only: restarting the GUI process logs everyone out.
 Idle timeout is 8 hours, absolute timeout 12 hours. Five failed logins for the same
-username+IP lock that pair for 5 minutes.
+username+IP lock that pair for 5 minutes. Changing a password (`user passwd`) or role, or
+deleting a user, takes effect on that user's next request; a password change logs out
+existing sessions.
 
 **Upgrade note.** `config/settings.yml` is no longer tracked in git. Pulling the commit that
 untracked it deletes your local copy (git removes a file the commit removes) — copy it aside

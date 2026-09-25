@@ -251,11 +251,13 @@ class App {
     }
   }
 
-  // Viewer lacks the "operate" permission, so POST /api/profiles/preview
-  // (relabeled OPERATE in wave A) would 403. Before /api/me answers, or in
-  // anonymous mode (auth: false, tests/embedding), treat as allowed.
+  // Least privilege: before /api/me answers, or if it fails, this.me stays
+  // unset and we must not treat that as "allowed" - it must match the
+  // data-role="viewer" default body attribute set in index.html (finding
+  // #9). Anonymous mode (auth: false) gets this.me populated from a real
+  // /api/me response (role: admin) just like an authenticated session.
   canOperate() {
-    return !this.me || this.me.permissions.includes("operate");
+    return !!this.me && this.me.permissions.includes("operate");
   }
 
   async boot() {
