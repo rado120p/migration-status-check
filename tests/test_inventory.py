@@ -35,6 +35,45 @@ def test_missing_ansible_host_warns():
     assert inv.warnings == ["line 2: LONELY has no ansible_host", "line 3: NOIP has no ansible_host"]
 
 
+def test_section_header_with_trailing_comment_is_recognised():
+    # finding #10a: "[mx] # routers" / "[x:vars] ; note" must still be
+    # recognised as a header - before the fix, endswith("]") failed and the
+    # ":vars" body below was parsed as host lines.
+    text = (
+        "[mx] # routers\n"
+        "MX-POP1 ansible_host=10.0.0.1\n"
+        "[mx:vars] ; note\n"
+        "ansible_host=9.9.9.9\n"
+        "ntp=1.1.1.1\n"
+    )
+    inv = parse_inventory(text)
+    assert inv.hosts == [InventoryHost("MX-POP1", "10.0.0.1")]
+    assert inv.warnings == []
+
+
+def test_bare_name_with_host_defined_elsewhere_does_not_warn():
+    # finding #10b: a bare name that gets its ansible_host from a different
+    # group-membership line elsewhere in the file must not warn, but a name
+    # that never gets a host anywhere still must.
+    text = (
+        "[pop1]\n"
+        "MX-POP1 ansible_host=10.0.0.1\n"
+        "[pop2]\n"
+        "MX-POP1\n"
+        "GHOST\n"
+    )
+    inv = parse_inventory(text)
+    assert inv.hosts == [InventoryHost("MX-POP1", "10.0.0.1")]
+    assert inv.warnings == ["line 5: GHOST has no ansible_host"]
+
+
+def test_bare_name_before_its_host_definition_does_not_warn():
+    text = "MX-POP1\n[pop1]\nMX-POP1 ansible_host=10.0.0.1\n"
+    inv = parse_inventory(text)
+    assert inv.hosts == [InventoryHost("MX-POP1", "10.0.0.1")]
+    assert inv.warnings == []
+
+
 def test_duplicates():
     inv = parse_inventory(
         "A1 ansible_host=10.0.0.1\nA1 ansible_host=10.0.0.1\nA1 ansible_host=10.0.0.9\n"

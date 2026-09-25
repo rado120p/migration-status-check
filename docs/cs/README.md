@@ -727,11 +727,13 @@ PTX-POP1 ansible_host=172.20.20.5
 
 První token je jméno uzlu, `ansible_host=` dává jeho adresu; ostatní páry `klíč=hodnota` se
 ignorují. Prázdné řádky, komentáře `#`/`;` a hlavičky `[group]` / `[group:vars]` /
-`[group:children]` (i jejich tělo) se přeskakují. Rozsahy hostů (`mx[01:10]`), YAML inventáře
-a adresáře `host_vars/` se **nerozbalují** — hosty vypiš jeden po druhém. Řádek bez
-`ansible_host`, nebo jméno opakované s jiným hostem, se přeskočí s varováním; varování se
-zobrazují na obrazovce Settings. Soubor se znovu čte při každé změně na disku — restart GUI
-není potřeba.
+`[group:children]` (i jejich tělo) se přeskakují — za hlavičkou může být komentář `#`/`;`
+(`[mx] # routers`). Rozsahy hostů (`mx[01:10]`), YAML inventáře a adresáře `host_vars/` se
+**nerozbalují** — hosty vypiš jeden po druhém. Jméno opakované s jiným hostem se přeskočí s
+varováním. Holé jméno bez `ansible_host` na svém řádku varuje jen tehdy, když host nezíská
+nikde jinde v souboru — řádek členství ve skupině (stejné jméno bez `ansible_host` v jiné
+`[group]`) sám o sobě varování nevyvolá, pokud mu host dá jiný řádek. Varování se zobrazují na
+obrazovce Settings. Soubor se znovu čte při každé změně na disku — restart GUI není potřeba.
 
 **New run / Bulk.** Každý řádek zařízení dostane vyhledávací pole: napiš část jména uzlu,
 vyber shodu, node i host se vyplní needitovatelně s "×" na vymazání. Zaškrtávátko **Manual** u

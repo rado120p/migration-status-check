@@ -6,8 +6,12 @@ inventare se nepodporuji. Varovani nesou cislo radku, GUI je ukaze adminovi.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
+
+# Header + optional trailing comment: "[mx]", "[mx] # routers", "[x:vars] ; note".
+_SECTION_RE = re.compile(r"^\[(?P<name>[^\]]*)\]\s*(?:[#;].*)?$")
 
 
 @dataclass(frozen=True)
@@ -30,14 +34,20 @@ def _strip_quotes(value: str) -> str:
 
 def parse_inventory(text: str) -> Inventory:
     found: dict[str, tuple[str, int]] = {}
-    warnings: list[str] = []
+    # (line, message) - duplicates are known immediately; a bare name (no
+    # ansible_host on its own line) is only decided once the whole file has
+    # been scanned, since a later group-membership line may still supply its
+    # host (or an earlier one already did) - see finding #10b.
+    warn_entries: list[tuple[int, str]] = []
+    bare: list[tuple[int, str]] = []
     in_host_section = True
     for number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
         if not line or line[0] in "#;":
             continue
-        if line.startswith("[") and line.endswith("]"):
-            section = line[1:-1]
+        match = _SECTION_RE.match(line)
+        if match:
+            section = match.group("name")
             in_host_section = not (section.endswith(":vars") or section.endswith(":children"))
             continue
         if not in_host_section:
@@ -50,16 +60,22 @@ def parse_inventory(text: str) -> Inventory:
             if sep and key == "ansible_host":
                 host = _strip_quotes(value)
         if not host:
-            warnings.append(f"line {number}: {node} has no ansible_host")
+            bare.append((number, node))
             continue
         if node in found:
             first_host, first_line = found[node]
             if first_host != host:
-                warnings.append(
-                    f"line {number}: {node} duplicates line {first_line} with a different host"
-                )
+                warn_entries.append((
+                    number,
+                    f"line {number}: {node} duplicates line {first_line} with a different host",
+                ))
             continue
         found[node] = (host, number)
+    for number, node in bare:
+        if node not in found:
+            warn_entries.append((number, f"line {number}: {node} has no ansible_host"))
+    warn_entries.sort(key=lambda entry: entry[0])
+    warnings = [message for _, message in warn_entries]
     hosts = sorted(
         (InventoryHost(node, host) for node, (host, _) in found.items()),
         key=lambda h: h.node.lower(),

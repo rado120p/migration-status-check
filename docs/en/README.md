@@ -622,11 +622,14 @@ PTX-POP1 ansible_host=172.20.20.5
 
 The first token is the node name, `ansible_host=` gives its address; other `key=value` pairs
 are ignored. Blank lines, `#`/`;` comments and `[group]` / `[group:vars]` / `[group:children]`
-headers (and their body lines) are skipped. Host ranges (`mx[01:10]`), YAML inventories and
-`host_vars/` directories are **not** expanded — list hosts one per line. A line missing
-`ansible_host`, or a name repeated with a different host, is skipped with a warning; the
-warnings show up on the Settings screen. The file is re-read whenever it changes on disk — no
-GUI restart needed.
+headers (and their body lines) are skipped — a header may carry a trailing `#`/`;` comment
+(`[mx] # routers`). Host ranges (`mx[01:10]`), YAML inventories and `host_vars/` directories
+are **not** expanded — list hosts one per line. A name repeated with a different host is
+skipped with a warning. A bare name with no `ansible_host` on its own line only warns if it
+never gets a host anywhere in the file — a group-membership line (the same name listed again,
+without `ansible_host`, in another `[group]`) is not itself a warning as long as some line
+gives that name a host. The warnings show up on the Settings screen. The file is re-read
+whenever it changes on disk — no GUI restart needed.
 
 **New run / Bulk.** Each device row gets a search box: type part of a node name, pick a match,
 and node + host fill in read-only with a "×" to clear. A **Manual** checkbox on the row swaps
