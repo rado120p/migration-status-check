@@ -356,3 +356,84 @@ def test_pairing_works_when_both_sides_are_deactivated():
     result = match_scopes(baseline, subject)
 
     assert len(result.pairs) == 1
+
+
+def _ifaces(pairs):
+    return {(p.baseline.selectors.interfaces[0], p.subject.selectors.interfaces[0]) for p in pairs}
+
+
+def test_ambiguous_scopes_fall_through_to_routing_instance():
+    """Review E5: popis "CPE" ve dvou VRF, stejna /30 na obou boxech -
+    dnes 0 paru, pravidlo routing_instance je rozlisi."""
+    baseline = [
+        _scope("ge-0/0/2.100", "CPE", "IPVPN", routing_instance="customer-a",
+               addresses=["192.168.1.1/30"]),
+        _scope("ge-0/0/2.200", "CPE", "IPVPN", routing_instance="customer-b",
+               addresses=["192.168.1.1/30"]),
+    ]
+    subject = [
+        _scope("et-0/0/8.100", "CPE", "IPVPN", routing_instance="customer-a",
+               addresses=["192.168.1.1/30"]),
+        _scope("et-0/0/8.200", "CPE", "IPVPN", routing_instance="customer-b",
+               addresses=["192.168.1.1/30"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert _ifaces(result.pairs) == {("ge-0/0/2.100", "et-0/0/8.100"),
+                                     ("ge-0/0/2.200", "et-0/0/8.200")}
+    assert {p.method for p in result.pairs} == {"routing_instance+service_type"}
+    assert {p.confidence for p in result.pairs} == {"medium"}
+    assert result.unmatched_baseline == [] and result.unmatched_subject == []
+
+
+def test_ambiguity_resolved_by_later_rule_leaves_leftover_as_new_service():
+    """Step beh: stary port ma CPE ve VRF-a, novy box CPE ve VRF-a (tento
+    krok) i VRF-b (drivejsi vlna). VRF-b souperil jen se sparovanou
+    baseline -> nova sluzba, ne ambiguous."""
+    baseline = [_scope("ge-0/0/2.100", "CPE", "IPVPN", routing_instance="VRF-a")]
+    subject = [
+        _scope("et-0/0/8.100", "CPE", "IPVPN", routing_instance="VRF-a"),
+        _scope("et-0/0/8.200", "CPE", "IPVPN", routing_instance="VRF-b"),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert _ifaces(result.pairs) == {("ge-0/0/2.100", "et-0/0/8.100")}
+    assert [(u.scope.selectors.interfaces, u.reason) for u in result.unmatched_subject] == [
+        (["et-0/0/8.200"], "nova sluzba, chybi baseline"),
+    ]
+
+
+def test_ambiguity_unresolved_keeps_ambiguous_reason_on_both_sides():
+    baseline = [_scope("ge-0/0/2.13", "SAME", "Internet")]
+    subject = [_scope("et-0/0/8.13", "SAME", "Internet"), _scope("et-0/0/9.13", "SAME", "Internet")]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+    assert all("ambiguous" in u.reason for u in result.unmatched_baseline + result.unmatched_subject)
+
+
+def test_local_switch_pair_resolved_by_vlan():
+    """Lab 2026-09-25: EVPN-VPWS-LOCAL - na PTX obe AC stejny popis,
+    stejna RI, rozlisi je az vlan."""
+    baseline = [
+        _scope("ge-0/0/2.211", "EVPN-VPWS-LOCAL-CPE1", "E-Line", "vpws",
+               routing_instance="EVPN-VPWS-LOCAL", vlans=["211"]),
+        _scope("ge-0/0/2.212", "EVPN-VPWS-LOCAL-CPE2", "E-Line", "vpws",
+               routing_instance="EVPN-VPWS-LOCAL", vlans=["212"]),
+    ]
+    subject = [
+        _scope("et-0/0/8.211", "EVPN-VPWS-LOCAL", "E-Line", "vpws",
+               routing_instance="EVPN-VPWS-LOCAL", vlans=["211"]),
+        _scope("et-0/0/8.212", "EVPN-VPWS-LOCAL", "E-Line", "vpws",
+               routing_instance="EVPN-VPWS-LOCAL", vlans=["212"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert _ifaces(result.pairs) == {("ge-0/0/2.211", "et-0/0/8.211"),
+                                     ("ge-0/0/2.212", "et-0/0/8.212")}
+    assert {p.method for p in result.pairs} == {"vlan+service_type"}
+    assert result.unmatched_baseline == [] and result.unmatched_subject == []

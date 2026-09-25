@@ -2,6 +2,10 @@
 
 Klicove pravidlo: pri nejednoznacnosti se nikdy nehada. Tichy spatny match
 by u migrace znamenal zelenou na rozbite sluzbe.
+
+Nejednoznacny scope z poolu nevypada (E5, spec 2026-09-25): pozdejsi
+pravidlo ho smi sparovat, pokud tam je shoda 1:1. Duvod "ambiguous" nese
+jen dokud nejednoznacnost trva.
 """
 
 from __future__ import annotations
@@ -166,6 +170,12 @@ def match_scopes(
         mapping, remaining_baseline, remaining_subject, result
     )
 
+    # E5 (review 2026-09-24): nejednoznacnost scope z poolu nevyradi -
+    # pozdejsi pravidlo (routing_instance, subnet, vlan) ho muze rozlisit.
+    # Pro kazdy scope se pamatuje prvni (nejsilnejsi) nejednoznacnost:
+    # duvod a scopy druhe strany, se kterymi pod tim klicem souperil.
+    ambiguity: dict[int, tuple[str, list[Scope]]] = {}
+
     for method, confidence, key_fn in RULES:
         baseline_index = _index(remaining_baseline, key_fn)
         subject_index = _index(remaining_subject, key_fn)
@@ -179,9 +189,8 @@ def match_scopes(
                 continue
             if len(b_hits) == 1 and len(s_hits) == 1:
                 # Kontroluje se paired I dropped: subnet a vlan pravidla generuji
-                # vic klicu na scope, takze scope zahozeny jako nejednoznacny pod
-                # jednim klicem by se pod jinym klicem tehoz pravidla jinak
-                # sparoval - a skoncil by zaroven v pairs i v unmatched.
+                # vic klicu na scope, takze scope nejednoznacny pod jednim
+                # klicem se pod jinym klicem tehoz pravidla nesmi sparovat.
                 if (
                     id(b_hits[0]) in paired
                     or id(s_hits[0]) in paired
@@ -202,29 +211,38 @@ def match_scopes(
 
             reason = _ambiguity_reason(s_hits if len(s_hits) > 1 else b_hits)
             for scope in b_hits:
-                if id(scope) not in dropped and id(scope) not in paired:
-                    result.unmatched_baseline.append(UnmatchedScope(scope, reason))
+                if id(scope) not in paired:
                     dropped.add(id(scope))
+                    ambiguity.setdefault(id(scope), (reason, s_hits))
             for scope in s_hits:
-                if id(scope) not in dropped and id(scope) not in paired:
-                    result.unmatched_subject.append(UnmatchedScope(scope, reason))
+                if id(scope) not in paired:
                     dropped.add(id(scope))
+                    ambiguity.setdefault(id(scope), (reason, b_hits))
 
-        remaining_baseline = [
-            scope
-            for scope in remaining_baseline
-            if id(scope) not in paired and id(scope) not in dropped
-        ]
-        remaining_subject = [
-            scope
-            for scope in remaining_subject
-            if id(scope) not in paired and id(scope) not in dropped
-        ]
+        # `dropped` plati jen uvnitr pravidla - do dalsiho jde vse nesparovane.
+        remaining_baseline = [scope for scope in remaining_baseline if id(scope) not in paired]
+        remaining_subject = [scope for scope in remaining_subject if id(scope) not in paired]
+
+    paired_ids = {id(pair.baseline) for pair in result.pairs} | {
+        id(pair.subject) for pair in result.pairs
+    }
+
+    def _reason(scope: Scope, fallback: str) -> str:
+        # Duvod "ambiguous" jen dokud nejednoznacnost trva - aspon jeden
+        # souper z druhe strany zustal nesparovany. Kdyz je pozdejsi
+        # pravidlo vsechny rozdelilo jinam, scope protejsek nema (step beh:
+        # scope cizi vlny musi zustat "nova sluzba" a byt vyloucen).
+        entry = ambiguity.get(id(scope))
+        if entry is not None and any(id(rival) not in paired_ids for rival in entry[1]):
+            return entry[0]
+        return fallback
 
     result.unmatched_baseline.extend(
-        UnmatchedScope(scope, REASON_NO_CANDIDATE) for scope in remaining_baseline
+        UnmatchedScope(scope, _reason(scope, REASON_NO_CANDIDATE))
+        for scope in remaining_baseline
     )
     result.unmatched_subject.extend(
-        UnmatchedScope(scope, REASON_NEW_SERVICE) for scope in remaining_subject
+        UnmatchedScope(scope, _reason(scope, REASON_NEW_SERVICE))
+        for scope in remaining_subject
     )
     return result
