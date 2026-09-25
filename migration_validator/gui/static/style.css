@@ -60,6 +60,13 @@ a:hover { color: #0e3fa9; }
 
 .topbar-spacer { flex: 1; }
 
+body[data-role="viewer"] [data-perm="operate"],
+body:not([data-role="admin"]) [data-perm="admin"] { display: none !important; }
+
+.user-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.user-chip[hidden] { display: none; }
+.user-role { color: #6b7280; }
+
 .profile {
   display: flex;
   align-items: center;
@@ -168,6 +175,8 @@ a:hover { color: #0e3fa9; }
   color: #b91c1c;
   font-weight: 500;
 }
+
+.btn-small { padding: 5px 10px; font-size: 12px; }
 
 .btn-toggle-active {
   border: 1px solid #1a56db;

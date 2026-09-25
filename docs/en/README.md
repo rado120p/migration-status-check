@@ -520,6 +520,79 @@ Full overview: [reference.md](reference.md).
 
 ---
 
+## 6a. Accounts and login (GUI)
+
+The GUI is a shared server: every request needs a session, created by signing in at
+`/login` with an account created from the CLI. There is no self-service signup and no
+user-admin screen — creating a user means shell access to the server.
+
+**Managing users** (`mig-validate user ...`, all take `--settings PATH`, default
+`config/settings.yml`, to locate the users file):
+
+```bash
+.venv/bin/mig-validate user add NAME --role viewer|operator|admin   # prompts the password twice
+.venv/bin/mig-validate user passwd NAME                              # prompts a new password twice
+.venv/bin/mig-validate user role NAME ROLE                           # changes the role
+.venv/bin/mig-validate user delete NAME
+.venv/bin/mig-validate user list                                     # prints NAME ROLE, no hashes
+```
+
+Passwords are never accepted as a command-line argument or an environment variable.
+
+**Permission matrix:**
+
+| Action | viewer | operator | admin |
+|---|---|---|---|
+| View runs, groups, profiles, checks; export evaluation JSON | ✓ | ✓ | ✓ |
+| Search inventory; view hostname filter | ✓ | ✓ | ✓ |
+| Create run | | ✓ | ✓ |
+| Start capture (pre/post) on a run | | ✓ | ✓ |
+| Edit run mapping | | ✓ | ✓ |
+| Groups: create, add devices, group capture | | ✓ | ✓ |
+| Archive, upgrade a run or group | | ✓ | ✓ |
+| Create, edit, preview, delete profile | | ✓ | ✓ |
+| Change hostname filter | | | ✓ |
+| Manage users (CLI) | | | shell access |
+
+**Users file.** The path comes from `config/settings.yml`:
+
+```yaml
+auth:
+  users_file: config/users.yml   # default when the key or the whole block is missing
+```
+
+The file is written atomically with mode `0600` and is gitignored — it never leaves the
+server.
+
+**Starting the GUI.** `mig-validate gui` refuses to start when the users file is missing or
+has no users, and prints the `mig-validate user add <name> --role admin` hint instead. New
+flags: `--settings PATH`, `--ssl-certfile`/`--ssl-keyfile` (serve HTTPS directly), and
+`--forwarded-allow-ips` (trust `X-Forwarded-*` from a reverse proxy, so the failed-login
+throttle sees the real client IP).
+
+**HTTPS.** The session cookie is always `Secure`, so a plain `http://` origin never keeps a
+session — except `127.0.0.1`/`localhost`, which browsers treat as secure for local
+development. Behind a reverse proxy, forward the browser's `Host` header **including the
+port**, or every write is rejected as cross-origin (the server checks `Origin` against
+`Host`):
+
+```nginx
+proxy_set_header Host $http_host;
+```
+
+Not `$host` — that variable drops a non-default port, which then no longer matches the
+`Origin` the browser sends.
+
+**Sessions.** Sessions live in memory only: restarting the GUI process logs everyone out.
+Idle timeout is 8 hours, absolute timeout 12 hours. Five failed logins for the same
+username+IP lock that pair for 5 minutes.
+
+**Upgrade note.** `config/settings.yml` is no longer tracked in git. Pulling the commit that
+untracked it deletes your local copy (git removes a file the commit removes) — copy it aside
+before `git pull` and restore it afterwards.
+
+---
+
 ## 7. Other commands
 
 **List the checks** — the single source of truth, no hand-maintained list:

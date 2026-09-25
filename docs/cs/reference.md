@@ -815,6 +815,7 @@ Provozní návod se stromem, hybridním `run.yml` a odvozeným příkladem je v
 | `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; fáze 4 podporuje jednoho `old` a jednoho `new`; `single` smí mít v runu typu `single` právě jedno zařízení a nesmí mít `interface_mapping` |
 | `interface_mapping` | seznam `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | páruje logické jednotky (`ge-0/0/0`), stejný tvar jako `mapping.yml` selektor `interface` |
 | `captures` | seznam `{phase, device, port, snapshot, taken}` | `port: all` v souboru odpovídá `port: null` v modelu (celoboxová capture); vede ji aplikace, ne operátor |
+| `created_by` | uživatelské jméno, nebo chybí | volitelné; přihlášený uživatel, který run/skupinu založil přes GUI. Zapisuje se jen když je znám — starší `run.yml` bez klíče se načtou beze změny. V přehledu runu se zobrazí jako „created by JMÉNO", pokud je přítomný |
 
 Soubory v `runs/<nazev>/` normalizují port náhradou `-`/`/` za `_`
 (`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,

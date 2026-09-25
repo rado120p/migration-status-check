@@ -808,6 +808,7 @@ section 8 — see the note at the end).
 | `devices` | `<node>: {host, platform, role}` | `role` ∈ `old`/`new`/`l2-switch`/`single`; a `single`-kind run has exactly one device with role `single` and no `interface_mapping` |
 | `interface_mapping` | list of `{old: {node, port[, l2_switch]}, new: {node, port[, l2_switch]}}` | pairs logical units (`ge-0/0/0`), same shape as the `mapping.yml` `interface` selector. **Several entries may share the same `new`** — N:1 (LAG) mapping: multiple old ports migrating onto one new LAG port |
 | `captures` | list of `{phase, device, port, snapshot, taken}` | `port: all` in the file corresponds to `port: null` in the model (whole-box capture); the application maintains this section, not the operator |
+| `created_by` | username, or absent | optional; the logged-in user who created the run/group through the GUI. Written only when set — older `run.yml` files without the key load unchanged. Shown as "created by NAME" on the run overview when present |
 
 Files under `runs/<name>/` normalize the port by replacing `-`/`/` with `_`
 (`ge-0/0/0` → `ge_0_0_0`): `inventory_<node>_<port|all>.yml`,

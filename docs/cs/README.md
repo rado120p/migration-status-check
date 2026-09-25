@@ -624,6 +624,78 @@ sem psát nemusí — jsou vyloučená už na úrovni stavby scopů a nikdy se n
 
 ---
 
+## 6a. Účty a přihlášení (GUI)
+
+GUI je sdílený server: každý požadavek potřebuje session, založenou přihlášením na `/login`
+účtem vytvořeným z CLI. Neexistuje samoobslužná registrace ani obrazovka pro správu
+uživatelů — vytvořit uživatele znamená mít shell přístup na server.
+
+**Správa uživatelů** (`mig-validate user ...`, vše bere `--settings PATH`, výchozí
+`config/settings.yml`, kterým se najde soubor s uživateli):
+
+```bash
+.venv/bin/mig-validate user add JMENO --role viewer|operator|admin   # heslo se ptá dvakrát
+.venv/bin/mig-validate user passwd JMENO                              # nové heslo dvakrát
+.venv/bin/mig-validate user role JMENO ROLE                           # změní roli
+.venv/bin/mig-validate user delete JMENO
+.venv/bin/mig-validate user list                                      # vypíše JMENO ROLE, bez hashů
+```
+
+Heslo se nikdy nepřijímá jako argument příkazové řádky ani jako proměnná prostředí.
+
+**Matice oprávnění:**
+
+| Akce | viewer | operator | admin |
+|---|---|---|---|
+| Zobrazení runů, skupin, profilů, checků; export evaluation JSON | ✓ | ✓ | ✓ |
+| Hledání v inventáři; zobrazení hostname filtru | ✓ | ✓ | ✓ |
+| Založení runu | | ✓ | ✓ |
+| Spuštění capture (pre/post) na runu | | ✓ | ✓ |
+| Editace mapování runu | | ✓ | ✓ |
+| Skupiny: založení, přidání zařízení, skupinová capture | | ✓ | ✓ |
+| Archivace, upgrade runu nebo skupiny | | ✓ | ✓ |
+| Založení, editace, náhled, smazání profilu | | ✓ | ✓ |
+| Změna hostname filtru | | | ✓ |
+| Správa uživatelů (CLI) | | | shell přístup |
+
+**Soubor s uživateli.** Cesta se bere z `config/settings.yml`:
+
+```yaml
+auth:
+  users_file: config/users.yml   # výchozí, když klíč nebo celý blok chybí
+```
+
+Soubor se zapisuje atomicky s právy `0600` a je v `.gitignore` — ze serveru neodchází.
+
+**Spuštění GUI.** `mig-validate gui` odmítne nastartovat, když soubor s uživateli chybí nebo
+je prázdný, a místo toho vypíše nápovědu `mig-validate user add <jmeno> --role admin`. Nové
+přepínače: `--settings PATH`, `--ssl-certfile`/`--ssl-keyfile` (přímé servírování HTTPS) a
+`--forwarded-allow-ips` (důvěřovat `X-Forwarded-*` od reverzní proxy, aby throttling
+neúspěšných přihlášení viděl skutečnou IP klienta).
+
+**HTTPS.** Session cookie je vždy `Secure`, takže čistý `http://` origin session nikdy
+neudrží — s výjimkou `127.0.0.1`/`localhost`, které prohlížeče pro lokální vývoj berou jako
+bezpečné. Za reverzní proxy je nutné přeposílat hlavičku `Host` z prohlížeče **včetně
+portu**, jinak server odmítne každý zápis jako cross-origin (kontroluje `Origin` proti
+`Host`):
+
+```nginx
+proxy_set_header Host $http_host;
+```
+
+Ne `$host` — ta proměnná nestandardní port odřízne, a pak už neodpovídá `Origin`, který
+posílá prohlížeč.
+
+**Sessions.** Sessions žijí jen v paměti: restart GUI procesu odhlásí všechny. Idle timeout
+je 8 hodin, absolutní timeout 12 hodin. Pět neúspěšných přihlášení pro stejnou dvojici
+uživatelské jméno+IP tuto dvojici zamkne na 5 minut.
+
+**Poznámka k upgradu.** `config/settings.yml` už není v gitu sledovaný. Stažením commitu,
+který ho odsledoval, se lokální kopie smaže (git odstraní soubor, který commit odstraňuje) —
+před `git pull` si ho zálohuj a po pullu vrať zpět.
+
+---
+
 ## 7. Ostatní příkazy
 
 **Seznam checků** — jediný zdroj pravdy, žádný ručně udržovaný seznam:

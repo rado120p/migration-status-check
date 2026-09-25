@@ -2,6 +2,14 @@
 
 /* mig-validate GUI - vanilla JS, fetch only, no framework, no build step. */
 
+// Session expired or logged out elsewhere: every API call lands on the login page.
+const rawFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const res = await rawFetch(...args);
+  if (res.status === 401) window.location.assign("/login");
+  return res;
+};
+
 const PLATFORM_LABEL = { junos: "MX", "junos-evo": "ACX/EVO" };
 
 function el(tag, opts) {
@@ -226,7 +234,32 @@ class App {
     });
   }
 
+  async loadMe() {
+    const res = await fetch("/api/me");
+    if (!res.ok) return;
+    const me = await res.json();
+    this.me = me;
+    document.body.dataset.role = me.role;
+    if (me.auth) {
+      document.getElementById("user-name").textContent = me.username;
+      document.getElementById("user-role").textContent = me.role;
+      document.getElementById("user-chip").hidden = false;
+      document.getElementById("btn-logout").addEventListener("click", async () => {
+        await fetch("/api/logout", { method: "POST" });
+        window.location.assign("/login");
+      });
+    }
+  }
+
+  // Viewer lacks the "operate" permission, so POST /api/profiles/preview
+  // (relabeled OPERATE in wave A) would 403. Before /api/me answers, or in
+  // anonymous mode (auth: false, tests/embedding), treat as allowed.
+  canOperate() {
+    return !this.me || this.me.permissions.includes("operate");
+  }
+
   async boot() {
+    await this.loadMe();
     try {
       const res = await fetch("/api/runs");
       if (!res.ok) {
@@ -1358,11 +1391,13 @@ class App {
         el("button", {
           className: "btn btn-secondary run-header-upgrade",
           text: "Upgrade group",
+          attrs: { "data-perm": "operate" },
           onClick: () => this.openUpgradeGroupModal(),
         }),
         el("button", {
           className: "btn btn-danger-secondary run-header-archive",
           text: "Archive group",
+          attrs: { "data-perm": "operate" },
           onClick: () => this.openArchiveGroupModal(),
         }),
       ],
@@ -1372,7 +1407,7 @@ class App {
     const captureBtn = (label, phase, primary) => el("button", {
       className: "btn " + (primary ? "btn-primary" : "btn-secondary"),
       text: label,
-      attrs: batchActive ? { disabled: "disabled" } : {},
+      attrs: Object.assign({ "data-perm": "operate" }, batchActive ? { disabled: "disabled" } : {}),
       onClick: batchActive ? null : () => this.startGroupCapture(phase),
     });
     const tracked = Object.values(tasks).filter((t) => t.task_id);
@@ -1384,7 +1419,7 @@ class App {
         captureBtn("Capture pre on all", "pre", true),
         captureBtn("Capture post on all", "post", false),
         captureBtn("Capture rollback on all", "rollback", false),
-        el("button", { className: "btn btn-secondary", text: "+ Add devices", onClick: () => this.openAddDevicesModal() }),
+        el("button", { className: "btn btn-secondary", text: "+ Add devices", attrs: { "data-perm": "operate" }, onClick: () => this.openAddDevicesModal() }),
         batchActive ? el("span", { className: "group-progress-text", text: `${phaseRunning} capture running · ${done}/${tracked.length} done` }) : null,
         this.buildVerdictStrip(summary.verdicts),
       ],
@@ -1459,7 +1494,7 @@ class App {
         counts(row.services), counts(row.checks),
         el("span", { className: "row-actions", children: [
           el("a", { className: "crumb-link", text: "open ›", attrs: { href: "#" }, onClick: (e) => { e.preventDefault(); this.selectRun(row.run); } }),
-          el("a", { className: "crumb-link", text: "capture ›", attrs: { href: "#" }, onClick: (e) => { e.preventDefault(); this.openCaptureForm(row.run, groupName); } }),
+          el("a", { className: "crumb-link", text: "capture ›", attrs: { href: "#", "data-perm": "operate" }, onClick: (e) => { e.preventDefault(); this.openCaptureForm(row.run, groupName); } }),
         ] }),
       ],
     });
@@ -1642,6 +1677,12 @@ class App {
     const editor = this.state.profileEditor;
     if (!editor || !editor.doc) return;
     if (!editor.preview) editor.preview = { yaml: null, error: null, pending: false };
+    // A viewer has no "operate" permission — the preview endpoint would 403.
+    // Viewing a profile must still work, just without the YAML panel.
+    if (!this.canOperate()) {
+      editor.preview = { yaml: null, error: null, pending: false };
+      return;
+    }
     editor.preview.pending = true;
     if (this.previewTimer) clearTimeout(this.previewTimer);
     this.previewTimer = setTimeout(() => this.loadPreview(), 300);
@@ -2326,6 +2367,7 @@ class App {
       el("button", {
         className: "btn btn-primary",
         text: "+ New run",
+        attrs: { "data-perm": "operate" },
         onClick: () => this.openNewRunForm(),
       })
     );
@@ -2481,6 +2523,9 @@ class App {
         onClick: () => this.goToProfiles(profileName),
       })
     );
+    if (detail.created_by) {
+      header.appendChild(el("span", { className: "subtitle", text: `created by ${detail.created_by}` }));
+    }
     if (single && singleDevice) {
       const label = PLATFORM_LABEL[singleDevice.platform] || singleDevice.platform;
       header.appendChild(el("span", { className: "kind-tag", text: "single device" }));
@@ -2512,6 +2557,7 @@ class App {
       el("button", {
         className: "btn btn-secondary run-header-upgrade",
         text: "Upgrade run",
+        attrs: { "data-perm": "operate" },
         onClick: () => this.openUpgradeModal(),
       })
     );
@@ -2519,6 +2565,7 @@ class App {
       el("button", {
         className: "btn btn-danger-secondary run-header-archive",
         text: "Archive run",
+        attrs: { "data-perm": "operate" },
         onClick: () => this.openArchiveModal(),
       })
     );
@@ -2531,6 +2578,7 @@ class App {
           el("button", {
             className: "btn btn-secondary notice-action",
             text: "Upgrade run",
+            attrs: { "data-perm": "operate" },
             onClick: () => this.openUpgradeModal(),
           })
         );
@@ -2595,6 +2643,7 @@ class App {
         el("button", {
           className: "btn btn-secondary",
           text: "Edit mapping",
+          attrs: { "data-perm": "operate" },
           onClick: () => this.openEditMapping(),
         })
       );
@@ -3634,7 +3683,7 @@ class App {
               ? "Re-capture"
               : "Start capture",
           onClick: submitDisabled ? null : () => this.startCapture(),
-          attrs: submitDisabled ? { disabled: "disabled" } : {},
+          attrs: Object.assign({ "data-perm": "operate" }, submitDisabled ? { disabled: "disabled" } : {}),
         }),
       ],
     });
@@ -4133,6 +4182,7 @@ class App {
           el("button", {
             className: "btn btn-primary",
             text: form.submitting ? "Creating…" : "Create run",
+            attrs: { "data-perm": "operate" },
             onClick: form.submitting ? null : () => this.submitNewRun(),
           }),
         ],
@@ -4173,7 +4223,7 @@ class App {
       el("button", { className: "btn btn-secondary", text: "Cancel", onClick: () => this.cancelNewRunForm() }),
       el("button", {
         className: "btn btn-primary", text: form.submitting ? "Creating…" : `Create ${bulk.devices.length} run${bulk.devices.length === 1 ? "" : "s"}`,
-        attrs: valid && !form.submitting ? {} : { disabled: "disabled" },
+        attrs: Object.assign({ "data-perm": "operate" }, valid && !form.submitting ? {} : { disabled: "disabled" }),
         onClick: valid && !form.submitting ? () => this.submitBulk() : null,
       }),
       el("label", { className: "bulk-capture-pre", children: [checkbox, document.createTextNode(" start pre capture on all after creating")] }),
@@ -4480,7 +4530,7 @@ class App {
     const deleteBtn = el("button", {
       className: "btn btn-danger-secondary",
       text: "Delete",
-      attrs: { type: "button" },
+      attrs: { type: "button", "data-perm": "operate" },
       onClick: () => this.deleteProfile(),
     });
     if (isDefault || usedBy > 0) {
@@ -4492,7 +4542,7 @@ class App {
     const duplicateBtn = el("button", {
       className: "btn btn-secondary",
       text: "Duplicate",
-      attrs: { type: "button" },
+      attrs: { type: "button", "data-perm": "operate" },
       onClick: () => this.newProfile(editor.doc),
     });
     if (!editor.doc) {
@@ -4505,7 +4555,7 @@ class App {
         el("span", { className: "field-label", text: "Profile" }),
         select,
         isDefault ? el("span", { className: "kind-tag", text: "read-only" }) : null,
-        el("button", { className: "btn btn-secondary", text: "+ New profile", attrs: { type: "button" },
+        el("button", { className: "btn btn-secondary", text: "+ New profile", attrs: { type: "button", "data-perm": "operate" },
           onClick: () => this.newProfile(null) }),
         duplicateBtn,
         deleteBtn,
@@ -4661,10 +4711,16 @@ class App {
     const preview = editor.preview || { yaml: null, error: null, pending: false };
     const panelChildren = [
       el("div", { className: "form-section-label", text: "YAML preview" }),
-      el("pre", { className: "yaml-preview mono" + (preview.pending ? " pending" : ""),
-        text: preview.yaml === null ? "" : (preview.yaml || "# prázdný profil - všechno default") }),
     ];
-    if (preview.error) panelChildren.push(el("div", { className: "field-error", text: preview.error }));
+    if (this.canOperate()) {
+      panelChildren.push(
+        el("pre", { className: "yaml-preview mono" + (preview.pending ? " pending" : ""),
+          text: preview.yaml === null ? "" : (preview.yaml || "# prázdný profil - všechno default") })
+      );
+      if (preview.error) panelChildren.push(el("div", { className: "field-error", text: preview.error }));
+    } else {
+      panelChildren.push(el("div", { className: "override-count", text: "requires operator access — see the Checks table" }));
+    }
     panelChildren.push(el("div", { className: "override-count", text: `${count} overrides` }));
     // Wrapper is the CSS container the @container rule measures: the
     // layout stacks the YAML panel when the main column is narrow, not
@@ -4719,7 +4775,7 @@ class App {
       return;
     }
 
-    const readonly = editor.name === null;
+    const readonly = editor.name === null || !this.canOperate();
     this.mainEl.appendChild(this.buildProfileSectionForm(editor, readonly));
     if (!editor.form) this.resetChecksForm(editor);
     this.mainEl.appendChild(this.buildChecksSection(editor, readonly));
@@ -4733,7 +4789,7 @@ class App {
         attrs: { type: "button" }, onClick: enabled ? () => this.discardProfile() : null });
       const saveBtn = el("button", { className: "btn btn-primary",
         text: editor.saving ? "Saving…" : "Save profile",
-        attrs: { type: "button" }, onClick: enabled ? () => this.saveProfile() : null });
+        attrs: { type: "button", "data-perm": "operate" }, onClick: enabled ? () => this.saveProfile() : null });
       if (!enabled) {
         discardBtn.setAttribute("disabled", "disabled");
         saveBtn.setAttribute("disabled", "disabled");

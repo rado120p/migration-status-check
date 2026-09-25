@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body data-role="viewer">
 <div class="page">
   <div class="shell">
     <div class="topbar">
@@ -28,17 +28,22 @@
           <input class="form-input mono run-combo-filter" id="run-combo-filter" type="text" placeholder="filter runs…" autocomplete="off">
           <div class="run-combo-list" id="run-combo-list" role="listbox"></div>
           <div class="run-combo-foot">
-            <a href="#" id="run-combo-new">+ New run</a>
+            <a href="#" id="run-combo-new" data-perm="operate">+ New run</a>
           </div>
         </div>
       </div>
       <div class="topbar-spacer"></div>
+      <div class="user-chip" id="user-chip" hidden>
+        <span class="mono" id="user-name"></span>
+        <span class="user-role" id="user-role"></span>
+        <button class="btn btn-secondary btn-small" id="btn-logout" type="button">Log out</button>
+      </div>
       <div class="profile">
         <span>Default profile:</span><span class="mono profile-value" id="profile-name">…</span>
       </div>
       <button class="btn btn-secondary" id="btn-profiles">Profiles</button>
-      <button class="btn btn-primary" id="btn-new-run">+ New run</button>
-      <button class="btn btn-secondary" id="btn-new-capture">New capture</button>
+      <button class="btn btn-primary" id="btn-new-run" data-perm="operate">+ New run</button>
+      <button class="btn btn-secondary" id="btn-new-capture" data-perm="operate">New capture</button>
     </div>
     <div class="body-grid">
       <div class="sidebar">
