@@ -3870,6 +3870,10 @@ class App {
     input.value = device.query || "";
     const dropdown = el("div", { className: "picker-dropdown", attrs: { role: "listbox" } });
     dropdown.hidden = true;
+    // Mousedown anywhere in the dropdown (scrollbar included) must not blur
+    // the input - only an item row's own mousedown handler (below) picks
+    // and should be allowed to trigger the input's blur via its own logic.
+    dropdown.addEventListener("mousedown", (e) => e.preventDefault());
     wrap.appendChild(input);
     wrap.appendChild(dropdown);
 
@@ -3879,7 +3883,10 @@ class App {
     let seq = 0;
     let debounceTimer = null;
 
+    // Bumping seq here invalidates any in-flight fetch, so a response that
+    // arrives after Esc/blur closed the dropdown can no longer reopen it.
     const closeDropdown = () => {
+      seq += 1;
       clear(dropdown);
       dropdown.hidden = true;
       items = [];
@@ -3912,6 +3919,11 @@ class App {
       if (more) dropdown.appendChild(el("div", { className: "picker-note", text: more }));
       if (note) dropdown.appendChild(el("div", { className: "picker-note", text: note }));
       dropdown.hidden = !(items.length || more || note);
+      // clear() resets scrollTop to 0 on every rebuild, so an arrow key
+      // that moves the highlight below the visible area needs to scroll
+      // it back into view.
+      const active = dropdown.querySelector(".picker-item.active");
+      if (active && active.scrollIntoView) active.scrollIntoView({ block: "nearest" });
     };
 
     const runSearch = async (q) => {
