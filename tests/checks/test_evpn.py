@@ -386,6 +386,41 @@ def test_vpws_unknown_sids_never_pair_by_sid():
         assert _by_label(findings, f"EVPN VPWS local interface status ({iface})").baseline_value is None
 
 
+def test_vpws_unknown_sid_ac_never_takes_baseline_of_other_unknown_sid_ac():
+    """Final review I-3 (mutant M1 - bez None guardu v _sid_key): Down AC
+    s neznamym SID by se sparoval s jedinym Down baseline AC s neznamym
+    SID a vysel by UNCHANGED = falesny PASS. (None, None) neni identita."""
+    baseline = _vpws_facts(
+        _vpws_ac(name="a.1", local_value=None, remote_value=None, status="Down"),
+        _vpws_ac(name="a.2", local_value=1, remote_value=2),
+    )
+    subject = _vpws_facts(
+        _vpws_ac(name="b.1", local_value=None, remote_value=None, status="Down"),
+        _vpws_ac(name="b.2", local_value=5, remote_value=6),
+    )
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    row = _by_label(rows, "EVPN VPWS local interface status (b.1)")
+    assert row.baseline_value is None
+    assert row.status is Status.FAIL
+
+
+def test_vpws_sid_key_shared_by_two_baseline_acs_gives_no_baseline():
+    """I-3 (mutant M6 - hits[0] misto len(hits) == 1): dve baseline AC se
+    stejnym SID 1/2 (prvni Down) - parovani je nejednoznacne, Down AC
+    subjektu nesmi dostat baseline Down a vyjit UNCHANGED."""
+    baseline = _vpws_facts(
+        _vpws_ac(name="a.1", local_value=1, remote_value=2, status="Down"),
+        _vpws_ac(name="a.2", local_value=1, remote_value=2, status="Up"),
+    )
+    subject = _vpws_facts(
+        _vpws_ac(name="b.1", local_value=1, remote_value=2, status="Down"),
+    )
+    rows = run_check(EvpnVpwsStatusCheck(), _vpws_ctx(subject, baseline=baseline))
+    row = _by_label(rows, "EVPN VPWS local interface status")
+    assert row.baseline_value is None
+    assert row.status is Status.FAIL
+
+
 def test_vpws_ac_missing_from_instance_output_is_broken():
     """Instance je, AC scopu ve vypisu neni -> BROKEN, ne SKIP."""
     findings = EvpnVpwsStatusCheck().run(_vpws_ctx(_vpws_facts()))
