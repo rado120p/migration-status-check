@@ -343,3 +343,13 @@ def test_update_mapping_zachova_kind_profile_group(tmp_path):
     assert reloaded.kind == "migration"
     assert reloaded.profile == "core-only"
     assert reloaded.group == "g1"
+
+
+def test_create_run_records_created_by_and_mapping_edit_keeps_it(tmp_path):
+    from migration_validator.runs.store import RunStore
+    api.create_run(
+        "mig09", kind="migration", devices=[OLD, NEW],
+        run_root=tmp_path, created_by="rado",
+    )
+    api.update_mapping("mig09", [("ge-0/0/1", "et-0/0/1")], run_root=tmp_path)
+    assert RunStore(tmp_path, "mig09").load().created_by == "rado"

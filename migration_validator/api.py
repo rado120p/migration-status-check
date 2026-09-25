@@ -141,6 +141,7 @@ def create_run(
     profile: str | None = None,
     run_root: str | Path = Path("runs"),
     profiles_root: str | Path = Path("profiles"),
+    created_by: str | None = None,
 ) -> RunManifest:
     """Zalozi runs/<name>/run.yml - schopnost, kterou CLI nema (run.yml
     se dosud psal rucne).
@@ -149,7 +150,9 @@ def create_run(
     kind "migration": prave jeden old a jeden new; mapping je volitelny,
     bez nej vznika sekvencni run s volnym capture formularem.
     `profile` je jmeno z profile store (profiles/<name>.yml); None =
-    serverovy default. Neexistujici profil je chyba, run se nezalozi."""
+    serverovy default. Neexistujici profil je chyba, run se nezalozi.
+    `created_by` je jmeno prihlaseneho uzivatele z GUI (spec 2026-09-25);
+    None u CLI."""
     if not _RUN_NAME_RE.match(name):
         raise ValueError(
             f"nevalidni jmeno runu '{name}' - povolene znaky: a-z 0-9 _ -"
@@ -168,7 +171,7 @@ def create_run(
         loaded[node] = device
     check_kind_devices(kind, loaded)
 
-    manifest = RunManifest(devices=loaded, kind=kind, profile=profile)
+    manifest = RunManifest(devices=loaded, kind=kind, profile=profile, created_by=created_by)
     if kind == "single":
         if mappings:
             raise ValueError("run typu single nema interface mapping")
@@ -321,12 +324,14 @@ def _validate_group_devices(
 
 
 def _write_group_members(
-    group: str, planned: list[tuple[str, str, RunDevice]], *, profile: str | None, run_root: Path
+    group: str, planned: list[tuple[str, str, RunDevice]], *, profile: str | None,
+    run_root: Path, created_by: str | None = None,
 ) -> list[str]:
     written: list[str] = []
     for name, node, device in planned:
         manifest = RunManifest(
             devices={node: device}, kind="single", profile=profile, group=group,
+            created_by=created_by,
         )
         try:
             RunStore(run_root, name).save(manifest)
@@ -343,6 +348,7 @@ def create_group(
     profile: str | None = None,
     run_root: str | Path = Path("runs"),
     profiles_root: str | Path = Path("profiles"),
+    created_by: str | None = None,
 ) -> list[str]:
     """Zalozi N single runu `<group>-<node>` se spolecnym `group`. Validuje
     vsechno dopredu; pri chybe se nezapise nic."""
@@ -358,7 +364,7 @@ def create_group(
         if not profiles.exists(profile):
             raise GroupError([(None, f"profil '{profile}' neexistuje ({profiles.path(profile)})")])
     planned = _validate_group_devices(group, devices, root)
-    return _write_group_members(group, planned, profile=profile, run_root=root)
+    return _write_group_members(group, planned, profile=profile, run_root=root, created_by=created_by)
 
 
 def add_group_devices(
@@ -366,6 +372,7 @@ def add_group_devices(
     devices: list[dict[str, str]],
     *,
     run_root: str | Path = Path("runs"),
+    created_by: str | None = None,
 ) -> list[str]:
     """Prida cleny do existujici skupiny; profil dedi po skupine."""
     root = Path(run_root)
@@ -377,7 +384,7 @@ def add_group_devices(
     manifests = [_raw_manifest(root / m / "run.yml") or {} for m in members]
     profile = next((m.get("profile") for m in manifests if m.get("profile")), None)
     planned = _validate_group_devices(group, devices, root)
-    return _write_group_members(group, planned, profile=profile, run_root=root)
+    return _write_group_members(group, planned, profile=profile, run_root=root, created_by=created_by)
 
 
 def archive_group(
@@ -556,6 +563,7 @@ def update_mapping(
         kind=manifest.kind,
         profile=manifest.profile,
         group=manifest.group,
+        created_by=manifest.created_by,
     )
     for old_port, new_port in mappings:
         rebuilt.add_mapping(

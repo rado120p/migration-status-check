@@ -65,6 +65,8 @@ class RunManifest:
     profile: str | None = None
     # Rezervovano pro bulk: N single runu se stejnou skupinou. Nikdo to zatim nepise.
     group: str | None = None
+    # Kdo run zalozil v GUI (spec 2026-09-25); None = CLI / starsi run.yml.
+    created_by: str | None = None
 
     def node_for_host(self, host: str) -> str | None:
         for node, device in self.devices.items():
@@ -238,6 +240,7 @@ def load_manifest(path: Path) -> RunManifest:
         kind=kind,
         profile=raw.get("profile"),
         group=raw.get("group"),
+        created_by=raw.get("created_by"),
     )
 
 
@@ -260,6 +263,8 @@ def save_manifest(manifest: RunManifest, path: Path) -> None:
         data["profile"] = manifest.profile
     if manifest.group is not None:
         data["group"] = manifest.group
+    if manifest.created_by is not None:
+        data["created_by"] = manifest.created_by
     data["devices"] = {
         node: {
             "host": device.host,

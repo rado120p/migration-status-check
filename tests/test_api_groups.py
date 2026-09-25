@@ -144,3 +144,17 @@ def test_archive_group_presune_vsechny_cleny(tmp_path):
 def test_archive_group_neznama_skupina(tmp_path):
     with pytest.raises(FileNotFoundError, match="skupina 'pop1' neexistuje"):
         api.archive_group("pop1", run_root=tmp_path)
+
+
+def test_group_members_record_created_by(tmp_path):
+    from migration_validator.runs.store import RunStore
+    api.create_group(
+        "g1", [{"node": "MX1", "host": "10.0.0.1", "platform": "junos"}],
+        run_root=tmp_path, profiles_root=tmp_path / "p", created_by="rado",
+    )
+    api.add_group_devices(
+        "g1", [{"node": "MX2", "host": "10.0.0.2", "platform": "junos"}],
+        run_root=tmp_path, created_by="eva",
+    )
+    assert RunStore(tmp_path, "g1-mx1").load().created_by == "rado"
+    assert RunStore(tmp_path, "g1-mx2").load().created_by == "eva"
