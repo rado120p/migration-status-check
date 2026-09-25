@@ -102,7 +102,13 @@ def create_app(
     throttle: LoginThrottle | None = None,
     settings_path: Path | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="mig-validate")
+    # S auth zapnutym by /docs a /openapi.json byly nechrenenou mapou celeho
+    # API bez require() seamu - vypnout, kdyz users soubor existuje.
+    docs_kwargs = (
+        {"docs_url": None, "redoc_url": None, "openapi_url": None}
+        if users is not None else {}
+    )
+    app = FastAPI(title="mig-validate", **docs_kwargs)
 
     @app.exception_handler(SnapshotVersionError)
     async def schema_outdated(request: Request, error: SnapshotVersionError) -> JSONResponse:

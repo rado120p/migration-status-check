@@ -94,6 +94,22 @@ def test_throttle_429_then_recovers(env):
     assert _login(client).status_code == 200
 
 
+def test_429_lockout_is_audited(env, caplog):
+    # finding #8: a 429 lockout produced no audit trail at all.
+    import logging
+
+    client, _, _ = env
+    for _ in range(5):
+        _login(client, password="wrong password!!")
+    with caplog.at_level(logging.INFO, logger="migration_validator.gui.audit"):
+        resp = _login(client)
+    assert resp.status_code == 429
+    lines = [line for line in caplog.text.splitlines() if "action=login-locked" in line]
+    assert len(lines) == 1
+    assert "user=rado" in lines[0]
+    assert "ip=testclient" in lines[0]
+
+
 def test_logout_invalidates_session(env):
     client, _, _ = env
     _login(client)
@@ -235,6 +251,55 @@ def test_login_with_rehash_keeps_working_on_next_request(env, monkeypatch):
     monkeypatch.setattr(users_mod, "PASSWORD_ITERATIONS", 2_000)
     assert _login(client).status_code == 200
     assert client.get("/api/me").status_code == 200
+
+
+def test_login_username_over_max_length_is_422(env):
+    # finding #4: LoginBody had no length limits at all.
+    client, _, _ = env
+    resp = _login(client, username="a" * 257)
+    assert resp.status_code == 422
+
+
+def test_login_password_over_max_length_is_422(env):
+    client, _, _ = env
+    resp = _login(client, password="a" * 2049)
+    assert resp.status_code == 422
+
+
+def test_login_non_pattern_username_is_401_and_not_throttled(tmp_path, monkeypatch):
+    # finding #4: usernames that never match USERNAME_PATTERN still run
+    # the dummy verify (timing) and return the same 401 body, but must not
+    # be recorded in the (unbounded-under-fresh-failures) throttle table.
+    from migration_validator.gui.sessions import LoginThrottle, SessionStore
+    from migration_validator.users import User, UserStore, hash_password
+
+    monkeypatch.setattr(users_mod, "PASSWORD_ITERATIONS", 1_000)
+    store = UserStore(tmp_path / "users.yml")
+    store.save({"rado": User("rado", "admin", hash_password(PW))})
+    api.create_run("mig01", kind="migration", devices=[OLD, NEW], run_root=tmp_path)
+    throttle = LoginThrottle()
+    app = create_app(
+        run_root=tmp_path, profiles_root=tmp_path / "profiles", users=store,
+        sessions=SessionStore(), throttle=throttle,
+    )
+    client = TestClient(app, base_url="https://testserver")
+
+    normal = _login(client, username="nobody", password="wrong password!!")
+    bad_pattern = _login(client, username="not a valid name!!", password="wrong password!!")
+
+    assert normal.status_code == bad_pattern.status_code == 401
+    assert normal.json() == bad_pattern.json() == {"detail": "invalid username or password"}
+    assert ("not a valid name!!", "testclient") not in throttle._entries
+    assert ("nobody", "testclient") in throttle._entries
+
+
+def test_docs_disabled_when_auth_enabled(env):
+    # finding #6: /docs and /openapi.json expose the whole API surface
+    # unauthenticated (no require() gate on FastAPI's own routes).
+    client, _, _ = env
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
 
 
 def test_anonymous_mode_me(tmp_path):

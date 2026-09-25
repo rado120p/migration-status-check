@@ -134,8 +134,9 @@ def _load_entry(path: Path, username, entry) -> User:
 class UserStore:
     def __init__(self, path: Path):
         self.path = Path(path)
-        self._cache_key: tuple[int, int] | None = None
-        self._cache: dict[str, User] = {}
+        # Jeden (key, users) tuple - atomicka vymena, zadne okno mezi
+        # aktualizaci klice a dat (vic vlaken v GUI procesu muze volat get()).
+        self._cache: tuple[tuple[int, int, int] | None, dict[str, User]] | None = None
 
     def load(self) -> dict[str, User]:
         if not self.path.exists():
@@ -151,13 +152,18 @@ class UserStore:
     def get(self, username: str) -> User | None:
         try:
             st = self.path.stat()
-            key = (st.st_mtime_ns, st.st_size)
+            # st_ino: save() pise pres tempfile+os.replace(), takze kazdy
+            # zapis dostane novy inode - i kdyz mtime_ns i size vyjdou
+            # stejne (hruba FS hodinu, nebo dva zapisy ve stejnem tiku),
+            # zmenu poznane podle inode.
+            key = (st.st_mtime_ns, st.st_size, st.st_ino)
         except FileNotFoundError:
             key = None
-        if key != self._cache_key or key is None:
-            self._cache = self.load()
-            self._cache_key = key
-        return self._cache.get(username)
+        cache = self._cache
+        if cache is None or cache[0] != key or key is None:
+            cache = (key, self.load())
+            self._cache = cache
+        return cache[1].get(username)
 
     def save(self, users: dict[str, User]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

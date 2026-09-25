@@ -7,11 +7,12 @@ from dataclasses import replace
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from migration_validator.gui import audit
 from migration_validator.gui.sessions import SESSION_COOKIE, LoginThrottle, SessionStore
 from migration_validator.users import (
+    USERNAME_PATTERN,
     AuthenticationError,
     UserStore,
     dummy_hash,
@@ -26,8 +27,10 @@ log = logging.getLogger(__name__)
 
 
 class LoginBody(BaseModel):
-    username: str
-    password: str
+    # Limity jsou jen proti zneuziti (payload/throttle-table dos), ne
+    # validace tvaru jmena - to dela az USERNAME_PATTERN v login().
+    username: str = Field(max_length=256)
+    password: str = Field(max_length=2048)
 
 
 def _client_ip(request: Request) -> str:
@@ -46,12 +49,18 @@ def build_auth_router(users: UserStore, sessions: SessionStore, throttle: LoginT
         ip = _client_ip(request)
         wait = throttle.retry_after(body.username, ip)
         if wait:
+            audit.record(body.username, "login-locked", ip=ip)
             raise HTTPException(status_code=429, detail=f"too many failed logins, try again in {wait} s")
         user = users.get(body.username)
         stored = user.password_hash if user else dummy_hash()
-        password_ok = verify_password(body.password[:2048], stored)
+        password_ok = verify_password(body.password, stored)
         if user is None or not password_ok:
-            throttle.failure(body.username, ip)
+            # Jmeno, ktere nikdy neprojde USERNAME_PATTERN, nemuze patrit
+            # zadnemu uctu - porad delame dummy verify (timing) a stejnou
+            # 401 odpoved, ale nezapisujeme ho do throttle tabulky (ta je
+            # jinak neomezena pod utokem s cerstve vymyslenymi jmeny).
+            if USERNAME_PATTERN.fullmatch(body.username):
+                throttle.failure(body.username, ip)
             audit.record(body.username, "login-failed", ip=ip)
             raise HTTPException(status_code=401, detail=INVALID_LOGIN)
         throttle.success(body.username, ip)

@@ -56,6 +56,11 @@ def test_meta_ctenim_settings_path_z_create_app(tmp_path):
     assert data["auth"].startswith("laborant")
 
 
+def test_docs_stay_enabled_without_auth(client):
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
+
+
 def test_root_servuje_index(client):
     resp = client.get("/")
     assert resp.status_code == 200

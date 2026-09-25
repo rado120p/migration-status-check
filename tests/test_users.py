@@ -117,6 +117,28 @@ def test_store_get_sees_external_edit(tmp_path):
     assert store.get("rado") is None
 
 
+def test_store_get_sees_equal_size_rewrite_same_mtime(tmp_path):
+    # finding #7: cache key was (mtime_ns, size) only - an os.replace()
+    # rewrite that lands on the same size, with mtime forced identical
+    # (coarse filesystem clock, or two writes in the same tick), looked
+    # unchanged and served the stale cached entry. st_ino changes on every
+    # os.replace() (new inode via tempfile+rename), so it belongs in the key.
+    path = tmp_path / "users.yml"
+    store = UserStore(path)
+    store.save({"rado": _user(role="viewer")})
+    first_hash = store.get("rado").password_hash
+    st_before = path.stat()
+
+    other = UserStore(path)
+    other.save({"rado": _user(role="viewer")})  # same length -> same size, new inode
+    os.utime(path, ns=(st_before.st_atime_ns, st_before.st_mtime_ns))
+    st_after = path.stat()
+    assert st_after.st_size == st_before.st_size
+    assert st_after.st_ino != st_before.st_ino
+
+    assert store.get("rado").password_hash != first_hash
+
+
 @pytest.mark.parametrize("content, match", [
     ("- rado\n", "mapping"),
     ("users: [rado]\n", "users"),
