@@ -300,8 +300,15 @@ Kroky:
 
 1. `mig-validate upgrade` na kopii `test-no-inventory` a diff reportu
    před/po. Očekávané rozdíly:
+   - **E5 na živých datech:** na PTX mají obě AC popis `EVPN-VPWS-LOCAL`,
+     na MX `EVPN-VPWS-LOCAL-CPE1` / `-CPE2`. Dnes (změřeno 2026-09-25 nad
+     schématem 14) jsou všechny čtyři scopy nespárované s důvodem
+     „ambiguous“ z pravidla `routing_instance`. Nově se spárují přes
+     `vlan+service_type`: ge-0/0/2.211 ↔ et-0/0/8.211, ge-0/0/2.212 ↔
+     et-0/0/8.212. MGMT E-LAN scopy (vlany 4093/4094) zůstanou nespárované
+     jako nejednoznačné.
    - EVPN-VPWS-LOCAL (.211 i .212): místo „remote peer chybi“ řádek local
-     switch OK a PW řádek `CCC-Up`
+     switch OK s baseline, a PW řádek `CCC-Up`
    - vzdálené PW (.213, ae0.224): přibude jen PW řádek `CCC-Up`. Řádek
      „AC … ve vypisu instance chybi“ se **nesmí** objevit. To je kontrola,
      že filtr `matches_interface` sedí na skutečná jména IFL (`ae0.224`,
