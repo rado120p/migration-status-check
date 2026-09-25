@@ -8,3 +8,6 @@ connection:
 auth:
   # GUI accounts; created with `mig-validate user add NAME --role ROLE`.
   users_file: config/users.yml
+inventory:
+  # Ansible INI inventory (NAME ansible_host=IP); without it the GUI offers manual entry only.
+  path: /etc/ansible/hosts

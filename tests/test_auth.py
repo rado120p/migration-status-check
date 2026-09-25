@@ -172,3 +172,29 @@ def test_auth_settings_does_not_need_password_env(tmp_path, monkeypatch):
     path = tmp_path / "settings.yml"
     path.write_text("connection:\n  password_env: NOPE_UNSET\nauth:\n  users_file: u.yml\n")
     assert load_auth_settings(path).users_file == Path("u.yml")
+
+
+def test_inventory_settings_default_disabled(tmp_path):
+    from migration_validator.auth import InventorySettings, load_inventory_settings
+    assert load_inventory_settings(tmp_path / "missing.yml") == InventorySettings(path=None)
+    path = tmp_path / "settings.yml"
+    path.write_text("auth:\n  users_file: u.yml\n")
+    assert load_inventory_settings(path).path is None
+
+
+def test_inventory_settings_path(tmp_path):
+    from migration_validator.auth import InventorySettings, load_inventory_settings
+    path = tmp_path / "settings.yml"
+    path.write_text("inventory:\n  path: ~/hosts\n")
+    assert load_inventory_settings(path).path == Path("~/hosts").expanduser()
+
+
+def test_inventory_settings_rejects_unknown_key_and_scalar(tmp_path):
+    from migration_validator.auth import load_inventory_settings
+    path = tmp_path / "settings.yml"
+    path.write_text("inventory:\n  file: hosts\n")
+    with pytest.raises(ValueError, match="file"):
+        load_inventory_settings(path)
+    path.write_text("inventory: /etc/ansible/hosts\n")
+    with pytest.raises(ValueError, match="'inventory' musi byt mapping"):
+        load_inventory_settings(path)

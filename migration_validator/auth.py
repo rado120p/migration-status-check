@@ -30,6 +30,8 @@ _KNOWN_KEYS = frozenset(
 
 _KNOWN_AUTH_KEYS = frozenset({"users_file"})
 
+_KNOWN_INVENTORY_KEYS = frozenset({"path"})
+
 
 @dataclass(frozen=True)
 class ConnectionSettings:
@@ -45,6 +47,12 @@ class ConnectionSettings:
 @dataclass(frozen=True)
 class AuthSettings:
     users_file: Path = DEFAULT_USERS_FILE
+
+
+@dataclass(frozen=True)
+class InventorySettings:
+    # None = inventar vypnuty, formulare jen s rucnim zadanim.
+    path: Path | None = None
 
 
 def _expand(paths) -> tuple[str, ...]:
@@ -82,6 +90,25 @@ def load_auth_settings(path: Path | None = None) -> AuthSettings:
     if users_file is None:
         return AuthSettings()
     return AuthSettings(users_file=Path(str(users_file)).expanduser())
+
+
+def load_inventory_settings(path: Path | None = None) -> InventorySettings:
+    if path is None:
+        path = DEFAULT_SETTINGS_PATH
+    raw = _read_settings(path)
+    if raw is None:
+        return InventorySettings()
+    block = raw.get("inventory") or {}
+    if not isinstance(block, dict):
+        raise ValueError(f"{path}: 'inventory' musi byt mapping")
+    unknown = sorted(set(block) - _KNOWN_INVENTORY_KEYS)
+    if unknown:
+        raise ValueError(
+            f"{path}: neznamy klic inventory.{', inventory.'.join(unknown)} "
+            f"(zname: {', '.join(sorted(_KNOWN_INVENTORY_KEYS))})"
+        )
+    value = block.get("path")
+    return InventorySettings(path=Path(str(value)).expanduser() if value else None)
 
 
 def load_settings(path: Path | None = None) -> ConnectionSettings:
