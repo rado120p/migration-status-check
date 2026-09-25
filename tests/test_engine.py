@@ -1694,6 +1694,44 @@ def test_step_keeps_ambiguous_subject_scope_visible():
     assert all("ambiguous" in e["reason"] for e in result.unmatched["subject"])
 
 
+def _vlan_scope(scope_id, interface, vlans):
+    return Scope(
+        id=scope_id,
+        kind="service",
+        key=ScopeKey(None, "Internet", None),
+        selectors=Selectors(interfaces=[interface], vlans=list(vlans)),
+    )
+
+
+def test_step_keeps_candidate_blocked_by_ambiguous_partner_visible():
+    """Final review I-1: B (vlany 10+20) je nejednoznacny pod vlanem 20
+    (S2, S3), S1 je jeho jediny 1:1 kandidat pod vlanem 10. S1 se
+    nesparuje, ale jeho kandidat B zustal nesparovany - S1 nesmi skoncit
+    v excluded_services jako "nova sluzba", musi do NESPAROVANO."""
+    baseline = _snapshot(
+        "172.20.20.4", "ge-0/0/4.0",
+        [_vlan_scope("svc:B:Internet", "ge-0/0/4.0", ["10", "20"])],
+    )
+    subject = _snapshot(
+        "172.20.20.5", "ae0.10",
+        [
+            _vlan_scope("svc:S1:Internet", "ae0.10", ["10"]),
+            _vlan_scope("svc:S2:Internet", "ae0.20", ["20"]),
+            _vlan_scope("svc:S3:Internet", "ae0.21", ["20"]),
+        ],
+        phase="post-migration",
+    )
+
+    result = evaluate_snapshots(subject, baseline, now=NOW, step=STEP)
+
+    assert result.excluded_services == []
+    unmatched = {e["scope_id"]: e["reason"] for e in result.unmatched["subject"]}
+    assert set(unmatched) == {"svc:S1:Internet", "svc:S2:Internet", "svc:S3:Internet"}
+    assert unmatched["svc:S1:Internet"].startswith("ambiguous: 3 kandidatu")
+    assert all(reason.startswith("ambiguous") for reason in unmatched.values())
+    assert "svc:S1:Internet" in {scope.scope_id for scope in result.scopes}
+
+
 def test_step_excludes_foreign_wave_scope_after_ambiguity_is_resolved():
     """Rozhodnuti 2026-09-25: VRF-b (drivejsi vlna) souperil jen se
     sparovanou baseline -> nova sluzba -> vyloucen."""

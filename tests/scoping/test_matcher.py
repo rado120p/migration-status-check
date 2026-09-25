@@ -1,3 +1,5 @@
+import itertools
+
 from migration_validator.models.scope import Scope, ScopeKey, Selectors
 from migration_validator.scoping.mapping import Mapping, MappingRule, Selector
 from migration_validator.scoping.matcher import match_scopes
@@ -563,3 +565,163 @@ def test_manual_mapping_by_routing_instance_splits_same_description():
 
     manual = [p for p in result.pairs if p.method == "manual"]
     assert _ifaces(manual) == {("ge-0/0/2.100", "et-0/0/8.100")}
+
+
+def _reasons(result):
+    """Rozhrani -> duvod pro vsechny nesparovane scope obou stran."""
+    return {
+        u.scope.selectors.interfaces[0]: u.reason
+        for u in result.unmatched_baseline + result.unmatched_subject
+    }
+
+
+def _in_every_order(baseline, subject):
+    """Vysledek pro kazde poradi obou seznamu - nejednoznacnost i blokace
+    nesmi zaviset na poradi vstupu."""
+    for b_order in itertools.permutations(baseline):
+        for s_order in itertools.permutations(subject):
+            yield match_scopes(list(b_order), list(s_order))
+
+
+def _assert_all_ambiguous(baseline, subject):
+    names = {s.selectors.interfaces[0] for s in baseline + subject}
+    for result in _in_every_order(baseline, subject):
+        assert result.pairs == []
+        reasons = _reasons(result)
+        assert set(reasons) == names
+        assert all(reason.startswith("ambiguous") for reason in reasons.values()), reasons
+
+
+def test_blocked_candidate_of_ambiguous_baseline_stays_ambiguous():
+    """Final review I-1, probe B: B ma vlany 10+20, pod vlanem 20 souperi
+    S2 a S3, pod vlanem 10 je S1 jeho jediny 1:1 kandidat. B je
+    nejednoznacny, takze se S1 nesparuje - ale S1 nesmi dostat "nova
+    sluzba, chybi baseline" (step beh by ho tise vyradil), protoze jeho
+    jediny kandidat B zustal nesparovany."""
+    baseline = [_scope("ge-0/0/2.1", None, "Internet", vlans=["10", "20"])]
+    subject = [
+        _scope("et-0/0/8.1", None, "Internet", vlans=["10"]),
+        _scope("et-0/0/8.2", None, "Internet", vlans=["20"]),
+        _scope("et-0/0/8.3", None, "Internet", vlans=["20"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+    assert _reasons(result)["et-0/0/8.1"] == (
+        "ambiguous: 3 kandidatu (svc:et-0/0/8.1:Internet, "
+        "svc:et-0/0/8.2:Internet, svc:et-0/0/8.3:Internet)"
+    )
+    _assert_all_ambiguous(baseline, subject)
+
+
+def test_blocked_candidate_of_ambiguous_subject_stays_ambiguous():
+    """I-1, probe C (zrcadlo B): S ma vlany 10+20, B1 je jeho jediny 1:1
+    kandidat pod vlanem 10, pod vlanem 20 souperi B2 a B3. B1 nesmi
+    dostat "zadny kandidat na subject", kdyz S zustal nesparovany."""
+    baseline = [
+        _scope("ge-0/0/2.1", None, "Internet", vlans=["10"]),
+        _scope("ge-0/0/2.2", None, "Internet", vlans=["20"]),
+        _scope("ge-0/0/2.3", None, "Internet", vlans=["20"]),
+    ]
+    subject = [_scope("et-0/0/8.1", None, "Internet", vlans=["10", "20"])]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+    assert _reasons(result)["ge-0/0/2.1"] == (
+        "ambiguous: 3 kandidatu (svc:ge-0/0/2.1:Internet, "
+        "svc:ge-0/0/2.2:Internet, svc:ge-0/0/2.3:Internet)"
+    )
+    _assert_all_ambiguous(baseline, subject)
+
+
+def test_blocked_dual_stack_candidate_stays_ambiguous():
+    """I-1, dual-stack: B ma v4 A + v6 X (siroke subnety), S1 jen v4 A,
+    S2 a S3 sdileji v6 X. S1 musi zustat "ambiguous"."""
+    baseline = [_scope("ge-0/0/2.1", None, "Internet", addresses=["10.0.0.1/24"],
+                       addresses_v6=["2001:db8::1/64"])]
+    subject = [
+        _scope("et-0/0/8.1", None, "Internet", addresses=["10.0.0.2/24"]),
+        _scope("et-0/0/8.2", None, "Internet", addresses_v6=["2001:db8::2/64"]),
+        _scope("et-0/0/8.3", None, "Internet", addresses_v6=["2001:db8::3/64"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert result.pairs == []
+    assert _reasons(result)["et-0/0/8.1"].startswith("ambiguous: 3 kandidatu")
+    _assert_all_ambiguous(baseline, subject)
+
+
+def test_blocked_candidate_falls_back_once_its_partner_pairs_later():
+    """I-1 nesmi znejednoznacnit vyresenou situaci: pod subnetem je S1
+    blokovany nejednoznacnym B (N2 sdileji S2 a S3), vlan 20 pak B
+    jednoznacne sparuje s S2. S1 i S3 uz nemaji nesparovaneho soupere ->
+    "nova sluzba, chybi baseline"."""
+    baseline = [_scope("ge-0/0/2.1", None, "Internet",
+                       addresses=["10.0.1.1/24", "10.0.2.1/24"], vlans=["20"])]
+    subject = [
+        _scope("et-0/0/8.1", None, "Internet", addresses=["10.0.1.2/24"]),
+        _scope("et-0/0/8.2", None, "Internet", addresses=["10.0.2.2/24"], vlans=["20"]),
+        _scope("et-0/0/8.3", None, "Internet", addresses=["10.0.2.3/24"]),
+    ]
+
+    for result in _in_every_order(baseline, subject):
+        assert _ifaces(result.pairs) == {("ge-0/0/2.1", "et-0/0/8.2")}
+        assert {p.method for p in result.pairs} == {"vlan+service_type"}
+        assert _reasons(result) == {
+            "et-0/0/8.1": "nova sluzba, chybi baseline",
+            "et-0/0/8.3": "nova sluzba, chybi baseline",
+        }
+
+
+def test_ambiguous_scope_keeps_its_blocked_candidate_as_rival():
+    """I-1 (fuzz): B0 sdili N1 s B1 proti S2 (nejednoznacne) a N2 ma 1:1
+    s S0. Vlan pak sparuje B1-S2, takze nejednoznacnost N1 je vyresena -
+    ale B0 se s S0 nesparoval jen kvuli ni a S0 porad ceka. B0 nesmi
+    skoncit jako "zadny kandidat na subject", S0 ne jako "nova sluzba"."""
+    baseline = [
+        _scope("ge-0/0/2.0", None, "Internet", addresses=["10.0.1.1/24", "10.0.2.1/24"]),
+        _scope("ge-0/0/2.1", None, "Internet", addresses=["10.0.1.2/24"], vlans=["20"]),
+    ]
+    subject = [
+        _scope("et-0/0/8.0", None, "Internet", addresses=["10.0.2.2/24"]),
+        _scope("et-0/0/8.2", None, "Internet", addresses=["10.0.1.3/24"], vlans=["20"]),
+    ]
+
+    for result in _in_every_order(baseline, subject):
+        assert _ifaces(result.pairs) == {("ge-0/0/2.1", "et-0/0/8.2")}
+        reasons = _reasons(result)
+        assert set(reasons) == {"ge-0/0/2.0", "et-0/0/8.0"}
+        assert all(reason.startswith("ambiguous") for reason in reasons.values()), reasons
+
+
+def test_subject_with_two_distinct_candidates_is_never_guessed():
+    """Final review I-2 (mutant Mb - vypnuta s-side smycka napric klici):
+    S ma vlany 10+20, B1 jen 10, B2 jen 20. Kazdy klic sam je 1:1, ale S
+    ma dva ruzne kandidaty - zadny par, vsichni "ambiguous"."""
+    baseline = [
+        _scope("ge-0/0/2.1", None, "Internet", vlans=["10"]),
+        _scope("ge-0/0/2.2", None, "Internet", vlans=["20"]),
+    ]
+    subject = [_scope("et-0/0/8.1", None, "Internet", vlans=["10", "20"])]
+    _assert_all_ambiguous(baseline, subject)
+    reversed_vlans = [_scope("et-0/0/8.1", None, "Internet", vlans=["20", "10"])]
+    _assert_all_ambiguous(baseline, reversed_vlans)
+
+
+def test_candidate_of_ambiguous_subject_is_never_paired():
+    """I-2 (mutant Ma - v prochodu 2 chybi `sid in rule_ambiguous`): pod
+    vlanem 10 souperi B1 a B2 o S, pod vlanem 20 je B3 1:1 s S. S je
+    nejednoznacny, takze B3<->S by byl odhad - zadny par, vsichni
+    "ambiguous"."""
+    baseline = [
+        _scope("ge-0/0/2.1", None, "Internet", vlans=["10"]),
+        _scope("ge-0/0/2.2", None, "Internet", vlans=["10"]),
+        _scope("ge-0/0/2.3", None, "Internet", vlans=["20"]),
+    ]
+    subject = [_scope("et-0/0/8.1", None, "Internet", vlans=["10", "20"])]
+    _assert_all_ambiguous(baseline, subject)
+    reversed_vlans = [_scope("et-0/0/8.1", None, "Internet", vlans=["20", "10"])]
+    _assert_all_ambiguous(baseline, reversed_vlans)

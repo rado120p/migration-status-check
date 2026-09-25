@@ -191,11 +191,19 @@ def match_scopes(
         s_scopes: dict[int, Scope] = {}
         b_candidates: dict[int, dict[int, Scope]] = {}
         s_candidates: dict[int, dict[int, Scope]] = {}
+        # Vsichni souperi scope z druhe strany pres vsechny klice pravidla
+        # (1:1 i nejednoznacne) - jen pro text duvodu blokovaneho kandidata.
+        b_rivals: dict[int, dict[int, Scope]] = {}
+        s_rivals: dict[int, dict[int, Scope]] = {}
 
         for key, b_hits in baseline_index.items():
             s_hits = subject_index.get(key)
             if not s_hits:
                 continue
+            for b in b_hits:
+                b_rivals.setdefault(id(b), {}).update((id(s), s) for s in s_hits)
+            for s in s_hits:
+                s_rivals.setdefault(id(s), {}).update((id(b), b) for b in b_hits)
             if len(b_hits) == 1 and len(s_hits) == 1:
                 b, s = b_hits[0], s_hits[0]
                 b_scopes[id(b)] = b
@@ -234,6 +242,37 @@ def match_scopes(
                     rule_ambiguous.add(id(b))
                     ambiguity.setdefault(id(b), []).append((reason, [s_scopes[sid]]))
 
+        # Final review I-1: 1:1 hrana s nejednoznacnym koncem se v prochodu
+        # 2 nesparuje. Bez zaznamu by jeji druhy konec skoncil jako "nova
+        # sluzba" / "zadny kandidat" (step beh by ho tise vyradil), prestoze
+        # jeho jediny kandidat zustal nesparovany. A nejednoznacny konec by
+        # po pozdejsim vyreseni sve jine nejednoznacnosti taky spadl do
+        # fallbacku, i kdyz jeho 1:1 kandidat dal ceka. Proto se na oba
+        # konce zapise nejednoznacnost se souperem = druhy konec hrany,
+        # bezpodminecne (i kdyz je druhy konec sam nejednoznacny). Do
+        # rule_ambiguous se blokovany scope nepridava: jeho jediny partner
+        # uz je blokovany, takze se nic dalsiho nerozleva.
+        for bid, partners in b_candidates.items():
+            if bid not in rule_ambiguous:
+                continue
+            b = b_scopes[bid]
+            reason = _ambiguity_reason(
+                [s for s in remaining_subject if id(s) in b_rivals[bid]]
+            )
+            ambiguity.setdefault(bid, []).append((reason, list(partners.values())))
+            for sid in partners:
+                ambiguity.setdefault(sid, []).append((reason, [b]))
+        for sid, partners in s_candidates.items():
+            if sid not in rule_ambiguous:
+                continue
+            s = s_scopes[sid]
+            reason = _ambiguity_reason(
+                [b for b in remaining_baseline if id(b) in s_rivals[sid]]
+            )
+            ambiguity.setdefault(sid, []).append((reason, list(partners.values())))
+            for bid in partners:
+                ambiguity.setdefault(bid, []).append((reason, [s]))
+
         # Prochod 2: sparuj kandidaty, ktere zustaly jednoznacne na obou
         # stranach. Iteruje se v poradi remaining_baseline, aby vysledek
         # byl deterministicky.
@@ -246,7 +285,9 @@ def match_scopes(
             if not partners:
                 continue
             (sid, s), = partners.items()
-            if sid in rule_ambiguous or sid in paired:
+            # "sid in paired" tu byt nemuze: dva baseline scope se stejnym
+            # jedinym partnerem uz partnera daly do rule_ambiguous.
+            if sid in rule_ambiguous:
                 continue
             result.pairs.append(
                 MatchedPair(baseline=scope, subject=s, method=method, confidence=confidence)
