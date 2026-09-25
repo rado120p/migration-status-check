@@ -412,6 +412,9 @@ def test_ambiguity_unresolved_keeps_ambiguous_reason_on_both_sides():
     result = match_scopes(baseline, subject)
 
     assert result.pairs == []
+    # all() na prazdnem seznamu je vzdy True - delka se overuje explicitne,
+    # aby test necekal falesne "passed" na chybejicich zaznamech.
+    assert len(result.unmatched_baseline) == 1 and len(result.unmatched_subject) == 2
     assert all("ambiguous" in u.reason for u in result.unmatched_baseline + result.unmatched_subject)
 
 
@@ -437,3 +440,104 @@ def test_local_switch_pair_resolved_by_vlan():
                                      ("ge-0/0/2.212", "et-0/0/8.212")}
     assert {p.method for p in result.pairs} == {"vlan+service_type"}
     assert result.unmatched_baseline == [] and result.unmatched_subject == []
+
+
+def test_ambiguous_conflict_under_subnet_rule_is_order_independent():
+    """F1 (fix round 1 review): stejna data, jiny vysledek podle poradi
+    zpracovani klicu = hadani. B ma dve /30 adresy N1+N2, B2 jen N2,
+    S ma taky N1+N2 - bez ohledu na poradi adres/poradi baseline scope
+    musi vyjit 0 paru a vsechny tri "ambiguous"."""
+    n1 = "192.168.1.1/30"
+    n2 = "192.168.2.1/30"
+
+    for b_addresses in ([n1, n2], [n2, n1]):
+        for baseline_order in ("b_first", "b2_first"):
+            b = _scope("ge-0/0/2.1", None, "Internet", addresses=list(b_addresses))
+            b2 = _scope("ge-0/0/2.2", None, "Internet", addresses=[n2])
+            s = _scope("et-0/0/8.1", None, "Internet", addresses=[n1, n2])
+            baseline = [b, b2] if baseline_order == "b_first" else [b2, b]
+            subject = [s]
+
+            result = match_scopes(baseline, subject)
+
+            assert result.pairs == [], (b_addresses, baseline_order)
+            assert len(result.unmatched_baseline) == 2, (b_addresses, baseline_order)
+            assert len(result.unmatched_subject) == 1, (b_addresses, baseline_order)
+            assert all(
+                "ambiguous" in u.reason
+                for u in result.unmatched_baseline + result.unmatched_subject
+            ), (b_addresses, baseline_order)
+
+
+def test_conflicting_candidates_under_two_keys_of_one_rule_is_ambiguous():
+    """F1: B ma vlany 10 a 20, S1 jen 10, S2 jen 20 (zadny popis/RI/subnet
+    ktery by je odlisil) - kazdy klic sam o sobe da jednoznacny par, ale B
+    ma dva ruzne kandidaty napric klici, takze nesmi hadat."""
+    for b_vlans in (["10", "20"], ["20", "10"]):
+        baseline = [_scope("ge-0/0/2.1", None, "Internet", vlans=b_vlans)]
+        subject = [
+            _scope("et-0/0/8.1", None, "Internet", vlans=["10"]),
+            _scope("et-0/0/8.2", None, "Internet", vlans=["20"]),
+        ]
+
+        result = match_scopes(baseline, subject)
+
+        assert result.pairs == [], b_vlans
+        assert len(result.unmatched_baseline) == 1, b_vlans
+        assert "ambiguous" in result.unmatched_baseline[0].reason, b_vlans
+
+
+def test_reason_falls_back_only_when_every_rival_is_paired():
+    """F2: pin any() vs all() v _reason. B "CPE" (bez RI) souperi s S1 i S2
+    o popis; B' "OTHER"/RI=a se pozdeji jednoznacne sparuje s S1/RI=a.
+    B ma porad nesparovaneho soupere S2 -> zustava "ambiguous". S2 ma
+    jedineho souperem B, ktery taky zustava nesparovany -> taky
+    "ambiguous". S all() by misto toho B dostalo "zadny kandidat na
+    subject" (viz report - overeno mutantem)."""
+    baseline = [
+        _scope("ge-0/0/2.1", "CPE", "Internet"),
+        _scope("ge-0/0/2.2", "OTHER", "Internet", routing_instance="a"),
+    ]
+    subject = [
+        _scope("et-0/0/8.1", "CPE", "Internet", routing_instance="a"),
+        _scope("et-0/0/8.2", "CPE", "Internet"),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert _ifaces(result.pairs) == {("ge-0/0/2.2", "et-0/0/8.1")}
+    b_reason = next(
+        u.reason for u in result.unmatched_baseline if u.scope.selectors.interfaces == ["ge-0/0/2.1"]
+    )
+    s_reason = next(
+        u.reason for u in result.unmatched_subject if u.scope.selectors.interfaces == ["et-0/0/8.2"]
+    )
+    assert b_reason.startswith("ambiguous: 2 kandidatu")
+    assert "ambiguous" in s_reason
+
+
+def test_later_rule_ambiguity_survives_earlier_rule_resolution():
+    """F3: prvni (nejsilnejsi) nejednoznacnost scope Sx se popisem vyresi
+    (B1 si vezme vlan-shoda), ale Sx porad souperi s jeste nesparovanym
+    B2 pod RI pravidlem - musi zustat "ambiguous", ne skoncit jako "nova
+    sluzba" jen proto, ze jeho PRVNI souper uz je sparovany jinam."""
+    baseline = [
+        _scope("ge-0/0/2.1", "CPE", "Internet", routing_instance="a", vlans=["10"]),
+        _scope("ge-0/0/2.2", "OTHER", "Internet", routing_instance="a", vlans=["20"]),
+    ]
+    subject = [
+        _scope("et-0/0/8.1", "CPE", "Internet", routing_instance="a", vlans=["10"]),
+        _scope("et-0/0/8.2", "CPE", "Internet", routing_instance="a", vlans=["30"]),
+    ]
+
+    result = match_scopes(baseline, subject)
+
+    assert _ifaces(result.pairs) == {("ge-0/0/2.1", "et-0/0/8.1")}
+    sx_reason = next(
+        u.reason for u in result.unmatched_subject if u.scope.selectors.interfaces == ["et-0/0/8.2"]
+    )
+    b2_reason = next(
+        u.reason for u in result.unmatched_baseline if u.scope.selectors.interfaces == ["ge-0/0/2.2"]
+    )
+    assert "ambiguous" in sx_reason
+    assert "ambiguous" in b2_reason

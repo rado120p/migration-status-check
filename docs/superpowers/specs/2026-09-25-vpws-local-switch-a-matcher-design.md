@@ -173,22 +173,30 @@ v praxi tedy odpadá.
 `scoping/matcher.py`, `match_scopes`.
 
 1. **Nejednoznačnost scope z poolu nevyřadí.** Po každém pravidle se
-   z `remaining_*` odeberou jen spárované scopy. Množina `dropped` zůstává
-   **uvnitř jednoho pravidla** jako dnešní pojistka pro pravidla s více
-   klíči na scope (subnet, vlan). Scope nejednoznačný pod jedním klíčem
-   pravidla se pod jiným klíčem téhož pravidla nespáruje.
+   z `remaining_*` odeberou jen spárované scopy. Uvnitř jednoho pravidla se
+   ale nesmí hádat: vyhodnocení je **dvouprůchodové** a nezávisí na pořadí
+   klíčů (na pořadí adres/vlanů ve scope, ani na pořadí scopů v seznamu).
+   V prvním průchodu se každý klíč pravidla posoudí sám za sebe – buď dá
+   jednoznačného kandidáta (1:1), nebo je pod ním scope nejednoznačný a
+   zapíše se to. Scope, který má napříč různými klíči téhož pravidla víc
+   než jednoho odlišného kandidáta, je taky nejednoznačný – i když byl
+   každý dílčí klíč sám o sobě 1:1, pravidlo nesmí hádat, který kandidát je
+   ten pravý. Teprve druhý průchod spáruje ty, co po prvním průchodu
+   zůstaly jednoznačné na obou stranách.
 2. **Seznam nespárovaných se staví až na konci.** Když je scope pod
-   klíčem nejednoznačný, zapamatuje se důvod a scopy **druhé strany**,
-   se kterými pod tím klíčem soupeřil (u subjektového scope `b_hits`,
-   u baseline scope `s_hits`). Pamatuje se jen první nejednoznačnost,
-   tedy ta z nejsilnějšího pravidla. Scope, který nespárovalo žádné
-   pravidlo, dostane:
-   - svůj důvod nejednoznačnosti, jen když **aspoň jeden** z těch scopů
-     druhé strany taky zůstal nespárovaný. Nejednoznačnost pak trvá.
+   klíčem (nebo napříč klíči, viz bod 1) nejednoznačný, zapamatuje se
+   důvod a scopy **druhé strany**, se kterými soupeřil (u subjektového
+   scope `b_hits`, u baseline scope `s_hits`). Zapamatuje se **každá**
+   nejednoznačnost scope v pořadí pravidel, ne jen první. Scope, který
+   nespárovalo žádné pravidlo, dostane:
+   - důvod PRVNÍ zapamatované nejednoznačnosti, která **ještě** má aspoň
+     jednoho nespárovaného soupeře. Nejednoznačnost může přetrvat i díky
+     pozdějšímu (slabšímu) pravidlu, přestože ta z nejsilnějšího pravidla
+     už je vyřešená – protějšek prvního soupeření může mít pár, ale
+     protějšek pozdějšího soupeření ne.
    - jinak `REASON_NO_CANDIDATE` (baseline) / `REASON_NEW_SERVICE`
-     (subject). Nejednoznačnost vyřešilo pozdější pravidlo, které
-     protějšek spárovalo s jiným scopem, takže tento scope protějšek
-     nemá.
+     (subject) – žádná ze zapamatovaných nejednoznačností už nemá
+     nespárovaného soupeře, takže žádná netrvá.
 
    Příklad ze step běhu: baseline (starý port) má „CPE“ ve VRF-a, nový
    box „CPE“ ve VRF-a (tento krok) a „CPE“ ve VRF-b (dřívější vlna).

@@ -172,54 +172,87 @@ def match_scopes(
 
     # E5 (review 2026-09-24): nejednoznacnost scope z poolu nevyradi -
     # pozdejsi pravidlo (routing_instance, subnet, vlan) ho muze rozlisit.
-    # Pro kazdy scope se pamatuje prvni (nejsilnejsi) nejednoznacnost:
-    # duvod a scopy druhe strany, se kterymi pod tim klicem souperil.
-    ambiguity: dict[int, tuple[str, list[Scope]]] = {}
+    # Fix round 1 (F3): pro kazdy scope se pamatuje KAZDA nejednoznacnost
+    # v poradi pravidel - ne jen prvni. Az na konci se z nich vybere ta,
+    # ktera jeste ma nesparovaneho soupere (viz _reason).
+    ambiguity: dict[int, list[tuple[str, list[Scope]]]] = {}
 
     for method, confidence, key_fn in RULES:
         baseline_index = _index(remaining_baseline, key_fn)
         subject_index = _index(remaining_subject, key_fn)
 
-        paired: set[int] = set()
-        dropped: set[int] = set()
+        # F1: dvouprochodovy vyhodnocovac, aby vysledek nezavisel na poradi
+        # klicu (napr. na poradi adres/vlanu ve scope). Prochod 1 rozhodne
+        # kazdy klic sam za sebe a nasbira kandidaty; prochod 2 az potom
+        # sparuje ty, co po prvnim prochodu zustaly jednoznacne na obou
+        # stranach. Vysledek tak nezavisi na poradi zpracovani klicu.
+        rule_ambiguous: set[int] = set()
+        b_scopes: dict[int, Scope] = {}
+        s_scopes: dict[int, Scope] = {}
+        b_candidates: dict[int, dict[int, Scope]] = {}
+        s_candidates: dict[int, dict[int, Scope]] = {}
 
         for key, b_hits in baseline_index.items():
             s_hits = subject_index.get(key)
             if not s_hits:
                 continue
             if len(b_hits) == 1 and len(s_hits) == 1:
-                # Kontroluje se paired I dropped: subnet a vlan pravidla generuji
-                # vic klicu na scope, takze scope nejednoznacny pod jednim
-                # klicem se pod jinym klicem tehoz pravidla nesmi sparovat.
-                if (
-                    id(b_hits[0]) in paired
-                    or id(s_hits[0]) in paired
-                    or id(b_hits[0]) in dropped
-                    or id(s_hits[0]) in dropped
-                ):
-                    continue
-                result.pairs.append(
-                    MatchedPair(
-                        baseline=b_hits[0],
-                        subject=s_hits[0],
-                        method=method,
-                        confidence=confidence,
-                    )
-                )
-                paired.update({id(b_hits[0]), id(s_hits[0])})
+                b, s = b_hits[0], s_hits[0]
+                b_scopes[id(b)] = b
+                s_scopes[id(s)] = s
+                b_candidates.setdefault(id(b), {})[id(s)] = s
+                s_candidates.setdefault(id(s), {})[id(b)] = b
                 continue
 
             reason = _ambiguity_reason(s_hits if len(s_hits) > 1 else b_hits)
             for scope in b_hits:
-                if id(scope) not in paired:
-                    dropped.add(id(scope))
-                    ambiguity.setdefault(id(scope), (reason, s_hits))
+                rule_ambiguous.add(id(scope))
+                ambiguity.setdefault(id(scope), []).append((reason, s_hits))
             for scope in s_hits:
-                if id(scope) not in paired:
-                    dropped.add(id(scope))
-                    ambiguity.setdefault(id(scope), (reason, b_hits))
+                rule_ambiguous.add(id(scope))
+                ambiguity.setdefault(id(scope), []).append((reason, b_hits))
 
-        # `dropped` plati jen uvnitr pravidla - do dalsiho jde vse nesparovane.
+        # Scope s vic nez jednim odlisnym kandidatem napric ruznymi klici
+        # tehoz pravidla je taky nejednoznacny - pravidlo nesmi hadat,
+        # ktery z kandidatu je ten spravny.
+        for bid, partners in b_candidates.items():
+            if len(partners) > 1:
+                rivals = list(partners.values())
+                reason = _ambiguity_reason(rivals)
+                rule_ambiguous.add(bid)
+                ambiguity.setdefault(bid, []).append((reason, rivals))
+                for s in rivals:
+                    rule_ambiguous.add(id(s))
+                    ambiguity.setdefault(id(s), []).append((reason, [b_scopes[bid]]))
+        for sid, partners in s_candidates.items():
+            if len(partners) > 1:
+                rivals = list(partners.values())
+                reason = _ambiguity_reason(rivals)
+                rule_ambiguous.add(sid)
+                ambiguity.setdefault(sid, []).append((reason, rivals))
+                for b in rivals:
+                    rule_ambiguous.add(id(b))
+                    ambiguity.setdefault(id(b), []).append((reason, [s_scopes[sid]]))
+
+        # Prochod 2: sparuj kandidaty, ktere zustaly jednoznacne na obou
+        # stranach. Iteruje se v poradi remaining_baseline, aby vysledek
+        # byl deterministicky.
+        paired: set[int] = set()
+        for scope in remaining_baseline:
+            bid = id(scope)
+            if bid in rule_ambiguous or bid in paired:
+                continue
+            partners = b_candidates.get(bid)
+            if not partners:
+                continue
+            (sid, s), = partners.items()
+            if sid in rule_ambiguous or sid in paired:
+                continue
+            result.pairs.append(
+                MatchedPair(baseline=scope, subject=s, method=method, confidence=confidence)
+            )
+            paired.update({bid, sid})
+
         remaining_baseline = [scope for scope in remaining_baseline if id(scope) not in paired]
         remaining_subject = [scope for scope in remaining_subject if id(scope) not in paired]
 
@@ -229,12 +262,14 @@ def match_scopes(
 
     def _reason(scope: Scope, fallback: str) -> str:
         # Duvod "ambiguous" jen dokud nejednoznacnost trva - aspon jeden
-        # souper z druhe strany zustal nesparovany. Kdyz je pozdejsi
-        # pravidlo vsechny rozdelilo jinam, scope protejsek nema (step beh:
-        # scope cizi vlny musi zustat "nova sluzba" a byt vyloucen).
-        entry = ambiguity.get(id(scope))
-        if entry is not None and any(id(rival) not in paired_ids for rival in entry[1]):
-            return entry[0]
+        # souper z druhe strany zustal nesparovany. F3: hleda se prvni
+        # (v poradi pravidel) zaznamenana nejednoznacnost, ktera jeste ma
+        # nesparovaneho soupere - pozdejsi (slabsi) klidne muze byt zive
+        # kdyz starsi uz je vyresena (step beh: scope cizi vlny musi
+        # zustat "ambiguous", ne skoncit jako "nova sluzba").
+        for reason, rivals in ambiguity.get(id(scope), []):
+            if any(id(rival) not in paired_ids for rival in rivals):
+                return reason
         return fallback
 
     result.unmatched_baseline.extend(
