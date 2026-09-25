@@ -5,7 +5,10 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 // Same loading trick as app_permissions.test.js: app.js is a browser-only
-// class file, not a CommonJS module, so pull App out of a vm sandbox.
+// class file, not a CommonJS module, so pull App out of a vm sandbox. The
+// sandbox's bare top-level `fetch` (app.js calls it unqualified, not via
+// `window.fetch`) delegates to sandbox.window.fetch, which tests that need
+// to mock a response can reassign per call.
 function loadApp() {
   const src = fs.readFileSync(
     path.join(__dirname, "../../migration_validator/gui/static/app.js"),
@@ -16,12 +19,13 @@ function loadApp() {
     document: { addEventListener: () => {} },
     module: { exports: {} },
   };
+  sandbox.fetch = (...args) => sandbox.window.fetch(...args);
   vm.createContext(sandbox);
   vm.runInContext(`${src}\nmodule.exports = App;`, sandbox, { filename: "app.js" });
-  return sandbox.module.exports;
+  return { App: sandbox.module.exports, sandbox };
 }
 
-const App = loadApp();
+const { App, sandbox } = loadApp();
 
 test("canAdmin: false for operator (view+operate only)", () => {
   const fakeThis = { me: { permissions: ["view", "operate"] } };
@@ -72,6 +76,81 @@ test("goToSettings: leaving a dirty profile editor is guarded, not just leaving 
   };
   await App.prototype.goToSettings.call(fakeThis);
   assert.strictEqual(fakeThis.state.view, "profiles", "navigation must be blocked when leaveGuard() refuses");
+});
+
+test("settingsCountLineText: not enabled wins over everything", () => {
+  const fakeThis = {};
+  const text = App.prototype.settingsCountLineText.call(fakeThis, {
+    enabled: false, fileError: "boom", error: "boom", counts: { visible: 1, total: 2 },
+  });
+  assert.strictEqual(text, "Inventory not configured — set inventory.path in config/settings.yml");
+});
+
+test("settingsCountLineText: fileError alone is shown and survives a null current error", () => {
+  const fakeThis = {};
+  const text = App.prototype.settingsCountLineText.call(fakeThis, {
+    enabled: true, fileError: "hostname_filter.yml: neplatny YAML", error: null, counts: { visible: 1, total: 2 },
+  });
+  assert.strictEqual(text, "hostname_filter.yml: neplatny YAML");
+});
+
+test("settingsCountLineText: fileError and a different current error both show", () => {
+  const fakeThis = {};
+  const text = App.prototype.settingsCountLineText.call(fakeThis, {
+    enabled: true, fileError: "file broken", error: "inventory broken", counts: null,
+  });
+  assert.strictEqual(text, "file broken · inventory broken");
+});
+
+test("settingsCountLineText: identical fileError and current error dedupe to one line", () => {
+  const fakeThis = {};
+  const text = App.prototype.settingsCountLineText.call(fakeThis, {
+    enabled: true, fileError: "same", error: "same", counts: null,
+  });
+  assert.strictEqual(text, "same");
+});
+
+test("settingsCountLineText: neither error -> counts, then blank", () => {
+  const fakeThis = {};
+  assert.strictEqual(
+    App.prototype.settingsCountLineText.call(fakeThis, { enabled: true, fileError: null, error: null, counts: { visible: 3, total: 5 } }),
+    "3 of 5 nodes visible"
+  );
+  assert.strictEqual(
+    App.prototype.settingsCountLineText.call(fakeThis, { enabled: true, fileError: null, error: null, counts: null }),
+    ""
+  );
+});
+
+test("loadFilter: a broken filter file sets fileError, which a dry-run-shaped response cannot clear on its own", async () => {
+  // finding #6: reproduces the bug via applyFilterResponse itself (dry-run
+  // response has no file error) - fileError must stay untouched by it.
+  const settings = { text: "", saved: [], counts: null, warnings: [], enabled: true, error: null, fileError: null, dirty: false };
+  const fakeThis = {
+    state: { settings },
+    applyFilterResponse: App.prototype.applyFilterResponse,
+  };
+  sandbox.window.fetch = async () => ({ ok: true, json: async () => ({ allow: [], visible: 0, total: 0, warnings: [], enabled: true, error: "hostname_filter.yml: neplatny YAML" }) });
+  await App.prototype.loadFilter.call(fakeThis);
+  assert.strictEqual(settings.fileError, "hostname_filter.yml: neplatny YAML");
+
+  // A dry-run response never carries a file error - applying it must not
+  // touch fileError (only loadFilter/saveFilter are allowed to).
+  App.prototype.applyFilterResponse.call(fakeThis, settings, { allow: ["MX-*"], visible: 1, total: 1, warnings: [], enabled: true, error: null }, false);
+  assert.strictEqual(settings.fileError, "hostname_filter.yml: neplatny YAML", "dry-run must not clear the sticky file error");
+});
+
+test("saveFilter: a successful save clears fileError", async () => {
+  const settings = { text: "MX-*", saved: [], counts: null, warnings: [], enabled: true, error: null, fileError: "was broken", saving: false, saveError: null, dirty: true };
+  const fakeThis = {
+    state: { settings },
+    render() {},
+    parseFilterLines: App.prototype.parseFilterLines,
+    applyFilterResponse: App.prototype.applyFilterResponse,
+  };
+  sandbox.window.fetch = async () => ({ ok: true, json: async () => ({ allow: ["MX-*"], visible: 1, total: 1, warnings: [], enabled: true, error: null }) });
+  await App.prototype.saveFilter.call(fakeThis);
+  assert.strictEqual(settings.fileError, null);
 });
 
 test("goToProfiles: leaving a dirty settings filter is guarded, not just leaving Profiles itself", async () => {

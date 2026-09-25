@@ -5110,6 +5110,25 @@ class App {
     if (updateSaved) settings.saved = body.allow || [];
   }
 
+  // finding #6: settings.error reflects the *latest* response - a dry-run
+  // PUT never re-reads the filter file, so its response has no filter-file
+  // error and would silently clear one just loaded. settings.fileError is
+  // the sticky one: set only by a real load (or a failed one), cleared only
+  // by a successful Save. settingsCountLineText() shows both when they
+  // differ and dedupes when they say the same thing.
+  settingsCountLineText(settings) {
+    if (!settings.enabled) {
+      return "Inventory not configured — set inventory.path in config/settings.yml";
+    }
+    const file = settings.fileError;
+    const current = settings.error;
+    if (file && current && file !== current) return `${file} · ${current}`;
+    if (file) return file;
+    if (current) return current;
+    if (settings.counts) return `${settings.counts.visible} of ${settings.counts.total} nodes visible`;
+    return "";
+  }
+
   async goToSettings() {
     if (!this.leaveGuard()) return;
     this.state.view = "settings";
@@ -5121,6 +5140,7 @@ class App {
       warnings: [],
       enabled: true,
       error: null,
+      fileError: null,
       saving: false,
       saveError: null,
       dirty: false,
@@ -5138,14 +5158,17 @@ class App {
       if (res.ok) {
         const body = await res.json();
         this.applyFilterResponse(settings, body, true);
+        settings.fileError = body.error || null;
         settings.text = settings.saved.join("\n");
         settings.dirty = false;
       } else {
         const body = await res.json().catch(() => ({}));
         settings.error = body.detail || `hostname filter se nepodarilo nacist (${res.status})`;
+        settings.fileError = settings.error;
       }
     } catch (err) {
       settings.error = String(err);
+      settings.fileError = settings.error;
     }
   }
 
@@ -5165,6 +5188,7 @@ class App {
       if (res.ok) {
         const body = await res.json();
         this.applyFilterResponse(settings, body, true);
+        settings.fileError = null; // a successful save proves the file is fine again
         settings.text = settings.saved.join("\n");
         settings.dirty = false;
       } else {
@@ -5213,15 +5237,7 @@ class App {
     card.appendChild(dryRunError);
 
     const updateCountLine = () => {
-      if (!settings.enabled) {
-        countLine.textContent = "Inventory not configured — set inventory.path in config/settings.yml";
-      } else if (settings.error) {
-        countLine.textContent = settings.error;
-      } else if (settings.counts) {
-        countLine.textContent = `${settings.counts.visible} of ${settings.counts.total} nodes visible`;
-      } else {
-        countLine.textContent = "";
-      }
+      countLine.textContent = this.settingsCountLineText(settings);
     };
     updateCountLine();
 
