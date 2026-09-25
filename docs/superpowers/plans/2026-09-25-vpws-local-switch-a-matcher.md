@@ -26,6 +26,7 @@
 - The unmatched reason strings stay as they are: `zadny kandidat na subject`, `nova sluzba, chybi baseline`, `ambiguous: N kandidatu (...)`.
 - Code comments follow repo style: Czech, **no diacritics**. Docs under `docs/` keep diacritics.
 - Commit messages end with `Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>`.
+  In the last wave, subagents wrote other model names in this trailer. The controller runs `git log -1 --format=%B` after every task and amends a wrong trailer before the next task starts.
 - Work on branch `vlna-e2-e5-2026-09-25`. Don't merge and don't push.
 - Baseline before the wave: `2103 passed, 1 skipped`; JS `pass 88`.
 - A docstring or comment that claims "mutant X is killed by test Y" must be verified by running the mutant before it is written or kept (memory: such claims go stale).
@@ -1594,35 +1595,109 @@ Also run these three mutants (do not commit them):
 - `_reason` always returning `entry[0]` when there is an entry → `test_ambiguity_resolved_by_later_rule_leaves_leftover_as_new_service` must fail.
 - In `Scope.select`, the AC filter replaced with `data` → `test_select_vpws_keeps_only_own_ac` must fail.
 
-- [ ] **Step 2: "Before" report from `main` (schema 14)**
+- [ ] **Step 2: "Before" result by replay with `main`'s code (schema 14)**
+
+Both sides come from replaying the same raw XML. That way a capture-vs-replay difference can't pass itself off as a finding of this wave.
 
 ```bash
-S=<scratchpad>   # session scratchpad directory
+S=<scratchpad>/acceptance   # session scratchpad directory
 cd /home/rado/Desktop/scripts/migration-status-check
+mkdir -p $S
 git worktree add $S/main-wt main
-.venv/bin/python -c "import sys; sys.path.insert(0, '$S/main-wt'); import migration_validator; print(migration_validator.__file__)"
-# expect a path under $S/main-wt
-.venv/bin/python -c "import sys; sys.path.insert(0, '$S/main-wt'); from migration_validator.cli import main; sys.exit(main())" \
-  evaluate --run test-no-inventory --run-root runs --format text --detail --output $S/before.txt
+cat > $S/main-cli.py <<PY
+import sys
+sys.path.insert(0, "$S/main-wt")
+import migration_validator
+assert migration_validator.__file__.startswith("$S/main-wt"), migration_validator.__file__
+from migration_validator.cli import main
+sys.exit(main())
+PY
+mkdir -p $S/before $S/after
+cp -r runs/test-no-inventory $S/before/ && cp -r runs/test-no-inventory $S/after/
+.venv/bin/python $S/main-cli.py upgrade test-no-inventory --run-root $S/before
+# --run a --output se vylucuji: JSON jde na stdout s hlavickou "=== ... ===" -> sed ji smaze.
+# Exit 1 je normalni (report obsahuje FAIL).
+.venv/bin/python $S/main-cli.py evaluate --run test-no-inventory --run-root $S/before --format json \
+  | sed '/^=== /d' > $S/before.json
+.venv/bin/python $S/main-cli.py evaluate --run test-no-inventory --run-root $S/before --format text --detail \
+  > $S/before.txt
 ```
 
-- [ ] **Step 3: "After" report on an upgraded copy**
+Verified while writing the plan: with `main`'s code, `upgrade` reports all four artifacts as `pregenerovano - beze zmeny`. The "before" summary is `scopes_matched 17, unmatched_baseline 10, unmatched_subject 7`, and the two EVPN-VPWS-LOCAL subject scopes are in `unmatched.subject`.
+
+- [ ] **Step 3: "After" result on the branch (schema 15)**
 
 ```bash
-mkdir -p $S/runs && cp -r runs/test-no-inventory $S/runs/
-.venv/bin/mig-validate upgrade test-no-inventory --run-root $S/runs
-.venv/bin/mig-validate evaluate --run test-no-inventory --run-root $S/runs --format text --detail --output $S/after.txt
-diff $S/before.txt $S/after.txt
+.venv/bin/mig-validate upgrade test-no-inventory --run-root $S/after
+.venv/bin/mig-validate evaluate --run test-no-inventory --run-root $S/after --format json \
+  | sed '/^=== /d' > $S/after.json
+.venv/bin/mig-validate evaluate --run test-no-inventory --run-root $S/after --format text --detail \
+  > $S/after.txt
 ```
 
-- [ ] **Step 4: Account for every diff line**
+- [ ] **Step 4: Compare per row, not per text line**
 
-Expected differences (spec §6, acceptance):
-- **E5:** EVPN-VPWS-LOCAL scopes are paired: ge-0/0/2.211 ↔ et-0/0/8.211 and ge-0/0/2.212 ↔ et-0/0/8.212, method `vlan+service_type`. They are gone from NESPAROVANO (4 fewer entries). MGMT E-LAN scopes stay in NESPAROVANO as ambiguous.
-- **EVPN-VPWS-LOCAL .211 and .212:** a `EVPN VPWS SID remote local switch` row PASS with baseline `ge-0/0/2.21x Up`, and a `EVPN VPWS pseudowire status` row `CCC-Up`. There is no `remote peer chybi` row.
-- **Remote PWs (.213, ae0.224):** only a new `EVPN VPWS pseudowire status` row `CCC-Up`. There must **not** be any `ve vypisu instance chybi` row.
+A text diff mixes reordering with real changes. Compare the JSON per `(scope_id, label)`:
 
-Any other difference is a finding. Stop and report it to the user.
+```bash
+.venv/bin/python - "$S/before.json" "$S/after.json" <<'PY'
+import json, sys
+
+def results(node):
+    # RunResult muze byt top-level, nebo vnoreny (--run rezim) - najdi vsechny
+    if isinstance(node, dict):
+        if "scopes" in node and "summary" in node:
+            yield node
+        for value in node.values():
+            yield from results(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from results(value)
+
+def rows(path):
+    out, summary, unmatched = {}, [], []
+    for result in results(json.load(open(path))):
+        summary.append(result["summary"])
+        unmatched.append({side: sorted(e["scope_id"] for e in items)
+                          for side, items in result["unmatched"].items()})
+        for scope in result["scopes"]:
+            match = scope.get("match") or {}
+            out[(scope["scope_id"], "__match__")] = (match.get("status"), match.get("method"), None)
+            for check in scope["checks"]:
+                key = (scope["scope_id"], check.get("label") or check["id"])
+                out[key] = (check["status"], check.get("value"), check.get("baseline_value"))
+    return out, summary, unmatched
+
+before, sb, ub = rows(sys.argv[1])
+after, sa, ua = rows(sys.argv[2])
+print("SUMMARY before", sb, "\nSUMMARY after ", sa)
+print("UNMATCHED before", ub, "\nUNMATCHED after ", ua)
+for key in sorted(set(before) | set(after), key=str):
+    if before.get(key) != after.get(key):
+        print(key, "\n   before:", before.get(key), "\n   after: ", after.get(key))
+PY
+```
+
+Account for every difference against this list (spec §6, acceptance).
+
+**E5, pairing:**
+- The four EVPN-VPWS-LOCAL scopes are paired: ge-0/0/2.211 ↔ et-0/0/8.211 and ge-0/0/2.212 ↔ et-0/0/8.212. The `__match__` value becomes `("matched", "vlan+service_type", …)`.
+- The summary moves: `scopes_matched` +2, and `unmatched_baseline` / `unmatched_subject` −2 each.
+- NESPAROVANO loses those four entries. MGMT E-LAN scopes stay there as ambiguous.
+
+**In the two newly paired blocks:**
+- Every row gaining a `baseline_value` is expected, because baseline comparison is now possible for the first time. That includes interface state, pps and optics.
+- A **verdict change** on a non-VPWS row there is not an automatic stop. Explain it one row at a time: what the baseline value is and why the verdict follows.
+- VPWS rows:
+  - `EVPN VPWS SID remote local switch` is PASS with baseline `ge-0/0/2.21x Up`
+  - `EVPN VPWS pseudowire status` is `CCC-Up` with no baseline
+  - the `EVPN VPWS SID remote PE` / `status` rows are gone (no `remote peer chybi`)
+
+**Everywhere else**, including the remote PWs `.213` and `ae0.224`:
+- The only allowed difference is a new `EVPN VPWS pseudowire status` row `CCC-Up`.
+- A `ve vypisu instance chybi` row must **not** appear.
+
+Anything else is a finding. Stop and report it to the user. Use the text reports (`before.txt` / `after.txt`) only to look at context around a difference.
 
 - [ ] **Step 5: Clean up and hand over**
 
@@ -1630,4 +1705,4 @@ Any other difference is a finding. Stop and report it to the user.
 git worktree remove $S/main-wt
 ```
 
-Report the diff summary to the user. The real `mig-validate upgrade test-no-inventory` on `runs/` and the lab-GUI restart are the user's decision (spec §6).
+Report the difference summary to the user. The real `mig-validate upgrade test-no-inventory` on `runs/` and the lab-GUI restart are the user's decision (spec §6). Say explicitly that the engine step-run change (Task 6) is covered only by synthetic tests, because the one raw run is a whole-box run.
