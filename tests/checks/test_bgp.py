@@ -227,6 +227,26 @@ def test_deactivated_peer_without_session_warns():
     assert by_label["BGP status (198.11.13.2)"].status is Status.PASS
 
 
+def test_deactivated_peer_with_ambiguous_address_is_skip_not_a_clean_deactivation():
+    """owns_bgp_peer bere i bgp_neighbors_inactive, takze dva zaznamy na
+    adrese deaktivovaneho peera ho udelaji nejednoznacnym stejne jako
+    aktivniho. 'deaktivovan' by tu tvrdilo jistotu, kterou nemame - ma to
+    byt SKIP se stejnou hodnotou jako u aktivniho nejednoznacneho peera, a
+    presne jeden radek (ne dva - jednou z vetve inactive, podruhe z
+    without_session)."""
+    ctx = _ctx(
+        {"bgp": {}, "bgp_ambiguous": {"198.11.13.9": 2}},
+        bgp_neighbors=[],
+        bgp_neighbors_inactive=["198.11.13.9"],
+    )
+    results = run_check(BgpSessionStateCheck(), ctx)
+    by_label = {result.label: result for result in results}
+
+    assert list(by_label) == ["BGP status (198.11.13.9)"]
+    assert by_label["BGP status (198.11.13.9)"].status is Status.SKIP
+    assert by_label["BGP status (198.11.13.9)"].value == ambiguous_value(2)
+
+
 def test_service_with_only_deactivated_peers_warns_per_peer():
     """Jediny peer sluzby je deaktivovany - nesmi to spadnout do 'zadny peer'.
 
@@ -959,16 +979,40 @@ def test_session_ambiguous_subject_is_skip_not_missing():
     assert "fe80::2" in row.message
 
 
-def test_session_ambiguous_baseline_never_unchanged():
-    """Pojistka proti falesnemu PASS: nejednoznacna baseline nasi session
-    nezmerila, takze 'v baseline taky nebyla' neplati a skutecna regrese
-    nesmi projit jako UNCHANGED.
+def test_idle_session_with_ambiguous_baseline_carries_baseline_value():
+    """Idle vetev (`state != ESTABLISHED`) nesmi tvrdit 'bez baseline', kdyz
+    baseline byla jen nejednoznacna - `was`/`baseline_value` musi ukazat
+    ambiguous_value(2), ne None.
 
-    Zabiji mutanta: `same=` ve vetvi bez session bez podminky na
-    nejednoznacnost.
+    Tenhle test NEporovnava vetev `without_session` (peer je tu v subjektu
+    Idle, ne bez session) - tu kryje
+    `test_session_missing_now_with_ambiguous_baseline_is_broken_not_unchanged`
+    nize.
     """
     ctx = _ctx(
         {"bgp": {"198.11.13.2": _peer(state="Idle")}},
+        baseline={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
+    )
+
+    [row] = run_check(BgpSessionStateCheck(), ctx)
+
+    assert row.status is Status.FAIL
+    assert UNCHANGED_SINCE_BASELINE not in row.details
+    assert row.baseline_value == ambiguous_value(2)
+
+
+def test_session_missing_now_with_ambiguous_baseline_is_broken_not_unchanged():
+    """Pojistka proti falesnemu PASS: nejednoznacna baseline nasi session
+    nezmerila, takze 'v baseline taky nebyla' neplati a skutecna regrese
+    (peer bez session ted, nejednoznacny v baselinu) nesmi projit jako
+    UNCHANGED.
+
+    Zabiji mutanta: `same=` ve vetvi `without_session`
+    (`same=peer not in baseline_peers and peer not in baseline_ambiguous`)
+    bez podminky na nejednoznacnost - overeno primo mutaci (viz report).
+    """
+    ctx = _ctx(
+        {"bgp": {}},
         baseline={"bgp": {}, "bgp_ambiguous": {"198.11.13.2": 2}},
     )
 

@@ -38,7 +38,7 @@ NOT_IN_SERVICE = "v baseline patril k teto sluzbe, v subjektu uz ne"
 # Adresa, na kterou ve scopu projde vic nez jeden zaznam (dva link-local
 # sousedi v jedne RI, multihop BFD bez VRF - Scope.select -> *_ambiguous).
 # Je to 'nevime', ne 'neni': jako value u SKIP radku, jako baseline_value
-# tam, kde nejednoznacna byla baseline. Sdilena s bfd.py.
+# tam, kde nejednoznacna byla baseline. bfd.py ji prevezme v Tasku 2.
 def ambiguous_value(count: int) -> str:
     return f"neznamy (nejednoznacne: {count} session)"
 
@@ -58,6 +58,24 @@ PREFIX_KEYS = ("active", "received", "accepted", "advertised")
 # je to jen hodnota slovniku baseline_value pro "RIB v baseline byla, v
 # subjektu chybi", ne sdileny konstrukt mezi checky.
 IN_TABLE = "v tabulce"
+
+
+def _ambiguous_session_finding(
+    peer: str, ambiguous: dict[str, int], ctx: CheckContext, baseline_value: str | None
+) -> Finding:
+    """Radek 'nevime' pro adresu, na kterou ve scopu projde vic nez jedna
+    session - sdileny tvar pro deaktivovanou i normalni cestu vetveni v
+    `BgpSessionStateCheck.run`, aby obe hlasily uplne totez."""
+    return Finding(
+        Outcome.SKIP,
+        f"{peer}: stav nelze urcit - na adrese je {ambiguous[peer]} BGP "
+        f"session v instanci {ctx.scope.bgp_instance or 'master'} "
+        "(lisi se local-interface)",
+        label=f"BGP status ({peer})",
+        family=peer_family(peer),
+        value=ambiguous_value(ambiguous[peer]),
+        baseline_value=baseline_value,
+    )
 
 
 def peer_family(peer: str) -> int | None:
@@ -236,6 +254,22 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             else []
         )
         for peer in sorted(inactive):
+            if peer in ambiguous:
+                # owns_bgp_peer bere i bgp_neighbors_inactive, takze dva
+                # zaznamy na adrese deaktivovaneho peera ho udelaji
+                # nejednoznacnym stejne jako aktivniho - 'deaktivovan' by tu
+                # tvrdilo jistotu, kterou nemame.
+                baseline_value = (
+                    str(baseline_peers[peer].get("state", UNKNOWN))
+                    if peer in baseline_peers
+                    else ambiguous_value(baseline_ambiguous[peer])
+                    if peer in baseline_ambiguous
+                    else None
+                )
+                findings.append(
+                    _ambiguous_session_finding(peer, ambiguous, ctx, baseline_value)
+                )
+                continue
             if peer in baseline_inactive:
                 baseline_off = True
             elif peer in baseline_active:
@@ -282,16 +316,7 @@ class BgpSessionStateCheck(_AppliesToCoreLoopback, Check):
             )
             if peer in ambiguous:
                 findings.append(
-                    Finding(
-                        Outcome.SKIP,
-                        f"{peer}: stav nelze urcit - na adrese je {ambiguous[peer]} BGP "
-                        f"session v instanci {ctx.scope.bgp_instance or 'master'} "
-                        "(lisi se local-interface)",
-                        label=f"BGP status ({peer})",
-                        family=peer_family(peer),
-                        value=ambiguous_value(ambiguous[peer]),
-                        baseline_value=baseline_value,
-                    )
+                    _ambiguous_session_finding(peer, ambiguous, ctx, baseline_value)
                 )
                 continue
             # Nejednoznacna baseline neni 'v baseline taky nebyl': baseline
