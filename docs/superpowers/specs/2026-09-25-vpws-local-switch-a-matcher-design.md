@@ -177,14 +177,25 @@ v praxi tedy odpadá.
    **uvnitř jednoho pravidla** jako dnešní pojistka pro pravidla s více
    klíči na scope (subnet, vlan). Scope nejednoznačný pod jedním klíčem
    pravidla se pod jiným klíčem téhož pravidla nespáruje.
-2. **Seznam nespárovaných se staví až na konci.** Během smyčky se pro
-   každý scope pamatuje první důvod nejednoznačnosti. To je ten z
-   nejsilnějšího pravidla, protože pravidla jdou od nejsilnějšího.
-   Scope, který nespárovalo žádné pravidlo, dostane:
-   - svůj první důvod nejednoznačnosti, pokud nějaký má
-     (`ambiguous: n kandidatu (...)`),
+2. **Seznam nespárovaných se staví až na konci.** Když je scope pod
+   klíčem nejednoznačný, zapamatuje se důvod a scopy **druhé strany**,
+   se kterými pod tím klíčem soupeřil (u subjektového scope `b_hits`,
+   u baseline scope `s_hits`). Pamatuje se jen první nejednoznačnost,
+   tedy ta z nejsilnějšího pravidla. Scope, který nespárovalo žádné
+   pravidlo, dostane:
+   - svůj důvod nejednoznačnosti, jen když **aspoň jeden** z těch scopů
+     druhé strany taky zůstal nespárovaný. Nejednoznačnost pak trvá.
    - jinak `REASON_NO_CANDIDATE` (baseline) / `REASON_NEW_SERVICE`
-     (subject).
+     (subject). Nejednoznačnost vyřešilo pozdější pravidlo, které
+     protějšek spárovalo s jiným scopem, takže tento scope protějšek
+     nemá.
+
+   Příklad ze step běhu: baseline (starý port) má „CPE“ ve VRF-a, nový
+   box „CPE“ ve VRF-a (tento krok) a „CPE“ ve VRF-b (dřívější vlna).
+   Popis je 1×2 nejednoznačný, `routing_instance` spáruje VRF-a ↔ VRF-a.
+   VRF-b soupeřil jen s baseline VRF-a, která je spárovaná, takže dostane
+   `nova sluzba` a step běh ho dál vyloučí (§5). Důvod „ambiguous“ by ho
+   vytáhl do NESPAROVANO a jmenoval by kandidáta, který už má pár.
 3. Modulový docstring („při nejednoznačnosti se nikdy nehádá“) platí dál.
    Pár vzniká jen z jednoznačné shody 1:1 pod nějakým pravidlem.
 
@@ -254,23 +265,49 @@ ztracené (přijato už u 14).
   - reprodukce „CPE“ → 2 páry přes `routing_instance`
   - scope nejednoznačný pod všemi pravidly → nespárovaný s důvodem
     nejednoznačnosti
+  - nejednoznačnost vyřešená pozdějším pravidlem (příklad VRF-a/VRF-b
+    z §4): nespárovaný scope VRF-b dostane `nova sluzba`, ne
+    „ambiguous“
   - pojistka více klíčů v jednom pravidle drží
   - existující testy důvodů nespárování se upraví tam, kde se důvod mění
 - **Engine:** step běh, scope nejednoznačný až do konce → v NESPAROVANO
   a má checky, ne v `excluded_services`. Scope s `nova sluzba` dál
-  vyloučen.
+  vyloučen, včetně scope VRF-b z příkladu v §4.
 - **mapping.yml:** `routing_instance` v `mappings` i `ignore`.
 - **Mutanti** jmenovaní v docstrings dotčených testů se po přegenerování
   fixtures pustí znovu.
 
+### Dokumentace
+
+`docs/cs` popisuje tvary faktů a řádky checků. Schéma 15 (`evpn_vpws`:
+`pseudowire_status`, `local_interface`), dva nové řádky checku, filtr AC
+ve `Scope.select`, propad nejednoznačnosti v matcheru a `routing_instance`
+v mapping.yml se promítnou do `docs/cs/files/{collectors,models,checks}.md`,
+`docs/cs/reference.md` a `docs/cs/architecture.md`, kde je to relevantní.
+Při vrstvě 2 to finální review muselo dohánět (833a04b).
+
 ### Akceptace v laborce
 
-1. Capture MX1-POP1 a PTX1-POP1 s EVPN-VPWS-LOCAL a vyhodnocení MX1 →
-   PTX1 pro ge-0/0/2.211 → et-0/0/8.211 (a .212). Očekáváno: obě služby
-   PASS s řádkem local switch a bez „remote peer chybi“.
-2. `mig-validate upgrade` na `test-no-inventory` a diff reportu před/po.
-   Jediný očekávaný rozdíl je nový PW řádek v E-Line blocích na EVO.
-   Jakýkoli jiný rozdíl je nález.
+Běh `runs/test-no-inventory` (raw z 2026-09-25) už obsahuje všechny
+případy. MX1-POP1 pre a PTX1-POP1 post mají:
+
+- EVPN-VPWS-LOCAL: ge-0/0/2.211/.212 → et-0/0/8.211/.212, local-switch
+  na obou stranách
+- vzdálené PW: EVPN-VPWS-CPE13-NNI ge-0/0/2.213 → et-0/0/8.213 a
+  EVPN-VPWS-CPE23-UNI ge-0/0/3.0 → ae0.224
+
+Kroky:
+
+1. `mig-validate upgrade` na kopii `test-no-inventory` a diff reportu
+   před/po. Očekávané rozdíly:
+   - EVPN-VPWS-LOCAL (.211 i .212): místo „remote peer chybi“ řádek local
+     switch OK a PW řádek `CCC-Up`
+   - vzdálené PW (.213, ae0.224): přibude jen PW řádek `CCC-Up`. Řádek
+     „AC … ve vypisu instance chybi“ se **nesmí** objevit. To je kontrola,
+     že filtr `matches_interface` sedí na skutečná jména IFL (`ae0.224`,
+     `ge-0/0/3.0`).
+   - Jakýkoli jiný rozdíl je nález.
+2. Pak skutečný `mig-validate upgrade test-no-inventory` (uživatel).
 3. Po merge restart lab GUI.
 
 ## Mimo rozsah
